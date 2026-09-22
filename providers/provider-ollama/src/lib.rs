@@ -1,6 +1,9 @@
-//! `provider-ollama` — 本地 Worker/Control Provider（Ollama HTTP API，`/api/chat` NDJSON 流）。
+//! Ollama `/api/chat` adapter.
 //!
-//! 计划模块：`client` `stream`
-//! 注意：qwen worker 需 `thinking: false`；结构化输出用 `format: "json"`；usage 从 `done` chunk 取。
+//! Wire-specific details remain inside this crate; callers only see the provider-neutral
+//! `agent-model` contract.
 
-// M2 待实施
+mod client;
+mod stream;
+
+pub use client::OllamaProvider;

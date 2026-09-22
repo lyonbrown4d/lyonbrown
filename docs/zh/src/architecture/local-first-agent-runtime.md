@@ -36,7 +36,7 @@
 
 ---
 
-# 2. 非目标
+## 2. 非目标
 
 第一阶段不追求：
 
@@ -65,7 +65,7 @@
 
 ---
 
-# 3. 总体架构
+## 3. 总体架构
 
 ```text
                            Client Layer
@@ -149,9 +149,9 @@
 
 ---
 
-# 4. 核心原则
+## 4. 核心原则
 
-## 4.1 Model Provider Neutral
+### 4.1 Model Provider Neutral
 
 Agent Runtime 不应绑定：
 
@@ -187,7 +187,7 @@ ModelCapabilities
 
 ---
 
-## 4.2 Agent Session 属于 Runtime，而不是 Provider
+### 4.2 Agent Session 属于 Runtime，而不是 Provider
 
 错误模式：
 
@@ -218,7 +218,7 @@ Your Session
 
 ---
 
-# 5. Agent Identity Runtime
+## 5. Agent Identity Runtime
 
 Agent 的身份与工作方式需要脱离具体 Session。
 
@@ -261,7 +261,7 @@ coding:
 
 ---
 
-# 6. Prompt Compiler
+## 6. Prompt Compiler
 
 Agent Profile 不应简单拼进 System Prompt。
 
@@ -295,7 +295,7 @@ Prompt Compiler 应负责把统一 Agent Identity 转成不同 Provider 最适�
 
 ---
 
-# 7. Workspace Runtime
+## 7. Workspace Runtime
 
 新仓库不应强制要求手工创建 `AGENTS.md`。
 
@@ -338,7 +338,7 @@ WorkspaceProfile
 
 ---
 
-## 7.1 兼容现有 Agent 规则文件
+### 7.1 兼容现有 Agent 规则文件
 
 自动识别：
 
@@ -374,7 +374,7 @@ Global Profile
 
 ---
 
-# 8. Skill Runtime
+## 8. Skill Runtime
 
 Skill 不应该依赖用户手工“调用”。
 
@@ -420,11 +420,11 @@ Global Asset
 
 ---
 
-# 9. Model Runtime
+## 9. Model Runtime
 
 整个模型系统建议分成三层。
 
-## 9.1 Local Control Model
+### 9.1 Local Control Model
 
 建议：
 
@@ -452,7 +452,7 @@ Structured Output
 
 ---
 
-## 9.2 Local Worker Model
+### 9.2 Local Worker Model
 
 例如：
 
@@ -478,7 +478,7 @@ GPU
 
 ---
 
-## 9.3 Remote Frontier Model
+### 9.3 Remote Frontier Model
 
 例如：
 
@@ -503,7 +503,7 @@ Gemini
 
 ---
 
-# 10. Model Scheduler
+## 10. Model Scheduler
 
 不采用：
 
@@ -554,7 +554,7 @@ Historical Success Rate
 
 ---
 
-# 11. 两阶段 Routing
+## 11. 两阶段 Routing
 
 只做 Pre-Routing 不够。
 
@@ -595,7 +595,7 @@ Historical Success Rate
 
 ---
 
-# 12. Context Engine
+## 12. Context Engine
 
 Context 不能简单定义为：
 
@@ -638,7 +638,7 @@ classification
 
 ---
 
-## 12.1 Progressive Context Disclosure
+### 12.1 Progressive Context Disclosure
 
 禁止直接：
 
@@ -698,7 +698,7 @@ expand(source)
 
 ---
 
-# 13. Memory 分层
+## 13. Memory 分层
 
 必须明确区分：
 
@@ -736,7 +736,7 @@ Long-term Memory
 
 ---
 
-# 14. Capability Runtime
+## 14. Capability Runtime
 
 能力不应该属于模型供应商。
 
@@ -768,7 +768,7 @@ Computer Use
 
 ---
 
-# 15. Computer Use
+## 15. Computer Use
 
 统一抽象：
 
@@ -813,7 +813,7 @@ Agent 只依赖 Capability，不依赖具体模型。
 
 ---
 
-# 16. 多模型 Computer Use
+## 16. 多模型 Computer Use
 
 不要求一个模型完成所有工作。
 
@@ -843,7 +843,7 @@ Judge Model
 
 ---
 
-# 17. Tool Runtime
+## 17. Tool Runtime
 
 统一抽象：
 
@@ -876,7 +876,7 @@ Tool Call Intent
 
 ---
 
-# 18. Secret Broker
+## 18. Secret Broker
 
 Secret 是一级核心能力。
 
@@ -897,7 +897,7 @@ Local llama.cpp
 
 ---
 
-## 18.1 SecretRef
+### 18.1 SecretRef
 
 模型只能使用逻辑引用：
 
@@ -917,7 +917,7 @@ secret://payment/prod/private-key
 
 ---
 
-## 18.2 Late Secret Binding
+### 18.2 Late Secret Binding
 
 正确执行链：
 
@@ -937,7 +937,7 @@ Secret 只在最后一个可信执行阶段绑定。
 
 ---
 
-# 19. 支付集成测试示例
+## 19. 支付集成测试示例
 
 模型发起：
 
@@ -994,7 +994,7 @@ signature secret
 
 ---
 
-# 20. Secret Scope
+## 20. Secret Scope
 
 Secret 必须有能力边界。
 
@@ -1026,7 +1026,7 @@ shell: print PAYMENT_PRIVATE_KEY
 
 ---
 
-# 21. Secret Provider
+## 21. Secret Provider
 
 支持：
 
@@ -1045,7 +1045,7 @@ Custom Provider
 
 ---
 
-# 22. Secret 不一定允许读取
+## 22. Secret 不一定允许读取
 
 更高安全级别：
 
@@ -1078,7 +1078,7 @@ Agent 进程也不获得私钥原文。
 
 ---
 
-# 23. Output Redaction
+## 23. Output Redaction
 
 不仅输入不能泄密。
 
@@ -1105,7 +1105,7 @@ Model Observation
 
 ---
 
-# 24. Data Classification
+## 24. Data Classification
 
 建议统一：
 
@@ -1134,7 +1134,7 @@ SECRET
 
 ---
 
-# 25. Sync Server
+## 25. Sync Server
 
 Sync Server 是：
 
@@ -1156,7 +1156,7 @@ Self-hosted Sync
 
 ---
 
-# 26. Sync Provider 抽象
+## 26. Sync Provider 抽象
 
 ```rust
 trait SyncProvider {
@@ -1185,9 +1185,9 @@ Agent 在没有任何账号、没有服务器的情况下必须完整可用。
 
 ---
 
-# 27. Sync 数据分级
+## 27. Sync 数据分级
 
-## Level 1：普通配置
+### Level 1：普通配置
 
 可以同步：
 
@@ -1200,7 +1200,7 @@ Skill Settings
 Policy
 ```
 
-## Level 2：Workspace Metadata
+### Level 2：Workspace Metadata
 
 可以同步：
 
@@ -1218,7 +1218,7 @@ Project Conventions
 workspace.private = true
 ```
 
-## Level 3：敏感记忆
+### Level 3：敏感记忆
 
 建议：
 
@@ -1226,7 +1226,7 @@ workspace.private = true
 Client-side Encryption
 ```
 
-## Level 4：Secret
+### Level 4：Secret
 
 默认：
 
@@ -1246,7 +1246,7 @@ End-to-End Encryption
 
 ---
 
-# 28. Sync Server 目标
+## 28. Sync Server 目标
 
 官方 Sync Server 主要同步：
 
@@ -1265,7 +1265,7 @@ Device State
 
 ---
 
-# 29. Event-driven Agent Kernel
+## 29. Event-driven Agent Kernel
 
 Kernel 内部建议采用：
 
@@ -1313,7 +1313,7 @@ Checkpoint
 
 ---
 
-# 30. Agent State Machine
+## 30. Agent State Machine
 
 ```text
 IDLE
@@ -1340,7 +1340,7 @@ OBSERVATION
 
 ---
 
-# 31. Rust 模块划分建议
+## 31. Rust 模块划分建议
 
 ```text
 agent-runtime/
@@ -1413,7 +1413,7 @@ agent-runtime/
 
 ---
 
-# 32. Rust 技术栈建议
+## 32. Rust 技术栈建议
 
 核心：
 
@@ -1469,7 +1469,7 @@ Rig Core
 
 ---
 
-# 33. 插件模型
+## 33. 插件模型
 
 不建议依赖：
 
@@ -1503,7 +1503,7 @@ Plugin
 
 ---
 
-# 34. Sandbox
+## 34. Sandbox
 
 Agent 最终需要：
 
@@ -1519,7 +1519,7 @@ Workspace Isolation
 
 ---
 
-# 35. Observability
+## 35. Observability
 
 所有模块统一产生：
 
@@ -1553,9 +1553,9 @@ secret_policy_denied
 
 ---
 
-# 36. 最重要的产品体验
+## 36. 最重要的产品体验
 
-## 36.1 换模型不断档
+### 36.1 换模型不断档
 
 ```text
 Local Qwen
@@ -1578,7 +1578,7 @@ Local Qwen
 
 ---
 
-## 36.2 新仓库 0 配置
+### 36.2 新仓库 0 配置
 
 ```bash
 agent .
@@ -1597,7 +1597,7 @@ Start Session
 
 ---
 
-## 36.3 Secret 永不暴露给模型
+### 36.3 Secret 永不暴露给模型
 
 ```text
 Agent wants action
@@ -1619,7 +1619,7 @@ Prompt
 
 ---
 
-## 36.4 Computer Use 与模型解耦
+### 36.4 Computer Use 与模型解耦
 
 任何满足能力要求的模型都可以使用：
 
@@ -1631,7 +1631,7 @@ Computer Capability
 
 ---
 
-# 37. 推荐第一阶段 MVP
+## 37. 推荐第一阶段 MVP
 
 第一阶段不要一次做完所有能力。
 
@@ -1673,7 +1673,7 @@ Remote:
 
 ---
 
-# 38. 第二阶段
+## 38. 第二阶段
 
 增加：
 
@@ -1694,7 +1694,7 @@ Advanced Secret Broker
 
 ---
 
-# 39. 第三阶段
+## 39. 第三阶段
 
 增加：
 
@@ -1713,7 +1713,7 @@ Model Performance History
 
 ---
 
-# 40. 最终架构哲学
+## 40. 最终架构哲学
 
 整个系统最核心的原则可以总结为：
 
@@ -1777,7 +1777,7 @@ Local Control  Local Worker   Remote Model
 
 ---
 
-# 41. 项目一句话定位
+## 41. 项目一句话定位
 
 > **A local-first, provider-neutral Agent Runtime where identity, context, capabilities and secrets belong to the Agent — models are replaceable compute providers.**
 

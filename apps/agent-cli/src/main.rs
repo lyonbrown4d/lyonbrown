@@ -1,8 +1,7 @@
-//! `agent-cli` — 命令行入口：`agent ask` / `agent chat` / `agent sessions` / `agent resume`。
-//!
-//! 计划模块：`repl` `render` `approve` `config`
-//! 目标体验（§36.2）：`agent .` 零配置进入仓库即开始会话。
+use agent_cli::cli::Cli;
+use clap::Parser;
 
-fn main() {
-    println!("agent-cli: skeleton（尚未实施，见 docs/plans/mvp-implementation-plan.md M2）");
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    agent_cli::cli::run(Cli::parse()).await
 }

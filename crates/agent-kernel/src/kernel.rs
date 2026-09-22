@@ -7,8 +7,8 @@ use agent_core::{
     TokenUsage, ToolResult, TurnId,
 };
 use agent_model::{
-    ChatMessage, GateVerdict, HeuristicGate, ModelEvent, ModelRegistry, ModelRequest, QualityGate,
-    Role,
+    ChatMessage, GateVerdict, HeuristicGate, ModelEvent, ModelRegistry, ModelRequest,
+    ModelScheduler, QualityGate, Role, RoutingPolicy, StepContext,
 };
 use agent_secret::{NoopBroker, SecretBroker};
 use agent_tool::{
@@ -42,7 +42,7 @@ pub struct Kernel {
     session: Session,
     state: KernelState,
     bus: EventBus,
-    providers: ModelRegistry,
+    scheduler: ModelScheduler,
     tools: ToolRegistry,
     approval: Arc<dyn ApprovalPolicy>,
     broker: Arc<dyn SecretBroker>,
@@ -156,14 +156,18 @@ impl Kernel {
                 ts: Utc::now(),
             })?;
 
-            let providers = self.providers.clone();
+            let tool_definitions = self.tools.definitions();
+            let mut step_context = StepContext::new(user_text);
+            step_context.needs_tools = !tool_definitions.is_empty();
+            step_context.previous_steps = steps - 1;
+            step_context.escalated = escalations > 0;
             let cancellation = self.cancellation.clone();
             let selected = match tokio::select! {
                 () = cancellation.cancelled() => {
                     self.cancel_turn(turn_id)?;
                     return Err(AgentError::Cancelled);
                 }
-                selected = providers.first_available() => selected,
+                selected = self.scheduler.decide(&step_context) => selected,
             } {
                 Ok(selected) => selected,
                 Err(error) => {
@@ -174,9 +178,9 @@ impl Kernel {
             };
             self.emit(AgentEvent::ModelSelected {
                 step_id,
-                provider: selected.provider.provider_id().to_owned(),
+                provider: selected.decision.provider.clone(),
                 model: selected.capabilities.model.clone(),
-                reason: "first available".into(),
+                reason: selected.decision.reason.clone(),
                 ts: Utc::now(),
             })?;
 
@@ -184,7 +188,7 @@ impl Kernel {
                 model: selected.capabilities.model.clone(),
                 system: None,
                 messages: self.session.messages.clone(),
-                tools: self.tools.definitions(),
+                tools: tool_definitions,
                 max_tokens: selected.capabilities.max_output_tokens,
                 temperature: None,
                 json_mode: false,
@@ -477,6 +481,7 @@ impl Kernel {
 
 pub struct KernelBuilder {
     providers: ModelRegistry,
+    routing_policy: RoutingPolicy,
     tools: ToolRegistry,
     approval: Arc<dyn ApprovalPolicy>,
     broker: Arc<dyn SecretBroker>,
@@ -488,6 +493,11 @@ pub struct KernelBuilder {
 impl KernelBuilder {
     pub fn providers(mut self, providers: ModelRegistry) -> Self {
         self.providers = providers;
+        self
+    }
+
+    pub fn routing_policy(mut self, routing_policy: RoutingPolicy) -> Self {
+        self.routing_policy = routing_policy;
         self
     }
 
@@ -526,7 +536,7 @@ impl KernelBuilder {
             session: Session::new(),
             state: KernelState::Idle,
             bus: EventBus::default(),
-            providers: self.providers,
+            scheduler: ModelScheduler::new(self.providers, self.routing_policy),
             tools: self.tools,
             approval: self.approval,
             broker: self.broker,
@@ -543,6 +553,7 @@ impl Default for KernelBuilder {
     fn default() -> Self {
         Self {
             providers: ModelRegistry::new(),
+            routing_policy: RoutingPolicy::default(),
             tools: ToolRegistry::new(),
             approval: Arc::new(AllowAllApproval),
             broker: Arc::new(NoopBroker),

@@ -4,6 +4,7 @@
 
 mod gate;
 mod registry;
+mod scheduler;
 
 pub mod provider;
 
@@ -12,3 +13,7 @@ pub use provider::{
     ChatMessage, ModelError, ModelEvent, ModelProvider, ModelRequest, ModelStream, Role,
 };
 pub use registry::{ModelRegistry, RegistryError, SelectedModel};
+pub use scheduler::{
+    Complexity, ModelScheduler, RoutePhase, RoutingPolicy, SchedulerDecision, SchedulerError,
+    SchedulerSelection, StepContext,
+};

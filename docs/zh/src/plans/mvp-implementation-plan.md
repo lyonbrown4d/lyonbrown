@@ -1,7 +1,7 @@
 # Lyonbrown 第一阶段 MVP 实施计划
 
 > 依据：[Lyonbrown Local-First Agent Runtime 架构设计](../architecture/local-first-agent-runtime.md)（Draft v0.1）
-> 状态：M0–M1 已完成；下一阶段为 M2
+> 状态：M0–M2 已完成；下一阶段为 M3
 > 平台：Windows 11 · rustc/cargo 1.98.1 · Ollama 已装（qwen3.8-27b:q3-claude 作 Worker / translategemma:4b 可作 Control）
 
 ## Context（背景）
@@ -285,10 +285,11 @@ pub trait QualityGate: Send + Sync {
 | `async-trait` | 对象安全异步 trait | model, tool, secret |
 | `serde` + `serde_json` | derive | 全局 |
 | `serde_yml` | 维护中的 YAML（非停维护的 serde_yaml） | profile, skill |
-| `toml` | 配置文件 | cli, mcp |
+| `toml` 1.1.6 | 直接解析 TOML（包括 MCP 配置） | cli, mcp |
+| `config-rs`（crate 名 `config`）0.15.26 | 分层配置；启用 TOML/YAML/JSON/JSON5/RON/INI 格式 | cli |
 | `thiserror` 2.x / `anyhow` | 错误 | 全局 |
 | `tracing` + `tracing-subscriber` | env-filter（Phase 2 的 telemetry 接缝） | 全局 |
-| `reqwest` 0.12 | `rustls-tls, stream, json`，**不用默认 TLS**（Windows 避开 OpenSSL） | providers |
+| `reqwest` 0.13.5 | `rustls, stream, json`，**不用默认 feature**（Windows 避开 OpenSSL） | providers |
 | `clap` 4.x derive | CLI | cli |
 | `rusqlite` | `bundled`（自带 SQLite C，无系统依赖；同步 API 走 spawn_blocking） | storage |
 | `uuid` (v4) / `chrono` | id、时间戳 | core |
@@ -320,8 +321,9 @@ pub trait QualityGate: Send + Sync {
 - 验证：`cargo test -p agent-kernel --test e2e_mock`（无网络）
 - 实施说明：M1 的 `HeuristicGate` 只处理空回答和显式错误，升级会重新选择当前首个可用模型；复杂度分级、tier 切换与可审计路由原因在 M2 的 `ModelScheduler` 中实现。
 
-**M2 — Ollama Provider + 本地模型（下一阶段）**（2 天）
+**M2 — Ollama Provider + 本地模型（已完成）**（2 天）
 - 构建：provider-ollama（`/api/chat` NDJSON 流式、`tools` 参数、`format:"json"`、qwen worker `think:false`、`done` chunk 取 usage）；从配置装配 ModelRegistry；ModelScheduler 静态过滤 + 启发式复杂度；CLI v1（`agent ask`、`agent chat` REPL、流式渲染、`--provider/--model`、`--approve-all`）
+- 配置：基于 `config-rs` 0.15.26 分层加载，支持 TOML、YAML、JSON、JSON5、RON 和 INI；环境变量使用 `LYONBROWN_` 前缀。覆盖优先级固定为：内置 defaults < 全局配置 < workspace 配置 < 显式指定的配置文件 < 环境变量 < CLI 参数
 - 验收：`agent ask "say hi"` 从 translategemma:4b 流出；工具 step 路由到 qwen3.8-27b（control 模型永不接工具 step——用 fake registry 断言 ModelSelected 事件）；scheduler 单测：简单输入选 Control、代码输入选 Worker
 - 验证：`cargo run -p agent-cli -- ask "1+1等于几" --provider ollama --model translategemma:4b`（Ollama 已在 :11434）
 

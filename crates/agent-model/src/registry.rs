@@ -29,16 +29,7 @@ impl ModelRegistry {
     }
 
     pub async fn first_available(&self) -> Result<SelectedModel, RegistryError> {
-        let providers = self
-            .providers
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
-
-        if providers.is_empty() {
-            return Err(RegistryError::Empty);
-        }
-
+        let providers = self.providers_snapshot()?;
         let mut last_error = None;
         for provider in providers {
             match provider.list_models().await {
@@ -53,10 +44,50 @@ impl ModelRegistry {
                 Err(error) => last_error = Some(error),
             }
         }
-
         match last_error {
             Some(error) => Err(RegistryError::Provider(error)),
             None => Err(RegistryError::NoModels),
+        }
+    }
+
+    pub async fn available_models(&self) -> Result<Vec<SelectedModel>, RegistryError> {
+        let providers = self.providers_snapshot()?;
+
+        let mut last_error = None;
+        let mut available = Vec::new();
+        for provider in providers {
+            match provider.list_models().await {
+                Ok(models) => {
+                    for capabilities in models {
+                        available.push(SelectedModel {
+                            provider: provider.clone(),
+                            capabilities,
+                        });
+                    }
+                }
+                Err(error) => last_error = Some(error),
+            }
+        }
+
+        if !available.is_empty() {
+            return Ok(available);
+        }
+        match last_error {
+            Some(error) => Err(RegistryError::Provider(error)),
+            None => Err(RegistryError::NoModels),
+        }
+    }
+
+    fn providers_snapshot(&self) -> Result<Vec<Arc<dyn ModelProvider>>, RegistryError> {
+        let providers = self
+            .providers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
+        if providers.is_empty() {
+            Err(RegistryError::Empty)
+        } else {
+            Ok(providers)
         }
     }
 }
