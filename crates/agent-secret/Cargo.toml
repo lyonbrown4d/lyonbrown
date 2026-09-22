@@ -8,6 +8,10 @@ agent-core = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }
+cap-std = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
 
 [lints]
 workspace = true

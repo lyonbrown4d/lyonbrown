@@ -1,6 +1,13 @@
 //! `agent-secret` — SecretBroker：延迟绑定 + 输出 redaction（§18-23）。
-//!
-//! M1 只提供运行时接缝与 [`NoopBroker`]；真实 secret provider 在 M5 实现。
+
+mod composite;
+mod env_broker;
+mod file_broker;
+mod redact;
+
+pub use composite::CompositeBroker;
+pub use env_broker::EnvSecretBroker;
+pub use file_broker::FileSecretBroker;
 
 use agent_core::SecretRef;
 use async_trait::async_trait;
@@ -9,6 +16,8 @@ use async_trait::async_trait;
 pub enum SecretError {
     #[error("secret not found: {0}")]
     NotFound(SecretRef),
+    #[error("invalid secret reference: {0}")]
+    InvalidReference(SecretRef),
     #[error("secret provider error: {0}")]
     Provider(String),
 }
@@ -16,17 +25,6 @@ pub enum SecretError {
 #[async_trait]
 pub trait SecretBroker: Send + Sync {
     async fn resolve(&self, reference: &SecretRef) -> Result<String, SecretError>;
-
-    async fn env_for(
-        &self,
-        references: &[SecretRef],
-    ) -> Result<Vec<(String, String)>, SecretError> {
-        let mut values = Vec::with_capacity(references.len());
-        for reference in references {
-            values.push((reference.to_string(), self.resolve(reference).await?));
-        }
-        Ok(values)
-    }
 
     fn redact(&self, text: &str) -> String {
         text.to_owned()

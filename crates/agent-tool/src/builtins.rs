@@ -285,7 +285,7 @@ impl ShellTool {
         Self {
             definition: ToolDefinition {
                 name: "shell".into(),
-                description: "Run one shell command in the workspace root.".into(),
+                description: "Run one shell command in the workspace root. To use a secret, set env to an object mapping variable names to references like \"secret:env:NAME\" or \"secret:file:NAME\"; the value is resolved at execution time, injected only into the command's environment, and redacted from its output.".into(),
                 input_schema: json!({
                     "type": "object",
                     "properties": {

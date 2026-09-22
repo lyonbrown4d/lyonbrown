@@ -186,8 +186,6 @@ pub trait ApprovalPolicy: Send + Sync {
 pub trait SecretBroker: Send + Sync {
     /// Called only during execution (late binding §18.2), never on the prompt path.
     async fn resolve(&self, r: &SecretRef) -> Result<String, SecretError>;
-    /// Injects child-process env values; values never enter model context.
-    async fn env_for(&self, refs: &[SecretRef]) -> Result<Vec<(String, String)>, SecretError>;
     /// Replaces values resolved in this session with "[REDACTED]".
     fn redact(&self, text: &str) -> String;
 }
@@ -309,7 +307,7 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 - Acceptance: zero-config Rust detection; deterministic five-part prompt fixture; quarkus trigger activates only on match; 200KB low priority trimmed to 8K while high priority remains
 - Verify: `cargo test -p agent-context -p agent-workspace -p agent-skill -p agent-profile`
 
-**M5 — Secrets** (1–2 days)
+**M5 — Secrets (complete)** (1–2 days)
 
 - Build: Env/File/Composite brokers; shell `{NAME:"secret:<ref>"}` resolution only at execution; session-wide resolved-value redaction
 - Acceptance: child sees secret env, serialized events never contain plaintext, missing ref returns a safe error without panic/leak

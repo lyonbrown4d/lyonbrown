@@ -6,6 +6,7 @@ use agent_core::{AgentError, AgentEvent};
 use agent_kernel::{Kernel, KernelModelOptions};
 use agent_model::{ModelRegistry, RoutingPolicy};
 use agent_profile::{AgentProfile, ProfileError, ProfileLoader};
+use agent_secret::CompositeBroker;
 use agent_skill::SkillRegistry;
 use agent_tool::{
     ListFilesTool, ReadFileTool, SessionApprovalPolicy, ShellTool, ToolRegistry, WriteFileTool,
@@ -131,6 +132,7 @@ fn build_kernel(
     let workspace_profile = WorkspaceProfile::detect(workspace)?;
     let profile = load_agent_profile(home, &config.profile)?;
     let skills = SkillRegistry::load_from_root(home.join(".agent").join("skills"))?;
+    let broker = CompositeBroker::for_home(home)?;
     let routing_policy = RoutingPolicy {
         prefer_local: profile.model.prefer_local,
         remote_escalation: profile.model.remote_escalation,
@@ -142,6 +144,7 @@ fn build_kernel(
         .routing_policy(routing_policy)
         .tools(tools)
         .approval(approval)
+        .broker(broker)
         .workspace_root(workspace)
         .agent_profile(profile)
         .workspace_profile(workspace_profile)

@@ -209,8 +209,6 @@ pub trait ApprovalPolicy: Send + Sync {   // CLI 交互式实现；测试用 All
 pub trait SecretBroker: Send + Sync {
     /// 仅执行期调用（late binding §18.2），永不出现在 prompt 路径
     async fn resolve(&self, r: &SecretRef) -> Result<String, SecretError>;
-    /// 给 shell 用：注入子进程 env，值永不进入模型上下文
-    async fn env_for(&self, refs: &[SecretRef]) -> Result<Vec<(String, String)>, SecretError>;
     /// 扫描工具输出，把本会话已解析过的值替换为 "[REDACTED]"
     fn redact(&self, text: &str) -> String;
 }
@@ -339,7 +337,7 @@ pub trait QualityGate: Send + Sync {
 - 验收：`agent .` 在全新 cargo 仓库零配置检测出 Rust workspace；编译出的 system prompt 五段齐全且顺序固定（fixture 仓库断言）；trigger "quarkus" 的 skill 仅在词出现时激活；budget 测试：200KB 低优先级被裁到 8K 预算内、高优先级保留
 - 验证：`cargo test -p agent-context -p agent-workspace -p agent-skill -p agent-profile`
 
-**M5 — Secrets**（1–2 天）
+**M5 — Secrets（已完成）**（1–2 天）
 - 构建：agent-secret（EnvSecretBroker、FileSecretBroker 读 `~/.agent/secrets/<name>`（裸值或 KEY=VALUE，创建时 0600）、CompositeBroker）；shell 工具 env 参数约定 `{NAME: "secret:<ref>"}` 仅执行期解析；redaction：会话级已解析值集合，扫出所有 ToolResult.output 与观察
 - 验收：**安全测试**——脚本 mock 请求 shell 带 `secret:test_value` 引用；子进程看到 env（测试用 `echo` 断言）；断言序列化事件日志中任何 AgentEvent 变体都不含 secret 明文（全变体扫描）；引用缺失 ⇒ `ToolResult{ok:false, error:"secret not found"}`，不 panic、不泄漏
 - 验证：`cargo test -p agent-secret -p agent-tool --test secret_e2e`
@@ -380,7 +378,7 @@ Kernel 在每 step 前构造 `StepContext`（`needs_tools` 来自上一步工具
 - flags：`--approve-all`、`--deny-all`；**非 TTY（管道/CI）默认拒绝高风险工具（fail-closed）**。Deny 产出 `ToolResult{ok:false, error:"denied by user"}`——循环继续，模型可以适应，符合 §17（模型提议、策略决定）。
 
 **D4. SecretRef 延迟绑定与 shell 工具（§18.2 链的具体化）。**
-Shell 工具输入 schema：`{ command: string, env?: { [NAME]: "secret:<ref>" } }`——模型只能写**引用**（名字在工具文档里；值永远不可得）。在 ToolRunning 阶段，`ShellTool::invoke` 调 `ctx.broker.env_for(refs)`，解析出的键值对**只注入子进程 env**（`tokio::process::Command::envs`）。值不跨越任何其他边界。纵深防御：(1) 解析值注册进会话 redaction 集合；(2) 每个 `ToolResult.output` 在 `ToolCompleted` 事件存在之前过 `broker.redact()`；(3) M5 测试断言序列化事件零明文。Secret 进入 ModelRequest 在构造上不可能：prompt 组装（D5）从不接触 broker。
+Shell 工具输入 schema：`{ command: string, env?: { [NAME]: "secret:<ref>" } }`——模型只能写**引用**（名字在工具文档里；值永远不可得）。在 ToolRunning 阶段，`ShellTool::invoke` 对每个引用逐个调 `ctx.broker.resolve()`（变量名由模型在 env 参数中指定），解析出的键值对**只注入子进程 env**（`tokio::process::Command::envs`）。值不跨越任何其他边界。纵深防御：(1) 解析值注册进会话 redaction 集合；(2) 每个 `ToolResult.output` 在 `ToolCompleted` 事件存在之前过 `broker.redact()`；(3) M5 测试断言序列化事件零明文。Secret 进入 ModelRequest 在构造上不可能：prompt 组装（D5）从不接触 broker。
 
 **D5. 上下文组装顺序（Prompt Compiler §6）。** System prompt 固定顺序：① AgentProfile（persona、工作风格、编码偏好）→ ② 模型能力说明（tier、"你有没有工具"、该 provider 族输出格式约定）→ ③ WorkspaceProfile（项目类型、语言、构建/测试命令）→ ④ canonical 仓库指令（AGENTS.md/CLAUDE.md/README 摘录）→ ⑤ 匹配的 Skill 指令 → ⑥ 工具使用指引（仅当选中的模型不支持原生工具时——工具以文本协议列出）。然后对话：ContextItem 按 `(priority asc, timestamp asc)` 排序，按预算裁剪（system + 最近 3 条用户消息 + 最近工具观察永不丢）。工具经 provider `tools` 参数传递（当 supports_tools），否则走 ⑥。理由：确定性顺序让 prompt diff/调试可控，符合 §7.1 覆盖顺序（session > repo > workspace > global）。
 
