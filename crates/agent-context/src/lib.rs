@@ -4,6 +4,6 @@ mod budget;
 mod compiler;
 mod tokens;
 
-pub use budget::{BudgetResult, ContextBudget};
-pub use compiler::{CompileRequest, CompiledPrompt, PromptCompiler};
+pub use budget::{BudgetError, BudgetResult, ContextBudget};
+pub use compiler::{CompileError, CompileRequest, CompiledPrompt, PromptCompiler};
 pub use tokens::TokenEstimator;

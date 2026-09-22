@@ -56,3 +56,25 @@ fn duplicate_skill_names_are_rejected() {
     let error = SkillRegistry::new([skill.clone(), skill]).unwrap_err();
     assert!(error.to_string().contains("duplicate"));
 }
+
+#[test]
+fn cjk_adjacent_text_is_a_boundary_but_ascii_suffixes_are_not() {
+    let registry = SkillRegistry::new([quarkus_skill()]).unwrap();
+    assert_eq!(registry.match_prompt("请用quarkus调试").len(), 1);
+    assert!(registry.match_prompt("quarkusx").is_empty());
+}
+
+#[test]
+fn non_ascii_triggers_are_rejected_explicitly() {
+    let error = Skill::from_yaml("name: debug\ntriggers: [调试]\n").unwrap_err();
+    assert!(error.to_string().contains("ASCII"));
+}
+
+#[test]
+fn rejects_unknown_top_level_and_nested_skill_fields() {
+    let top_level = Skill::from_yaml("name: debug\ntrigers: [debug]\n").unwrap_err();
+    assert!(top_level.to_string().contains("trigers"));
+
+    let nested = Skill::from_yaml("name: debug\nrequires:\n  toolz: [shell]\n").unwrap_err();
+    assert!(nested.to_string().contains("toolz"));
+}

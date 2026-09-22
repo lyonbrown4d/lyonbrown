@@ -69,3 +69,14 @@ fn profile_ids_cannot_escape_the_profiles_directory() {
     assert!(error.to_string().contains("profile id"));
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn rejects_unknown_top_level_and_nested_profile_fields() {
+    let top_level = AgentProfile::from_yaml("id: dev\npersonna: typo\n").unwrap_err();
+    assert!(top_level.to_string().contains("personna"));
+
+    let nested =
+        AgentProfile::from_yaml("id: dev\nworking_style:\n  inspect_before_editting: true\n")
+            .unwrap_err();
+    assert!(nested.to_string().contains("inspect_before_editting"));
+}

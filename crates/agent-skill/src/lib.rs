@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Skill {
     pub name: String,
     #[serde(default)]
@@ -21,12 +22,14 @@ pub struct Skill {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SkillRequirements {
     #[serde(default)]
     pub tools: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SkillContext {
     #[serde(default)]
     pub files: Vec<String>,
@@ -60,6 +63,11 @@ impl Skill {
         {
             return Err(SkillError::Validation(
                 "triggers must not contain empty values".into(),
+            ));
+        }
+        if self.triggers.iter().any(|trigger| !trigger.is_ascii()) {
+            return Err(SkillError::Validation(
+                "triggers must contain ASCII text only".into(),
             ));
         }
         Ok(())
@@ -124,5 +132,5 @@ fn contains_trigger(prompt: &str, trigger: &str) -> bool {
 }
 
 fn is_word_character(character: char) -> bool {
-    character.is_alphanumeric() || character == '_'
+    character.is_ascii_alphanumeric() || character == '_'
 }

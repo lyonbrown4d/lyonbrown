@@ -5,7 +5,8 @@ use agent_profile::AgentProfile;
 use agent_skill::Skill;
 use agent_workspace::WorkspaceProfile;
 
-use crate::{ContextBudget, TokenEstimator};
+use crate::{BudgetError, ContextBudget, TokenEstimator};
+use thiserror::Error;
 
 pub struct CompileRequest<'a> {
     pub profile: &'a AgentProfile,
@@ -26,6 +27,14 @@ pub struct CompiledPrompt {
     pub dropped: usize,
 }
 
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum CompileError {
+    #[error("system prompt requires {required} tokens but budget is {budget}")]
+    SystemPromptExceeds { required: u64, budget: u32 },
+    #[error(transparent)]
+    Budget(#[from] BudgetError),
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PromptCompiler {
     estimator: TokenEstimator,
@@ -36,18 +45,34 @@ impl PromptCompiler {
         Self { estimator }
     }
 
-    pub fn compile(&self, request: CompileRequest<'_>) -> CompiledPrompt {
+    pub fn compile(&self, request: CompileRequest<'_>) -> Result<CompiledPrompt, CompileError> {
         let system_prompt = compile_system_prompt(&request);
-        let system_tokens = self.estimator.estimate(&system_prompt);
-        let available = request.token_budget.saturating_sub(system_tokens);
-        let budget = ContextBudget::new(self.estimator).trim(request.context_items, available);
-        CompiledPrompt {
+        let system_tokens = u64::from(self.estimator.estimate(&system_prompt));
+        if system_tokens > u64::from(request.token_budget) {
+            return Err(CompileError::SystemPromptExceeds {
+                required: system_tokens,
+                budget: request.token_budget,
+            });
+        }
+        let available = u64::from(request.token_budget) - system_tokens;
+        let available =
+            u32::try_from(available).map_err(|_| CompileError::SystemPromptExceeds {
+                required: system_tokens,
+                budget: request.token_budget,
+            })?;
+        let budget = ContextBudget::new(self.estimator).trim(request.context_items, available)?;
+        Ok(CompiledPrompt {
             system_prompt,
             context_items: budget.items,
-            system_tokens,
+            system_tokens: u32::try_from(system_tokens).map_err(|_| {
+                CompileError::SystemPromptExceeds {
+                    required: system_tokens,
+                    budget: request.token_budget,
+                }
+            })?,
             context_tokens: budget.tokens,
             dropped: budget.dropped,
-        }
+        })
     }
 }
 
@@ -78,13 +103,35 @@ fn append_profile(output: &mut String, profile: &AgentProfile) {
     }
     let _ = write!(
         body,
-        "\nworking style: inspect before editing={}, run tests after changes={}, architecture first={}\ncoding: avoid unnecessary abstraction={}, prefer small reviewable changes={}",
+        "\nworking style: prefer existing libraries={}, avoid reinventing wheels={}, inspect before editing={}, run tests after changes={}, architecture first={}\ncoding: avoid unnecessary abstraction={}, prefer small reviewable changes={}",
+        profile.working_style.prefer_existing_libraries,
+        profile.working_style.avoid_reinventing_wheels,
         profile.working_style.inspect_before_editing,
         profile.working_style.run_tests_after_changes,
         profile.working_style.architecture_first,
         profile.coding.avoid_unnecessary_abstraction,
         profile.coding.prefer_small_reviewable_changes,
     );
+    if let Some(policy) = &profile.reasoning_policy {
+        let _ = write!(body, "\nreasoning policy: {policy}");
+    }
+    if let Some(policy) = &profile.privacy_policy {
+        let _ = write!(body, "\nprivacy policy: {policy}");
+    }
+    if !profile.tool_preferences.is_empty() {
+        let _ = write!(
+            body,
+            "\ntool preferences: {}",
+            profile.tool_preferences.join(", ")
+        );
+    }
+    if !profile.default_skills.is_empty() {
+        let _ = write!(
+            body,
+            "\ndefault skills: {}",
+            profile.default_skills.join(", ")
+        );
+    }
     section(output, "Agent Profile", &body);
 }
 

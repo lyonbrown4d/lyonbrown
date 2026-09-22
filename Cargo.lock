@@ -175,6 +175,7 @@ name = "agent-workspace"
 version = "0.1.0"
 dependencies = [
  "agent-core",
+ "cap-std",
  "dirs",
  "serde",
  "thiserror",

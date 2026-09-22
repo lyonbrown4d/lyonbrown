@@ -1,6 +1,9 @@
 use std::fs;
 
-use agent_workspace::{ProjectType, WorkspaceProfile, workspace_cache_path};
+use agent_workspace::{
+    MAX_AGGREGATE_INSTRUCTION_BYTES, MAX_INSTRUCTION_FILE_BYTES, ProjectType, WorkspaceProfile,
+    load_repository_instructions, workspace_cache_path,
+};
 
 fn fixture_root(name: &str) -> std::path::PathBuf {
     let root = std::env::temp_dir().join(format!("agent-workspace-{name}-{}", std::process::id()));
@@ -64,4 +67,70 @@ fn cache_path_is_stable_and_outside_the_repository() {
     assert!(!first.exists(), "computing a cache path must not write it");
     fs::remove_dir_all(root).unwrap();
     fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
+fn rejects_an_oversized_instruction_file_without_loading_it() {
+    let root = fixture_root("oversized");
+    fs::write(
+        root.join("AGENTS.md"),
+        vec![b'x'; MAX_INSTRUCTION_FILE_BYTES + 1],
+    )
+    .unwrap();
+
+    let error = load_repository_instructions(&root).unwrap_err();
+    assert!(error.to_string().contains("exceeds"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn rejects_instruction_files_over_the_aggregate_limit() {
+    let root = fixture_root("aggregate");
+    let each = MAX_AGGREGATE_INSTRUCTION_BYTES / 3;
+    for name in ["AGENTS.md", "CLAUDE.md", "README.md", "CONTRIBUTING.md"] {
+        fs::write(root.join(name), vec![b'x'; each]).unwrap();
+    }
+
+    let error = load_repository_instructions(&root).unwrap_err();
+    assert!(error.to_string().contains("aggregate"));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_repository_instruction_symlink_escape() {
+    let root = fixture_root("link-root");
+    let outside = fixture_root("link-outside");
+    fs::write(outside.join("secret.md"), "outside secret").unwrap();
+    std::os::unix::fs::symlink(outside.join("secret.md"), root.join("AGENTS.md")).unwrap();
+
+    assert!(load_repository_instructions(&root).is_err());
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(outside).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn rejects_repository_instruction_junction_escape() {
+    use std::process::Command;
+
+    let container = fixture_root("junction-container");
+    let outside = container.join("outside");
+    let workspace = container.join("workspace");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("AGENTS.md"), "outside secret").unwrap();
+    let output = Command::new("cmd.exe")
+        .args(["/D", "/C", "mklink /J workspace outside"])
+        .current_dir(&container)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(load_repository_instructions(&workspace).is_err());
+    fs::remove_dir(&workspace).unwrap();
+    fs::remove_dir_all(container).unwrap();
 }

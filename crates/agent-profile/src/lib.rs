@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct AgentProfile {
     pub id: String,
     #[serde(default)]
@@ -32,6 +33,7 @@ pub struct AgentProfile {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct WorkingStyle {
     #[serde(default)]
     pub prefer_existing_libraries: bool,
@@ -46,6 +48,7 @@ pub struct WorkingStyle {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ModelPreferences {
     #[serde(default)]
     pub prefer_local: bool,
@@ -54,6 +57,7 @@ pub struct ModelPreferences {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CodingPreferences {
     #[serde(default)]
     pub avoid_unnecessary_abstraction: bool,
