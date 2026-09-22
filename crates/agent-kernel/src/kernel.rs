@@ -803,16 +803,22 @@ fn step_needs_tools(prompt: &str) -> bool {
         && ["repository", "repo", "workspace"]
             .iter()
             .any(|word| words.contains(word));
-    let explanatory = ["explain", "describe", "what", "meaning", "concept"]
+    let explanatory = ["explain", "describe", "what", "meaning", "concept", "how"]
         .iter()
         .any(|word| words.contains(word));
-    let coding_action = ["fix", "repair", "implement"]
+    let negated = lower.contains("don't")
+        || lower.contains("do not")
+        || ["not", "never", "avoid", "without"]
+            .iter()
+            .any(|word| words.contains(word));
+    let coding_action = ["fix", "repair", "implement", "add", "update", "refactor"]
         .iter()
         .any(|word| words.contains(word))
-        && ["bug", "error", "test", "tests", "feature", "code"]
+        && ["bug", "error", "test", "tests", "feature", "code", "module"]
             .iter()
             .any(|word| words.contains(word))
-        && !explanatory;
+        && !explanatory
+        && !negated;
     let chinese_file_action = [
         "列出", "查看", "读取", "读", "写入", "写", "创建", "删除", "搜索", "编辑",
     ]
@@ -825,13 +831,22 @@ fn step_needs_tools(prompt: &str) -> bool {
         && (lower.contains("项目") || lower.contains("代码"));
     let chinese_repository_action = (lower.contains("检查") || lower.contains("搜索"))
         && (lower.contains("仓库") || lower.contains("代码库"));
-    let chinese_coding_action = (lower.contains("修复") || lower.contains("实现"))
-        && ["错误", "缺陷", "测试", "功能", "代码"]
+    let chinese_explanatory = ["解释", "什么", "如何", "怎么", "为什么"]
+        .iter()
+        .any(|marker| lower.contains(marker));
+    let chinese_negated = ["不要", "别", "无需", "不必"]
+        .iter()
+        .any(|marker| lower.contains(marker));
+    let chinese_coding_action = ((lower.contains("修复") || lower.contains("实现"))
+        || (["添加", "更新", "重构"]
             .iter()
-            .any(|object| lower.contains(object))
-        && !lower.contains("解释")
-        && !lower.contains("什么是");
-    file_action
+            .any(|action| lower.contains(action))
+            && ["错误", "缺陷", "测试", "功能", "代码", "模块"]
+                .iter()
+                .any(|object| lower.contains(object))))
+        && !chinese_explanatory
+        && !chinese_negated;
+    let actionable = file_action
         || path_action
         || command_action
         || project_action
@@ -841,7 +856,8 @@ fn step_needs_tools(prompt: &str) -> bool {
         || chinese_command_action
         || chinese_project_action
         || chinese_repository_action
-        || chinese_coding_action
+        || chinese_coding_action;
+    actionable && !explanatory && !negated && !chinese_explanatory && !chinese_negated
 }
 
 #[cfg(test)]
@@ -866,6 +882,9 @@ mod tests {
             "fix this bug",
             "implement feature",
             "repair failing test",
+            "add a feature",
+            "update code",
+            "refactor module",
             "列出文件",
             "读取配置文件",
             "写入文件",
@@ -880,6 +899,8 @@ mod tests {
             "检查仓库",
             "修复这个错误",
             "实现这个功能",
+            "实现 M4",
+            "修复登录问题",
         ] {
             assert!(step_needs_tools(prompt), "expected tool intent: {prompt}");
         }
@@ -899,6 +920,11 @@ mod tests {
             "describe a failing test",
             "解释如何修复错误",
             "什么是功能实现",
+            "how should I fix this bug?",
+            "don't fix this bug",
+            "do not implement this feature",
+            "如何修复登录问题",
+            "不要实现这个功能",
         ] {
             assert!(
                 !step_needs_tools(prompt),

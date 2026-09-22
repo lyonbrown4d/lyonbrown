@@ -346,9 +346,18 @@ async fn secret_working_memory_never_reaches_provider_request() {
     secret.classification = DataClassification::Secret;
     let document = ContextItem::new(ContextItemKind::Document, "public document", 1);
     let memory = ContextItem::new(ContextItemKind::Memory, "public memory", 1);
+    let external_message = ContextItem::new(ContextItemKind::Message, "external message", 1);
+    let external_observation =
+        ContextItem::new(ContextItemKind::ToolObservation, "external observation", 1);
     let mut kernel = Kernel::builder()
         .providers(registry)
-        .context_items([secret, document, memory])
+        .context_items([
+            secret,
+            document,
+            memory,
+            external_message,
+            external_observation,
+        ])
         .build();
 
     let events = kernel.run_turn("say hi").await.unwrap();
@@ -371,6 +380,16 @@ async fn secret_working_memory_never_reaches_provider_request() {
         message.role == agent_model::Role::System
             && message.content.contains("Document")
             && message.content.contains("public document")
+    }));
+    assert!(request.messages.iter().any(|message| {
+        message.role == agent_model::Role::System
+            && message.content.contains("Message")
+            && message.content.contains("external message")
+    }));
+    assert!(request.messages.iter().any(|message| {
+        message.role == agent_model::Role::System
+            && message.content.contains("ToolObservation")
+            && message.content.contains("external observation")
     }));
     assert!(request.messages.iter().any(|message| {
         message.role == agent_model::Role::System

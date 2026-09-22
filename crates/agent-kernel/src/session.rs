@@ -97,9 +97,7 @@ impl Session {
         let mut messages = selected
             .iter()
             .filter(|item| {
-                !mapped_ids.contains(&item.id)
-                    && item.classification != DataClassification::Secret
-                    && is_non_chat_context(item.kind)
+                !mapped_ids.contains(&item.id) && item.classification != DataClassification::Secret
             })
             .filter_map(|selected_item| {
                 self.working_memory
@@ -137,7 +135,6 @@ impl Session {
                 let mut budget_item = item.clone();
                 if !mapped_indices.contains(&index)
                     && item.classification != DataClassification::Secret
-                    && is_non_chat_context(item.kind)
                 {
                     budget_item.content = serde_json::to_string(&synthetic_context_message(item))
                         .expect("ChatMessage serialization cannot fail");
@@ -146,13 +143,6 @@ impl Session {
             })
             .collect()
     }
-}
-
-fn is_non_chat_context(kind: ContextItemKind) -> bool {
-    !matches!(
-        kind,
-        ContextItemKind::Message | ContextItemKind::ToolObservation
-    )
 }
 
 fn synthetic_context_message(item: &ContextItem) -> ChatMessage {
