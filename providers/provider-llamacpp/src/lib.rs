@@ -3,9 +3,14 @@
 //! The native binding is intentionally opt-in through the `llama-cpp` feature, so normal
 //! workspace builds do not compile llama.cpp. Configuration and GGUF validation remain
 //! available without the feature; constructing the provider then returns [`ProviderError::Unavailable`].
+//!
+//! GGUF models must contain `tokenizer.chat_template` metadata; the provider deliberately
+//! returns an error instead of guessing a fallback template. External acceptance can be run with
+//! a real model via `LYONBROWN_GGUF_MODEL=/path/model.gguf cargo test -p provider-llamacpp
+//! --features llama-cpp live_completion_smoke_test -- --ignored`.
 
 #[cfg(any(feature = "llama-cpp", test))]
-use std::fmt::Write as _;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 #[cfg(any(feature = "llama-cpp", test))]
@@ -16,15 +21,17 @@ use agent_model::{ModelRequest, Role};
 
 #[cfg(feature = "llama-cpp")]
 use std::num::NonZeroU32;
-#[cfg(feature = "llama-cpp")]
+#[cfg(any(feature = "llama-cpp", test))]
 use std::sync::Arc;
 
 #[cfg(any(feature = "llama-cpp", test))]
 use agent_core::StopReason;
 #[cfg(feature = "llama-cpp")]
 use agent_core::TokenUsage;
+#[cfg(any(feature = "llama-cpp", test))]
+use agent_model::ModelEvent;
 #[cfg(feature = "llama-cpp")]
-use agent_model::{ModelEvent, ModelProvider, ModelStream};
+use agent_model::{ModelProvider, ModelStream};
 #[cfg(feature = "llama-cpp")]
 use async_trait::async_trait;
 #[cfg(feature = "llama-cpp")]
@@ -36,11 +43,11 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 #[cfg(feature = "llama-cpp")]
 use llama_cpp_2::model::params::LlamaModelParams;
 #[cfg(feature = "llama-cpp")]
-use llama_cpp_2::model::{AddBos, LlamaModel};
+use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
 #[cfg(feature = "llama-cpp")]
 use llama_cpp_2::sampling::LlamaSampler;
-#[cfg(feature = "llama-cpp")]
-use tokio::sync::{Mutex, mpsc};
+#[cfg(any(feature = "llama-cpp", test))]
+use tokio::sync::{Mutex, OwnedMutexGuard, OwnedSemaphorePermit, Semaphore, mpsc};
 #[cfg(feature = "llama-cpp")]
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -115,12 +122,19 @@ impl GgufModel {
     }
 }
 
+/// Default maximum number of prompt tokens decoded by one native call.
+pub const DEFAULT_BATCH_SIZE: u32 = 512;
+/// Hard limit for prompt batch sizing to keep native allocations bounded.
+pub const MAX_BATCH_SIZE: u32 = 4_096;
+
 /// Runtime settings for one embedded llama.cpp model.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LlamaCppConfig {
     pub model: GgufModel,
     pub threads: u32,
     pub batch_threads: u32,
+    /// Maximum prompt tokens decoded per native batch.
+    pub batch_size: u32,
     pub gpu_layers: u32,
     pub temperature: f32,
     pub seed: u32,
@@ -137,6 +151,15 @@ impl LlamaCppConfig {
             return Err(ProviderError::InvalidConfig(
                 "batch threads must be between 1 and i32::MAX".into(),
             ));
+        }
+        if self.batch_size == 0
+            || self.batch_size > MAX_BATCH_SIZE
+            || self.batch_size > self.model.context_size
+        {
+            return Err(ProviderError::InvalidConfig(format!(
+                "batch size must be between 1 and {} and no larger than the context size",
+                MAX_BATCH_SIZE
+            )));
         }
         if self.gpu_layers > i32::MAX as u32 {
             return Err(ProviderError::InvalidConfig(
@@ -160,6 +183,8 @@ pub enum ProviderError {
     InvalidRequest(String),
     #[error("embedded llama.cpp support is unavailable; enable the `llama-cpp` feature")]
     Unavailable,
+    #[error("embedded llama.cpp provider is busy with another inference")]
+    Busy,
     #[error("llama.cpp failure: {0}")]
     Native(String),
 }
@@ -205,6 +230,75 @@ fn termination_reason(termination: Termination) -> StopReason {
     }
 }
 
+#[cfg(any(feature = "llama-cpp", test))]
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PromptMessage {
+    role: String,
+    content: String,
+}
+
+#[cfg(any(feature = "llama-cpp", test))]
+impl PromptMessage {
+    fn new(role: impl Into<String>, content: impl Into<String>) -> Self {
+        Self {
+            role: role.into(),
+            content: content.into(),
+        }
+    }
+}
+
+#[cfg(any(feature = "llama-cpp", test))]
+fn prompt_messages(request: &ModelRequest) -> Vec<PromptMessage> {
+    let mut messages =
+        Vec::with_capacity(request.messages.len() + usize::from(request.system.is_some()));
+    if let Some(system) = &request.system {
+        messages.push(PromptMessage::new("system", system));
+    }
+    messages.extend(request.messages.iter().map(|message| {
+        let role = match message.role {
+            Role::System => "system",
+            Role::User => "user",
+            Role::Assistant => "assistant",
+            Role::Tool => "tool",
+        };
+        PromptMessage::new(role, &message.content)
+    }));
+    messages
+}
+
+#[cfg(any(feature = "llama-cpp", test))]
+fn chunk_ranges(len: usize, batch_size: usize) -> Vec<Range<usize>> {
+    if batch_size == 0 {
+        return Vec::new();
+    }
+    let mut ranges = Vec::with_capacity(len.div_ceil(batch_size));
+    let mut start = 0;
+    while start < len {
+        let end = (start + batch_size).min(len);
+        ranges.push(start..end);
+        start = end;
+    }
+    ranges
+}
+
+#[cfg(any(feature = "llama-cpp", test))]
+async fn acquire_inference_gate(
+    gate: Arc<Mutex<()>>,
+    sender: mpsc::Sender<Result<ModelEvent, ModelError>>,
+) -> Option<OwnedMutexGuard<()>> {
+    tokio::select! {
+        guard = gate.lock_owned() => Some(guard),
+        () = sender.closed() => None,
+    }
+}
+
+#[cfg(any(feature = "llama-cpp", test))]
+fn try_admit_inference(admission: Arc<Semaphore>) -> Result<OwnedSemaphorePermit, ProviderError> {
+    admission
+        .try_acquire_owned()
+        .map_err(|_| ProviderError::Busy)
+}
+
 /// A single-model embedded llama.cpp provider.
 pub struct LlamaCppProvider {
     config: LlamaCppConfig,
@@ -212,6 +306,8 @@ pub struct LlamaCppProvider {
     native: Arc<NativeState>,
     #[cfg(feature = "llama-cpp")]
     inference_gate: Arc<Mutex<()>>,
+    #[cfg(feature = "llama-cpp")]
+    admission: Arc<Semaphore>,
 }
 
 impl std::fmt::Debug for LlamaCppProvider {
@@ -270,6 +366,7 @@ impl LlamaCppProvider {
             config,
             native: Arc::new(native),
             inference_gate: Arc::new(Mutex::new(())),
+            admission: Arc::new(Semaphore::new(1)),
         })
     }
 }
@@ -292,12 +389,12 @@ impl ModelProvider for LlamaCppProvider {
 
     async fn stream(&self, request: ModelRequest) -> Result<ModelStream, ModelError> {
         validate_request(&self.config, &request)?;
+        let admission_permit = try_admit_inference(Arc::clone(&self.admission))?;
 
         let model_id = self.config.model.id.clone();
-        let prompt = format_prompt(&request);
         let max_tokens = request.max_tokens.min(self.config.model.max_output_tokens);
         let temperature = request.temperature.unwrap_or(self.config.temperature);
-        let stops = request.stop;
+        let stops = request.stop.clone();
 
         let native = Arc::clone(&self.native);
         let gate = Arc::clone(&self.inference_gate);
@@ -305,7 +402,10 @@ impl ModelProvider for LlamaCppProvider {
         let (sender, receiver) = mpsc::channel(8);
         let error_sender = sender.clone();
         tokio::spawn(async move {
-            let guard = gate.lock_owned().await;
+            let _admission_permit = admission_permit;
+            let Some(guard) = acquire_inference_gate(gate, sender.clone()).await else {
+                return;
+            };
             if sender.is_closed() {
                 return;
             }
@@ -314,7 +414,7 @@ impl ModelProvider for LlamaCppProvider {
                 generate(
                     &native,
                     &config,
-                    &prompt,
+                    &request,
                     max_tokens,
                     temperature,
                     &stops,
@@ -346,27 +446,26 @@ impl ModelProvider for LlamaCppProvider {
 fn generate(
     native: &NativeState,
     config: &LlamaCppConfig,
-    prompt: &str,
+    request: &ModelRequest,
     max_tokens: u32,
     temperature: f32,
     stops: &[String],
     sender: &mpsc::Sender<Result<ModelEvent, ModelError>>,
 ) -> Result<(), ModelError> {
-    let context_size = NonZeroU32::new(config.model.context_size)
-        .ok_or_else(|| ModelError::Other("context size is zero".into()))?;
-    let context_params = LlamaContextParams::default()
-        .with_n_ctx(Some(context_size))
-        .with_n_batch(config.model.context_size)
-        .with_n_threads(config.threads as i32)
-        .with_n_threads_batch(config.batch_threads as i32);
-    let mut context = native
-        .model
-        .new_context(&native.backend, context_params)
-        .map_err(|error| ModelError::Other(format!("cannot create llama.cpp context: {error}")))?;
+    if sender.is_closed() {
+        return Ok(());
+    }
+    let prompt = render_prompt(&native.model, request)?;
+    if sender.is_closed() {
+        return Ok(());
+    }
     let prompt_tokens = native
         .model
-        .str_to_token(prompt, AddBos::Always)
+        .str_to_token(&prompt, AddBos::Never)
         .map_err(|error| ModelError::Other(format!("cannot tokenize prompt: {error}")))?;
+    if sender.is_closed() {
+        return Ok(());
+    }
     let prompt_len = u32::try_from(prompt_tokens.len())
         .map_err(|_| ModelError::Other("prompt token count exceeds u32".into()))?;
     if prompt_tokens.is_empty() || prompt_len >= config.model.context_size {
@@ -374,14 +473,51 @@ fn generate(
             "prompt does not fit in the configured context".into(),
         ));
     }
+
+    let context_size = NonZeroU32::new(config.model.context_size)
+        .ok_or_else(|| ModelError::Other("context size is zero".into()))?;
+    let context_params = LlamaContextParams::default()
+        .with_n_ctx(Some(context_size))
+        .with_n_batch(config.batch_size)
+        .with_n_threads(config.threads as i32)
+        .with_n_threads_batch(config.batch_threads as i32);
+    let mut context = native
+        .model
+        .new_context(&native.backend, context_params)
+        .map_err(|error| ModelError::Other(format!("cannot create llama.cpp context: {error}")))?;
+    if sender.is_closed() {
+        return Ok(());
+    }
     let output_limit = max_tokens.min(config.model.context_size - prompt_len);
-    let mut batch = LlamaBatch::new(prompt_tokens.len(), 1);
-    batch
-        .add_sequence(&prompt_tokens, 0, false)
-        .map_err(|error| ModelError::Other(format!("cannot create prompt batch: {error}")))?;
-    context
-        .decode(&mut batch)
-        .map_err(|error| ModelError::Other(format!("cannot decode prompt: {error}")))?;
+    let batch_size = usize::try_from(config.batch_size)
+        .map_err(|_| ModelError::Other("batch size exceeds usize".into()))?;
+    let mut batch = LlamaBatch::new(batch_size, 1);
+    for range in chunk_ranges(prompt_tokens.len(), batch_size) {
+        if sender.is_closed() {
+            return Ok(());
+        }
+        batch.clear();
+        for index in range {
+            let position = i32::try_from(index)
+                .map_err(|_| ModelError::Other("prompt token position exceeds i32".into()))?;
+            batch
+                .add(
+                    prompt_tokens[index],
+                    position,
+                    &[0],
+                    index + 1 == prompt_tokens.len(),
+                )
+                .map_err(|error| {
+                    ModelError::Other(format!("cannot create prompt batch: {error}"))
+                })?;
+        }
+        context
+            .decode(&mut batch)
+            .map_err(|error| ModelError::Other(format!("cannot decode prompt: {error}")))?;
+        if sender.is_closed() {
+            return Ok(());
+        }
+    }
 
     let mut sampler = if temperature == 0.0 {
         LlamaSampler::greedy()
@@ -449,6 +585,23 @@ fn generate(
         stop_reason: termination_reason(termination),
     }));
     Ok(())
+}
+
+#[cfg(feature = "llama-cpp")]
+fn render_prompt(model: &LlamaModel, request: &ModelRequest) -> Result<String, ModelError> {
+    let template = model.chat_template(None).map_err(|error| {
+        ModelError::Other(format!(
+            "GGUF model is missing usable tokenizer.chat_template metadata; no fallback template is applied: {error}"
+        ))
+    })?;
+    let messages = prompt_messages(request)
+        .into_iter()
+        .map(|message| LlamaChatMessage::new(message.role, message.content))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| ModelError::Other(format!("invalid chat message: {error}")))?;
+    model
+        .apply_chat_template(&template, &messages, true)
+        .map_err(|error| ModelError::Other(format!("cannot apply GGUF chat template: {error}")))
 }
 
 #[cfg(feature = "llama-cpp")]
@@ -555,36 +708,6 @@ fn validate_request(config: &LlamaCppConfig, request: &ModelRequest) -> Result<(
     Ok(())
 }
 
-#[cfg(any(feature = "llama-cpp", test))]
-fn format_prompt(request: &ModelRequest) -> String {
-    let mut prompt = String::new();
-    if let Some(system) = &request.system {
-        let _ = write!(prompt, "<|system|>\n{system}\n");
-    }
-    for message in &request.messages {
-        match message.role {
-            Role::System => {
-                let _ = write!(prompt, "<|system|>\n{}\n", message.content);
-            }
-            Role::User => {
-                let _ = write!(prompt, "<|user|>\n{}\n", message.content);
-            }
-            Role::Assistant => {
-                let _ = write!(prompt, "<|assistant|>\n{}\n", message.content);
-            }
-            Role::Tool => {
-                let name = message.tool_name.as_deref().unwrap_or("unknown");
-                let id = message
-                    .tool_call_id
-                    .map_or_else(|| "unknown".into(), |id| id.to_string());
-                let _ = write!(prompt, "<|tool:{name}:{id}|>\n{}\n", message.content);
-            }
-        }
-    }
-    prompt.push_str("<|assistant|>\n");
-    prompt
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -597,7 +720,8 @@ mod tests {
     #[cfg(feature = "llama-cpp")]
     use super::StopBuffer;
     use super::{
-        GgufModel, LlamaCppConfig, LlamaCppProvider, ProviderError, capabilities, format_prompt,
+        GgufModel, LlamaCppConfig, LlamaCppProvider, MAX_BATCH_SIZE, PromptMessage, ProviderError,
+        acquire_inference_gate, capabilities, chunk_ranges, prompt_messages, try_admit_inference,
         validate_request,
     };
     use super::{Termination, termination_reason};
@@ -633,6 +757,7 @@ mod tests {
             model: GgufModel::new("local-test", &fixture.0, 2_048, 256).expect("valid descriptor"),
             threads: 2,
             batch_threads: 2,
+            batch_size: 512,
             gpu_layers: 0,
             temperature: 0.7,
             seed: 42,
@@ -711,6 +836,18 @@ mod tests {
         assert!(candidate.validate().is_err());
 
         candidate = config(&fixture);
+        candidate.batch_size = 0;
+        assert!(candidate.validate().is_err());
+
+        candidate = config(&fixture);
+        candidate.batch_size = MAX_BATCH_SIZE + 1;
+        assert!(candidate.validate().is_err());
+
+        candidate = config(&fixture);
+        candidate.batch_size = candidate.model.context_size() + 1;
+        assert!(candidate.validate().is_err());
+
+        candidate = config(&fixture);
         candidate.temperature = f32::NAN;
         assert!(candidate.validate().is_err());
 
@@ -724,17 +861,51 @@ mod tests {
     }
 
     #[test]
-    fn prompt_format_is_deterministic_for_all_message_roles() {
+    fn prompt_messages_preserve_deterministic_role_order() {
         let request = request("local-test");
-        let tool_call_id = request.messages[2].tool_call_id.expect("tool call id");
-        let prompt = format_prompt(&request);
-
         assert_eq!(
-            prompt,
-            format!(
-                "<|system|>\nBe concise.\n<|user|>\nhello\n<|assistant|>\nHi!\n<|tool:lookup:{tool_call_id}|>\ntool output\n<|assistant|>\n"
-            )
+            prompt_messages(&request),
+            vec![
+                PromptMessage::new("system", "Be concise."),
+                PromptMessage::new("user", "hello"),
+                PromptMessage::new("assistant", "Hi!"),
+                PromptMessage::new("tool", "tool output"),
+            ]
         );
+    }
+
+    #[test]
+    fn prompt_chunks_are_bounded_and_cover_every_token() {
+        assert_eq!(chunk_ranges(10, 4), vec![0..4, 4..8, 8..10]);
+        assert_eq!(chunk_ranges(3, 4), vec![0..3]);
+    }
+
+    #[tokio::test]
+    async fn queued_inference_is_cancelled_when_receiver_is_dropped() {
+        let gate = std::sync::Arc::new(tokio::sync::Mutex::new(()));
+        let held = gate.clone().lock_owned().await;
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        let waiter = tokio::spawn(acquire_inference_gate(gate, sender));
+
+        drop(receiver);
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
+            .await
+            .expect("cancelled waiter finishes")
+            .expect("waiter task does not panic");
+        assert!(result.is_none());
+        drop(held);
+    }
+
+    #[tokio::test]
+    async fn concurrent_inference_is_rejected_at_bounded_admission() {
+        let admission = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+        let permit = try_admit_inference(admission.clone()).expect("first request is admitted");
+
+        let error = try_admit_inference(admission.clone()).expect_err("second request is busy");
+        assert!(matches!(error, ProviderError::Busy));
+
+        drop(permit);
+        assert!(try_admit_inference(admission).is_ok());
     }
 
     #[test]
@@ -847,6 +1018,7 @@ mod tests {
             model: GgufModel::new("live", path, 2_048, 32).expect("valid model descriptor"),
             threads: 2,
             batch_threads: 2,
+            batch_size: 512,
             gpu_layers: 0,
             temperature: 0.0,
             seed: 42,
