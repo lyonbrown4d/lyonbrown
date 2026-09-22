@@ -89,6 +89,16 @@ fn filesystem_loader_rejects_duplicate_names_and_oversized_files() {
 }
 
 #[test]
+fn filesystem_yaml_errors_include_the_source_filename() {
+    let root = TestDir::new();
+    std::fs::write(root.path().join("broken.yaml"), "name: [not valid").unwrap();
+
+    let error = SkillRegistry::load_from_root(root.path()).unwrap_err();
+
+    assert!(error.to_string().contains("broken.yaml"));
+}
+
+#[test]
 fn filesystem_loader_rejects_file_count_and_aggregate_limits() {
     let root = TestDir::new();
     for index in 0..=agent_skill::MAX_SKILL_FILES {

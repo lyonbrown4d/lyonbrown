@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 agent-core = { workspace = true }
+cap-std = { workspace = true }
 serde = { workspace = true }
 serde_yml = { workspace = true }
 thiserror = { workspace = true }

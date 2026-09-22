@@ -2,13 +2,14 @@ use std::sync::{Arc, Mutex};
 
 use agent_core::{
     AgentEvent, ContextItem, ContextItemKind, DataClassification, Locality, ModelCapabilities,
-    ModelTier, StopReason, TokenUsage,
+    ModelTier, RiskLevel, StopReason, TokenUsage, ToolDefinition, ToolInvocation, ToolResult,
+    ToolSource,
 };
 use agent_kernel::{Kernel, KernelModelOptions};
 use agent_model::{
     ModelError, ModelEvent, ModelProvider, ModelRegistry, ModelRequest, ModelStream,
 };
-use agent_tool::{EchoTool, ToolRegistry};
+use agent_tool::{EchoTool, Tool, ToolContext, ToolError, ToolRegistry};
 use async_trait::async_trait;
 use futures::stream;
 
@@ -154,6 +155,7 @@ async fn step_with_tools_selects_worker_and_never_sends_tools_to_control() {
 
 #[tokio::test]
 async fn compiled_context_reaches_provider_with_actual_event_counts() {
+    use agent_context::TokenEstimator;
     use agent_profile::AgentProfile;
     use agent_skill::{Skill, SkillRegistry};
     use agent_workspace::WorkspaceProfile;
@@ -194,6 +196,145 @@ async fn compiled_context_reaches_provider_with_actual_event_counts() {
     assert!(prepared.0 > 0);
     assert!(prepared.1 > 0);
     assert_eq!(prepared.2, 0);
+    let estimator = TokenEstimator::default();
+    assert_eq!(
+        u64::from(prepared.0),
+        estimator.estimate(&serde_json::to_string(&request.system).unwrap())
+    );
+    assert_eq!(
+        u64::from(prepared.1),
+        estimator.estimate(
+            &serde_json::to_string(&(request.messages.as_slice(), request.tools.as_slice()))
+                .unwrap()
+        )
+    );
+    assert!(u64::from(prepared.0) + u64::from(prepared.1) <= u64::from(8_192 - request.max_tokens));
+}
+
+#[tokio::test]
+async fn configured_and_triggered_skills_form_a_deterministic_union() {
+    use agent_profile::AgentProfile;
+    use agent_skill::{Skill, SkillRegistry};
+    use agent_workspace::WorkspaceProfile;
+
+    let provider = Arc::new(RoutingProvider::new());
+    let registry = ModelRegistry::new();
+    registry.register(provider.clone());
+    let mut profile = AgentProfile::builtin_default();
+    profile.default_skills = vec!["z-default".into(), "shared".into()];
+    let mut workspace = WorkspaceProfile::detect(env!("CARGO_MANIFEST_DIR")).unwrap();
+    workspace.enabled_skills = vec!["a-workspace".into(), "shared".into()];
+    let skills = SkillRegistry::new([
+        Skill::from_yaml("name: z-default\ninstructions: DEFAULT_MARKER\n").unwrap(),
+        Skill::from_yaml("name: a-workspace\ninstructions: WORKSPACE_MARKER\n").unwrap(),
+        Skill::from_yaml("name: shared\ntriggers: [hello]\ninstructions: SHARED_MARKER\n").unwrap(),
+        Skill::from_yaml("name: prompt\ntriggers: [hello]\ninstructions: PROMPT_MARKER\n").unwrap(),
+    ])
+    .unwrap();
+    let mut kernel = Kernel::builder()
+        .providers(registry)
+        .agent_profile(profile)
+        .workspace_profile(workspace)
+        .skills(skills)
+        .build();
+
+    kernel.run_turn("hello").await.unwrap();
+
+    let system = provider.requests()[0].system.clone().unwrap();
+    for marker in [
+        "DEFAULT_MARKER",
+        "WORKSPACE_MARKER",
+        "SHARED_MARKER",
+        "PROMPT_MARKER",
+    ] {
+        assert_eq!(system.matches(marker).count(), 1);
+    }
+    let matched_section = system.split("## Matched Skills").nth(1).unwrap();
+    let headings = matched_section
+        .lines()
+        .filter(|line| line.starts_with("### "))
+        .collect::<Vec<_>>();
+    assert!(headings.windows(2).all(|pair| pair[0] <= pair[1]));
+}
+
+#[tokio::test]
+async fn unknown_configured_skill_is_a_logged_context_error() {
+    use agent_profile::AgentProfile;
+    let provider = Arc::new(RoutingProvider::new());
+    let registry = ModelRegistry::new();
+    registry.register(provider);
+    let mut profile = AgentProfile::builtin_default();
+    profile.default_skills = vec!["missing".into()];
+    let mut kernel = Kernel::builder()
+        .providers(registry)
+        .agent_profile(profile)
+        .build();
+
+    let error = kernel.run_turn("hello").await.unwrap_err();
+
+    assert!(matches!(error, agent_core::AgentError::Context(_)));
+    assert!(error.to_string().contains("missing"));
+    assert_eq!(kernel.event_log().last().unwrap().kind(), "Error");
+}
+
+struct HugeSchemaTool {
+    definition: ToolDefinition,
+}
+
+impl HugeSchemaTool {
+    fn new() -> Self {
+        Self {
+            definition: ToolDefinition {
+                name: "huge".into(),
+                description: "large schema".into(),
+                input_schema: serde_json::json!({
+                    "type": "object",
+                    "description": "x".repeat(16_384),
+                }),
+                source: ToolSource::BuiltIn,
+                risk: RiskLevel::Read,
+                requires_secrets: vec![],
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl Tool for HugeSchemaTool {
+    fn definition(&self) -> &ToolDefinition {
+        &self.definition
+    }
+
+    async fn invoke(
+        &self,
+        _context: &ToolContext,
+        invocation: &ToolInvocation,
+    ) -> Result<ToolResult, ToolError> {
+        Ok(ToolResult {
+            invocation_id: invocation.id,
+            ok: true,
+            output: String::new(),
+            truncated: false,
+            duration_ms: 0,
+            error: None,
+        })
+    }
+}
+
+#[tokio::test]
+async fn oversized_tool_schema_cannot_bypass_the_input_budget() {
+    let provider = Arc::new(RoutingProvider::with_context_window(2_048));
+    let registry = ModelRegistry::new();
+    registry.register(provider.clone());
+    let tools = ToolRegistry::new();
+    tools.register(Arc::new(HugeSchemaTool::new()));
+    let mut kernel = Kernel::builder().providers(registry).tools(tools).build();
+
+    let error = kernel.run_turn("list files").await.unwrap_err();
+
+    assert!(matches!(error, agent_core::AgentError::Context(_)));
+    assert!(provider.requests().is_empty());
+    assert_eq!(kernel.event_log().last().unwrap().kind(), "Error");
 }
 
 #[tokio::test]

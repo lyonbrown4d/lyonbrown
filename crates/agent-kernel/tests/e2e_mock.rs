@@ -313,6 +313,24 @@ async fn tool_use_without_calls_is_logged_as_a_provider_protocol_error() {
     assert_eq!(kernel.event_log().last().unwrap().kind(), "Error");
 }
 
+#[tokio::test]
+async fn oversized_tool_arguments_cannot_bypass_next_step_budget() {
+    let arguments = "x".repeat(256 * 1024);
+    let (mut kernel, _) = kernel_with_script(
+        vec![
+            ScriptedStep::tool_call("echo", json!({"text": arguments})),
+            ScriptedStep::text("must not be requested"),
+        ],
+        20,
+    );
+
+    let error = kernel.run_turn("run a shell command").await.unwrap_err();
+
+    assert!(matches!(error, AgentError::Context(_)));
+    assert_eq!(kernel.last_requests().len(), 1);
+    assert_eq!(kernel.event_log().last().unwrap().kind(), "Error");
+}
+
 struct RedactingBroker;
 
 struct DenyApproval;

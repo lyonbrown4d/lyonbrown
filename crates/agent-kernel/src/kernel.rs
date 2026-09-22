@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_context::{CompileRequest, PromptCompiler};
+use agent_context::{CompileRequest, PromptCompiler, TokenEstimator};
 use agent_core::{
     AgentError, AgentEvent, ContextItem, ContextItemKind, ObservationId, StepId, StepOutcome,
     StopReason, TokenUsage, ToolResult, TurnId,
@@ -14,7 +14,7 @@ use agent_model::{
 };
 use agent_profile::AgentProfile;
 use agent_secret::{NoopBroker, SecretBroker};
-use agent_skill::SkillRegistry;
+use agent_skill::{Skill, SkillRegistry};
 use agent_tool::{
     AllowAllApproval, ApprovalDecision, ApprovalPolicy, ToolContext, ToolExecutionError,
     ToolExecutor, ToolRegistry,
@@ -126,15 +126,17 @@ impl Kernel {
             turn_id,
             ts: Utc::now(),
         })?;
-        self.session.messages.push(ChatMessage {
-            role: Role::User,
-            content: user_text.to_owned(),
-            tool_call_id: None,
-            tool_name: None,
-            tool_calls: vec![],
-        });
-        self.session
-            .remember(ContextItemKind::Message, user_text, "user");
+        self.session.push_message(
+            ChatMessage {
+                role: Role::User,
+                content: user_text.to_owned(),
+                tool_call_id: None,
+                tool_name: None,
+                tool_calls: vec![],
+            },
+            ContextItemKind::Message,
+            "user",
+        );
 
         let mut steps = 0;
         let mut escalations = 0;
@@ -193,23 +195,43 @@ impl Kernel {
                 .max_tokens
                 .unwrap_or(selected.capabilities.max_output_tokens)
                 .min(selected.capabilities.max_output_tokens);
-            let token_budget = u64::from(
+            let input_budget = u64::from(
                 selected
                     .capabilities
                     .context_window
                     .saturating_sub(max_tokens),
             );
-            let matched_skills = self
-                .skills
-                .match_prompt(user_text)
-                .into_iter()
-                .cloned()
-                .collect::<Vec<_>>();
+            let request_tools = if step_context.needs_tools && selected.capabilities.supports_tools
+            {
+                tool_definitions
+            } else {
+                Vec::new()
+            };
+            let estimator = TokenEstimator::default();
+            let fixed_context_tokens = serialized_context_tokens(&estimator, &[], &request_tools)?;
+            let token_budget = match input_budget.checked_sub(fixed_context_tokens) {
+                Some(budget) => budget,
+                None => {
+                    let error = AgentError::Context(format!(
+                        "tool definitions require {fixed_context_tokens} tokens but input budget is {input_budget}"
+                    ));
+                    self.record_error(error.to_string())?;
+                    return Err(error);
+                }
+            };
+            let active_skills = match self.active_skills(user_text) {
+                Ok(skills) => skills,
+                Err(error) => {
+                    let error = AgentError::Context(error);
+                    self.record_error(error.to_string())?;
+                    return Err(error);
+                }
+            };
             let compiled = match self.prompt_compiler.compile(CompileRequest {
                 profile: &self.agent_profile,
                 model: &selected.capabilities,
                 workspace: &self.workspace_profile,
-                skills: &matched_skills,
+                skills: &active_skills,
                 tool_guidance: None,
                 context_items: &self.session.working_memory,
                 token_budget,
@@ -221,10 +243,24 @@ impl Kernel {
                     return Err(error);
                 }
             };
-            let system_tokens = u32::try_from(compiled.system_tokens).map_err(|_| {
+            let request_messages = self.session.selected_messages(&compiled.context_items);
+            let system_tokens = serialized_system_tokens(&estimator, &compiled.system_prompt)?;
+            let context_tokens =
+                serialized_context_tokens(&estimator, &request_messages, &request_tools)?;
+            let finalized_tokens = system_tokens.checked_add(context_tokens).ok_or_else(|| {
+                AgentError::Context("finalized request token count overflowed u64".into())
+            })?;
+            if finalized_tokens > input_budget {
+                let error = AgentError::Context(format!(
+                    "finalized request requires {finalized_tokens} tokens but input budget is {input_budget}"
+                ));
+                self.record_error(error.to_string())?;
+                return Err(error);
+            }
+            let system_tokens = u32::try_from(system_tokens).map_err(|_| {
                 AgentError::Context("compiled system token count exceeds u32".into())
             })?;
-            let context_tokens = u32::try_from(compiled.context_tokens).map_err(|_| {
+            let context_tokens = u32::try_from(context_tokens).map_err(|_| {
                 AgentError::Context("compiled context token count exceeds u32".into())
             })?;
             let dropped = u32::try_from(compiled.dropped)
@@ -247,12 +283,8 @@ impl Kernel {
             let request = ModelRequest {
                 model: selected.capabilities.model.clone(),
                 system: Some(compiled.system_prompt),
-                messages: request_messages(&self.session.messages, &compiled.context_items),
-                tools: if step_context.needs_tools && selected.capabilities.supports_tools {
-                    tool_definitions
-                } else {
-                    Vec::new()
-                },
+                messages: request_messages,
+                tools: request_tools,
                 max_tokens,
                 temperature: self.model_options.temperature,
                 json_mode: false,
@@ -350,15 +382,17 @@ impl Kernel {
             };
             match self.gate.evaluate(&outcome, &selected.capabilities) {
                 GateVerdict::Pass => {
-                    self.session.messages.push(ChatMessage {
-                        role: Role::Assistant,
-                        content: text.clone(),
-                        tool_call_id: None,
-                        tool_name: None,
-                        tool_calls: vec![],
-                    });
-                    self.session
-                        .remember(ContextItemKind::Message, text.clone(), "assistant");
+                    self.session.push_message(
+                        ChatMessage {
+                            role: Role::Assistant,
+                            content: text.clone(),
+                            tool_call_id: None,
+                            tool_name: None,
+                            tool_calls: vec![],
+                        },
+                        ContextItemKind::Message,
+                        "assistant",
+                    );
                     self.emit(AgentEvent::StepCompleted {
                         step_id,
                         outcome,
@@ -399,13 +433,15 @@ impl Kernel {
         text: String,
         tool_calls: Vec<agent_core::ToolInvocation>,
     ) -> Result<(), AgentError> {
-        self.session.messages.push(ChatMessage {
+        let assistant_message = ChatMessage {
             role: Role::Assistant,
             content: text.clone(),
             tool_call_id: None,
             tool_name: None,
             tool_calls: tool_calls.clone(),
-        });
+        };
+        self.session
+            .push_unbudgeted_message(assistant_message.clone());
 
         let call_ids = tool_calls.iter().map(|call| call.id).collect();
         for invocation in tool_calls {
@@ -486,18 +522,15 @@ impl Kernel {
                 observation_id: ObservationId::new(),
                 ts: Utc::now(),
             })?;
-            self.session.messages.push(ChatMessage {
+            let tool_message = ChatMessage {
                 role: Role::Tool,
                 content: observation.clone(),
                 tool_call_id: Some(invocation.id),
                 tool_name: Some(invocation.name.clone()),
                 tool_calls: vec![],
-            });
-            self.session.remember(
-                ContextItemKind::ToolObservation,
-                observation,
-                format!("tool://{}#{}", invocation.name, invocation.id),
-            );
+            };
+            self.session
+                .push_tool_observation(tool_message, &assistant_message);
         }
 
         self.emit(AgentEvent::StepCompleted {
@@ -536,6 +569,26 @@ impl Kernel {
             turn_id,
             ts: Utc::now(),
         })
+    }
+
+    fn active_skills(&self, prompt: &str) -> Result<Vec<Skill>, String> {
+        let mut active = BTreeMap::new();
+        for name in self
+            .agent_profile
+            .default_skills
+            .iter()
+            .chain(self.workspace_profile.enabled_skills.iter())
+        {
+            let skill = self
+                .skills
+                .get(name)
+                .ok_or_else(|| format!("configured skill `{name}` is not registered"))?;
+            active.insert(skill.name.clone(), skill.clone());
+        }
+        for skill in self.skills.match_prompt(prompt) {
+            active.insert(skill.name.clone(), skill.clone());
+        }
+        Ok(active.into_values().collect())
     }
 }
 
@@ -691,27 +744,22 @@ impl Default for KernelBuilder {
     }
 }
 
-fn request_messages(messages: &[ChatMessage], context_items: &[ContextItem]) -> Vec<ChatMessage> {
-    let selected: HashSet<_> = context_items
-        .iter()
-        .map(|item| item.content.as_str())
-        .collect();
-    let selected_tool_calls: HashSet<_> = messages
-        .iter()
-        .filter(|message| message.role == Role::Tool && selected.contains(message.content.as_str()))
-        .filter_map(|message| message.tool_call_id)
-        .collect();
-    messages
-        .iter()
-        .filter(|message| {
-            selected.contains(message.content.as_str())
-                || message
-                    .tool_calls
-                    .iter()
-                    .any(|call| selected_tool_calls.contains(&call.id))
+fn serialized_system_tokens(estimator: &TokenEstimator, system: &str) -> Result<u64, AgentError> {
+    serde_json::to_string(&Some(system))
+        .map(|serialized| estimator.estimate(&serialized))
+        .map_err(|error| AgentError::Context(format!("could not serialize system prompt: {error}")))
+}
+
+fn serialized_context_tokens(
+    estimator: &TokenEstimator,
+    messages: &[ChatMessage],
+    tools: &[agent_core::ToolDefinition],
+) -> Result<u64, AgentError> {
+    serde_json::to_string(&(messages, tools))
+        .map(|serialized| estimator.estimate(&serialized))
+        .map_err(|error| {
+            AgentError::Context(format!("could not serialize request context: {error}"))
         })
-        .cloned()
-        .collect()
 }
 
 fn step_needs_tools(prompt: &str) -> bool {
@@ -721,29 +769,112 @@ fn step_needs_tools(prompt: &str) -> bool {
         .filter(|word| !word.is_empty())
         .collect();
     let file_action = [
-        "list", "listing", "read", "reading", "write", "writing", "open", "show",
+        "list", "listing", "read", "reading", "write", "writing", "create", "delete", "search",
+        "edit", "open", "show",
     ]
     .iter()
     .any(|word| words.contains(word))
         && ["file", "files", "directory", "folder", "filesystem"]
             .iter()
             .any(|word| words.contains(word));
-    let command_action = ["shell", "command", "run", "execute", "build", "test"]
+    let path_action = [
+        "read", "write", "create", "delete", "search", "edit", "open",
+    ]
+    .iter()
+    .any(|word| words.contains(word))
+        && (lower.contains('/')
+            || lower.contains(".rs")
+            || lower.contains(".toml")
+            || lower.contains(".json")
+            || lower.contains(".yaml")
+            || lower.contains(".yml"));
+    let command_action = ["run", "execute"].iter().any(|word| words.contains(word))
+        && ["shell", "command", "script", "tests"]
+            .iter()
+            .any(|word| words.contains(word));
+    let project_action = ["build", "test"].iter().any(|word| words.contains(word))
+        && ["project", "code", "workspace", "repository"]
+            .iter()
+            .any(|word| words.contains(word));
+    let repository_action = ["inspect", "search"]
         .iter()
-        .any(|word| words.contains(word));
-    const CHINESE: [&str; 12] = [
-        "列出文件",
-        "查看文件",
-        "读取文件",
-        "读文件",
-        "写入文件",
-        "写文件",
-        "目录",
-        "文件夹",
-        "命令",
-        "执行",
-        "构建",
-        "测试",
-    ];
-    file_action || command_action || CHINESE.iter().any(|needle| lower.contains(needle))
+        .any(|word| words.contains(word))
+        && ["repository", "repo", "workspace"]
+            .iter()
+            .any(|word| words.contains(word));
+    let chinese_file_action = [
+        "列出", "查看", "读取", "读", "写入", "写", "创建", "删除", "搜索", "编辑",
+    ]
+    .iter()
+    .any(|action| lower.contains(action))
+        && lower.contains("文件");
+    let chinese_command_action = ["执行", "运行"].iter().any(|action| lower.contains(action))
+        && (lower.contains("命令") || lower.contains("shell"));
+    let chinese_project_action = (lower.contains("构建") || lower.contains("测试"))
+        && (lower.contains("项目") || lower.contains("代码"));
+    let chinese_repository_action = (lower.contains("检查") || lower.contains("搜索"))
+        && (lower.contains("仓库") || lower.contains("代码库"));
+    file_action
+        || path_action
+        || command_action
+        || project_action
+        || repository_action
+        || chinese_file_action
+        || chinese_command_action
+        || chinese_project_action
+        || chinese_repository_action
+}
+
+#[cfg(test)]
+mod tests {
+    use super::step_needs_tools;
+
+    #[test]
+    fn tool_intent_requires_an_action_and_concrete_object() {
+        for prompt in [
+            "list files",
+            "read the config file",
+            "write a file",
+            "create src/main.rs",
+            "delete the old file",
+            "search files for TODO",
+            "edit Cargo.toml",
+            "run a shell command",
+            "execute command cargo fmt",
+            "build the project",
+            "test this code",
+            "inspect the repository",
+            "列出文件",
+            "读取配置文件",
+            "写入文件",
+            "创建文件",
+            "删除文件",
+            "搜索文件",
+            "编辑文件",
+            "执行命令",
+            "运行 shell 命令",
+            "构建项目",
+            "测试代码",
+            "检查仓库",
+        ] {
+            assert!(step_needs_tools(prompt), "expected tool intent: {prompt}");
+        }
+
+        for prompt in [
+            "explain unit testing",
+            "what is a build",
+            "describe the command pattern",
+            "explain the directory concept",
+            "how do filesystems work",
+            "解释单元测试",
+            "什么是构建",
+            "解释命令模式",
+            "目录是什么概念",
+        ] {
+            assert!(
+                !step_needs_tools(prompt),
+                "unexpected tool intent: {prompt}"
+            );
+        }
+    }
 }

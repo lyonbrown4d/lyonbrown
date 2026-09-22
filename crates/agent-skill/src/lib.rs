@@ -7,6 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use cap_std::fs::Dir;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -71,6 +72,12 @@ pub enum SkillError {
     AggregateTooLarge { limit: usize },
     #[error("skill file {0} is not valid UTF-8")]
     InvalidUtf8(PathBuf),
+    #[error("invalid skill file {path}: {source}")]
+    File {
+        path: PathBuf,
+        #[source]
+        source: Box<SkillError>,
+    },
 }
 
 impl Skill {
@@ -133,6 +140,10 @@ impl SkillRegistry {
             .collect()
     }
 
+    pub fn get(&self, name: &str) -> Option<&Skill> {
+        self.skills.get(name)
+    }
+
     /// Loads `*.yaml` skills from an explicit directory root in stable filename order.
     pub fn load_from_root(root: impl AsRef<Path>) -> Result<Self, SkillError> {
         let root = root.as_ref();
@@ -152,30 +163,34 @@ impl SkillRegistry {
         if is_link(&root_metadata) {
             return Err(SkillError::Linked(root.to_path_buf()));
         }
-        let entries = fs::read_dir(root).map_err(|source| SkillError::Io {
+        let directory = open_skill_dir(root, &root_metadata)?;
+        let entries = directory.entries().map_err(|source| SkillError::Io {
             path: root.to_path_buf(),
             source,
         })?;
-        let mut paths = Vec::with_capacity(MAX_SKILL_FILES);
+        let mut names = Vec::with_capacity(MAX_SKILL_FILES);
         let mut aggregate_bytes = 0_usize;
         for entry in entries {
-            let path = entry
+            let name = entry
                 .map_err(|source| SkillError::Io {
                     path: root.to_path_buf(),
                     source,
                 })?
-                .path();
-            if !path
+                .file_name();
+            let path = root.join(&name);
+            if !Path::new(&name)
                 .extension()
                 .is_some_and(|extension| extension == "yaml")
             {
                 continue;
             }
-            let metadata = fs::symlink_metadata(&path).map_err(|source| SkillError::Io {
-                path: path.clone(),
-                source,
-            })?;
-            if is_link(&metadata) {
+            let metadata = directory
+                .symlink_metadata(&name)
+                .map_err(|source| SkillError::Io {
+                    path: path.clone(),
+                    source,
+                })?;
+            if is_cap_link(&metadata) {
                 return Err(SkillError::Linked(path));
             }
             if !metadata.is_file() {
@@ -187,7 +202,7 @@ impl SkillRegistry {
                     limit: MAX_SKILL_FILE_BYTES,
                 });
             }
-            if paths.len() == MAX_SKILL_FILES {
+            if names.len() == MAX_SKILL_FILES {
                 return Err(SkillError::TooManyFiles {
                     limit: MAX_SKILL_FILES,
                 });
@@ -202,18 +217,21 @@ impl SkillRegistry {
                     limit: MAX_AGGREGATE_SKILL_BYTES,
                 });
             }
-            paths.push(path);
+            names.push(name);
         }
-        paths.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+        names.sort();
 
-        let mut skills = Vec::with_capacity(paths.len());
+        let mut skills = Vec::with_capacity(names.len());
         let mut read_bytes = 0_usize;
-        for path in paths {
-            let metadata = fs::symlink_metadata(&path).map_err(|source| SkillError::Io {
-                path: path.clone(),
-                source,
-            })?;
-            if is_link(&metadata) {
+        for name in names {
+            let path = root.join(&name);
+            let metadata = directory
+                .symlink_metadata(&name)
+                .map_err(|source| SkillError::Io {
+                    path: path.clone(),
+                    source,
+                })?;
+            if is_cap_link(&metadata) {
                 return Err(SkillError::Linked(path));
             }
             if !metadata.is_file() {
@@ -226,7 +244,8 @@ impl SkillRegistry {
                 });
             }
             let mut bytes = Vec::with_capacity(metadata.len() as usize);
-            fs::File::open(&path)
+            directory
+                .open(&name)
                 .and_then(|file| {
                     file.take((MAX_SKILL_FILE_BYTES + 1) as u64)
                         .read_to_end(&mut bytes)
@@ -254,7 +273,10 @@ impl SkillRegistry {
             }
             let yaml =
                 String::from_utf8(bytes).map_err(|_| SkillError::InvalidUtf8(path.clone()))?;
-            skills.push(Skill::from_yaml(&yaml)?);
+            skills.push(Skill::from_yaml(&yaml).map_err(|source| SkillError::File {
+                path,
+                source: Box::new(source),
+            })?);
         }
         Self::new(skills)
     }
@@ -262,6 +284,62 @@ impl SkillRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &Skill> {
         self.skills.values()
     }
+}
+
+#[cfg(unix)]
+fn open_skill_dir(root: &Path, before: &std::fs::Metadata) -> Result<Dir, SkillError> {
+    use cap_std::fs::MetadataExt as CapMetadataExt;
+    use std::os::unix::fs::MetadataExt as StdMetadataExt;
+
+    let directory =
+        Dir::open_ambient_dir(root, cap_std::ambient_authority()).map_err(|source| {
+            SkillError::Io {
+                path: root.to_path_buf(),
+                source,
+            }
+        })?;
+    let opened = directory.dir_metadata().map_err(|source| SkillError::Io {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    if StdMetadataExt::dev(before) != CapMetadataExt::dev(&opened)
+        || StdMetadataExt::ino(before) != CapMetadataExt::ino(&opened)
+    {
+        return Err(SkillError::Linked(root.to_path_buf()));
+    }
+    Ok(directory)
+}
+
+#[cfg(windows)]
+fn open_skill_dir(root: &Path, _before: &std::fs::Metadata) -> Result<Dir, SkillError> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(root)
+        .map_err(|source| SkillError::Io {
+            path: root.to_path_buf(),
+            source,
+        })?;
+    let metadata = file.metadata().map_err(|source| SkillError::Io {
+        path: root.to_path_buf(),
+        source,
+    })?;
+    if is_link(&metadata) {
+        return Err(SkillError::Linked(root.to_path_buf()));
+    }
+    Ok(Dir::from_std_file(file))
+}
+
+#[cfg(not(any(unix, windows)))]
+fn open_skill_dir(root: &Path, _before: &std::fs::Metadata) -> Result<Dir, SkillError> {
+    Dir::open_ambient_dir(root, cap_std::ambient_authority()).map_err(|source| SkillError::Io {
+        path: root.to_path_buf(),
+        source,
+    })
 }
 
 fn validate_unlinked_ancestors(path: &Path) -> Result<(), SkillError> {
@@ -286,6 +364,19 @@ fn validate_unlinked_ancestors(path: &Path) -> Result<(), SkillError> {
 #[cfg(not(windows))]
 fn is_link(metadata: &fs::Metadata) -> bool {
     metadata.file_type().is_symlink()
+}
+
+#[cfg(not(windows))]
+fn is_cap_link(metadata: &cap_std::fs::Metadata) -> bool {
+    metadata.file_type().is_symlink()
+}
+
+#[cfg(windows)]
+fn is_cap_link(metadata: &cap_std::fs::Metadata) -> bool {
+    use cap_std::fs::MetadataExt;
+    const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+    metadata.file_type().is_symlink()
+        || metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
 }
 
 #[cfg(windows)]
