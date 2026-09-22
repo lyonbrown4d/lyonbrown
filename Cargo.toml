@@ -69,6 +69,7 @@ chrono = { version = "0.4", features = ["serde"] }
 dirs = "7.0.0"
 which = "8.0.6"
 cap-std = "4.0.3"
+llama-cpp-2 = { version = "=0.1.156", default-features = false }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 crossterm = "0.29"
 
