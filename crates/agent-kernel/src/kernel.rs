@@ -227,13 +227,14 @@ impl Kernel {
                     return Err(error);
                 }
             };
+            let budget_items = self.session.budget_items();
             let compiled = match self.prompt_compiler.compile(CompileRequest {
                 profile: &self.agent_profile,
                 model: &selected.capabilities,
                 workspace: &self.workspace_profile,
                 skills: &active_skills,
                 tool_guidance: None,
-                context_items: &self.session.working_memory,
+                context_items: &budget_items,
                 token_budget,
             }) {
                 Ok(compiled) => compiled,
@@ -802,6 +803,16 @@ fn step_needs_tools(prompt: &str) -> bool {
         && ["repository", "repo", "workspace"]
             .iter()
             .any(|word| words.contains(word));
+    let explanatory = ["explain", "describe", "what", "meaning", "concept"]
+        .iter()
+        .any(|word| words.contains(word));
+    let coding_action = ["fix", "repair", "implement"]
+        .iter()
+        .any(|word| words.contains(word))
+        && ["bug", "error", "test", "tests", "feature", "code"]
+            .iter()
+            .any(|word| words.contains(word))
+        && !explanatory;
     let chinese_file_action = [
         "列出", "查看", "读取", "读", "写入", "写", "创建", "删除", "搜索", "编辑",
     ]
@@ -814,15 +825,23 @@ fn step_needs_tools(prompt: &str) -> bool {
         && (lower.contains("项目") || lower.contains("代码"));
     let chinese_repository_action = (lower.contains("检查") || lower.contains("搜索"))
         && (lower.contains("仓库") || lower.contains("代码库"));
+    let chinese_coding_action = (lower.contains("修复") || lower.contains("实现"))
+        && ["错误", "缺陷", "测试", "功能", "代码"]
+            .iter()
+            .any(|object| lower.contains(object))
+        && !lower.contains("解释")
+        && !lower.contains("什么是");
     file_action
         || path_action
         || command_action
         || project_action
         || repository_action
+        || coding_action
         || chinese_file_action
         || chinese_command_action
         || chinese_project_action
         || chinese_repository_action
+        || chinese_coding_action
 }
 
 #[cfg(test)]
@@ -844,6 +863,9 @@ mod tests {
             "build the project",
             "test this code",
             "inspect the repository",
+            "fix this bug",
+            "implement feature",
+            "repair failing test",
             "列出文件",
             "读取配置文件",
             "写入文件",
@@ -856,6 +878,8 @@ mod tests {
             "构建项目",
             "测试代码",
             "检查仓库",
+            "修复这个错误",
+            "实现这个功能",
         ] {
             assert!(step_needs_tools(prompt), "expected tool intent: {prompt}");
         }
@@ -870,6 +894,11 @@ mod tests {
             "什么是构建",
             "解释命令模式",
             "目录是什么概念",
+            "explain how bug fixes work",
+            "what does feature implementation mean",
+            "describe a failing test",
+            "解释如何修复错误",
+            "什么是功能实现",
         ] {
             assert!(
                 !step_needs_tools(prompt),

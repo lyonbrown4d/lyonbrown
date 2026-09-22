@@ -344,12 +344,14 @@ async fn secret_working_memory_never_reaches_provider_request() {
     registry.register(provider.clone());
     let mut secret = ContextItem::new(ContextItemKind::Memory, "do-not-send", 0);
     secret.classification = DataClassification::Secret;
+    let document = ContextItem::new(ContextItemKind::Document, "public document", 1);
+    let memory = ContextItem::new(ContextItemKind::Memory, "public memory", 1);
     let mut kernel = Kernel::builder()
         .providers(registry)
-        .context_items([secret])
+        .context_items([secret, document, memory])
         .build();
 
-    kernel.run_turn("say hi").await.unwrap();
+    let events = kernel.run_turn("say hi").await.unwrap();
 
     let request = &provider.requests()[0];
     assert!(
@@ -365,6 +367,40 @@ async fn secret_working_memory_never_reaches_provider_request() {
             .iter()
             .all(|message| !message.content.contains("do-not-send"))
     );
+    assert!(request.messages.iter().any(|message| {
+        message.role == agent_model::Role::System
+            && message.content.contains("Document")
+            && message.content.contains("public document")
+    }));
+    assert!(request.messages.iter().any(|message| {
+        message.role == agent_model::Role::System
+            && message.content.contains("Memory")
+            && message.content.contains("public memory")
+    }));
+    let prepared = events
+        .iter()
+        .find_map(|event| match event {
+            AgentEvent::ContextPrepared {
+                system_tokens,
+                context_tokens,
+                ..
+            } => Some((u64::from(*system_tokens), u64::from(*context_tokens))),
+            _ => None,
+        })
+        .unwrap();
+    let estimator = agent_context::TokenEstimator::default();
+    assert_eq!(
+        prepared.0,
+        estimator.estimate(&serde_json::to_string(&request.system).unwrap())
+    );
+    assert_eq!(
+        prepared.1,
+        estimator.estimate(
+            &serde_json::to_string(&(request.messages.as_slice(), request.tools.as_slice()))
+                .unwrap()
+        )
+    );
+    assert!(prepared.0 + prepared.1 <= u64::from(8_192 - request.max_tokens));
 }
 
 #[tokio::test]
