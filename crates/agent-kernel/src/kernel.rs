@@ -803,9 +803,11 @@ fn step_needs_tools(prompt: &str) -> bool {
         && ["repository", "repo", "workspace"]
             .iter()
             .any(|word| words.contains(word));
-    let explanatory = ["explain", "describe", "what", "meaning", "concept", "how"]
-        .iter()
-        .any(|word| words.contains(word));
+    let explanatory = [
+        "explain", "describe", "what", "meaning", "concept", "how", "why",
+    ]
+    .iter()
+    .any(|word| words.contains(word));
     let negated = lower.contains("don't")
         || lower.contains("do not")
         || ["not", "never", "avoid", "without"]
@@ -921,6 +923,7 @@ mod tests {
             "解释如何修复错误",
             "什么是功能实现",
             "how should I fix this bug?",
+            "why should I fix this bug?",
             "don't fix this bug",
             "do not implement this feature",
             "如何修复登录问题",
