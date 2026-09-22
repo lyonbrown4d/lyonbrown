@@ -1,4 +1,30 @@
 use agent_skill::{Skill, SkillRegistry};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
+
+struct TestDir(PathBuf);
+
+impl TestDir {
+    fn new() -> Self {
+        let id = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
+        let path =
+            std::env::temp_dir().join(format!("lyonbrown-skill-test-{}-{id}", std::process::id()));
+        std::fs::create_dir_all(&path).unwrap();
+        Self(path)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
 
 fn quarkus_skill() -> Skill {
     Skill::from_yaml(
@@ -14,6 +40,69 @@ context:
 "#,
     )
     .unwrap()
+}
+
+#[test]
+fn loads_yaml_files_in_stable_filename_order_and_missing_directory_is_empty() {
+    let root = TestDir::new();
+    let missing = SkillRegistry::load_from_root(root.path().join("missing")).unwrap();
+    assert_eq!(missing.iter().count(), 0);
+
+    let skills = root.path().join("skills");
+    std::fs::create_dir(&skills).unwrap();
+    std::fs::write(skills.join("z.yaml"), "name: zed\ntriggers: [zed]\n").unwrap();
+    std::fs::write(skills.join("a.yaml"), "name: alpha\ntriggers: [alpha]\n").unwrap();
+    let loaded = SkillRegistry::load_from_root(&skills).unwrap();
+    assert_eq!(
+        loaded
+            .iter()
+            .map(|skill| skill.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["alpha", "zed"]
+    );
+}
+
+#[test]
+fn filesystem_loader_rejects_duplicate_names_and_oversized_files() {
+    let root = TestDir::new();
+    std::fs::write(root.path().join("a.yaml"), "name: same\n").unwrap();
+    std::fs::write(root.path().join("b.yaml"), "name: same\n").unwrap();
+    assert!(
+        SkillRegistry::load_from_root(root.path())
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate")
+    );
+
+    std::fs::remove_file(root.path().join("b.yaml")).unwrap();
+    std::fs::write(
+        root.path().join("large.yaml"),
+        vec![b'x'; agent_skill::MAX_SKILL_FILE_BYTES + 1],
+    )
+    .unwrap();
+    assert!(
+        SkillRegistry::load_from_root(root.path())
+            .unwrap_err()
+            .to_string()
+            .contains("exceeds")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn filesystem_loader_rejects_symlinked_yaml() {
+    use std::os::unix::fs::symlink;
+    let root = TestDir::new();
+    let outside = root.path().with_extension("outside.yaml");
+    std::fs::write(&outside, "name: outside\n").unwrap();
+    symlink(&outside, root.path().join("escape.yaml")).unwrap();
+    assert!(
+        SkillRegistry::load_from_root(root.path())
+            .unwrap_err()
+            .to_string()
+            .contains("link")
+    );
+    std::fs::remove_file(outside).unwrap();
 }
 
 #[test]

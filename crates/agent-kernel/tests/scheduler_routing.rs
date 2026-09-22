@@ -1,6 +1,9 @@
 use std::sync::{Arc, Mutex};
 
-use agent_core::{AgentEvent, Locality, ModelCapabilities, ModelTier, StopReason, TokenUsage};
+use agent_core::{
+    AgentEvent, ContextItem, ContextItemKind, DataClassification, Locality, ModelCapabilities,
+    ModelTier, StopReason, TokenUsage,
+};
 use agent_kernel::{Kernel, KernelModelOptions};
 use agent_model::{
     ModelError, ModelEvent, ModelProvider, ModelRegistry, ModelRequest, ModelStream,
@@ -11,12 +14,21 @@ use futures::stream;
 
 struct RoutingProvider {
     requests: Mutex<Vec<ModelRequest>>,
+    context_window: u32,
 }
 
 impl RoutingProvider {
     fn new() -> Self {
         Self {
             requests: Mutex::new(Vec::new()),
+            context_window: 8_192,
+        }
+    }
+
+    fn with_context_window(context_window: u32) -> Self {
+        Self {
+            requests: Mutex::new(Vec::new()),
+            context_window,
         }
     }
 
@@ -35,10 +47,15 @@ impl ModelProvider for RoutingProvider {
     }
 
     async fn list_models(&self) -> Result<Vec<ModelCapabilities>, ModelError> {
-        Ok(vec![
+        let mut models = vec![
             capabilities("control", ModelTier::Control, false),
             capabilities("worker", ModelTier::Worker, true),
-        ])
+        ];
+        for model in &mut models {
+            model.context_window = self.context_window;
+            model.max_output_tokens = model.max_output_tokens.min(self.context_window);
+        }
+        Ok(models)
     }
 
     async fn stream(&self, request: ModelRequest) -> Result<ModelStream, ModelError> {
@@ -97,7 +114,9 @@ async fn simple_step_without_tools_selects_control_model() {
     let provider = Arc::new(RoutingProvider::new());
     let registry = ModelRegistry::new();
     registry.register(provider.clone());
-    let mut kernel = Kernel::builder().providers(registry).build();
+    let tools = ToolRegistry::new();
+    tools.register(Arc::new(EchoTool::new()));
+    let mut kernel = Kernel::builder().providers(registry).tools(tools).build();
 
     let events = kernel.run_turn("say hi").await.unwrap();
 
@@ -106,6 +125,7 @@ async fn simple_step_without_tools_selects_control_model() {
     assert_eq!(model, "control");
     assert!(reason.contains("Low complexity"));
     assert_eq!(provider.requests()[0].model, "control");
+    assert!(provider.requests()[0].tools.is_empty());
 }
 
 #[tokio::test]
@@ -117,7 +137,10 @@ async fn step_with_tools_selects_worker_and_never_sends_tools_to_control() {
     tools.register(Arc::new(EchoTool::new()));
     let mut kernel = Kernel::builder().providers(registry).tools(tools).build();
 
-    let events = kernel.run_turn("say hi").await.unwrap();
+    let events = kernel
+        .run_turn("list files in the workspace")
+        .await
+        .unwrap();
 
     let (selected_provider, model, reason) = selected(&events);
     assert_eq!(selected_provider, "routing-test");
@@ -127,6 +150,93 @@ async fn step_with_tools_selects_worker_and_never_sends_tools_to_control() {
     assert_eq!(requests[0].model, "worker");
     assert!(!requests[0].tools.is_empty());
     assert!(requests.iter().all(|request| request.model != "control"));
+}
+
+#[tokio::test]
+async fn compiled_context_reaches_provider_with_actual_event_counts() {
+    use agent_profile::AgentProfile;
+    use agent_skill::{Skill, SkillRegistry};
+    use agent_workspace::WorkspaceProfile;
+
+    let provider = Arc::new(RoutingProvider::new());
+    let registry = ModelRegistry::new();
+    registry.register(provider.clone());
+    let workspace = WorkspaceProfile::detect(env!("CARGO_MANIFEST_DIR")).unwrap();
+    let skills = SkillRegistry::new([Skill::from_yaml(
+        "name: greeting\ntriggers: [hello]\ninstructions: Greet concisely.\n",
+    )
+    .unwrap()])
+    .unwrap();
+    let mut kernel = Kernel::builder()
+        .providers(registry)
+        .agent_profile(AgentProfile::builtin_default())
+        .workspace_profile(workspace)
+        .skills(skills)
+        .build();
+
+    let events = kernel.run_turn("hello").await.unwrap();
+    let request = &provider.requests()[0];
+    let system = request.system.as_deref().expect("compiled system prompt");
+    assert!(system.contains("## Agent Profile"));
+    assert!(system.contains("### greeting"));
+    let prepared = events
+        .iter()
+        .find_map(|event| match event {
+            AgentEvent::ContextPrepared {
+                system_tokens,
+                context_tokens,
+                dropped,
+                ..
+            } => Some((*system_tokens, *context_tokens, *dropped)),
+            _ => None,
+        })
+        .unwrap();
+    assert!(prepared.0 > 0);
+    assert!(prepared.1 > 0);
+    assert_eq!(prepared.2, 0);
+}
+
+#[tokio::test]
+async fn secret_working_memory_never_reaches_provider_request() {
+    let provider = Arc::new(RoutingProvider::new());
+    let registry = ModelRegistry::new();
+    registry.register(provider.clone());
+    let mut secret = ContextItem::new(ContextItemKind::Memory, "do-not-send", 0);
+    secret.classification = DataClassification::Secret;
+    let mut kernel = Kernel::builder()
+        .providers(registry)
+        .context_items([secret])
+        .build();
+
+    kernel.run_turn("say hi").await.unwrap();
+
+    let request = &provider.requests()[0];
+    assert!(
+        !request
+            .system
+            .as_deref()
+            .unwrap_or_default()
+            .contains("do-not-send")
+    );
+    assert!(
+        request
+            .messages
+            .iter()
+            .all(|message| !message.content.contains("do-not-send"))
+    );
+}
+
+#[tokio::test]
+async fn compilation_budget_failure_is_an_agent_error_and_is_logged() {
+    let provider = Arc::new(RoutingProvider::with_context_window(64));
+    let registry = ModelRegistry::new();
+    registry.register(provider);
+    let mut kernel = Kernel::builder().providers(registry).build();
+
+    let error = kernel.run_turn("say hi").await.unwrap_err();
+
+    assert!(matches!(error, agent_core::AgentError::Context(_)));
+    assert_eq!(kernel.event_log().last().unwrap().kind(), "Error");
 }
 
 #[tokio::test]

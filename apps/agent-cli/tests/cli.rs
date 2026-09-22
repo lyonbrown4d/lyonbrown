@@ -44,6 +44,15 @@ fn chat_subcommand_is_available() {
 }
 
 #[test]
+fn dot_is_workspace_entrypoint_and_profile_can_be_overridden() {
+    let cli = Cli::try_parse_from(["agent", ".", "--profile", "careful"]).unwrap();
+    assert_eq!(cli.profile.as_deref(), Some("careful"));
+    assert!(
+        matches!(cli.command, Command::Tui { workspace } if workspace == std::path::Path::new("."))
+    );
+}
+
+#[test]
 fn command_is_required() {
     assert!(Cli::try_parse_from(["agent"]).is_err());
 }

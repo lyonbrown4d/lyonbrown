@@ -8,6 +8,7 @@ use serde::Deserialize;
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RuntimeConfig {
+    pub profile: String,
     pub model: ModelConfig,
     pub ollama: OllamaConfig,
     pub approval: ApprovalConfig,
@@ -39,6 +40,7 @@ pub struct ApprovalConfig {
 
 #[derive(Debug, Clone, Default)]
 pub struct CliOverrides {
+    pub profile: Option<String>,
     pub provider: Option<String>,
     pub model: Option<String>,
     pub endpoint: Option<String>,
@@ -90,6 +92,7 @@ impl RuntimeConfig {
             .source(options.environment);
 
         let mut builder = Config::builder()
+            .set_default("profile", "default-dev")?
             .set_default("model.provider", "ollama")?
             .set_default("model.max_tokens", 2_048_u32)?
             .set_default("ollama.endpoint", "http://127.0.0.1:11434")?
@@ -110,6 +113,11 @@ impl RuntimeConfig {
     }
 
     fn validate(&self) -> Result<(), ConfigLoadError> {
+        if self.profile.trim().is_empty() {
+            return Err(ConfigLoadError::Validation(
+                "profile must not be empty".into(),
+            ));
+        }
         if self.model.provider.trim().is_empty() {
             return Err(ConfigLoadError::Validation(
                 "model.provider must not be empty".into(),
@@ -148,6 +156,9 @@ fn apply_cli_overrides(
     mut builder: config::ConfigBuilder<config::builder::DefaultState>,
     overrides: CliOverrides,
 ) -> Result<config::ConfigBuilder<config::builder::DefaultState>, config::ConfigError> {
+    if let Some(value) = overrides.profile {
+        builder = builder.set_override("profile", value)?;
+    }
     if let Some(value) = overrides.provider {
         builder = builder.set_override("model.provider", value)?;
     }

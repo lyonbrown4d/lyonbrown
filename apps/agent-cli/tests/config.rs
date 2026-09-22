@@ -88,9 +88,28 @@ fn missing_optional_global_and_workspace_files_use_typed_defaults() {
     .unwrap();
 
     assert_eq!(loaded.model.provider, "ollama");
+    assert_eq!(loaded.profile, "default-dev");
     assert_eq!(loaded.ollama.endpoint, "http://127.0.0.1:11434");
     assert!(!loaded.approval.approve_all);
     assert!(!loaded.approval.deny_all);
+}
+
+#[test]
+fn profile_has_typed_config_and_cli_precedence() {
+    let root = TestDir::new();
+    root.write("agent.toml", "profile = 'workspace-profile'\n");
+    let loaded = RuntimeConfig::load(LoadOptions {
+        global_config: root.path().join("missing.toml"),
+        workspace_dir: root.path().to_owned(),
+        environment: Some(HashMap::new()),
+        cli: CliOverrides {
+            profile: Some("cli-profile".into()),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .unwrap();
+    assert_eq!(loaded.profile, "cli-profile");
 }
 
 #[test]

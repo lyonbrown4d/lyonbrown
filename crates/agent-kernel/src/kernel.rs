@@ -1,20 +1,25 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use agent_context::{CompileRequest, PromptCompiler};
 use agent_core::{
-    AgentError, AgentEvent, ContextItemKind, ObservationId, StepId, StepOutcome, StopReason,
-    TokenUsage, ToolResult, TurnId,
+    AgentError, AgentEvent, ContextItem, ContextItemKind, ObservationId, StepId, StepOutcome,
+    StopReason, TokenUsage, ToolResult, TurnId,
 };
 use agent_model::{
     ChatMessage, GateVerdict, HeuristicGate, ModelEvent, ModelRegistry, ModelRequest,
     ModelScheduler, QualityGate, Role, RoutingPolicy, StepContext,
 };
+use agent_profile::AgentProfile;
 use agent_secret::{NoopBroker, SecretBroker};
+use agent_skill::SkillRegistry;
 use agent_tool::{
     AllowAllApproval, ApprovalDecision, ApprovalPolicy, ToolContext, ToolExecutionError,
     ToolExecutor, ToolRegistry,
 };
+use agent_workspace::{ProjectType, WorkspaceProfile};
 use chrono::Utc;
 use futures::StreamExt;
 use tokio_util::sync::CancellationToken;
@@ -59,6 +64,10 @@ pub struct Kernel {
     cancellation: CancellationToken,
     tool_context: ToolContext,
     model_options: KernelModelOptions,
+    agent_profile: AgentProfile,
+    workspace_profile: WorkspaceProfile,
+    skills: SkillRegistry,
+    prompt_compiler: PromptCompiler,
     last_requests: Vec<ModelRequest>,
 }
 
@@ -129,6 +138,7 @@ impl Kernel {
 
         let mut steps = 0;
         let mut escalations = 0;
+        let mut used_tool = false;
         loop {
             if self.cancellation.is_cancelled() {
                 self.cancel_turn(turn_id)?;
@@ -155,23 +165,10 @@ impl Kernel {
                 step_id,
                 ts: Utc::now(),
             })?;
-            let context_tokens = self
-                .session
-                .working_memory
-                .iter()
-                .map(|item| item.token_estimate)
-                .sum();
-            self.emit(AgentEvent::ContextPrepared {
-                step_id,
-                system_tokens: 0,
-                context_tokens,
-                dropped: 0,
-                ts: Utc::now(),
-            })?;
-
             let tool_definitions = self.tools.definitions();
             let mut step_context = StepContext::new(user_text);
-            step_context.needs_tools = !tool_definitions.is_empty();
+            step_context.needs_tools =
+                !tool_definitions.is_empty() && (used_tool || step_needs_tools(user_text));
             step_context.previous_steps = steps - 1;
             step_context.escalated = escalations > 0;
             step_context.provider = self.model_options.provider.clone();
@@ -191,6 +188,54 @@ impl Kernel {
                     return Err(error);
                 }
             };
+            let max_tokens = self
+                .model_options
+                .max_tokens
+                .unwrap_or(selected.capabilities.max_output_tokens)
+                .min(selected.capabilities.max_output_tokens);
+            let token_budget = u64::from(
+                selected
+                    .capabilities
+                    .context_window
+                    .saturating_sub(max_tokens),
+            );
+            let matched_skills = self
+                .skills
+                .match_prompt(user_text)
+                .into_iter()
+                .cloned()
+                .collect::<Vec<_>>();
+            let compiled = match self.prompt_compiler.compile(CompileRequest {
+                profile: &self.agent_profile,
+                model: &selected.capabilities,
+                workspace: &self.workspace_profile,
+                skills: &matched_skills,
+                tool_guidance: None,
+                context_items: &self.session.working_memory,
+                token_budget,
+            }) {
+                Ok(compiled) => compiled,
+                Err(error) => {
+                    let error = AgentError::Context(error.to_string());
+                    self.record_error(error.to_string())?;
+                    return Err(error);
+                }
+            };
+            let system_tokens = u32::try_from(compiled.system_tokens).map_err(|_| {
+                AgentError::Context("compiled system token count exceeds u32".into())
+            })?;
+            let context_tokens = u32::try_from(compiled.context_tokens).map_err(|_| {
+                AgentError::Context("compiled context token count exceeds u32".into())
+            })?;
+            let dropped = u32::try_from(compiled.dropped)
+                .map_err(|_| AgentError::Context("dropped context count exceeds u32".into()))?;
+            self.emit(AgentEvent::ContextPrepared {
+                step_id,
+                system_tokens,
+                context_tokens,
+                dropped,
+                ts: Utc::now(),
+            })?;
             self.emit(AgentEvent::ModelSelected {
                 step_id,
                 provider: selected.decision.provider.clone(),
@@ -201,14 +246,14 @@ impl Kernel {
 
             let request = ModelRequest {
                 model: selected.capabilities.model.clone(),
-                system: None,
-                messages: self.session.messages.clone(),
-                tools: tool_definitions,
-                max_tokens: self
-                    .model_options
-                    .max_tokens
-                    .unwrap_or(selected.capabilities.max_output_tokens)
-                    .min(selected.capabilities.max_output_tokens),
+                system: Some(compiled.system_prompt),
+                messages: request_messages(&self.session.messages, &compiled.context_items),
+                tools: if step_context.needs_tools && selected.capabilities.supports_tools {
+                    tool_definitions
+                } else {
+                    Vec::new()
+                },
+                max_tokens,
                 temperature: self.model_options.temperature,
                 json_mode: false,
                 thinking: None,
@@ -293,6 +338,7 @@ impl Kernel {
             }
             if !tool_calls.is_empty() {
                 self.run_tools(turn_id, step_id, text, tool_calls).await?;
+                used_tool = true;
                 continue;
             }
 
@@ -503,6 +549,11 @@ pub struct KernelBuilder {
     limits: KernelLimits,
     workspace_root: PathBuf,
     model_options: KernelModelOptions,
+    agent_profile: AgentProfile,
+    workspace_profile: Option<WorkspaceProfile>,
+    skills: SkillRegistry,
+    prompt_compiler: PromptCompiler,
+    context_items: Vec<ContextItem>,
 }
 
 impl KernelBuilder {
@@ -551,6 +602,31 @@ impl KernelBuilder {
         self
     }
 
+    pub fn agent_profile(mut self, profile: AgentProfile) -> Self {
+        self.agent_profile = profile;
+        self
+    }
+
+    pub fn workspace_profile(mut self, workspace: WorkspaceProfile) -> Self {
+        self.workspace_profile = Some(workspace);
+        self
+    }
+
+    pub fn skills(mut self, skills: SkillRegistry) -> Self {
+        self.skills = skills;
+        self
+    }
+
+    pub fn prompt_compiler(mut self, compiler: PromptCompiler) -> Self {
+        self.prompt_compiler = compiler;
+        self
+    }
+
+    pub fn context_items(mut self, items: impl IntoIterator<Item = ContextItem>) -> Self {
+        self.context_items = items.into_iter().collect();
+        self
+    }
+
     pub fn build(self) -> Kernel {
         let cancellation = CancellationToken::new();
         let tool_context = ToolContext::new(
@@ -559,8 +635,21 @@ impl KernelBuilder {
             cancellation.clone(),
             self.limits.tool_timeout,
         );
+        let workspace_profile = self.workspace_profile.unwrap_or_else(|| WorkspaceProfile {
+            root: self.workspace_root.clone(),
+            project_type: ProjectType::Unknown,
+            languages: Vec::new(),
+            frameworks: Vec::new(),
+            build_commands: Vec::new(),
+            test_commands: Vec::new(),
+            conventions: Vec::new(),
+            enabled_skills: Vec::new(),
+            repository_instructions: Vec::new(),
+        });
+        let mut session = Session::new();
+        session.working_memory = self.context_items;
         Kernel {
-            session: Session::new(),
+            session,
             state: KernelState::Idle,
             bus: EventBus::default(),
             scheduler: ModelScheduler::new(self.providers, self.routing_policy),
@@ -572,6 +661,10 @@ impl KernelBuilder {
             cancellation,
             tool_context,
             model_options: self.model_options,
+            agent_profile: self.agent_profile,
+            workspace_profile,
+            skills: self.skills,
+            prompt_compiler: self.prompt_compiler,
             last_requests: Vec::new(),
         }
     }
@@ -589,6 +682,68 @@ impl Default for KernelBuilder {
             limits: KernelLimits::default(),
             workspace_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
             model_options: KernelModelOptions::default(),
+            agent_profile: AgentProfile::builtin_default(),
+            workspace_profile: None,
+            skills: SkillRegistry::default(),
+            prompt_compiler: PromptCompiler::default(),
+            context_items: Vec::new(),
         }
     }
+}
+
+fn request_messages(messages: &[ChatMessage], context_items: &[ContextItem]) -> Vec<ChatMessage> {
+    let selected: HashSet<_> = context_items
+        .iter()
+        .map(|item| item.content.as_str())
+        .collect();
+    let selected_tool_calls: HashSet<_> = messages
+        .iter()
+        .filter(|message| message.role == Role::Tool && selected.contains(message.content.as_str()))
+        .filter_map(|message| message.tool_call_id)
+        .collect();
+    messages
+        .iter()
+        .filter(|message| {
+            selected.contains(message.content.as_str())
+                || message
+                    .tool_calls
+                    .iter()
+                    .any(|call| selected_tool_calls.contains(&call.id))
+        })
+        .cloned()
+        .collect()
+}
+
+fn step_needs_tools(prompt: &str) -> bool {
+    let lower = prompt.to_lowercase();
+    let words: HashSet<_> = lower
+        .split(|character: char| !character.is_ascii_alphanumeric() && character != '_')
+        .filter(|word| !word.is_empty())
+        .collect();
+    let file_action = [
+        "list", "listing", "read", "reading", "write", "writing", "open", "show",
+    ]
+    .iter()
+    .any(|word| words.contains(word))
+        && ["file", "files", "directory", "folder", "filesystem"]
+            .iter()
+            .any(|word| words.contains(word));
+    let command_action = ["shell", "command", "run", "execute", "build", "test"]
+        .iter()
+        .any(|word| words.contains(word));
+    const CHINESE: [&str; 12] = [
+        "列出文件",
+        "查看文件",
+        "读取文件",
+        "读文件",
+        "写入文件",
+        "写文件",
+        "目录",
+        "文件夹",
+        "命令",
+        "执行",
+        "构建",
+        "测试",
+    ];
+    file_action || command_action || CHINESE.iter().any(|needle| lower.contains(needle))
 }

@@ -4,8 +4,11 @@ use std::sync::Arc;
 
 use agent_core::{AgentError, AgentEvent};
 use agent_kernel::{Kernel, KernelModelOptions};
-use agent_model::ModelRegistry;
+use agent_model::{ModelRegistry, RoutingPolicy};
+use agent_profile::{AgentProfile, ProfileError, ProfileLoader};
+use agent_skill::SkillRegistry;
 use agent_tool::{ListFilesTool, ReadFileTool, ShellTool, ToolRegistry, WriteFileTool};
+use agent_workspace::WorkspaceProfile;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use provider_ollama::OllamaProvider;
@@ -29,6 +32,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub model: Option<String>,
 
+    /// Agent profile ID from ~/.agent/profiles.
+    #[arg(long, global = true)]
+    pub profile: Option<String>,
+
     /// Ollama base URL.
     #[arg(long, global = true)]
     pub endpoint: Option<String>,
@@ -48,30 +55,42 @@ pub enum Command {
     Ask { prompt: String },
     /// Start a multi-turn terminal chat.
     Chat,
+    /// Open the workspace interface (implemented in the next milestone).
+    #[command(name = ".")]
+    Tui {
+        #[arg(skip = PathBuf::from("."))]
+        workspace: PathBuf,
+    },
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
-    let workspace = std::env::current_dir().context("failed to determine workspace directory")?;
+    let workspace = match &cli.command {
+        Command::Tui { workspace } => workspace.clone(),
+        _ => std::env::current_dir().context("failed to determine workspace directory")?,
+    };
     let mut options = LoadOptions::for_workspace(&workspace);
     options.explicit_config = cli.config;
     options.cli = CliOverrides {
         provider: cli.provider,
         model: cli.model,
+        profile: cli.profile,
         endpoint: cli.endpoint,
         approve_all: cli.approve_all.then_some(true),
         deny_all: cli.deny_all.then_some(true),
         ..Default::default()
     };
     let config = RuntimeConfig::load(options)?;
-    let mut kernel = build_kernel(&config, &workspace)?;
+    let home = dirs::home_dir().context("home directory is unavailable")?;
+    let mut kernel = build_kernel(&config, &workspace, &home)?;
 
     match cli.command {
         Command::Ask { prompt } => ask(&mut kernel, &prompt).await,
         Command::Chat => chat(&mut kernel).await,
+        Command::Tui { .. } => anyhow::bail!("workspace interface is not implemented yet"),
     }
 }
 
-fn build_kernel(config: &RuntimeConfig, workspace: &Path) -> Result<Kernel> {
+fn build_kernel(config: &RuntimeConfig, workspace: &Path, home: &Path) -> Result<Kernel> {
     let registry = ModelRegistry::new();
     registry.register(Arc::new(OllamaProvider::with_default_models(
         &config.ollama.endpoint,
@@ -82,11 +101,24 @@ fn build_kernel(config: &RuntimeConfig, workspace: &Path) -> Result<Kernel> {
     tools.register(Arc::new(ListFilesTool::new()));
     tools.register(Arc::new(ShellTool::new()));
 
+    let workspace_profile = WorkspaceProfile::detect(workspace)?;
+    let profile = load_agent_profile(home, &config.profile)?;
+    let skills = SkillRegistry::load_from_root(home.join(".agent").join("skills"))?;
+    let routing_policy = RoutingPolicy {
+        prefer_local: profile.model.prefer_local,
+        remote_escalation: profile.model.remote_escalation,
+        ..RoutingPolicy::default()
+    };
+
     Ok(Kernel::builder()
         .providers(registry)
+        .routing_policy(routing_policy)
         .tools(tools)
         .approval(policy_from_config(&config.approval))
         .workspace_root(workspace)
+        .agent_profile(profile)
+        .workspace_profile(workspace_profile)
+        .skills(skills)
         .model_options(KernelModelOptions {
             provider: Some(config.model.provider.clone()),
             model: config.model.model.clone(),
@@ -94,6 +126,18 @@ fn build_kernel(config: &RuntimeConfig, workspace: &Path) -> Result<Kernel> {
             temperature: config.model.temperature,
         })
         .build())
+}
+
+fn load_agent_profile(home: &Path, id: &str) -> Result<AgentProfile> {
+    match ProfileLoader::new(home).load(id) {
+        Ok(profile) => Ok(profile),
+        Err(ProfileError::Io { source, .. })
+            if id == "default-dev" && source.kind() == io::ErrorKind::NotFound =>
+        {
+            Ok(AgentProfile::builtin_default())
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 async fn ask(kernel: &mut Kernel, prompt: &str) -> Result<()> {
