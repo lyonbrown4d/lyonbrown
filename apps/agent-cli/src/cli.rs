@@ -7,7 +7,9 @@ use agent_kernel::{Kernel, KernelModelOptions};
 use agent_model::{ModelRegistry, RoutingPolicy};
 use agent_profile::{AgentProfile, ProfileError, ProfileLoader};
 use agent_skill::SkillRegistry;
-use agent_tool::{ListFilesTool, ReadFileTool, ShellTool, ToolRegistry, WriteFileTool};
+use agent_tool::{
+    ListFilesTool, ReadFileTool, SessionApprovalPolicy, ShellTool, ToolRegistry, WriteFileTool,
+};
 use agent_workspace::WorkspaceProfile;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -15,6 +17,7 @@ use provider_ollama::OllamaProvider;
 
 use crate::approval::policy_from_config;
 use crate::config::{CliOverrides, LoadOptions, RuntimeConfig};
+use crate::tui::TuiApprovalPrompt;
 
 #[derive(Debug, Parser)]
 #[command(name = "agent", version, about = "Local-first agent runtime")]
@@ -55,7 +58,7 @@ pub enum Command {
     Ask { prompt: String },
     /// Start a multi-turn terminal chat.
     Chat,
-    /// Open the workspace interface (implemented in the next milestone).
+    /// Open the workspace terminal interface.
     #[command(name = ".")]
     Tui {
         #[arg(skip = PathBuf::from("."))]
@@ -81,16 +84,37 @@ pub async fn run(cli: Cli) -> Result<()> {
     };
     let config = RuntimeConfig::load(options)?;
     let home = dirs::home_dir().context("home directory is unavailable")?;
-    let mut kernel = build_kernel(&config, &workspace, &home)?;
+    let (approval, tui_approvals) = match &cli.command {
+        Command::Tui { .. } if !config.approval.approve_all && !config.approval.deny_all => {
+            let (prompt, requests) = TuiApprovalPrompt::channel();
+            (
+                SessionApprovalPolicy::interactive(Arc::new(prompt)),
+                Some(requests),
+            )
+        }
+        _ => (policy_from_config(&config.approval), None),
+    };
+    let mut kernel = build_kernel(&config, &workspace, &home, approval)?;
 
     match cli.command {
         Command::Ask { prompt } => ask(&mut kernel, &prompt).await,
         Command::Chat => chat(&mut kernel).await,
-        Command::Tui { .. } => anyhow::bail!("workspace interface is not implemented yet"),
+        Command::Tui { .. } => {
+            let requests = tui_approvals.unwrap_or_else(|| {
+                let (_sender, receiver) = std::sync::mpsc::channel();
+                receiver
+            });
+            crate::tui::run(kernel, requests).await
+        }
     }
 }
 
-fn build_kernel(config: &RuntimeConfig, workspace: &Path, home: &Path) -> Result<Kernel> {
+fn build_kernel(
+    config: &RuntimeConfig,
+    workspace: &Path,
+    home: &Path,
+    approval: SessionApprovalPolicy,
+) -> Result<Kernel> {
     let registry = ModelRegistry::new();
     registry.register(Arc::new(OllamaProvider::with_default_models(
         &config.ollama.endpoint,
@@ -114,7 +138,7 @@ fn build_kernel(config: &RuntimeConfig, workspace: &Path, home: &Path) -> Result
         .providers(registry)
         .routing_policy(routing_policy)
         .tools(tools)
-        .approval(policy_from_config(&config.approval))
+        .approval(approval)
         .workspace_root(workspace)
         .agent_profile(profile)
         .workspace_profile(workspace_profile)

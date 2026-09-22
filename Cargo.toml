@@ -69,6 +69,8 @@ chrono = { version = "0.4", features = ["serde"] }
 dirs = "7.0.0"
 which = "8.0.6"
 cap-std = "4.0.3"
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "0.29"
 
 # --- MCP（pin 精确版本；rmcp 3.4.0 已核实为最新稳定版）---
 rmcp = { version = "3.4.0", features = ["client", "transport-child-process"] }

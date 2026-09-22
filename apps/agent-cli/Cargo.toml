@@ -35,9 +35,12 @@ dirs = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
 
 [lints]
 workspace = true
 
 [dev-dependencies]
 provider-mock = { workspace = true }
+chrono = { workspace = true }
