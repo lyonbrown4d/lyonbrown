@@ -1,16 +1,16 @@
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use agent_model::{
-    ChatMessage, ModelEvent, ModelRegistry, ModelRequest, ModelScheduler, Role, RoutingPolicy,
-    StepContext,
-};
-use anyhow::{Context, Result, bail};
+use agent_core::{AgentError, AgentEvent};
+use agent_kernel::{Kernel, KernelModelOptions};
+use agent_model::ModelRegistry;
+use agent_tool::{ListFilesTool, ReadFileTool, ShellTool, ToolRegistry, WriteFileTool};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use futures::StreamExt;
 use provider_ollama::OllamaProvider;
 
+use crate::approval::policy_from_config;
 use crate::config::{CliOverrides, LoadOptions, RuntimeConfig};
 
 #[derive(Debug, Parser)]
@@ -33,9 +33,13 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub endpoint: Option<String>,
 
-    /// Allow all tool requests for this session (tools are introduced in M3).
-    #[arg(long, global = true)]
+    /// Allow all tool requests for this session.
+    #[arg(long, global = true, conflicts_with = "deny_all")]
     pub approve_all: bool,
+
+    /// Deny all write, execute, and network tool requests for this session.
+    #[arg(long, global = true, conflicts_with = "approve_all")]
+    pub deny_all: bool,
 }
 
 #[derive(Debug, Subcommand)]
@@ -48,34 +52,59 @@ pub enum Command {
 
 pub async fn run(cli: Cli) -> Result<()> {
     let workspace = std::env::current_dir().context("failed to determine workspace directory")?;
-    let mut options = LoadOptions::for_workspace(workspace);
+    let mut options = LoadOptions::for_workspace(&workspace);
     options.explicit_config = cli.config;
     options.cli = CliOverrides {
         provider: cli.provider,
         model: cli.model,
         endpoint: cli.endpoint,
         approve_all: cli.approve_all.then_some(true),
+        deny_all: cli.deny_all.then_some(true),
         ..Default::default()
     };
     let config = RuntimeConfig::load(options)?;
+    let mut kernel = build_kernel(&config, &workspace)?;
 
     match cli.command {
-        Command::Ask { prompt } => ask(&config, &prompt).await,
-        Command::Chat => chat(&config).await,
+        Command::Ask { prompt } => ask(&mut kernel, &prompt).await,
+        Command::Chat => chat(&mut kernel).await,
     }
 }
 
-async fn ask(config: &RuntimeConfig, prompt: &str) -> Result<()> {
-    let mut messages = Vec::new();
+fn build_kernel(config: &RuntimeConfig, workspace: &Path) -> Result<Kernel> {
+    let registry = ModelRegistry::new();
+    registry.register(Arc::new(OllamaProvider::with_default_models(
+        &config.ollama.endpoint,
+    )?));
+    let tools = ToolRegistry::new();
+    tools.register(Arc::new(ReadFileTool::new()));
+    tools.register(Arc::new(WriteFileTool::new()));
+    tools.register(Arc::new(ListFilesTool::new()));
+    tools.register(Arc::new(ShellTool::new()));
+
+    Ok(Kernel::builder()
+        .providers(registry)
+        .tools(tools)
+        .approval(policy_from_config(&config.approval))
+        .workspace_root(workspace)
+        .model_options(KernelModelOptions {
+            provider: Some(config.model.provider.clone()),
+            model: config.model.model.clone(),
+            max_tokens: Some(config.model.max_tokens),
+            temperature: config.model.temperature,
+        })
+        .build())
+}
+
+async fn ask(kernel: &mut Kernel, prompt: &str) -> Result<()> {
     let stdout = io::stdout();
     let mut output = stdout.lock();
-    stream_turn(config, prompt, &mut messages, &mut output).await?;
+    run_kernel_turn(kernel, prompt, &mut output).await?;
     writeln!(output)?;
     Ok(())
 }
 
-async fn chat(config: &RuntimeConfig) -> Result<()> {
-    let mut messages = Vec::new();
+async fn chat(kernel: &mut Kernel) -> Result<()> {
     loop {
         print!("> ");
         io::stdout().flush()?;
@@ -92,78 +121,64 @@ async fn chat(config: &RuntimeConfig) -> Result<()> {
         }
         let stdout = io::stdout();
         let mut output = stdout.lock();
-        stream_turn(config, prompt, &mut messages, &mut output).await?;
+        run_kernel_turn(kernel, prompt, &mut output).await?;
         writeln!(output)?;
     }
     Ok(())
 }
 
-async fn stream_turn(
-    config: &RuntimeConfig,
+pub async fn run_kernel_turn(
+    kernel: &mut Kernel,
     prompt: &str,
-    messages: &mut Vec<ChatMessage>,
     output: &mut impl Write,
-) -> Result<()> {
-    let registry = ModelRegistry::new();
-    registry.register(Arc::new(OllamaProvider::with_default_models(
-        &config.ollama.endpoint,
-    )?));
-    let scheduler = ModelScheduler::new(registry, RoutingPolicy::default());
-    let mut context = StepContext::new(prompt);
-    context.provider = Some(config.model.provider.clone());
-    context.model = config.model.model.clone();
-    let selection = scheduler.decide(&context).await?;
-
-    messages.push(ChatMessage {
-        role: Role::User,
-        content: prompt.to_owned(),
-        tool_call_id: None,
-        tool_name: None,
-        tool_calls: vec![],
-    });
-    let request = ModelRequest {
-        model: selection.capabilities.model.clone(),
-        system: None,
-        messages: messages.clone(),
-        tools: vec![],
-        max_tokens: config
-            .model
-            .max_tokens
-            .min(selection.capabilities.max_output_tokens),
-        temperature: config.model.temperature,
-        json_mode: false,
-        thinking: selection.capabilities.supports_thinking.then_some(false),
-        stop: vec![],
-    };
-    let mut events = selection.provider.stream(request).await?.events;
-    let mut answer = String::new();
-    let mut done = false;
-    while let Some(event) = events.next().await {
-        match event? {
-            ModelEvent::Delta(delta) => {
-                output.write_all(delta.as_bytes())?;
-                output.flush()?;
-                answer.push_str(&delta);
+) -> Result<Vec<AgentEvent>, AgentError> {
+    let mut events = kernel.subscribe();
+    let turn = kernel.run_turn(prompt);
+    tokio::pin!(turn);
+    loop {
+        tokio::select! {
+            biased;
+            event = events.recv() => {
+                match event {
+                    Ok(event) => render_event(&event, output)?,
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        return Err(AgentError::Tool(format!(
+                            "CLI event renderer lagged by {skipped} events"
+                        )));
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        return Err(AgentError::Tool("kernel event stream closed".into()));
+                    }
+                }
             }
-            ModelEvent::ToolCall(call) => {
-                bail!(
-                    "model requested tool '{}', but CLI tool execution is not enabled until M3",
-                    call.name
-                );
-            }
-            ModelEvent::Usage(_) => {}
-            ModelEvent::Done { .. } => done = true,
+            result = &mut turn => {
+                let result = result?;
+                loop {
+                    match events.try_recv() {
+                        Ok(event) => render_event(&event, output)?,
+                        Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
+                        Err(tokio::sync::broadcast::error::TryRecvError::Closed) => break,
+                        Err(tokio::sync::broadcast::error::TryRecvError::Lagged(skipped)) => {
+                            return Err(AgentError::Tool(format!(
+                                "CLI event renderer lagged by {skipped} events"
+                            )));
+                        }
+                    }
+                }
+                return Ok(result);
+            },
         }
     }
-    if !done {
-        bail!("provider stream ended without a Done event");
+}
+
+fn render_event(event: &AgentEvent, output: &mut impl Write) -> Result<(), AgentError> {
+    if let AgentEvent::ModelDelta { delta, .. } = event {
+        output
+            .write_all(delta.as_bytes())
+            .map_err(|error| AgentError::Tool(error.to_string()))?;
+        output
+            .flush()
+            .map_err(|error| AgentError::Tool(error.to_string()))?;
     }
-    messages.push(ChatMessage {
-        role: Role::Assistant,
-        content: answer,
-        tool_call_id: None,
-        tool_name: None,
-        tool_calls: vec![],
-    });
     Ok(())
 }

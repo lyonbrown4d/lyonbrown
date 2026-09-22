@@ -8,6 +8,6 @@ mod session;
 mod state;
 
 pub use bus::EventBus;
-pub use kernel::{Kernel, KernelBuilder, KernelLimits};
+pub use kernel::{Kernel, KernelBuilder, KernelLimits, KernelModelOptions};
 pub use session::Session;
 pub use state::{KernelState, TransitionError};

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use agent_core::{AgentEvent, Locality, ModelCapabilities, ModelTier, StopReason, TokenUsage};
-use agent_kernel::Kernel;
+use agent_kernel::{Kernel, KernelModelOptions};
 use agent_model::{
     ModelError, ModelEvent, ModelProvider, ModelRegistry, ModelRequest, ModelStream,
 };
@@ -127,4 +127,27 @@ async fn step_with_tools_selects_worker_and_never_sends_tools_to_control() {
     assert_eq!(requests[0].model, "worker");
     assert!(!requests[0].tools.is_empty());
     assert!(requests.iter().all(|request| request.model != "control"));
+}
+
+#[tokio::test]
+async fn configured_model_and_generation_options_reach_the_provider() {
+    let provider = Arc::new(RoutingProvider::new());
+    let registry = ModelRegistry::new();
+    registry.register(provider.clone());
+    let mut kernel = Kernel::builder()
+        .providers(registry)
+        .model_options(KernelModelOptions {
+            provider: Some("routing-test".into()),
+            model: Some("worker".into()),
+            max_tokens: Some(321),
+            temperature: Some(0.4),
+        })
+        .build();
+
+    kernel.run_turn("say hi").await.unwrap();
+
+    let request = &provider.requests()[0];
+    assert_eq!(request.model, "worker");
+    assert_eq!(request.max_tokens, 321);
+    assert_eq!(request.temperature, Some(0.4));
 }

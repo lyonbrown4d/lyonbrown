@@ -47,3 +47,10 @@ fn chat_subcommand_is_available() {
 fn command_is_required() {
     assert!(Cli::try_parse_from(["agent"]).is_err());
 }
+
+#[test]
+fn approve_all_and_deny_all_are_mutually_exclusive() {
+    assert!(Cli::try_parse_from(["agent", "ask", "hi", "--approve-all", "--deny-all"]).is_err());
+    let cli = Cli::try_parse_from(["agent", "ask", "hi", "--deny-all"]).unwrap();
+    assert!(cli.deny_all);
+}

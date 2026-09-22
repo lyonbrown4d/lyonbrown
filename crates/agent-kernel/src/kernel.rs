@@ -28,6 +28,14 @@ pub struct KernelLimits {
     pub tool_timeout: Duration,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct KernelModelOptions {
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub max_tokens: Option<u32>,
+    pub temperature: Option<f32>,
+}
+
 impl Default for KernelLimits {
     fn default() -> Self {
         Self {
@@ -50,6 +58,7 @@ pub struct Kernel {
     limits: KernelLimits,
     cancellation: CancellationToken,
     workspace_root: PathBuf,
+    model_options: KernelModelOptions,
     last_requests: Vec<ModelRequest>,
 }
 
@@ -72,6 +81,10 @@ impl Kernel {
 
     pub fn cancellation_token(&self) -> CancellationToken {
         self.cancellation.clone()
+    }
+
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<AgentEvent> {
+        self.bus.subscribe()
     }
 
     pub async fn run_turn(&mut self, user_text: &str) -> Result<Vec<AgentEvent>, AgentError> {
@@ -161,6 +174,8 @@ impl Kernel {
             step_context.needs_tools = !tool_definitions.is_empty();
             step_context.previous_steps = steps - 1;
             step_context.escalated = escalations > 0;
+            step_context.provider = self.model_options.provider.clone();
+            step_context.model = self.model_options.model.clone();
             let cancellation = self.cancellation.clone();
             let selected = match tokio::select! {
                 () = cancellation.cancelled() => {
@@ -189,8 +204,12 @@ impl Kernel {
                 system: None,
                 messages: self.session.messages.clone(),
                 tools: tool_definitions,
-                max_tokens: selected.capabilities.max_output_tokens,
-                temperature: None,
+                max_tokens: self
+                    .model_options
+                    .max_tokens
+                    .unwrap_or(selected.capabilities.max_output_tokens)
+                    .min(selected.capabilities.max_output_tokens),
+                temperature: self.model_options.temperature,
                 json_mode: false,
                 thinking: None,
                 stop: vec![],
@@ -359,7 +378,7 @@ impl Kernel {
                     error: Some(format!("tool not found: {}", invocation.name)),
                 },
                 Some(tool) => match self.approval.approve(tool.definition(), &invocation) {
-                    ApprovalDecision::Deny => ToolResult {
+                    ApprovalDecision::Deny | ApprovalDecision::DenyAll => ToolResult {
                         invocation_id: invocation.id,
                         ok: false,
                         output: String::new(),
@@ -488,6 +507,7 @@ pub struct KernelBuilder {
     gate: Arc<dyn QualityGate>,
     limits: KernelLimits,
     workspace_root: PathBuf,
+    model_options: KernelModelOptions,
 }
 
 impl KernelBuilder {
@@ -531,6 +551,11 @@ impl KernelBuilder {
         self
     }
 
+    pub fn model_options(mut self, model_options: KernelModelOptions) -> Self {
+        self.model_options = model_options;
+        self
+    }
+
     pub fn build(self) -> Kernel {
         Kernel {
             session: Session::new(),
@@ -544,6 +569,7 @@ impl KernelBuilder {
             limits: self.limits,
             cancellation: CancellationToken::new(),
             workspace_root: self.workspace_root,
+            model_options: self.model_options,
             last_requests: Vec::new(),
         }
     }
@@ -560,6 +586,7 @@ impl Default for KernelBuilder {
             gate: Arc::new(HeuristicGate),
             limits: KernelLimits::default(),
             workspace_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            model_options: KernelModelOptions::default(),
         }
     }
 }

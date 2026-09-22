@@ -34,6 +34,7 @@ pub struct OllamaConfig {
 #[serde(deny_unknown_fields)]
 pub struct ApprovalConfig {
     pub approve_all: bool,
+    pub deny_all: bool,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -44,6 +45,7 @@ pub struct CliOverrides {
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,
     pub approve_all: Option<bool>,
+    pub deny_all: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -92,6 +94,7 @@ impl RuntimeConfig {
             .set_default("model.max_tokens", 2_048_u32)?
             .set_default("ollama.endpoint", "http://127.0.0.1:11434")?
             .set_default("approval.approve_all", false)?
+            .set_default("approval.deny_all", false)?
             .set_default("secrets", Vec::<String>::new())?
             .add_source(File::from(options.global_config).required(false))
             .add_source(File::from(workspace_config).required(false));
@@ -122,6 +125,11 @@ impl RuntimeConfig {
         {
             return Err(ConfigLoadError::Validation(
                 "model.temperature must be between 0 and 2".into(),
+            ));
+        }
+        if self.approval.approve_all && self.approval.deny_all {
+            return Err(ConfigLoadError::Validation(
+                "approval.approve_all and approval.deny_all cannot both be true".into(),
             ));
         }
         for reference in &self.secrets {
@@ -157,6 +165,9 @@ fn apply_cli_overrides(
     }
     if let Some(value) = overrides.approve_all {
         builder = builder.set_override("approval.approve_all", value)?;
+    }
+    if let Some(value) = overrides.deny_all {
+        builder = builder.set_override("approval.deny_all", value)?;
     }
     Ok(builder)
 }

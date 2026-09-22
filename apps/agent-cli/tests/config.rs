@@ -90,6 +90,26 @@ fn missing_optional_global_and_workspace_files_use_typed_defaults() {
     assert_eq!(loaded.model.provider, "ollama");
     assert_eq!(loaded.ollama.endpoint, "http://127.0.0.1:11434");
     assert!(!loaded.approval.approve_all);
+    assert!(!loaded.approval.deny_all);
+}
+
+#[test]
+fn approval_flags_must_not_conflict() {
+    let root = TestDir::new();
+    let error = RuntimeConfig::load(LoadOptions {
+        global_config: root.path().join("missing.toml"),
+        workspace_dir: root.path().to_owned(),
+        environment: Some(HashMap::new()),
+        cli: CliOverrides {
+            approve_all: Some(true),
+            deny_all: Some(true),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("approve_all"));
 }
 
 #[test]
