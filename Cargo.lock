@@ -117,6 +117,7 @@ name = "agent-profile"
 version = "0.1.0"
 dependencies = [
  "agent-core",
+ "dirs",
  "serde",
  "serde_yml",
  "thiserror",
