@@ -88,6 +88,36 @@ fn filesystem_loader_rejects_duplicate_names_and_oversized_files() {
     );
 }
 
+#[test]
+fn filesystem_loader_rejects_file_count_and_aggregate_limits() {
+    let root = TestDir::new();
+    for index in 0..=agent_skill::MAX_SKILL_FILES {
+        std::fs::write(
+            root.path().join(format!("{index:04}.yaml")),
+            format!("name: skill-{index}\n"),
+        )
+        .unwrap();
+    }
+    assert!(matches!(
+        SkillRegistry::load_from_root(root.path()),
+        Err(agent_skill::SkillError::TooManyFiles { .. })
+    ));
+
+    let aggregate = TestDir::new();
+    let payload = "x".repeat(agent_skill::MAX_AGGREGATE_SKILL_BYTES / 8);
+    for index in 0..9 {
+        std::fs::write(
+            aggregate.path().join(format!("{index}.yaml")),
+            format!("name: aggregate-{index}\ndescription: {payload}\n"),
+        )
+        .unwrap();
+    }
+    assert!(matches!(
+        SkillRegistry::load_from_root(aggregate.path()),
+        Err(agent_skill::SkillError::AggregateTooLarge { .. })
+    ));
+}
+
 #[cfg(unix)]
 #[test]
 fn filesystem_loader_rejects_symlinked_yaml() {
@@ -103,6 +133,50 @@ fn filesystem_loader_rejects_symlinked_yaml() {
             .contains("link")
     );
     std::fs::remove_file(outside).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn filesystem_loader_rejects_symlinked_ancestor() {
+    use std::os::unix::fs::symlink;
+    let container = TestDir::new();
+    let home = container.path().join("home");
+    let outside = container.path().join("outside");
+    std::fs::create_dir(&home).unwrap();
+    std::fs::create_dir_all(outside.join("skills")).unwrap();
+    symlink(&outside, home.join(".agent")).unwrap();
+
+    assert!(matches!(
+        SkillRegistry::load_from_root(home.join(".agent").join("skills")),
+        Err(agent_skill::SkillError::Linked(_))
+    ));
+}
+
+#[cfg(windows)]
+#[test]
+fn filesystem_loader_rejects_junction_ancestor() {
+    use std::process::Command;
+    let container = TestDir::new();
+    let home = container.path().join("home");
+    let outside = container.path().join("outside");
+    std::fs::create_dir(&home).unwrap();
+    std::fs::create_dir_all(outside.join("skills")).unwrap();
+    let output = Command::new("cmd.exe")
+        .args(["/D", "/C", "mklink /J .agent ..\\outside"])
+        .current_dir(&home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    assert!(matches!(
+        SkillRegistry::load_from_root(home.join(".agent").join("skills")),
+        Err(agent_skill::SkillError::Linked(_))
+    ));
+    std::fs::remove_dir(home.join(".agent")).unwrap();
 }
 
 #[test]

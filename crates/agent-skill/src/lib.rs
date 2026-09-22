@@ -42,6 +42,10 @@ pub struct SkillContext {
 
 /// Maximum accepted size of one skill file (256 KiB).
 pub const MAX_SKILL_FILE_BYTES: usize = 256 * 1024;
+/// Maximum number of skill files loaded from one directory.
+pub const MAX_SKILL_FILES: usize = 128;
+/// Maximum accepted total size of all skill files (1 MiB).
+pub const MAX_AGGREGATE_SKILL_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Error)]
 pub enum SkillError {
@@ -61,6 +65,10 @@ pub enum SkillError {
     Linked(PathBuf),
     #[error("skill file {path} exceeds {limit} bytes")]
     TooLarge { path: PathBuf, limit: usize },
+    #[error("skill directory contains more than {limit} YAML files")]
+    TooManyFiles { limit: usize },
+    #[error("skill files exceed aggregate limit of {limit} bytes")]
+    AggregateTooLarge { limit: usize },
     #[error("skill file {0} is not valid UTF-8")]
     InvalidUtf8(PathBuf),
 }
@@ -128,6 +136,7 @@ impl SkillRegistry {
     /// Loads `*.yaml` skills from an explicit directory root in stable filename order.
     pub fn load_from_root(root: impl AsRef<Path>) -> Result<Self, SkillError> {
         let root = root.as_ref();
+        validate_unlinked_ancestors(root)?;
         let root_metadata = match fs::symlink_metadata(root) {
             Ok(metadata) => metadata,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -143,24 +152,62 @@ impl SkillRegistry {
         if is_link(&root_metadata) {
             return Err(SkillError::Linked(root.to_path_buf()));
         }
-        let mut paths = fs::read_dir(root)
-            .map_err(|source| SkillError::Io {
-                path: root.to_path_buf(),
-                source,
-            })?
-            .map(|entry| entry.map(|entry| entry.path()))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|source| SkillError::Io {
-                path: root.to_path_buf(),
+        let entries = fs::read_dir(root).map_err(|source| SkillError::Io {
+            path: root.to_path_buf(),
+            source,
+        })?;
+        let mut paths = Vec::with_capacity(MAX_SKILL_FILES);
+        let mut aggregate_bytes = 0_usize;
+        for entry in entries {
+            let path = entry
+                .map_err(|source| SkillError::Io {
+                    path: root.to_path_buf(),
+                    source,
+                })?
+                .path();
+            if !path
+                .extension()
+                .is_some_and(|extension| extension == "yaml")
+            {
+                continue;
+            }
+            let metadata = fs::symlink_metadata(&path).map_err(|source| SkillError::Io {
+                path: path.clone(),
                 source,
             })?;
-        paths.retain(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "yaml")
-        });
+            if is_link(&metadata) {
+                return Err(SkillError::Linked(path));
+            }
+            if !metadata.is_file() {
+                continue;
+            }
+            if metadata.len() > MAX_SKILL_FILE_BYTES as u64 {
+                return Err(SkillError::TooLarge {
+                    path,
+                    limit: MAX_SKILL_FILE_BYTES,
+                });
+            }
+            if paths.len() == MAX_SKILL_FILES {
+                return Err(SkillError::TooManyFiles {
+                    limit: MAX_SKILL_FILES,
+                });
+            }
+            aggregate_bytes = aggregate_bytes.checked_add(metadata.len() as usize).ok_or(
+                SkillError::AggregateTooLarge {
+                    limit: MAX_AGGREGATE_SKILL_BYTES,
+                },
+            )?;
+            if aggregate_bytes > MAX_AGGREGATE_SKILL_BYTES {
+                return Err(SkillError::AggregateTooLarge {
+                    limit: MAX_AGGREGATE_SKILL_BYTES,
+                });
+            }
+            paths.push(path);
+        }
         paths.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
 
         let mut skills = Vec::with_capacity(paths.len());
+        let mut read_bytes = 0_usize;
         for path in paths {
             let metadata = fs::symlink_metadata(&path).map_err(|source| SkillError::Io {
                 path: path.clone(),
@@ -194,6 +241,17 @@ impl SkillRegistry {
                     limit: MAX_SKILL_FILE_BYTES,
                 });
             }
+            read_bytes =
+                read_bytes
+                    .checked_add(bytes.len())
+                    .ok_or(SkillError::AggregateTooLarge {
+                        limit: MAX_AGGREGATE_SKILL_BYTES,
+                    })?;
+            if read_bytes > MAX_AGGREGATE_SKILL_BYTES {
+                return Err(SkillError::AggregateTooLarge {
+                    limit: MAX_AGGREGATE_SKILL_BYTES,
+                });
+            }
             let yaml =
                 String::from_utf8(bytes).map_err(|_| SkillError::InvalidUtf8(path.clone()))?;
             skills.push(Skill::from_yaml(&yaml)?);
@@ -204,6 +262,25 @@ impl SkillRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &Skill> {
         self.skills.values()
     }
+}
+
+fn validate_unlinked_ancestors(path: &Path) -> Result<(), SkillError> {
+    for ancestor in path.ancestors() {
+        match fs::symlink_metadata(ancestor) {
+            Ok(metadata) if is_link(&metadata) => {
+                return Err(SkillError::Linked(ancestor.to_path_buf()));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(source) => {
+                return Err(SkillError::Io {
+                    path: ancestor.to_path_buf(),
+                    source,
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(not(windows))]
