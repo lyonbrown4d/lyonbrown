@@ -1,6 +1,15 @@
 //! `agent-tool` — Tool trait、registry、执行器、审批、redaction 钩子 + 内置 Shell/FS 工具（§17）。
 //!
-//! 计划模块：`registry` `execute` `approval` `redact` `shell` `fs`
-//! 安全测试：`tests/secret_e2e.rs`（M5，secret 零明文断言）
+//! M1 提供 registry、带超时/取消的执行器、审批接缝和测试用 echo/read_file 工具。
 
-// M1/M3/M5 待实施
+mod approval;
+mod builtins;
+mod execute;
+mod registry;
+mod runtime;
+
+pub use approval::{AllowAllApproval, ApprovalDecision, ApprovalPolicy};
+pub use builtins::{EchoTool, ReadFileTool};
+pub use execute::{ToolExecutionError, ToolExecutor};
+pub use registry::ToolRegistry;
+pub use runtime::{Tool, ToolContext, ToolError};

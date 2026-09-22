@@ -1,5 +1,14 @@
 //! `agent-model` — ModelProvider trait、ModelRegistry、ModelScheduler、QualityGate（§4/§9-11）。
 //!
-//! 计划模块：`provider` `registry` `scheduler` `policy` `gate`
+//! M1 提供 provider-neutral 接口、registry 和启发式 quality gate；调度策略在 M2 扩展。
 
-// M1/M2 待实施
+mod gate;
+mod registry;
+
+pub mod provider;
+
+pub use gate::{GateVerdict, HeuristicGate, QualityGate};
+pub use provider::{
+    ChatMessage, ModelError, ModelEvent, ModelProvider, ModelRequest, ModelStream, Role,
+};
+pub use registry::{ModelRegistry, RegistryError, SelectedModel};

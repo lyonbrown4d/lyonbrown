@@ -122,6 +122,11 @@ fn sample_events() -> Vec<AgentEvent> {
             answer: "done".into(),
             ts,
         },
+        AgentEvent::TurnCancelled {
+            session_id: SessionId(sid),
+            turn_id: TurnId(tid),
+            ts,
+        },
         AgentEvent::SessionClosed {
             session_id: SessionId(sid),
             ts,
@@ -150,7 +155,8 @@ fn every_event_variant_roundtrips() {
 fn context_item_priority_ordering() {
     let mut items: Vec<ContextItem> = (0..5)
         .map(|i| {
-            let mut c = ContextItem::new(ContextItemKind::Message, format!("msg {i}"), (4 - i) as u8);
+            let mut c =
+                ContextItem::new(ContextItemKind::Message, format!("msg {i}"), (4 - i) as u8);
             c.source = format!("src{i}");
             c
         })
@@ -167,7 +173,10 @@ fn context_item_priority_ordering() {
 
 #[test]
 fn secret_ref_parts() {
-    assert_eq!(SecretRef::env("ANTHROPIC_API_KEY").parts(), ("env", "ANTHROPIC_API_KEY"));
+    assert_eq!(
+        SecretRef::env("ANTHROPIC_API_KEY").parts(),
+        ("env", "ANTHROPIC_API_KEY")
+    );
     assert_eq!(SecretRef::file("github").parts(), ("file", "github"));
 }
 

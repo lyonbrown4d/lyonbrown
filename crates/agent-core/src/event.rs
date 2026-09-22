@@ -23,9 +23,21 @@ pub struct StepOutcome {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum AgentEvent {
-    SessionStarted { session_id: SessionId, ts: DateTime<Utc> },
-    UserMessageReceived { session_id: SessionId, turn_id: TurnId, text: String, ts: DateTime<Utc> },
-    TurnStarted { session_id: SessionId, turn_id: TurnId, ts: DateTime<Utc> },
+    SessionStarted {
+        session_id: SessionId,
+        ts: DateTime<Utc>,
+    },
+    UserMessageReceived {
+        session_id: SessionId,
+        turn_id: TurnId,
+        text: String,
+        ts: DateTime<Utc>,
+    },
+    TurnStarted {
+        session_id: SessionId,
+        turn_id: TurnId,
+        ts: DateTime<Utc>,
+    },
     StepStarted {
         session_id: SessionId,
         turn_id: TurnId,
@@ -46,23 +58,69 @@ pub enum AgentEvent {
         reason: String,
         ts: DateTime<Utc>,
     },
-    ModelStarted { step_id: StepId, ts: DateTime<Utc> },
-    ModelDelta { step_id: StepId, delta: String },
-    ModelCompleted { step_id: StepId, usage: TokenUsage, ts: DateTime<Utc> },
-    ToolRequested { step_id: StepId, invocation: ToolInvocation, ts: DateTime<Utc> },
+    ModelStarted {
+        step_id: StepId,
+        ts: DateTime<Utc>,
+    },
+    ModelDelta {
+        step_id: StepId,
+        delta: String,
+    },
+    ModelCompleted {
+        step_id: StepId,
+        usage: TokenUsage,
+        ts: DateTime<Utc>,
+    },
+    ToolRequested {
+        step_id: StepId,
+        invocation: ToolInvocation,
+        ts: DateTime<Utc>,
+    },
     ToolApproved {
         step_id: StepId,
         tool_call_id: ToolCallId,
         by: String,
         ts: DateTime<Utc>,
     },
-    ToolStarted { step_id: StepId, tool_call_id: ToolCallId, ts: DateTime<Utc> },
-    ToolCompleted { step_id: StepId, result: ToolResult, ts: DateTime<Utc> },
-    ObservationCreated { step_id: StepId, observation_id: ObservationId, ts: DateTime<Utc> },
-    StepCompleted { step_id: StepId, outcome: StepOutcome, ts: DateTime<Utc> },
-    TurnCompleted { turn_id: TurnId, answer: String, ts: DateTime<Utc> },
-    SessionClosed { session_id: SessionId, ts: DateTime<Utc> },
-    Error { session_id: SessionId, message: String, ts: DateTime<Utc> },
+    ToolStarted {
+        step_id: StepId,
+        tool_call_id: ToolCallId,
+        ts: DateTime<Utc>,
+    },
+    ToolCompleted {
+        step_id: StepId,
+        result: ToolResult,
+        ts: DateTime<Utc>,
+    },
+    ObservationCreated {
+        step_id: StepId,
+        observation_id: ObservationId,
+        ts: DateTime<Utc>,
+    },
+    StepCompleted {
+        step_id: StepId,
+        outcome: StepOutcome,
+        ts: DateTime<Utc>,
+    },
+    TurnCompleted {
+        turn_id: TurnId,
+        answer: String,
+        ts: DateTime<Utc>,
+    },
+    TurnCancelled {
+        session_id: SessionId,
+        turn_id: TurnId,
+        ts: DateTime<Utc>,
+    },
+    SessionClosed {
+        session_id: SessionId,
+        ts: DateTime<Utc>,
+    },
+    Error {
+        session_id: SessionId,
+        message: String,
+        ts: DateTime<Utc>,
+    },
 }
 
 impl AgentEvent {
@@ -85,6 +143,7 @@ impl AgentEvent {
             Self::ObservationCreated { .. } => "ObservationCreated",
             Self::StepCompleted { .. } => "StepCompleted",
             Self::TurnCompleted { .. } => "TurnCompleted",
+            Self::TurnCancelled { .. } => "TurnCancelled",
             Self::SessionClosed { .. } => "SessionClosed",
             Self::Error { .. } => "Error",
         }

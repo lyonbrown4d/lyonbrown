@@ -1,7 +1,7 @@
 # Lyonbrown 第一阶段 MVP 实施计划
 
 > 依据：[Lyonbrown Local-First Agent Runtime 架构设计](../architecture/local-first-agent-runtime.md)（Draft v0.1）
-> 状态：M0 已完成；下一阶段为 M1
+> 状态：M0–M1 已完成；下一阶段为 M2
 > 平台：Windows 11 · rustc/cargo 1.98.1 · Ollama 已装（qwen3.8-27b:q3-claude 作 Worker / translategemma:4b 可作 Control）
 
 ## Context（背景）
@@ -314,12 +314,13 @@ pub trait QualityGate: Send + Sync {
 - 验收：`cargo build --workspace` 干净；每个 AgentEvent 变体 serde round-trip 测试；ContextItem priority 排序测试；clippy 干净
 - 验证：`cargo test -p agent-core && cargo clippy --workspace -- -D warnings`
 
-**M1 — Kernel + MockProvider（离线 e2e，下一阶段）**（2–3 天）——*去风险核心里程碑*
+**M1 — Kernel + MockProvider（离线 e2e，已完成）**（2–3 天）——*去风险核心里程碑*
 - 构建：agent-kernel（状态机 + 转换表、EventBus、`Kernel::run_turn`、session/working memory、max-steps 防护、cancel token）；agent-model（trait、ModelRegistry、HeuristicGate）；agent-tool（registry、带超时执行器、ApprovalPolicy + AllowAll）；provider-mock（脚本化 step）；内置 echo + read_file 测试工具；§7 的 e2e 测试
 - 验收：离线 e2e 通过（用户消息→mock 工具调用→观察→最终回答，全事件序列断言）；状态机转换表穷举测试；max-steps 循环防护测试；cancel 测试
 - 验证：`cargo test -p agent-kernel --test e2e_mock`（无网络）
+- 实施说明：M1 的 `HeuristicGate` 只处理空回答和显式错误，升级会重新选择当前首个可用模型；复杂度分级、tier 切换与可审计路由原因在 M2 的 `ModelScheduler` 中实现。
 
-**M2 — Ollama Provider + 本地模型**（2 天）
+**M2 — Ollama Provider + 本地模型（下一阶段）**（2 天）
 - 构建：provider-ollama（`/api/chat` NDJSON 流式、`tools` 参数、`format:"json"`、qwen worker `think:false`、`done` chunk 取 usage）；从配置装配 ModelRegistry；ModelScheduler 静态过滤 + 启发式复杂度；CLI v1（`agent ask`、`agent chat` REPL、流式渲染、`--provider/--model`、`--approve-all`）
 - 验收：`agent ask "say hi"` 从 translategemma:4b 流出；工具 step 路由到 qwen3.8-27b（control 模型永不接工具 step——用 fake registry 断言 ModelSelected 事件）；scheduler 单测：简单输入选 Control、代码输入选 Worker
 - 验证：`cargo run -p agent-cli -- ask "1+1等于几" --provider ollama --model translategemma:4b`（Ollama 已在 :11434）
@@ -390,7 +391,7 @@ Shell 工具输入 schema：`{ command: string, env?: { [NAME]: "secret:<ref>" }
 | R1 | **Windows MSVC 下 embedded llama.cpp**：源码构建已知问题——32 位 `ftell/fseek` 在 MSVC 加载 >4GB GGUF 溢出（仅新版修复）、CRT/链接符号冲突 | 中/高（若强推） | 藏 `llama-cpp` feature 后、**默认关**；用 eugenehp/llama-cpp-rs **预编译** MSVC artifact（不源码构建）；M9 仅 stretch——Ollama 已满足本地层，MVP 完成从不依赖它。预编译不行就砍 M9 |
 | R2 | **MCP Rust SDK 成熟度**：rmcp 官方且活跃（3.4.0，已核实 crates.io 最新稳定版），但 1.x→2.x→3.x 有过破坏性变更；协议本身在演进 | 中/中 | workspace deps 里 pin 精确版本；rmcp 类型全部隔离在 agent-mcp（不越桥）；测试用本地 Rust stdio fixture server，不依赖 npx；CLI 里 MCP feature-gate，MCP 构建坏了不阻塞 chat |
 | R3 | **Provider 协议差异**：Anthropic `tool_use`/`tool_result` content block + max_tokens 必填 + 消息里无 system role；OpenAI `tool_calls` 以 delta 流式到达需按 index 累积；Ollama 工具调用整块在最终 chunk 送达、结构化输出用 `format:"json"`、qwen3.8 默认发 thinking 需禁用 | 高/中（静默错工具调用） | 每个 provider 在自己的 crate 内归一化为 ModelEvent；**每个 provider 配 wiremock 离线测试**断言精确 ModelEvent 序列；qwen worker `thinking: Some(false)`；JSON-Schema input_schema 作三种格式公分母。Provider 的 bug 结构性困在 provider crate 内 |
-| R4 | **Windows 进程/路径**：`cmd.exe /c` 引号（嵌套引号、`&`、`^`）、CWD 与进程继承、junction/8.3 短名绕过 `..` 路径监狱、fs 工具换行符、控制台代码页（GBK vs UTF-8）破坏中文输出 | 中/中 | Shell 工具显式设 cwd、整条命令作单个参数传给 `cmd.exe /c`（不自解析）；监狱检查 = `canonicalize()` + `starts_with(workspace_root)` **且**规范化前拒绝含 `..` 的参数；fs 工具写 `\n` 读两种；子进程 stdout 按字节读、UTF-8 带替换解码（与 chcp 无关）；审批提示与渲染用纯文本（无 ANSI 除非 `--color`） |
+| R4 | **Windows 进程/路径**：`cmd.exe /c` 引号（嵌套引号、`&`、`^`）、CWD 与进程继承、junction/8.3 短名绕过 `..` 路径监狱、fs 工具换行符、控制台代码页（GBK vs UTF-8）破坏中文输出 | 中/中 | Shell 工具显式设 cwd、整条命令作单个参数传给 `cmd.exe /c`（不自解析）；监狱检查 = `canonicalize()` + `starts_with(workspace_root)` **且**规范化前拒绝含 `..` 的参数；M1 已覆盖静态 traversal 与已存在 symlink 的越界检查，检查后并发替换 symlink/junction 的 TOCTOU 风险在 M3 以 handle-relative/no-follow 打开继续硬化；fs 工具写 `\n` 读两种；子进程 stdout 按字节读、UTF-8 带替换解码（与 chcp 无关）；审批提示与渲染用纯文本（无 ANSI 除非 `--color`） |
 | R5 | **Control 模型无工具能力**（translategemma:4b 无 Ollama `tools` 支持） | 确定/低（若遵守） | `ModelCapabilities.supports_tools` 来自 Ollama `/api/show`/tags；scheduler 静态过滤把无工具模型排除出 `needs_tools` step；kernel 请求前断言。M2 在本机实测确认 worker 有 tools、control 无 |
 | R6 | **27B Q3 worker 延迟**——多 step turn 很慢；天真超时会杀死合法 step | 中/低 | 模型超时宽（300s）vs 工具超时（60s）；CLI 流式渲染 delta 让用户始终看到进展；`max_steps_per_turn=20` 封顶最坏情况 |
 

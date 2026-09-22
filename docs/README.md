@@ -10,8 +10,9 @@
 ## 当前状态
 
 - **已完成：M0 — Skeleton + agent-core**
-- **下一阶段：M1 — Kernel + MockProvider（离线 E2E）**
-- M2–M8 待实施；M9 为可选 stretch goal。
+- **已完成：M1 — Kernel + MockProvider（离线 E2E）**
+- **下一阶段：M2 — Ollama Provider + 本地模型**
+- M3–M8 待实施；M9 为可选 stretch goal。
 
 里程碑的详细范围和验收口径以 MVP 实施计划为准；架构文档描述长期方向，不直接表示当前实现进度。
 
