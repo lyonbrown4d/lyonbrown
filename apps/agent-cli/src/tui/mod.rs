@@ -7,7 +7,7 @@ mod ui;
 pub use approval::{ApprovalRequest, TuiApprovalPrompt};
 pub use runner::run;
 pub use state::{Speaker, TranscriptEntry, TuiState};
-pub use ui::render;
+pub use ui::{render, render_with_approval};
 
 pub(crate) fn terminal_safe(value: &str) -> String {
     value

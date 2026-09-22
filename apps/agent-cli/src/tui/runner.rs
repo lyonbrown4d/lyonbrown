@@ -5,6 +5,7 @@ use agent_tool::ApprovalDecision;
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tokio::{sync::broadcast, task::JoinHandle};
+use tokio_util::sync::CancellationToken;
 
 use super::{ApprovalRequest, TuiState, terminal::TerminalSession, ui::render_with_approval};
 
@@ -13,41 +14,83 @@ type TurnTask = JoinHandle<(
     Result<Vec<agent_core::AgentEvent>, agent_core::AgentError>,
 )>;
 
-pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> Result<()> {
-    let mut terminal =
-        TerminalSession::enter().context("failed to initialize terminal interface")?;
-    let mut state = TuiState::default();
-    let mut kernel = Some(kernel);
-    let mut events: Option<broadcast::Receiver<agent_core::AgentEvent>> = None;
-    let mut task: Option<TurnTask> = None;
-    let mut approval: Option<ApprovalRequest> = None;
+struct Runtime {
+    state: TuiState,
+    kernel: Option<Kernel>,
+    events: Option<broadcast::Receiver<agent_core::AgentEvent>>,
+    task: Option<TurnTask>,
+    approval: Option<ApprovalRequest>,
+    approvals: Option<mpsc::Receiver<ApprovalRequest>>,
+    approval_scroll: u16,
+    approval_max_scroll: u16,
+}
 
-    loop {
-        drain_events(&mut events, &mut state);
-        if approval.is_none() {
-            approval = approvals.try_recv().ok();
+pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> Result<()> {
+    let cancellation = kernel.cancellation_token();
+    let mut terminal = match TerminalSession::enter() {
+        Ok(terminal) => terminal,
+        Err(error) => {
+            cancellation.cancel();
+            return Err(error).context("failed to initialize terminal interface");
         }
-        if task.as_ref().is_some_and(JoinHandle::is_finished) {
-            let finished = task.take().expect("finished task exists").await;
-            final_drain(&mut events, &mut state);
+    };
+    let mut runtime = Runtime {
+        state: TuiState::default(),
+        kernel: Some(kernel),
+        events: None,
+        task: None,
+        approval: None,
+        approvals: Some(approvals),
+        approval_scroll: 0,
+        approval_max_scroll: 0,
+    };
+
+    let result = run_event_loop(&mut terminal, &mut runtime).await;
+    shutdown(&mut runtime, &cancellation).await;
+    result
+}
+
+async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -> Result<()> {
+    loop {
+        drain_events(&mut runtime.events, &mut runtime.state);
+        if runtime.approval.is_none()
+            && let Some(approvals) = runtime.approvals.as_ref()
+            && let Ok(request) = approvals.try_recv()
+        {
+            runtime.approval = Some(request);
+            runtime.approval_scroll = 0;
+        }
+        if runtime.task.as_ref().is_some_and(JoinHandle::is_finished) {
+            let finished = runtime.task.take().expect("finished task exists").await;
+            final_drain(&mut runtime.events, &mut runtime.state);
             match finished {
-                Ok((returned_kernel, Ok(_))) => kernel = Some(returned_kernel),
+                Ok((returned_kernel, Ok(_))) => runtime.kernel = Some(returned_kernel),
                 Ok((returned_kernel, Err(error))) => {
-                    kernel = Some(returned_kernel);
-                    state.set_error(error.to_string());
+                    runtime.kernel = Some(returned_kernel);
+                    runtime.state.set_error(error.to_string());
                 }
                 Err(error) => {
-                    state.set_error(format!("turn task failed: {error}"));
-                    break;
+                    runtime
+                        .state
+                        .set_error(format!("turn task failed: {error}"));
+                    anyhow::bail!("turn task failed: {error}");
                 }
             }
-            events = None;
-            state.busy = false;
+            runtime.events = None;
         }
+        runtime.state.busy = runtime.task.is_some();
 
-        terminal
-            .terminal
-            .draw(|frame| render_with_approval(frame, &state, approval.as_ref()))?;
+        let mut approval_max_scroll = 0;
+        terminal.terminal.draw(|frame| {
+            approval_max_scroll = render_with_approval(
+                frame,
+                &runtime.state,
+                runtime.approval.as_ref(),
+                runtime.approval_scroll,
+            );
+        })?;
+        runtime.approval_max_scroll = approval_max_scroll;
+        runtime.approval_scroll = runtime.approval_scroll.min(approval_max_scroll);
 
         if event::poll(Duration::from_millis(25))?
             && let Event::Key(key) = event::read()?
@@ -55,30 +98,57 @@ pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> 
             if key.kind != KeyEventKind::Press {
                 continue;
             }
-            if let Some(request) = approval.take() {
+            if quit_key(key) {
+                return Ok(());
+            }
+            if runtime.approval.is_some() {
+                match key.code {
+                    KeyCode::Up => {
+                        runtime.approval_scroll = runtime.approval_scroll.saturating_sub(1)
+                    }
+                    KeyCode::Down => {
+                        runtime.approval_scroll = runtime
+                            .approval_scroll
+                            .saturating_add(1)
+                            .min(runtime.approval_max_scroll)
+                    }
+                    KeyCode::PageUp => {
+                        runtime.approval_scroll = runtime.approval_scroll.saturating_sub(5)
+                    }
+                    KeyCode::PageDown => {
+                        runtime.approval_scroll = runtime
+                            .approval_scroll
+                            .saturating_add(5)
+                            .min(runtime.approval_max_scroll)
+                    }
+                    KeyCode::Home => runtime.approval_scroll = 0,
+                    KeyCode::End => runtime.approval_scroll = runtime.approval_max_scroll,
+                    _ => {}
+                }
                 if let Some(decision) = approval_decision(key) {
-                    request.respond(decision);
-                } else {
-                    approval = Some(request);
+                    runtime
+                        .approval
+                        .take()
+                        .expect("approval exists")
+                        .respond(decision);
                 }
                 continue;
             }
-            if quit_key(key) && !state.busy {
-                break;
-            }
-            if state.busy {
+            if !can_accept_input(runtime.task.is_some(), runtime.kernel.is_some()) {
                 continue;
             }
             match key.code {
                 KeyCode::Enter => {
-                    let prompt = state.input.trim().to_owned();
+                    let prompt = runtime.state.input.trim().to_owned();
                     if !prompt.is_empty() {
-                        state.input.clear();
-                        state.mark_submitted();
-                        let owned_kernel =
-                            kernel.take().context("kernel unavailable between turns")?;
-                        events = Some(owned_kernel.subscribe());
-                        task = Some(tokio::spawn(async move {
+                        runtime.state.input.clear();
+                        runtime.state.mark_submitted();
+                        let owned_kernel = runtime
+                            .kernel
+                            .take()
+                            .context("kernel unavailable between turns")?;
+                        runtime.events = Some(owned_kernel.subscribe());
+                        runtime.task = Some(tokio::spawn(async move {
                             let mut owned_kernel = owned_kernel;
                             let result = owned_kernel.run_turn(&prompt).await;
                             (owned_kernel, result)
@@ -86,16 +156,38 @@ pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> 
                     }
                 }
                 KeyCode::Backspace => {
-                    state.input.pop();
+                    runtime.state.input.pop();
                 }
                 KeyCode::Char(character) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    state.input.push(character);
+                    runtime.state.input.push(character);
                 }
                 _ => {}
             }
         }
     }
-    Ok(())
+}
+
+async fn shutdown(runtime: &mut Runtime, cancellation: &CancellationToken) {
+    if let Some(request) = runtime.approval.take() {
+        request.respond(ApprovalDecision::Deny);
+    }
+    runtime.approvals.take();
+    cancellation.cancel();
+
+    if let Some(mut task) = runtime.task.take() {
+        if tokio::time::timeout(Duration::from_secs(2), &mut task)
+            .await
+            .is_err()
+        {
+            task.abort();
+            let _ = task.await;
+        }
+        final_drain(&mut runtime.events, &mut runtime.state);
+    }
+}
+
+fn can_accept_input(task_active: bool, kernel_available: bool) -> bool {
+    !task_active && kernel_available
 }
 
 fn final_drain(
@@ -139,29 +231,5 @@ fn approval_decision(key: KeyEvent) -> Option<ApprovalDecision> {
 }
 
 #[cfg(test)]
-mod tests {
-    use agent_core::{AgentEvent, TurnId};
-    use chrono::Utc;
-    use tokio::sync::broadcast;
-
-    use super::{TuiState, final_drain};
-
-    #[test]
-    fn final_drain_consumes_events_queued_at_task_completion() {
-        let (sender, receiver) = broadcast::channel(4);
-        let mut receiver = Some(receiver);
-        let mut state = TuiState::default();
-        sender
-            .send(AgentEvent::TurnCompleted {
-                turn_id: TurnId::new(),
-                answer: "last answer".into(),
-                ts: Utc::now(),
-            })
-            .unwrap();
-
-        final_drain(&mut receiver, &mut state);
-
-        assert_eq!(state.transcript().last().unwrap().text, "last answer");
-        assert_eq!(state.status(), "idle");
-    }
-}
+#[path = "runner_tests.rs"]
+mod tests;

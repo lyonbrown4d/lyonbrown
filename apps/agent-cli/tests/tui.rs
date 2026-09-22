@@ -1,6 +1,6 @@
 use std::{sync::Arc, thread};
 
-use agent_cli::tui::{TuiApprovalPrompt, TuiState, render};
+use agent_cli::tui::{TuiApprovalPrompt, TuiState, render, render_with_approval};
 use agent_core::{
     AgentEvent, RiskLevel, SecretRef, SessionId, StepId, TokenUsage, ToolCallId, ToolDefinition,
     ToolInvocation, ToolResult, ToolSource,
@@ -14,6 +14,31 @@ fn screen(state: &TuiState, width: u16, height: u16) -> String {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|frame| render(frame, state)).unwrap();
+    let buffer = terminal.backend().buffer();
+    (0..height)
+        .map(|y| {
+            (0..width)
+                .map(|x| buffer[(x, y)].symbol().to_owned())
+                .collect::<String>()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn approval_screen(
+    state: &TuiState,
+    request: &agent_cli::tui::ApprovalRequest,
+    scroll: u16,
+    width: u16,
+    height: u16,
+) -> String {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            render_with_approval(frame, state, Some(request), scroll);
+        })
+        .unwrap();
     let buffer = terminal.backend().buffer();
     (0..height)
         .map(|y| {
@@ -224,4 +249,65 @@ fn approval_bridge_sends_sanitized_request_and_returns_ui_decision() {
     request.respond(ApprovalDecision::AllowSession);
 
     assert_eq!(worker.join().unwrap(), ApprovalDecision::AllowSession);
+}
+
+#[test]
+fn approval_modal_scrolls_long_arguments_and_shows_position() {
+    let (prompt, requests) = TuiApprovalPrompt::channel();
+    let definition = ToolDefinition {
+        name: "shell".into(),
+        description: String::new(),
+        input_schema: json!({"type": "object"}),
+        source: ToolSource::BuiltIn,
+        risk: RiskLevel::Execute,
+        requires_secrets: vec![],
+    };
+    let long_command = (0..30)
+        .map(|index| format!("argument-{index}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let invocation = ToolInvocation {
+        id: ToolCallId::new(),
+        name: "shell".into(),
+        arguments: json!({"command": format!("{long_command} TAIL-MARKER \u{1b}[31m")}),
+    };
+    let worker = thread::spawn(move || prompt.prompt(&definition, &invocation));
+    let request = requests.recv().unwrap();
+
+    let first = approval_screen(&TuiState::default(), &request, 0, 52, 14);
+    let last = approval_screen(&TuiState::default(), &request, u16::MAX, 52, 14);
+    assert!(first.contains("lines "));
+    assert!(!first.contains("TAIL-MARKER"));
+    assert!(last.contains("TAIL-MARKER"));
+    assert!(!last.contains('\u{1b}'));
+
+    request.respond(ApprovalDecision::Deny);
+    assert_eq!(worker.join().unwrap(), ApprovalDecision::Deny);
+}
+
+#[test]
+fn approval_modal_uses_full_minimum_screen_without_panicking() {
+    let (prompt, requests) = TuiApprovalPrompt::channel();
+    let definition = ToolDefinition {
+        name: "shell".into(),
+        description: String::new(),
+        input_schema: json!({"type": "object"}),
+        source: ToolSource::BuiltIn,
+        risk: RiskLevel::Execute,
+        requires_secrets: vec![],
+    };
+    let invocation = ToolInvocation {
+        id: ToolCallId::new(),
+        name: "shell".into(),
+        arguments: json!({"command": "echo inspect"}),
+    };
+    let worker = thread::spawn(move || prompt.prompt(&definition, &invocation));
+    let request = requests.recv().unwrap();
+
+    let output = approval_screen(&TuiState::default(), &request, 0, 30, 8);
+    assert!(output.contains("y/n/a/d"));
+    assert!(output.contains("lines "));
+
+    request.respond(ApprovalDecision::Deny);
+    assert_eq!(worker.join().unwrap(), ApprovalDecision::Deny);
 }

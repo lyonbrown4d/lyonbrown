@@ -16,14 +16,16 @@ const PAPER: Color = Color::Rgb(0xE8, 0xEE, 0xF2);
 const MUTED_STEEL: Color = Color::Rgb(0x78, 0x90, 0x9C);
 
 pub fn render(frame: &mut Frame<'_>, state: &TuiState) {
-    render_with_approval(frame, state, None);
+    let _ = render_with_approval(frame, state, None, 0);
 }
 
-pub(crate) fn render_with_approval(
+#[doc(hidden)]
+pub fn render_with_approval(
     frame: &mut Frame<'_>,
     state: &TuiState,
     approval: Option<&ApprovalRequest>,
-) {
+    approval_scroll: u16,
+) -> u16 {
     frame.render_widget(
         Block::default().style(Style::default().bg(MIDNIGHT_SLATE)),
         frame.area(),
@@ -47,7 +49,9 @@ pub(crate) fn render_with_approval(
     }
     render_composer(frame, rows[1], state);
     if let Some(request) = approval {
-        render_approval(frame, request);
+        render_approval(frame, request, approval_scroll)
+    } else {
+        0
     }
 }
 
@@ -159,11 +163,15 @@ fn render_composer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
     );
 }
 
-fn render_approval(frame: &mut Frame<'_>, request: &ApprovalRequest) {
-    let area = centered_rect(76, 70, frame.area());
+fn render_approval(frame: &mut Frame<'_>, request: &ApprovalRequest, requested_scroll: u16) -> u16 {
+    let area = if frame.area().width < 70 || frame.area().height < 18 {
+        frame.area()
+    } else {
+        centered_rect(76, 70, frame.area())
+    };
     frame.render_widget(Clear, area);
     let text = format!(
-        "tool: {}\nrisk: {:?}\narguments:\n{}\nsecret references: {}\n\n[y] allow  [n] deny  [a] session  [d] deny all",
+        "tool: {}\nrisk: {:?}\narguments:\n{}\nsecret references: {}",
         request.tool,
         request.risk,
         request.arguments,
@@ -178,10 +186,37 @@ fn render_approval(frame: &mut Frame<'_>, request: &ApprovalRequest) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(APPROVAL_AMBER))
         .style(Style::default().bg(DEEP_NAVY).fg(PAPER));
-    frame.render_widget(
-        Paragraph::new(text).block(block).wrap(Wrap { trim: false }),
-        area,
-    );
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    if inner.is_empty() {
+        return 0;
+    }
+    let footer_height = u16::from(inner.height > 1);
+    let sections =
+        Layout::vertical([Constraint::Min(1), Constraint::Length(footer_height)]).split(inner);
+    let body = sections[0];
+    let paragraph = Paragraph::new(text).wrap(Wrap { trim: false });
+    let line_count = paragraph.line_count(body.width.max(1));
+    let max_scroll = line_count
+        .saturating_sub(usize::from(body.height))
+        .min(usize::from(u16::MAX)) as u16;
+    let scroll = requested_scroll.min(max_scroll);
+    frame.render_widget(paragraph.scroll((scroll, 0)), body);
+    if footer_height > 0 {
+        let first = usize::from(scroll).saturating_add(1).min(line_count.max(1));
+        let last = usize::from(scroll)
+            .saturating_add(usize::from(body.height))
+            .min(line_count);
+        frame.render_widget(
+            Paragraph::new(format!(
+                "y/n/a/d · lines {first}-{last}/{} · ↑↓ PgUp/PgDn",
+                line_count.max(1)
+            ))
+            .style(Style::default().fg(APPROVAL_AMBER)),
+            sections[1],
+        );
+    }
+    max_scroll
 }
 
 fn centered_rect(width_percent: u16, height_percent: u16, area: Rect) -> Rect {
