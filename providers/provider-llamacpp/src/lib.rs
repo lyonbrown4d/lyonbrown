@@ -19,8 +19,10 @@ use std::num::NonZeroU32;
 #[cfg(feature = "llama-cpp")]
 use std::sync::Arc;
 
+#[cfg(any(feature = "llama-cpp", test))]
+use agent_core::StopReason;
 #[cfg(feature = "llama-cpp")]
-use agent_core::{StopReason, TokenUsage};
+use agent_core::TokenUsage;
 #[cfg(feature = "llama-cpp")]
 use agent_model::{ModelEvent, ModelProvider, ModelStream};
 #[cfg(feature = "llama-cpp")]
@@ -183,6 +185,23 @@ fn capabilities(config: &LlamaCppConfig) -> ModelCapabilities {
         supports_thinking: false,
         cost_per_mtok_in: 0.0,
         cost_per_mtok_out: 0.0,
+    }
+}
+
+#[cfg(any(feature = "llama-cpp", test))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Termination {
+    Eog,
+    StopString,
+    OutputLimit,
+}
+
+#[cfg(any(feature = "llama-cpp", test))]
+fn termination_reason(termination: Termination) -> StopReason {
+    match termination {
+        Termination::Eog => StopReason::EndTurn,
+        Termination::StopString => StopReason::Stop,
+        Termination::OutputLimit => StopReason::MaxTokens,
     }
 }
 
@@ -375,14 +394,15 @@ fn generate(
     let mut decoder = encoding_rs::UTF_8.new_decoder();
     let mut stop_buffer = StopBuffer::new(stops);
     let mut generated = 0_u32;
+    let mut termination = Termination::OutputLimit;
 
     while generated < output_limit {
         if sender.is_closed() {
             return Ok(());
         }
         let token = sampler.sample(&context, -1);
-        sampler.accept(token);
         if native.model.is_eog_token(token) {
+            termination = Termination::Eog;
             break;
         }
         generated += 1;
@@ -391,12 +411,13 @@ fn generate(
             .token_to_piece(token, &mut decoder, false, None)
             .map_err(|error| ModelError::Other(format!("cannot decode token: {error}")))?;
         let (delta, stopped) = stop_buffer.push(&piece);
-        if let Some(delta) = delta {
-            if sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err() {
-                return Ok(());
-            }
+        if let Some(delta) = delta
+            && sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err()
+        {
+            return Ok(());
         }
         if stopped {
+            termination = Termination::StopString;
             break;
         }
 
@@ -411,10 +432,10 @@ fn generate(
         })?;
     }
 
-    if let Some(delta) = stop_buffer.finish() {
-        if sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err() {
-            return Ok(());
-        }
+    if let Some(delta) = stop_buffer.finish()
+        && sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err()
+    {
+        return Ok(());
     }
     let usage = TokenUsage {
         input: prompt_len,
@@ -425,7 +446,7 @@ fn generate(
         return Ok(());
     }
     let _ = sender.blocking_send(Ok(ModelEvent::Done {
-        stop_reason: StopReason::EndTurn,
+        stop_reason: termination_reason(termination),
     }));
     Ok(())
 }
@@ -579,6 +600,7 @@ mod tests {
         GgufModel, LlamaCppConfig, LlamaCppProvider, ProviderError, capabilities, format_prompt,
         validate_request,
     };
+    use super::{Termination, termination_reason};
     #[cfg(feature = "llama-cpp")]
     use agent_model::{ModelEvent, ModelProvider};
     #[cfg(feature = "llama-cpp")]
@@ -762,6 +784,30 @@ mod tests {
         assert!(!capability.supports_thinking);
     }
 
+    #[test]
+    fn natural_eog_ends_the_turn() {
+        assert_eq!(
+            termination_reason(Termination::Eog),
+            agent_core::StopReason::EndTurn
+        );
+    }
+
+    #[test]
+    fn configured_stop_reports_stop() {
+        assert_eq!(
+            termination_reason(Termination::StopString),
+            agent_core::StopReason::Stop
+        );
+    }
+
+    #[test]
+    fn exhausted_output_budget_reports_max_tokens() {
+        assert_eq!(
+            termination_reason(Termination::OutputLimit),
+            agent_core::StopReason::MaxTokens
+        );
+    }
+
     #[cfg(not(feature = "llama-cpp"))]
     #[test]
     fn constructor_is_explicitly_unavailable_without_native_feature() {
@@ -783,7 +829,8 @@ mod tests {
     #[cfg(feature = "llama-cpp")]
     #[test]
     fn stop_buffer_handles_a_stop_string_split_across_tokens() {
-        let mut buffer = StopBuffer::new(&["STOP".into()]);
+        let stops = ["STOP".into()];
+        let mut buffer = StopBuffer::new(&stops);
 
         assert_eq!(buffer.push("answer ST"), (Some("answer ".into()), false));
         assert_eq!(buffer.push("OP ignored"), (None, true));
