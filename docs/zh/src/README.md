@@ -13,8 +13,8 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
 
 - 已完成：M0 — Skeleton + agent-core
 - 已完成：M1 — Kernel + MockProvider（离线 E2E）
-- 已完成：M2 — Ollama Provider + 本地模型
-- 下一阶段：M3 — Tool Runtime
-- M4–M8 待实施；M9 为可选 stretch goal
+- 已完成：M0–M3（含 Tool Runtime、审批与 capability-relative 文件隔离）
+- 下一阶段：M4 — Profile + Workspace + Skills + Prompt Compiler
+- M4–M8 待实施；M9 为可选的内嵌 llama.cpp stretch goal；跨平台进程 sandbox 在 Phase 2 实施
 
 里程碑的详细范围和验收口径以 MVP 实施计划为准。架构文档描述长期方向，不直接表示当前实现进度。

@@ -13,6 +13,6 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 
 - Complete: M0 — Skeleton + agent-core
 - Complete: M1 — Kernel + MockProvider (offline E2E)
-- Complete: M2 — Ollama Provider + local models
-- Next: M3 — Tool Runtime
-- M4–M8 remain; M9 is an optional stretch goal
+- Complete: M0–M3, including Tool Runtime, approval, and capability-relative filesystem confinement
+- Next: M4 — Profile + Workspace + Skills + Prompt Compiler
+- M4–M8 remain; M9 is the optional embedded llama.cpp stretch goal; cross-platform process sandboxing is Phase 2

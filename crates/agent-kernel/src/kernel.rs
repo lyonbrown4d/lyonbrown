@@ -57,7 +57,7 @@ pub struct Kernel {
     gate: Arc<dyn QualityGate>,
     limits: KernelLimits,
     cancellation: CancellationToken,
-    workspace_root: PathBuf,
+    tool_context: ToolContext,
     model_options: KernelModelOptions,
     last_requests: Vec<ModelRequest>,
 }
@@ -398,13 +398,8 @@ impl Kernel {
                             tool_call_id: invocation.id,
                             ts: Utc::now(),
                         })?;
-                        let context = ToolContext::new(
-                            self.workspace_root.clone(),
-                            self.broker.clone(),
-                            self.cancellation.clone(),
-                            self.limits.tool_timeout,
-                        );
-                        let executor = ToolExecutor::new(self.tools.clone(), context);
+                        let executor =
+                            ToolExecutor::new(self.tools.clone(), self.tool_context.clone());
                         match executor.execute(&invocation).await {
                             Ok(result) => result,
                             Err(ToolExecutionError::Cancelled) => {
@@ -557,6 +552,13 @@ impl KernelBuilder {
     }
 
     pub fn build(self) -> Kernel {
+        let cancellation = CancellationToken::new();
+        let tool_context = ToolContext::new(
+            self.workspace_root.clone(),
+            self.broker.clone(),
+            cancellation.clone(),
+            self.limits.tool_timeout,
+        );
         Kernel {
             session: Session::new(),
             state: KernelState::Idle,
@@ -567,8 +569,8 @@ impl KernelBuilder {
             broker: self.broker,
             gate: self.gate,
             limits: self.limits,
-            cancellation: CancellationToken::new(),
-            workspace_root: self.workspace_root,
+            cancellation,
+            tool_context,
             model_options: self.model_options,
             last_requests: Vec::new(),
         }

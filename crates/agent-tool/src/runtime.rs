@@ -5,6 +5,8 @@ use std::time::Duration;
 use agent_core::{ToolDefinition, ToolInvocation, ToolResult};
 use agent_secret::SecretBroker;
 use async_trait::async_trait;
+use cap_std::ambient_authority;
+use cap_std::fs::Dir;
 use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
@@ -13,6 +15,7 @@ pub struct ToolContext {
     pub broker: Arc<dyn SecretBroker>,
     pub cancel: CancellationToken,
     pub timeout: Duration,
+    workspace_dir: Result<Arc<Dir>, Arc<str>>,
 }
 
 impl ToolContext {
@@ -22,12 +25,22 @@ impl ToolContext {
         cancel: CancellationToken,
         timeout: Duration,
     ) -> Self {
+        let workspace_dir = Dir::open_ambient_dir(&workspace_root, ambient_authority())
+            .map(Arc::new)
+            .map_err(|error| Arc::<str>::from(error.to_string()));
         Self {
             workspace_root,
             broker,
             cancel,
             timeout,
+            workspace_dir,
         }
+    }
+
+    pub(crate) fn workspace_dir(&self) -> Result<Arc<Dir>, ToolError> {
+        self.workspace_dir
+            .clone()
+            .map_err(|error| ToolError::Io(error.to_string()))
     }
 }
 

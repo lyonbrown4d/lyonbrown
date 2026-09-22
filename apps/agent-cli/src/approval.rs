@@ -64,10 +64,16 @@ pub fn format_approval_request(definition: &ToolDefinition, invocation: &ToolInv
         .iter()
         .map(ToString::to_string)
         .collect::<Vec<_>>();
+    let sandbox = if definition.name == "shell" {
+        "host/unsandboxed"
+    } else {
+        "not applicable"
+    };
     format!(
-        "tool: {}\nrisk: {:?}\narguments:\n{}\ndeclared secrets: {}",
+        "tool: {}\nrisk: {:?}\nsandbox: {}\narguments:\n{}\ndeclared secrets: {}",
         definition.name,
         definition.risk,
+        sandbox,
         arguments,
         if declared_secrets.is_empty() {
             "none".into()

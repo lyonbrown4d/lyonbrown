@@ -7,7 +7,10 @@ use agent_core::{
 use agent_kernel::{Kernel, KernelLimits, KernelState};
 use agent_model::{ModelRegistry, Role};
 use agent_secret::{NoopBroker, SecretBroker, SecretError};
-use agent_tool::{AllowAllApproval, EchoTool, Tool, ToolContext, ToolError, ToolRegistry};
+use agent_tool::{
+    AllowAllApproval, ApprovalDecision, ApprovalPolicy, EchoTool, Tool, ToolContext, ToolError,
+    ToolRegistry,
+};
 use async_trait::async_trait;
 use provider_mock::{MockProvider, ScriptedStep};
 use serde_json::json;
@@ -239,6 +242,38 @@ async fn unknown_tool_is_returned_to_the_model_as_a_failed_observation() {
 }
 
 #[tokio::test]
+async fn denied_tool_is_returned_as_an_observation_and_the_turn_continues() {
+    let mock = Arc::new(MockProvider::scripted(vec![
+        ScriptedStep::tool_call("echo", json!({"text": "must not execute"})),
+        ScriptedStep::text("I continued after the denial."),
+    ]));
+    let providers = ModelRegistry::new();
+    providers.register(mock);
+    let tools = ToolRegistry::new();
+    tools.register(Arc::new(EchoTool::new()));
+    let mut kernel = Kernel::builder()
+        .providers(providers)
+        .tools(tools)
+        .approval(DenyApproval)
+        .build();
+
+    let events = kernel.run_turn("try the denied tool").await.unwrap();
+
+    let result = events.iter().find_map(|event| event.tool_result()).unwrap();
+    assert!(!result.ok);
+    assert_eq!(
+        result.error.as_deref(),
+        Some("tool denied by approval policy")
+    );
+    assert!(!events.iter().any(|event| event.kind() == "ToolStarted"));
+    assert_eq!(events.last().unwrap().kind(), "TurnCompleted");
+    assert_eq!(
+        events.iter().find_map(|event| event.turn_answer()),
+        Some("I continued after the denial.")
+    );
+}
+
+#[tokio::test]
 async fn tool_output_is_redacted_before_events_and_model_observations() {
     let mock = Arc::new(MockProvider::scripted(vec![
         ScriptedStep::tool_call("fixed_secret", json!({})),
@@ -279,6 +314,18 @@ async fn tool_use_without_calls_is_logged_as_a_provider_protocol_error() {
 }
 
 struct RedactingBroker;
+
+struct DenyApproval;
+
+impl ApprovalPolicy for DenyApproval {
+    fn approve(
+        &self,
+        _definition: &ToolDefinition,
+        _invocation: &ToolInvocation,
+    ) -> ApprovalDecision {
+        ApprovalDecision::Deny
+    }
+}
 
 struct FixedSecretTool {
     definition: ToolDefinition,

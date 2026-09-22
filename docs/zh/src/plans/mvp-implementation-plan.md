@@ -1,7 +1,7 @@
 # Lyonbrown 第一阶段 MVP 实施计划
 
 > 依据：[Lyonbrown Local-First Agent Runtime 架构设计](../architecture/local-first-agent-runtime.md)（Draft v0.1）
-> 状态：M0–M2 已完成；下一阶段为 M3
+> 状态：M0–M3 已完成；下一阶段为 M4
 > 平台：Windows 11 · rustc/cargo 1.98.1 · Ollama 已装（qwen3.8-27b:q3-claude 作 Worker / translategemma:4b 可作 Control）
 
 ## Context（背景）
@@ -51,7 +51,7 @@ Agent Kernel（事件驱动 + 状态机）· Agent Profile · Workspace Runtime 
 | `providers/provider-mock` | 脚本化 Mock Provider，全部 kernel/e2e 测试离线跑 |
 | `providers/provider-llamacpp` | 可选 feature `llama-cpp`、默认关闭（M9 stretch） |
 
-从 §31 中裁剪（属 Phase 2/3，见 §38-39）：`agent-capability`（MVP 并入 agent-tool）、`agent-sync`、`agent-sandbox`、`agent-telemetry`（先用 tracing）、`agent-server`、`agent-desktop`。
+从 §31 中裁剪（属 Phase 2/3，见 §38-39）：`agent-capability`（MVP 并入 agent-tool）、`agent-sync`、`agent-sandbox`、`agent-telemetry`（先用 tracing）、`agent-server`、`agent-desktop`。其中 `agent-sandbox` 已形成独立的[跨平台设计](../architecture/cross-platform-sandbox.md)：M3 的 Shell 必须明确标记为 host/unsandboxed，Phase 2 以 WASI + OS 原生后端落地。
 
 ### 依赖图（严格 DAG）
 
@@ -295,6 +295,7 @@ pub trait QualityGate: Send + Sync {
 | `uuid` (v4) / `chrono` | id、时间戳 | core |
 | `dirs` | `~/.agent` | cli, storage, secret |
 | `which` | 定位 MCP server 可执行文件 | mcp, workspace |
+| `cap-std` 4.0.3 | capability-relative 文件访问，阻止 symlink/junction 越过 workspace | tool |
 | `wiremock` | **仅 dev-dependency** — provider 离线 HTTP 测试 | providers (tests) |
 
 **可延后：**
@@ -303,7 +304,8 @@ pub trait QualityGate: Send + Sync {
 |---|---|---|
 | `rmcp` **3.4.0**（官方 MCP SDK，`client, transport-child-process`，已核实为 crates.io 最新稳定版） | M7 才需要——**pin 精确版本**，所有 rmcp 类型隔离在 agent-mcp 内 | M7 |
 | `tiktoken-rs` | 延后——先用 `chars/4` 启发式 + provider 回报的 TokenUsage，不够准再加 feature | post-MVP |
-| `llama-cpp-rs`（eugenehp，预编译 MSVC artifact） | 可选 feature `llama-cpp`，默认关 | M9 stretch |
+| `ratatui` 0.30.2（默认 Crossterm backend） | 完整 TUI；核心只暴露 AgentEvent 与 ApprovalPrompt | M8 |
+| `llama-cpp-2` 0.1.156 | 进程内嵌入 llama.cpp；可选 feature `llama-cpp`，默认关 | M9 stretch |
 | `axum` / `opentelemetry` / `wasmtime` 等 | 延后 | Phase 2/3 |
 
 ---
@@ -327,13 +329,13 @@ pub trait QualityGate: Send + Sync {
 - 验收：`agent ask "say hi"` 从 translategemma:4b 流出；工具 step 路由到 qwen3.8-27b（control 模型永不接工具 step——用 fake registry 断言 ModelSelected 事件）；scheduler 单测：简单输入选 Control、代码输入选 Worker
 - 验证：`cargo run -p agent-cli -- ask "1+1等于几" --provider ollama --model translategemma:4b`（Ollama 已在 :11434）
 
-**M3 — Tool Runtime：Shell + Filesystem + 审批 + redaction**（2–3 天）
-- 构建：shell 工具（tokio::process、默认 `cmd.exe /c`、cwd=workspace root、60s 超时、env 注入钩子、输出上限 32KB + 截断标志）；fs 工具（read/write/list——`canonicalize` + 前缀检查路径监狱，拒绝 `..` 逃逸）；风险级别（shell=Execute、fs.write=Write、read/list=Read）；CLI 审批提示（y/n/a/d），Write/Execute 才问，Read 自动放行；`--deny-all`；非 TTY 默认拒绝高风险（fail-closed）
-- 验收：单测：`../etc/passwd` 逃逸被拒；超时杀死挂起命令；审批 Deny 产出 `ToolResult{ok:false}` 且循环继续；e2e：模型调 shell → Windows 上真实 echo 执行
+**M3 — Tool Runtime：Shell + Filesystem + 审批 + redaction（已完成）**（2–3 天）
+- 构建：shell 工具（tokio::process、默认 `cmd.exe /c`、cwd=workspace root、60s 超时、env 注入钩子、输出上限 32KB + 截断标志）；fs 工具（read/write/list——基于 `cap-std` 的 capability-relative 文件访问，且前置拒绝 `..`/绝对路径）；风险级别（shell=Execute、fs.write=Write、read/list=Read）；CLI 审批提示（y/n/a/d），Write/Execute 才问，Read 自动放行；`--deny-all`；非 TTY 默认拒绝高风险（fail-closed）
+- 验收：单测：`..`、symlink/junction 与 workspace 路径替换逃逸被拒；执行器在期限内返回 timeout 并终止直接 shell（后代进程树的强制回收属于 Phase 2 sandbox，不在 M3 伪作保证）；审批 Deny 产出 `ToolResult{ok:false}` 且循环继续；e2e：模型调 shell → Windows 上真实 echo 执行
 - 验证：`cargo test -p agent-tool` + 手动 `cargo run -p agent-cli -- chat` 让它列文件
 
 **M4 — Profile + Workspace + Skills + Prompt Compiler**（2–3 天）
-- 构建：agent-profile（§5 YAML，`~/.agent/profiles/<id>.yaml`，内置默认 profile）；agent-workspace（manifest 检测、AGENTS.md/CLAUDE.md/README/CONTRIBUTING → canonical instructions、`~/.agent/workspaces/<hash>/` 缓存、不污染仓库）；agent-skill（`~/.agent/skills/` YAML + trigger 匹配）；agent-context 编译器：system prompt = profile → 模型能力说明 → workspace profile → 仓库指令 → 匹配 skills → 工具使用说明；budget 裁剪（优先级序，system + 最近 3 条用户消息 + 最近工具观察永不丢）；TokenEstimator 启发式
+- 构建：agent-profile（§5 YAML，`~/.agent/profiles/<id>.yaml`，内置默认 profile）；agent-workspace（manifest 检测、AGENTS.md/CLAUDE.md/README/CONTRIBUTING → canonical instructions、`~/.agent/workspaces/<hash>/` 缓存、不污染仓库）；agent-skill（`~/.agent/skills/` YAML + trigger 匹配）；agent-context 编译器：system prompt = profile → 模型能力说明 → workspace profile → 仓库指令 → 匹配 skills → 工具使用说明；budget 裁剪（优先级序，system + 最近 3 条用户消息 + 最近工具观察永不丢）；TokenEstimator 启发式；用 prompt/step 意图产生真正的 `needs_tools` 信号，替换 M3“只要注册工具就保守选 Worker”的临时策略
 - 验收：`agent .` 在全新 cargo 仓库零配置检测出 Rust workspace；编译出的 system prompt 五段齐全且顺序固定（fixture 仓库断言）；trigger "quarkus" 的 skill 仅在词出现时激活；budget 测试：200KB 低优先级被裁到 8K 预算内、高优先级保留
 - 验证：`cargo test -p agent-context -p agent-workspace -p agent-skill -p agent-profile`
 
@@ -353,12 +355,12 @@ pub trait QualityGate: Send + Sync {
 - 验证：`cargo test -p agent-mcp`（离线，spawn 本地 fixture server）
 
 **M8 — Storage、resume、收尾**（2 天）
-- 构建：agent-storage（rusqlite bundled、`~/.agent/agent.db`：`sessions`、`events(session_id, seq, json)`、`tool_audit`；WAL、spawn_blocking）；每事件落库；`agent resume <session-id>` 从事件重建 Session；Ctrl-C 第一次 = 取消当前 step（Cancelled 状态、干净退出）、第二次 = 强制；`agent sessions` 列表；README（中文）含配置参考
+- 构建：agent-storage（rusqlite bundled、`~/.agent/agent.db`：`sessions`、`events(session_id, seq, json)`、`tool_audit`；WAL、spawn_blocking）；每事件落库；`agent resume <session-id>` 从事件重建 Session；Ctrl-C 第一次 = 取消当前 step（Cancelled 状态、干净退出）、第二次 = 强制；`agent sessions` 列表；基于 `ratatui` 0.30.2 + Crossterm 的可选完整 TUI（事件流、消息、工具审批/结果面板），同时保留 headless CLI；README（中文）含配置参考
 - 验收：resume 测试——模拟 2 step 后中断，resume 后模型看到前序上下文（mock 断言请求消息）；事件日志回放重建相同 Session 状态；全 workspace 测试绿
 - 验证：`cargo test --workspace && cargo clippy --workspace -- -D warnings`
 
 **M9 —（stretch）llama.cpp**（1–2 天，仅当 M0–M8 全绿）
-- 构建：provider-llamacpp 藏 workspace feature `llama-cpp`（默认关）后，eugenehp/llama-cpp-rs **预编译** `x86_64-pc-windows-msvc` artifact（不源码构建），GGUF 路径配置，注册为 local provider
+- 构建：`provider-llamacpp` 通过 `llama-cpp-2` 0.1.156 **进程内嵌入** llama.cpp：Agent 自己加载 GGUF、持有 backend/model/context 生命周期并把 token 流归一化为 `ModelEvent`；不依赖 HTTP daemon，也不启动外部推理进程。用 workspace feature `llama-cpp` 隔离原生构建（默认关），CPU 为默认后端，CUDA/Vulkan 后续按 feature 开启；模型只加载一次，推理先串行化，后续再引入 context pool
 - 验收：feature build 编译过；加载小 GGUF 完成一次补全。若预编译 artifact 在本机有问题，**砍掉 M9**——Ollama 已覆盖本地层，不阻塞 MVP
 - 验证：`cargo test -p provider-llamacpp --features llama-cpp`
 
@@ -384,16 +386,20 @@ Shell 工具输入 schema：`{ command: string, env?: { [NAME]: "secret:<ref>" }
 
 **D6. MCP 工具作为一等工具并入 Tool Registry。** `agent-mcp` 是**桥**，不是平行执行路径：启动时列出 MCP server 工具，把 `McpTool { client, server, name }` 以 `mcp.<server>.<tool>` 注册进 Kernel 用的同一个 `ToolRegistry`。Kernel、scheduler、审批、redaction、audit 对它们与内置工具一视同仁（risk 默认 Execute ⇒ 走审批；输出走同一 redaction）。agent-mcp 之下没有任何 MCP 专属代码。理由：§14 "能力属于 runtime 不属于 provider"——且这让 M7 成为叶子里程碑，砍掉也不碰 Kernel。
 
+**D7. TUI 是 AgentEvent/ApprovalPrompt 的可选适配器，不进入 Kernel。** 完整终端界面采用 `ratatui` + 默认 Crossterm backend；它订阅与当前 CLI 相同的事件流，并通过同一个审批接口回传决策。管道、CI 与屏幕阅读器场景继续走纯文本/headless 路径，非 TTY 的 fail-closed 行为不变。
+
+**D8. provider-llamacpp 是内嵌推理运行时，不是外部服务适配器。** 启用 feature 后，进程直接加载 GGUF 并执行采样，生命周期由 Agent 管理；provider 仅负责把 agent-model 请求映射到 llama.cpp context，并将 token/tool-compatible 输出转成统一事件。这样本地模型能力属于 Agent 自身，同时保持 Ollama 为默认、安装成本更低的本地路径。
+
 ---
 
 ## 6. 风险
 
 | # | 风险 | 概率/影响 | 缓解 |
 |---|---|---|---|
-| R1 | **Windows MSVC 下 embedded llama.cpp**：源码构建已知问题——32 位 `ftell/fseek` 在 MSVC 加载 >4GB GGUF 溢出（仅新版修复）、CRT/链接符号冲突 | 中/高（若强推） | 藏 `llama-cpp` feature 后、**默认关**；用 eugenehp/llama-cpp-rs **预编译** MSVC artifact（不源码构建）；M9 仅 stretch——Ollama 已满足本地层，MVP 完成从不依赖它。预编译不行就砍 M9 |
+| R1 | **Windows MSVC 下 embedded llama.cpp**：原生 C/C++ 构建、CRT/链接与 GPU backend 组合复杂 | 中/高（若强推） | 用 `llama-cpp-2` 隔离在 `provider-llamacpp` 和 `llama-cpp` feature 后、**默认关**；CPU 后端先行并在 CI 单独验证；M9 仅 stretch——Ollama 已满足默认本地路径 |
 | R2 | **MCP Rust SDK 成熟度**：rmcp 官方且活跃（3.4.0，已核实 crates.io 最新稳定版），但 1.x→2.x→3.x 有过破坏性变更；协议本身在演进 | 中/中 | workspace deps 里 pin 精确版本；rmcp 类型全部隔离在 agent-mcp（不越桥）；测试用本地 Rust stdio fixture server，不依赖 npx；CLI 里 MCP feature-gate，MCP 构建坏了不阻塞 chat |
 | R3 | **Provider 协议差异**：Anthropic `tool_use`/`tool_result` content block + max_tokens 必填 + 消息里无 system role；OpenAI `tool_calls` 以 delta 流式到达需按 index 累积；Ollama 工具调用整块在最终 chunk 送达、结构化输出用 `format:"json"`、qwen3.8 默认发 thinking 需禁用 | 高/中（静默错工具调用） | 每个 provider 在自己的 crate 内归一化为 ModelEvent；**每个 provider 配 wiremock 离线测试**断言精确 ModelEvent 序列；qwen worker `thinking: Some(false)`；JSON-Schema input_schema 作三种格式公分母。Provider 的 bug 结构性困在 provider crate 内 |
-| R4 | **Windows 进程/路径**：`cmd.exe /c` 引号（嵌套引号、`&`、`^`）、CWD 与进程继承、junction/8.3 短名绕过 `..` 路径监狱、fs 工具换行符、控制台代码页（GBK vs UTF-8）破坏中文输出 | 中/中 | Shell 工具显式设 cwd、整条命令作单个参数传给 `cmd.exe /c`（不自解析）；监狱检查 = `canonicalize()` + `starts_with(workspace_root)` **且**规范化前拒绝含 `..` 的参数；M1 已覆盖静态 traversal 与已存在 symlink 的越界检查，检查后并发替换 symlink/junction 的 TOCTOU 风险在 M3 以 handle-relative/no-follow 打开继续硬化；fs 工具写 `\n` 读两种；子进程 stdout 按字节读、UTF-8 带替换解码（与 chcp 无关）；审批提示与渲染用纯文本（无 ANSI 除非 `--color`） |
+| R4 | **Windows 进程/路径**：`cmd.exe /c` 引号（嵌套引号、`&`、`^`）、CWD 与进程继承、junction/8.3 短名、fs 工具换行符、控制台代码页（GBK vs UTF-8）破坏中文输出 | 中/中 | Shell 工具显式设 cwd、整条命令作单个参数传给 `cmd.exe /c`（不自解析）；M3 使用 `cap-std` 4.0.3 做 handle-relative 文件访问并提前拒绝 `..`/绝对路径，junction 越界有 Windows 回归测试；子进程 stdout 按字节读、UTF-8 带替换解码；审批提示保留纯文本路径 |
 | R5 | **Control 模型无工具能力**（translategemma:4b 无 Ollama `tools` 支持） | 确定/低（若遵守） | `ModelCapabilities.supports_tools` 来自 Ollama `/api/show`/tags；scheduler 静态过滤把无工具模型排除出 `needs_tools` step；kernel 请求前断言。M2 在本机实测确认 worker 有 tools、control 无 |
 | R6 | **27B Q3 worker 延迟**——多 step turn 很慢；天真超时会杀死合法 step | 中/低 | 模型超时宽（300s）vs 工具超时（60s）；CLI 流式渲染 delta 让用户始终看到进展；`max_steps_per_turn=20` 封顶最坏情况 |
 

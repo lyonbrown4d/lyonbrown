@@ -1,7 +1,7 @@
 # Lyonbrown Phase-One MVP Implementation Plan
 
 > Based on: [Lyonbrown Local-First Agent Runtime Architecture](../architecture/local-first-agent-runtime.md) (Draft v0.1)  
-> Status: M0–M2 complete; M3 is next  
+> Status: M0–M3 complete; M4 is next
 > Platform: Windows 11 · rustc/cargo 1.98.1 · Ollama installed (qwen3.8-27b:q3-claude as Worker / translategemma:4b available as Control)
 
 ## Context
@@ -53,7 +53,7 @@ Root: `D:\Projects\lyonbrown`; edition 2024; resolver 2; shared versions in work
 | `providers/provider-mock` | Scripted Mock Provider; all kernel/e2e tests run offline |
 | `providers/provider-llamacpp` | Optional `llama-cpp` feature, disabled by default (M9 stretch) |
 
-Trimmed from §31 as Phase 2/3 work (§38–39): `agent-capability` (folded into agent-tool for MVP), `agent-sync`, `agent-sandbox`, `agent-telemetry` (use tracing initially), `agent-server`, and `agent-desktop`.
+Trimmed from §31 as Phase 2/3 work (§38–39): `agent-capability` (folded into agent-tool for MVP), `agent-sync`, `agent-sandbox`, `agent-telemetry` (use tracing initially), `agent-server`, and `agent-desktop`. `agent-sandbox` now has a separate [cross-platform design](../architecture/cross-platform-sandbox.md): M3 Shell must identify itself as host/unsandboxed, while Phase 2 delivers WASI plus native OS backends.
 
 ### Dependency graph (strict DAG)
 
@@ -260,6 +260,7 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 | `uuid` (v4) / `chrono` | IDs, timestamps | core |
 | `dirs` | `~/.agent` | cli, storage, secret |
 | `which` | Locate MCP server executables | mcp, workspace |
+| `cap-std` 4.0.3 | Capability-relative filesystem access that contains symlinks/junctions within the workspace | tool |
 | `wiremock` | **dev-dependency only** — offline provider HTTP tests | provider tests |
 
 **Deferrable:**
@@ -268,7 +269,8 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 |---|---|---|
 | `rmcp` **3.4.0** (official MCP SDK; `client, transport-child-process`; verified latest stable on crates.io) | Needed only in M7; pin exact version and isolate all rmcp types inside agent-mcp | M7 |
 | `tiktoken-rs` | Defer; begin with `chars/4` heuristic + provider TokenUsage | post-MVP |
-| `llama-cpp-rs` (eugenehp, prebuilt MSVC artifact) | Optional `llama-cpp`, off by default | M9 stretch |
+| `ratatui` 0.30.2 (default Crossterm backend) | Full TUI; core exposes only AgentEvent and ApprovalPrompt | M8 |
+| `llama-cpp-2` 0.1.156 | In-process embedded llama.cpp; optional `llama-cpp`, off by default | M9 stretch |
 | `axum` / `opentelemetry` / `wasmtime` etc. | Defer | Phase 2/3 |
 
 ---
@@ -295,15 +297,15 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 - Acceptance: translategemma streams “say hi”; tool steps route to qwen3.8-27b and never Control; scheduler tests select Control for simple input and Worker for code
 - Verify: `cargo run -p agent-cli -- ask "1+1等于几" --provider ollama --model translategemma:4b`
 
-**M3 — Tool Runtime: Shell + Filesystem + approval + redaction** (2–3 days)
+**M3 — Tool Runtime: Shell + Filesystem + approval + redaction (complete)** (2–3 days)
 
-- Build: shell via tokio process and `cmd.exe /c`, workspace cwd, 60s timeout, env hook, 32KB capped output; jailed FS read/write/list using canonicalize + prefix check and rejecting `..`; risk levels; interactive approval; deny-all; non-TTY fail-closed
-- Acceptance: traversal rejected; timeout kills hung command; denial returns a failed ToolResult and loop continues; real Windows echo e2e
+- Build: shell via tokio process and `cmd.exe /c`, workspace cwd, 60s timeout, env hook, 32KB capped output; FS read/write/list through `cap-std` capability-relative access with early rejection of `..` and absolute paths; risk levels; interactive approval; deny-all; non-TTY fail-closed
+- Acceptance: `..`, symlink/junction, and workspace-path replacement escapes rejected; the executor returns a timeout by its deadline and terminates the immediate shell (guaranteed descendant-tree cleanup belongs to the Phase 2 sandbox and is not claimed by M3); denial returns a failed ToolResult and loop continues; real Windows echo e2e
 - Verify: `cargo test -p agent-tool` plus manual chat file listing
 
 **M4 — Profile + Workspace + Skills + Prompt Compiler** (2–3 days)
 
-- Build: profile YAML/default; manifest detection and canonical repository instructions with cache outside repo; Skill YAML/triggers; ordered prompt compiler; priority budget trimming retaining system/latest three user messages/latest tool observation; heuristic estimator
+- Build: profile YAML/default; manifest detection and canonical repository instructions with cache outside repo; Skill YAML/triggers; ordered prompt compiler; priority budget trimming retaining system/latest three user messages/latest tool observation; heuristic estimator; derive a real `needs_tools` signal from prompt/step intent, replacing M3's conservative temporary rule that any registered tool selects Worker
 - Acceptance: zero-config Rust detection; deterministic five-part prompt fixture; quarkus trigger activates only on match; 200KB low priority trimmed to 8K while high priority remains
 - Verify: `cargo test -p agent-context -p agent-workspace -p agent-skill -p agent-profile`
 
@@ -327,13 +329,13 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 
 **M8 — Storage, resume, finish** (2 days)
 
-- Build: bundled SQLite/WAL/spawn_blocking; persist every event; resume/session listing; first Ctrl-C cancels cleanly, second forces; Chinese README configuration reference
+- Build: bundled SQLite/WAL/spawn_blocking; persist every event; resume/session listing; first Ctrl-C cancels cleanly, second forces; optional full TUI using `ratatui` 0.30.2 + Crossterm (event, message, approval, and tool-result panes) while retaining the headless CLI; Chinese README configuration reference
 - Acceptance: resume after two interrupted steps preserves context; replay reconstructs identical Session; workspace green
 - Verify: `cargo test --workspace && cargo clippy --workspace -- -D warnings`
 
 **M9 — llama.cpp (stretch)** (1–2 days, only if M0–M8 are green)
 
-- Build: optional `llama-cpp` feature, prebuilt `x86_64-pc-windows-msvc` artifact, GGUF path and local-provider registration
+- Build: `provider-llamacpp` embeds llama.cpp **in process** through `llama-cpp-2` 0.1.156. The Agent loads GGUF itself, owns backend/model/context lifetimes, and normalizes streamed tokens into `ModelEvent`; there is no HTTP daemon or external inference process. Isolate native compilation behind the optional `llama-cpp` feature, default to CPU, add CUDA/Vulkan later by feature, load a model once, and serialize inference until a context pool is justified.
 - Acceptance: feature build and one small-GGUF completion. Drop M9 if the prebuilt artifact fails; Ollama already covers local inference and MVP does not depend on it.
 - Verify: `cargo test -p provider-llamacpp --features llama-cpp`
 
@@ -353,16 +355,20 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 
 **D6. MCP tools are first-class Tool Registry entries.** `agent-mcp` is a bridge, not a parallel execution path. It registers `mcp.<server>.<tool>` entries in the same registry; Kernel, scheduler, approval, redaction, and audit treat them like built-ins. No MCP-specific code exists below agent-mcp, making M7 a removable leaf milestone.
 
+**D7. The TUI is an optional AgentEvent/ApprovalPrompt adapter, not part of Kernel.** The full terminal UI uses `ratatui` with its default Crossterm backend, subscribes to the same event stream as the current CLI, and submits decisions through the same approval interface. Pipes, CI, and screen-reader workflows retain the plain-text/headless path and non-TTY fail-closed behavior.
+
+**D8. provider-llamacpp is an embedded inference runtime, not an external-service adapter.** With the feature enabled, the process loads GGUF and samples directly while the provider maps agent-model requests to llama.cpp contexts and emits normalized events. This gives the Agent its own local-model execution capability while Ollama remains the lower-friction default local path.
+
 ---
 
 ## 6. Risks
 
 | # | Risk | Probability/impact | Mitigation |
 |---|---|---|---|
-| R1 | Embedded llama.cpp on Windows MSVC: >4GB GGUF `ftell/fseek` overflow in older builds; CRT/link conflicts | Medium/high if forced | Optional, off by default; prebuilt MSVC artifact; M9 stretch and removable |
+| R1 | Embedded llama.cpp on Windows MSVC: native C/C++ compilation plus CRT/link and GPU-backend combinations | Medium/high if forced | Isolate `llama-cpp-2` in provider-llamacpp behind an off-by-default feature; start CPU-only and validate it separately in CI; M9 remains removable because Ollama covers the default local path |
 | R2 | MCP Rust SDK maturity and breaking 1.x→2.x→3.x changes | Medium/medium | Exact pin; isolate rmcp types; local Rust fixture; CLI feature gate |
 | R3 | Provider protocol differences can silently break tool calls | High/medium | Normalize per provider; precise offline wiremock sequences; disable qwen thinking; common JSON Schema |
-| R4 | Windows quoting, cwd/inheritance, junction/8.3 jail bypass, line endings, GBK/UTF-8 | Medium/medium | Explicit cwd; one argument to cmd; canonicalize/prefix plus reject `..`; strengthen M3 with handle-relative/no-follow; byte-read and lossy UTF-8; plain approval UI |
+| R4 | Windows quoting, cwd/inheritance, junction/8.3 paths, line endings, GBK/UTF-8 | Medium/medium | Explicit cwd and one argument to cmd; M3 uses cap-std 4.0.3 handle-relative access plus early `..`/absolute-path rejection, with Windows junction and workspace-replacement regressions; shell output is byte-read/lossy UTF-8 while FS reads require UTF-8; retain a plain approval UI path |
 | R5 | Control model lacks tools | Certain/low if respected | Discover capabilities; filter tool steps; assert before request; test Worker yes/Control no in M2 |
 | R6 | 27B Q3 Worker latency | Medium/low | 300s model vs 60s tool timeout; stream progress; cap at 20 steps |
 

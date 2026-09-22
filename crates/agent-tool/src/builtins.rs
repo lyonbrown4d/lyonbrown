@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
-use std::path::{Component, Path, PathBuf};
+use std::io::{Read, Write};
+use std::path::{Component, Path};
 use std::process::Stdio;
 
 use agent_core::{RiskLevel, SecretRef, ToolDefinition, ToolInvocation, ToolResult, ToolSource};
 use async_trait::async_trait;
+use cap_std::fs::OpenOptions;
 use serde_json::json;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
@@ -113,11 +115,13 @@ impl Tool for ReadFileTool {
             .get("path")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| ToolError::InvalidArguments("path must be a string".into()))?;
-        let root = context.workspace_root.clone();
+        let directory = context.workspace_dir()?;
         let relative = validate_relative_path(raw_path)?.to_owned();
         let output = tokio::task::spawn_blocking(move || {
-            let canonical_path = jailed_existing_path(&root, &relative)?;
-            std::fs::read_to_string(canonical_path)
+            let mut file = directory.open(&relative)?;
+            let mut output = String::new();
+            file.read_to_string(&mut output)?;
+            Ok::<_, std::io::Error>(output)
         })
         .await
         .map_err(|error| ToolError::Io(error.to_string()))?
@@ -181,11 +185,13 @@ impl Tool for WriteFileTool {
         let raw_path = string_argument(invocation, "path")?;
         let content = string_argument(invocation, "content")?.to_owned();
         let relative = validate_relative_path(raw_path)?.to_owned();
-        let root = context.workspace_root.clone();
+        let directory = context.workspace_dir()?;
         let byte_count = content.len();
         tokio::task::spawn_blocking(move || {
-            let path = jailed_write_path(&root, &relative)?;
-            std::fs::write(path, content)
+            let mut options = OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            let mut file = directory.open_with(&relative, &options)?;
+            file.write_all(content.as_bytes())
         })
         .await
         .map_err(|error| ToolError::Io(error.to_string()))?
@@ -249,11 +255,10 @@ impl Tool for ListFilesTool {
             .transpose()?
             .unwrap_or(".");
         let relative = validate_relative_path(raw_path)?.to_owned();
-        let root = context.workspace_root.clone();
+        let workspace = context.workspace_dir()?;
         let output = tokio::task::spawn_blocking(move || -> std::io::Result<String> {
-            let directory = jailed_existing_path(&root, &relative)?;
             let mut entries = Vec::new();
-            for entry in std::fs::read_dir(directory)? {
+            for entry in workspace.read_dir(&relative)? {
                 let entry = entry?;
                 let mut name = entry.file_name().to_string_lossy().into_owned();
                 if entry.file_type()?.is_dir() {
@@ -396,44 +401,6 @@ fn validate_relative_path(raw: &str) -> Result<&Path, ToolError> {
         ));
     }
     Ok(relative)
-}
-
-fn jailed_existing_path(root: &Path, relative: &Path) -> std::io::Result<PathBuf> {
-    let canonical_root = root.canonicalize()?;
-    let canonical_path = canonical_root.join(relative).canonicalize()?;
-    ensure_inside(&canonical_root, &canonical_path)?;
-    Ok(canonical_path)
-}
-
-fn jailed_write_path(root: &Path, relative: &Path) -> std::io::Result<PathBuf> {
-    let canonical_root = root.canonicalize()?;
-    let candidate = canonical_root.join(relative);
-    let parent = candidate.parent().ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
-    })?;
-    let canonical_parent = parent.canonicalize()?;
-    ensure_inside(&canonical_root, &canonical_parent)?;
-    if candidate.exists() {
-        let canonical_candidate = candidate.canonicalize()?;
-        ensure_inside(&canonical_root, &canonical_candidate)?;
-        Ok(canonical_candidate)
-    } else {
-        let name = candidate.file_name().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no file name")
-        })?;
-        Ok(canonical_parent.join(name))
-    }
-}
-
-fn ensure_inside(root: &Path, candidate: &Path) -> std::io::Result<()> {
-    if candidate.starts_with(root) {
-        Ok(())
-    } else {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "path escapes workspace root",
-        ))
-    }
 }
 
 fn success_result(invocation: &ToolInvocation, output: String, truncated: bool) -> ToolResult {

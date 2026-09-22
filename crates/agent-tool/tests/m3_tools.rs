@@ -1,6 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+#[cfg(windows)]
+use std::process::Command;
 
 use agent_core::{RiskLevel, ToolCallId, ToolInvocation};
 use agent_secret::NoopBroker;
@@ -135,6 +138,77 @@ async fn every_filesystem_tool_rejects_parent_traversal() {
 }
 
 #[tokio::test]
+async fn filesystem_capability_remains_anchored_when_workspace_path_is_replaced() {
+    let container = TestDir::new();
+    let workspace = container.path().join("workspace");
+    let original = container.path().join("original-workspace");
+    std::fs::create_dir(&workspace).unwrap();
+    std::fs::write(workspace.join("identity.txt"), "original").unwrap();
+    let read = executor(
+        &workspace,
+        Arc::new(ReadFileTool::new()),
+        Duration::from_secs(1),
+    );
+
+    match std::fs::rename(&workspace, &original) {
+        Ok(()) => {
+            std::fs::create_dir(&workspace).unwrap();
+            std::fs::write(workspace.join("identity.txt"), "replacement").unwrap();
+        }
+        Err(error) if cfg!(windows) && error.raw_os_error() == Some(32) => {
+            // Windows denies replacing a directory while the retained capability is open.
+        }
+        Err(error) => panic!("failed to replace workspace path: {error}"),
+    }
+
+    let result = read
+        .execute(&invocation("read_file", json!({"path": "identity.txt"})))
+        .await
+        .unwrap();
+
+    assert_eq!(result.output, "original");
+}
+
+#[tokio::test]
+async fn every_filesystem_tool_rejects_link_escape() {
+    let root = TestDir::new();
+    let outside = TestDir::new();
+    std::fs::write(outside.path().join("secret.txt"), "outside").unwrap();
+    let link = root.path().join("escape");
+    create_directory_link(outside.path(), &link);
+
+    for (name, tool, args) in [
+        (
+            "read_file",
+            Arc::new(ReadFileTool::new()) as Arc<dyn Tool>,
+            json!({"path": "escape/secret.txt"}),
+        ),
+        (
+            "write_file",
+            Arc::new(WriteFileTool::new()) as Arc<dyn Tool>,
+            json!({"path": "escape/new.txt", "content": "bad"}),
+        ),
+        (
+            "list_files",
+            Arc::new(ListFilesTool::new()) as Arc<dyn Tool>,
+            json!({"path": "escape"}),
+        ),
+    ] {
+        let error = executor(root.path(), tool, Duration::from_secs(1))
+            .execute(&invocation(name, args))
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, ToolExecutionError::Tool(_)),
+            "{name}: {error}"
+        );
+    }
+
+    assert!(!outside.path().join("new.txt").exists());
+    std::fs::remove_dir(&link).unwrap();
+}
+
+#[tokio::test]
 async fn shell_runs_in_workspace_and_caps_combined_output() {
     let root = TestDir::new();
     let shell = executor(
@@ -172,10 +246,35 @@ async fn shell_timeout_is_reported_by_the_executor() {
         "sleep 10"
     };
 
+    let started = Instant::now();
     let error = shell
         .execute(&invocation("shell", json!({"command": command})))
         .await
         .unwrap_err();
 
     assert!(matches!(error, ToolExecutionError::TimedOut { .. }));
+    assert!(started.elapsed() < Duration::from_secs(1));
+}
+
+#[cfg(windows)]
+fn create_directory_link(target: &Path, link: &Path) {
+    let link_parent = link.parent().unwrap();
+    let target_name = target.file_name().unwrap().to_string_lossy();
+    let link_name = link.file_name().unwrap().to_string_lossy();
+    let command = format!("mklink /J {link_name} ..\\{target_name}");
+    let output = Command::new("cmd.exe")
+        .args(["/D", "/C", &command])
+        .current_dir(link_parent)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "failed to create junction: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[cfg(unix)]
+fn create_directory_link(target: &Path, link: &Path) {
+    std::os::unix::fs::symlink(target, link).unwrap();
 }

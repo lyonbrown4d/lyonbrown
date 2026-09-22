@@ -45,6 +45,7 @@ fn approval_text_shows_tool_arguments_and_secret_reference_names() {
 
     assert!(rendered.contains("shell"));
     assert!(rendered.contains("Execute"));
+    assert!(rendered.contains("sandbox: host/unsandboxed"));
     assert!(rendered.contains("echo ready"));
     assert!(rendered.contains("env:TOKEN"));
     assert!(!rendered.contains("plaintext-secret"));
