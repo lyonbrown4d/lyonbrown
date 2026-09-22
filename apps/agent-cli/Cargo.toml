@@ -1,0 +1,33 @@
+[package]
+name = "agent-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-kernel = { workspace = true }
+agent-model = { workspace = true }
+agent-context = { workspace = true }
+agent-tool = { workspace = true }
+agent-secret = { workspace = true }
+agent-storage = { workspace = true }
+agent-profile = { workspace = true }
+agent-workspace = { workspace = true }
+agent-skill = { workspace = true }
+agent-mcp = { workspace = true }
+provider-ollama = { workspace = true }
+provider-anthropic = { workspace = true }
+provider-openai = { workspace = true }
+provider-mock = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+toml = { workspace = true }
+dirs = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

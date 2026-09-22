@@ -1,0 +1,13 @@
+[package]
+name = "agent-profile"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-core = { workspace = true }
+serde = { workspace = true }
+serde_yml = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "provider-llamacpp"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-core = { workspace = true }
+agent-model = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

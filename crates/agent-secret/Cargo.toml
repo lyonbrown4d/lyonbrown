@@ -1,0 +1,13 @@
+[package]
+name = "agent-secret"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-core = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+dirs = { workspace = true }
+
+[lints]
+workspace = true
