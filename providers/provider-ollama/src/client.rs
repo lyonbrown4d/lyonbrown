@@ -142,20 +142,6 @@ fn default_models() -> Vec<ModelCapabilities> {
     vec![
         ModelCapabilities {
             provider: "ollama".into(),
-            model: "translategemma:4b".into(),
-            tier: ModelTier::Control,
-            locality: Locality::Local,
-            context_window: 8_192,
-            max_output_tokens: 2_048,
-            supports_tools: false,
-            supports_streaming: true,
-            supports_json: true,
-            supports_thinking: false,
-            cost_per_mtok_in: 0.0,
-            cost_per_mtok_out: 0.0,
-        },
-        ModelCapabilities {
-            provider: "ollama".into(),
             model: "qwen3.8-27b:q3-claude".into(),
             tier: ModelTier::Worker,
             locality: Locality::Local,
