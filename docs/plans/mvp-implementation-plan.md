@@ -1,11 +1,12 @@
 # Lyonbrown 第一阶段 MVP 实施计划
 
-> 依据：`local-first-agent-runtime-architecture.md`（Draft v0.1）
+> 依据：[Lyonbrown Local-First Agent Runtime 架构设计](../architecture/local-first-agent-runtime.md)（Draft v0.1）
+> 状态：M0 已完成；下一阶段为 M1
 > 平台：Windows 11 · rustc/cargo 1.98.1 · Ollama 已装（qwen3.8-27b:q3-claude 作 Worker / translategemma:4b 可作 Control）
 
 ## Context（背景）
 
-仓库目前只有架构设计文档、无代码。本计划把文档 §37 定义的第一阶段 MVP 落地为可编译、可测试、可运行的 Rust Cargo workspace：
+仓库已经完成 M0 workspace 骨架与 `agent-core` 基础类型。本计划继续把架构文档 §37 定义的第一阶段 MVP 落地为可测试、可运行的 Rust Agent Runtime：
 
 Agent Kernel（事件驱动 + 状态机）· Agent Profile · Workspace Runtime · Skill Registry · Model Provider + Scheduler（三层模型、Step 级调度、两阶段路由）· Tool Runtime（Shell/Filesystem）· MCP · SecretRef + 基础 Secret Broker · CLI
 
@@ -26,7 +27,7 @@ Agent Kernel（事件驱动 + 状态机）· Agent Profile · Workspace Runtime 
 
 ## 1. Workspace 布局
 
-根目录 `D:\Projects\lyonbrown`（M0 时 git init），edition 2024，resolver 2，workspace deps 表统一版本，`clippy::all` warn + `unsafe_code` forbid（llamacpp crate 后续单独放开）。
+根目录 `D:\Projects\lyonbrown`，edition 2024，resolver 2，workspace deps 表统一版本，`clippy::all` warn + `unsafe_code` forbid（llamacpp crate 后续单独放开）。M0 已完成 Git 初始化和 workspace 骨架搭建。
 
 ### MVP crate 清单（11 crates + 5 providers + 1 app，共 17 个包）
 
@@ -308,12 +309,12 @@ pub trait QualityGate: Send + Sync {
 
 ## 4. 里程碑（M0–M9）
 
-**M0 — Skeleton + agent-core**（0.5–1 天）
+**M0 — Skeleton + agent-core（已完成）**（0.5–1 天）
 - 构建：git init、workspace Cargo.toml（workspace deps、lint）、17 个包 stub 全部可编译；`agent-core` 完整（ids/errors/ContextItem/AgentEvent/tool 类型/ModelCapabilities/SecretRef）；rustfmt.toml、.gitignore
 - 验收：`cargo build --workspace` 干净；每个 AgentEvent 变体 serde round-trip 测试；ContextItem priority 排序测试；clippy 干净
 - 验证：`cargo test -p agent-core && cargo clippy --workspace -- -D warnings`
 
-**M1 — Kernel + MockProvider（离线 e2e）**（2–3 天）——*去风险核心里程碑*
+**M1 — Kernel + MockProvider（离线 e2e，下一阶段）**（2–3 天）——*去风险核心里程碑*
 - 构建：agent-kernel（状态机 + 转换表、EventBus、`Kernel::run_turn`、session/working memory、max-steps 防护、cancel token）；agent-model（trait、ModelRegistry、HeuristicGate）；agent-tool（registry、带超时执行器、ApprovalPolicy + AllowAll）；provider-mock（脚本化 step）；内置 echo + read_file 测试工具；§7 的 e2e 测试
 - 验收：离线 e2e 通过（用户消息→mock 工具调用→观察→最终回答，全事件序列断言）；状态机转换表穷举测试；max-steps 循环防护测试；cancel 测试
 - 验证：`cargo test -p agent-kernel --test e2e_mock`（无网络）

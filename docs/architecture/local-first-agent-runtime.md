@@ -1,6 +1,7 @@
-# Local-First 通用 Agent Runtime 架构设计方向
+# Lyonbrown Local-First Agent Runtime 架构设计
 
 > 版本：Draft v0.1  
+> 状态：长期架构方向稿；当前实施进度见 [第一阶段 MVP 实施计划](../plans/mvp-implementation-plan.md)
 > 定位：长期维护的、模型供应商中立（Model Provider Neutral）、本地优先（Local-first）的通用 Agent Runtime  
 > 建议主实现语言：Rust
 

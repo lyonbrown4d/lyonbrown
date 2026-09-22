@@ -4,5 +4,5 @@
 //! 目标体验（§36.2）：`agent .` 零配置进入仓库即开始会话。
 
 fn main() {
-    println!("agent-cli: skeleton（尚未实施，见计划文件 M2）");
+    println!("agent-cli: skeleton（尚未实施，见 docs/plans/mvp-implementation-plan.md M2）");
 }

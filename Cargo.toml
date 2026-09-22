@@ -1,5 +1,5 @@
 # Local-First 通用 Agent Runtime — workspace 根
-# 骨架已就绪；实现按计划文件 milestones M0..M9 进行。
+# 骨架已就绪；实现按 docs/plans/mvp-implementation-plan.md 的 M0..M9 进行。
 
 [workspace]
 resolver = "2"
@@ -20,7 +20,7 @@ unsafe_code = "forbid"
 all = "warn"
 
 [workspace.dependencies]
-# --- 内部 crate（严格 DAG：见计划文件 §1 依赖图）---
+# --- 内部 crate（严格 DAG：见 docs/plans/mvp-implementation-plan.md §1）---
 agent-core = { path = "crates/agent-core" }
 agent-kernel = { path = "crates/agent-kernel" }
 agent-model = { path = "crates/agent-model" }
