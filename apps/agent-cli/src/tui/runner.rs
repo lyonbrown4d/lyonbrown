@@ -29,6 +29,7 @@ pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> 
         }
         if task.as_ref().is_some_and(JoinHandle::is_finished) {
             let finished = task.take().expect("finished task exists").await;
+            final_drain(&mut events, &mut state);
             match finished {
                 Ok((returned_kernel, Ok(_))) => kernel = Some(returned_kernel),
                 Ok((returned_kernel, Err(error))) => {
@@ -97,6 +98,13 @@ pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> 
     Ok(())
 }
 
+fn final_drain(
+    receiver: &mut Option<broadcast::Receiver<agent_core::AgentEvent>>,
+    state: &mut TuiState,
+) {
+    drain_events(receiver, state);
+}
+
 fn drain_events(
     receiver: &mut Option<broadcast::Receiver<agent_core::AgentEvent>>,
     state: &mut TuiState,
@@ -127,5 +135,33 @@ fn approval_decision(key: KeyEvent) -> Option<ApprovalDecision> {
         KeyCode::Char('a') => Some(ApprovalDecision::AllowSession),
         KeyCode::Char('d') => Some(ApprovalDecision::DenyAll),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use agent_core::{AgentEvent, TurnId};
+    use chrono::Utc;
+    use tokio::sync::broadcast;
+
+    use super::{TuiState, final_drain};
+
+    #[test]
+    fn final_drain_consumes_events_queued_at_task_completion() {
+        let (sender, receiver) = broadcast::channel(4);
+        let mut receiver = Some(receiver);
+        let mut state = TuiState::default();
+        sender
+            .send(AgentEvent::TurnCompleted {
+                turn_id: TurnId::new(),
+                answer: "last answer".into(),
+                ts: Utc::now(),
+            })
+            .unwrap();
+
+        final_drain(&mut receiver, &mut state);
+
+        assert_eq!(state.transcript().last().unwrap().text, "last answer");
+        assert_eq!(state.status(), "idle");
     }
 }

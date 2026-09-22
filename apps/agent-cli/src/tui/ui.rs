@@ -65,27 +65,33 @@ fn panel(title: &'static str) -> Block<'static> {
 }
 
 fn render_conversation(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-    let lines = state.transcript().iter().flat_map(|entry| {
+    let mut lines = Vec::new();
+    for entry in state.transcript() {
         let (label, color) = match entry.speaker {
             Speaker::User => ("YOU", APPROVAL_AMBER),
             Speaker::Assistant => ("AGENT", SIGNAL_CYAN),
             Speaker::System => ("SYSTEM", APPROVAL_AMBER),
         };
-        [
-            Line::from(Span::styled(
-                label,
-                Style::default().fg(color).add_modifier(Modifier::BOLD),
-            )),
-            Line::from(entry.text.clone()),
-            Line::default(),
-        ]
-    });
-    frame.render_widget(
-        Paragraph::new(Text::from(lines.collect::<Vec<_>>()))
-            .block(panel(" CONVERSATION "))
-            .wrap(Wrap { trim: false }),
-        area,
-    );
+        lines.push(Line::from(Span::styled(
+            label,
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        )));
+        lines.extend(entry.text.split('\n').map(Line::from));
+        lines.push(Line::default());
+    }
+    let content_width = usize::from(area.width.saturating_sub(2)).max(1);
+    let rendered_lines = lines
+        .iter()
+        .map(|line| line.width().div_ceil(content_width).max(1))
+        .sum::<usize>();
+    let paragraph = Paragraph::new(Text::from(lines))
+        .block(panel(" CONVERSATION "))
+        .wrap(Wrap { trim: false });
+    let viewport_height = usize::from(area.height.saturating_sub(2));
+    let scroll = rendered_lines
+        .saturating_sub(viewport_height)
+        .min(usize::from(u16::MAX)) as u16;
+    frame.render_widget(paragraph.scroll((scroll, 0)), area);
 }
 
 fn render_runtime(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {

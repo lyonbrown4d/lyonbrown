@@ -9,7 +9,7 @@ pub use runner::run;
 pub use state::{Speaker, TranscriptEntry, TuiState};
 pub use ui::render;
 
-fn terminal_safe(value: &str) -> String {
+pub(crate) fn terminal_safe(value: &str) -> String {
     value
         .chars()
         .map(|character| match character {

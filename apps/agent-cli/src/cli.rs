@@ -241,6 +241,7 @@ pub async fn run_kernel_turn(
 
 fn render_event(event: &AgentEvent, output: &mut impl Write) -> Result<(), AgentError> {
     if let AgentEvent::ModelDelta { delta, .. } = event {
+        let delta = crate::tui::terminal_safe(delta);
         output
             .write_all(delta.as_bytes())
             .map_err(|error| AgentError::Tool(error.to_string()))?;

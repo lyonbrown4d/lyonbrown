@@ -145,6 +145,40 @@ fn minimum_supported_terminal_does_not_panic() {
 }
 
 #[test]
+fn wide_conversation_follows_the_newest_streaming_text() {
+    let mut state = TuiState::default();
+    for index in 0..20 {
+        state.reduce(AgentEvent::ModelDelta {
+            step_id: StepId::new(),
+            delta: format!("older message {index}"),
+        });
+    }
+    state.reduce(AgentEvent::ModelDelta {
+        step_id: StepId::new(),
+        delta: "NEWEST-WIDE-MARKER".into(),
+    });
+
+    assert!(screen(&state, 120, 12).contains("NEWEST-WIDE-MARKER"));
+}
+
+#[test]
+fn narrow_conversation_follows_wrapped_newest_streaming_text() {
+    let mut state = TuiState::default();
+    for index in 0..20 {
+        state.reduce(AgentEvent::ModelDelta {
+            step_id: StepId::new(),
+            delta: format!("older narrow message {index}"),
+        });
+    }
+    state.reduce(AgentEvent::ModelDelta {
+        step_id: StepId::new(),
+        delta: "NEWEST-NARROW-MARKER".into(),
+    });
+
+    assert!(screen(&state, 72, 12).contains("NEWEST-NARROW-MARKER"));
+}
+
+#[test]
 fn approval_bridge_sends_sanitized_request_and_returns_ui_decision() {
     let (prompt, requests) = TuiApprovalPrompt::channel();
     let prompt = Arc::new(prompt);
