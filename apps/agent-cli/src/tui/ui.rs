@@ -79,12 +79,12 @@ fn render_conversation(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
         lines.extend(entry.text.split('\n').map(Line::from));
         lines.push(Line::default());
     }
-    let content_width = usize::from(area.width.saturating_sub(2)).max(1);
-    let rendered_lines = lines
-        .iter()
-        .map(|line| line.width().div_ceil(content_width).max(1))
-        .sum::<usize>();
-    let paragraph = Paragraph::new(Text::from(lines))
+    let content_width = area.width.saturating_sub(2).max(1);
+    let text = Text::from(lines);
+    let rendered_lines = Paragraph::new(text.clone())
+        .wrap(Wrap { trim: false })
+        .line_count(content_width);
+    let paragraph = Paragraph::new(text)
         .block(panel(" CONVERSATION "))
         .wrap(Wrap { trim: false });
     let viewport_height = usize::from(area.height.saturating_sub(2));

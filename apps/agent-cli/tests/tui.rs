@@ -179,6 +179,24 @@ fn narrow_conversation_follows_wrapped_newest_streaming_text() {
 }
 
 #[test]
+fn narrow_conversation_follows_newest_text_after_word_boundary_wraps() {
+    let mut state = TuiState::default();
+    let multi_word = "abcdefghijklmnopqrst uvwxyzabcdefghijklmn opqrstuvwxyzabcdefgh";
+    for _ in 0..8 {
+        state.reduce(AgentEvent::ModelDelta {
+            step_id: StepId::new(),
+            delta: multi_word.into(),
+        });
+    }
+    state.reduce(AgentEvent::ModelDelta {
+        step_id: StepId::new(),
+        delta: "NEWEST-WORD-WRAP-MARKER".into(),
+    });
+
+    assert!(screen(&state, 40, 12).contains("NEWEST-WORD-WRAP-MARKER"));
+}
+
+#[test]
 fn approval_bridge_sends_sanitized_request_and_returns_ui_decision() {
     let (prompt, requests) = TuiApprovalPrompt::channel();
     let prompt = Arc::new(prompt);
