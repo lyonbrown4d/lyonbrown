@@ -15,22 +15,22 @@ pub struct CompileRequest<'a> {
     pub skills: &'a [Skill],
     pub tool_guidance: Option<&'a str>,
     pub context_items: &'a [ContextItem],
-    pub token_budget: u32,
+    pub token_budget: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct CompiledPrompt {
     pub system_prompt: String,
     pub context_items: Vec<ContextItem>,
-    pub system_tokens: u32,
-    pub context_tokens: u32,
+    pub system_tokens: u64,
+    pub context_tokens: u64,
     pub dropped: usize,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CompileError {
     #[error("system prompt requires {required} tokens but budget is {budget}")]
-    SystemPromptExceeds { required: u64, budget: u32 },
+    SystemPromptExceeds { required: u64, budget: u64 },
     #[error(transparent)]
     Budget(#[from] BudgetError),
 }
@@ -47,29 +47,19 @@ impl PromptCompiler {
 
     pub fn compile(&self, request: CompileRequest<'_>) -> Result<CompiledPrompt, CompileError> {
         let system_prompt = compile_system_prompt(&request);
-        let system_tokens = u64::from(self.estimator.estimate(&system_prompt));
-        if system_tokens > u64::from(request.token_budget) {
+        let system_tokens = self.estimator.estimate(&system_prompt);
+        if system_tokens > request.token_budget {
             return Err(CompileError::SystemPromptExceeds {
                 required: system_tokens,
                 budget: request.token_budget,
             });
         }
-        let available = u64::from(request.token_budget) - system_tokens;
-        let available =
-            u32::try_from(available).map_err(|_| CompileError::SystemPromptExceeds {
-                required: system_tokens,
-                budget: request.token_budget,
-            })?;
+        let available = request.token_budget - system_tokens;
         let budget = ContextBudget::new(self.estimator).trim(request.context_items, available)?;
         Ok(CompiledPrompt {
             system_prompt,
             context_items: budget.items,
-            system_tokens: u32::try_from(system_tokens).map_err(|_| {
-                CompileError::SystemPromptExceeds {
-                    required: system_tokens,
-                    budget: request.token_budget,
-                }
-            })?,
+            system_tokens,
             context_tokens: budget.tokens,
             dropped: budget.dropped,
         })
@@ -101,6 +91,11 @@ fn append_profile(output: &mut String, profile: &AgentProfile) {
     if let Some(style) = &profile.communication_style {
         let _ = write!(body, "\ncommunication style: {style}");
     }
+    let _ = write!(
+        body,
+        "\nmodel preferences: prefer local={}, remote escalation={}",
+        profile.model.prefer_local, profile.model.remote_escalation,
+    );
     let _ = write!(
         body,
         "\nworking style: prefer existing libraries={}, avoid reinventing wheels={}, inspect before editing={}, run tests after changes={}, architecture first={}\ncoding: avoid unnecessary abstraction={}, prefer small reviewable changes={}",

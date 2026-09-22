@@ -305,6 +305,8 @@ fn profile_fields_all_affect_the_compiled_prompt() {
         "privacy policy: keep data local",
         "tool preferences: prefer read-only tools",
         "default skills: rust",
+        "prefer local=true",
+        "remote escalation=true",
     ] {
         assert!(
             result.system_prompt.contains(expected),
