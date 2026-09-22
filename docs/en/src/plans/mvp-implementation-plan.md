@@ -1,7 +1,7 @@
 # Lyonbrown Phase-One MVP Implementation Plan
 
 > Based on: [Lyonbrown Local-First Agent Runtime Architecture](../architecture/local-first-agent-runtime.md) (Draft v0.1)  
-> Status: M0–M3 complete; M4 is next
+> Status: M0–M4 complete; M5 is next. The TUI and embedded llama.cpp implementation were delivered early; llama.cpp still requires a real-GGUF smoke run for M9 acceptance
 > Platform: Windows 11 · rustc/cargo 1.98.1 · Ollama installed (qwen3.8-27b:q3-claude as Worker / translategemma:4b available as Control)
 
 ## Context
@@ -303,7 +303,7 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 - Acceptance: `..`, symlink/junction, and workspace-path replacement escapes rejected; the executor returns a timeout by its deadline and terminates the immediate shell (guaranteed descendant-tree cleanup belongs to the Phase 2 sandbox and is not claimed by M3); denial returns a failed ToolResult and loop continues; real Windows echo e2e
 - Verify: `cargo test -p agent-tool` plus manual chat file listing
 
-**M4 — Profile + Workspace + Skills + Prompt Compiler** (2–3 days)
+**M4 — Profile + Workspace + Skills + Prompt Compiler (complete)** (2–3 days)
 
 - Build: profile YAML/default; manifest detection and canonical repository instructions with cache outside repo; Skill YAML/triggers; ordered prompt compiler; priority budget trimming retaining system/latest three user messages/latest tool observation; heuristic estimator; derive a real `needs_tools` signal from prompt/step intent, replacing M3's conservative temporary rule that any registered tool selects Worker
 - Acceptance: zero-config Rust detection; deterministic five-part prompt fixture; quarkus trigger activates only on match; 200KB low priority trimmed to 8K while high priority remains
@@ -329,11 +329,11 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 
 **M8 — Storage, resume, finish** (2 days)
 
-- Build: bundled SQLite/WAL/spawn_blocking; persist every event; resume/session listing; first Ctrl-C cancels cleanly, second forces; optional full TUI using `ratatui` 0.30.2 + Crossterm (event, message, approval, and tool-result panes) while retaining the headless CLI; Chinese README configuration reference
+- Build: bundled SQLite/WAL/spawn_blocking; persist every event; resume/session listing; first Ctrl-C cancels cleanly, second forces. The full `ratatui` 0.30.2 + Crossterm TUI was delivered early after M4 (event, message, approval, and tool-result panes) while retaining the headless CLI
 - Acceptance: resume after two interrupted steps preserves context; replay reconstructs identical Session; workspace green
 - Verify: `cargo test --workspace && cargo clippy --workspace -- -D warnings`
 
-**M9 — llama.cpp (stretch)** (1–2 days, only if M0–M8 are green)
+**M9 — llama.cpp (stretch; implementation delivered early, real-model acceptance pending)** (1–2 days)
 
 - Build: `provider-llamacpp` embeds llama.cpp **in process** through `llama-cpp-2` 0.1.156. The Agent loads GGUF itself, owns backend/model/context lifetimes, and normalizes streamed tokens into `ModelEvent`; there is no HTTP daemon or external inference process. Isolate native compilation behind the optional `llama-cpp` feature, default to CPU, add CUDA/Vulkan later by feature, load a model once, and serialize inference until a context pool is justified.
 - Acceptance: feature build and one small-GGUF completion. Drop M9 if the prebuilt artifact fails; Ollama already covers local inference and MVP does not depend on it.

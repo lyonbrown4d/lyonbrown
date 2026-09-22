@@ -1,7 +1,7 @@
 # Lyonbrown 第一阶段 MVP 实施计划
 
 > 依据：[Lyonbrown Local-First Agent Runtime 架构设计](../architecture/local-first-agent-runtime.md)（Draft v0.1）
-> 状态：M0–M3 已完成；下一阶段为 M4
+> 状态：M0–M4 已完成；下一阶段为 M5。TUI 与 embedded llama.cpp 已提前交付，后者仍需真实 GGUF smoke 完成 M9 验收
 > 平台：Windows 11 · rustc/cargo 1.98.1 · Ollama 已装（qwen3.8-27b:q3-claude 作 Worker / translategemma:4b 可作 Control）
 
 ## Context（背景）
@@ -334,7 +334,7 @@ pub trait QualityGate: Send + Sync {
 - 验收：单测：`..`、symlink/junction 与 workspace 路径替换逃逸被拒；执行器在期限内返回 timeout 并终止直接 shell（后代进程树的强制回收属于 Phase 2 sandbox，不在 M3 伪作保证）；审批 Deny 产出 `ToolResult{ok:false}` 且循环继续；e2e：模型调 shell → Windows 上真实 echo 执行
 - 验证：`cargo test -p agent-tool` + 手动 `cargo run -p agent-cli -- chat` 让它列文件
 
-**M4 — Profile + Workspace + Skills + Prompt Compiler**（2–3 天）
+**M4 — Profile + Workspace + Skills + Prompt Compiler（已完成）**（2–3 天）
 - 构建：agent-profile（§5 YAML，`~/.agent/profiles/<id>.yaml`，内置默认 profile）；agent-workspace（manifest 检测、AGENTS.md/CLAUDE.md/README/CONTRIBUTING → canonical instructions、`~/.agent/workspaces/<hash>/` 缓存、不污染仓库）；agent-skill（`~/.agent/skills/` YAML + trigger 匹配）；agent-context 编译器：system prompt = profile → 模型能力说明 → workspace profile → 仓库指令 → 匹配 skills → 工具使用说明；budget 裁剪（优先级序，system + 最近 3 条用户消息 + 最近工具观察永不丢）；TokenEstimator 启发式；用 prompt/step 意图产生真正的 `needs_tools` 信号，替换 M3“只要注册工具就保守选 Worker”的临时策略
 - 验收：`agent .` 在全新 cargo 仓库零配置检测出 Rust workspace；编译出的 system prompt 五段齐全且顺序固定（fixture 仓库断言）；trigger "quarkus" 的 skill 仅在词出现时激活；budget 测试：200KB 低优先级被裁到 8K 预算内、高优先级保留
 - 验证：`cargo test -p agent-context -p agent-workspace -p agent-skill -p agent-profile`
@@ -355,11 +355,11 @@ pub trait QualityGate: Send + Sync {
 - 验证：`cargo test -p agent-mcp`（离线，spawn 本地 fixture server）
 
 **M8 — Storage、resume、收尾**（2 天）
-- 构建：agent-storage（rusqlite bundled、`~/.agent/agent.db`：`sessions`、`events(session_id, seq, json)`、`tool_audit`；WAL、spawn_blocking）；每事件落库；`agent resume <session-id>` 从事件重建 Session；Ctrl-C 第一次 = 取消当前 step（Cancelled 状态、干净退出）、第二次 = 强制；`agent sessions` 列表；基于 `ratatui` 0.30.2 + Crossterm 的可选完整 TUI（事件流、消息、工具审批/结果面板），同时保留 headless CLI；README（中文）含配置参考
+- 构建：agent-storage（rusqlite bundled、`~/.agent/agent.db`：`sessions`、`events(session_id, seq, json)`、`tool_audit`；WAL、spawn_blocking）；每事件落库；`agent resume <session-id>` 从事件重建 Session；Ctrl-C 第一次 = 取消当前 step（Cancelled 状态、干净退出）、第二次 = 强制；`agent sessions` 列表。基于 `ratatui` 0.30.2 + Crossterm 的 TUI 已提前在 M4 后交付（事件流、消息、工具审批/结果面板），并保留 headless CLI
 - 验收：resume 测试——模拟 2 step 后中断，resume 后模型看到前序上下文（mock 断言请求消息）；事件日志回放重建相同 Session 状态；全 workspace 测试绿
 - 验证：`cargo test --workspace && cargo clippy --workspace -- -D warnings`
 
-**M9 —（stretch）llama.cpp**（1–2 天，仅当 M0–M8 全绿）
+**M9 —（stretch）llama.cpp（实现已提前交付，真实模型验收待完成）**（1–2 天）
 - 构建：`provider-llamacpp` 通过 `llama-cpp-2` 0.1.156 **进程内嵌入** llama.cpp：Agent 自己加载 GGUF、持有 backend/model/context 生命周期并把 token 流归一化为 `ModelEvent`；不依赖 HTTP daemon，也不启动外部推理进程。用 workspace feature `llama-cpp` 隔离原生构建（默认关），CPU 为默认后端，CUDA/Vulkan 后续按 feature 开启；模型只加载一次，推理先串行化，后续再引入 context pool
 - 验收：feature build 编译过；加载小 GGUF 完成一次补全。若预编译 artifact 在本机有问题，**砍掉 M9**——Ollama 已覆盖本地层，不阻塞 MVP
 - 验证：`cargo test -p provider-llamacpp --features llama-cpp`

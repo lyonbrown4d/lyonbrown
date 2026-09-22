@@ -7,6 +7,12 @@ edition.workspace = true
 name = "agent"
 path = "src/main.rs"
 
+[features]
+default = []
+llama-cpp = ["dep:provider-llamacpp", "provider-llamacpp/llama-cpp"]
+cuda = ["llama-cpp", "provider-llamacpp/cuda"]
+vulkan = ["llama-cpp", "provider-llamacpp/vulkan"]
+
 [dependencies]
 agent-core = { workspace = true }
 agent-kernel = { workspace = true }
@@ -23,6 +29,7 @@ provider-ollama = { workspace = true }
 provider-anthropic = { workspace = true }
 provider-openai = { workspace = true }
 provider-mock = { workspace = true }
+provider-llamacpp = { workspace = true, optional = true }
 clap = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

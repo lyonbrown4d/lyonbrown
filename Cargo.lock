@@ -25,6 +25,7 @@ dependencies = [
  "dirs",
  "futures",
  "provider-anthropic",
+ "provider-llamacpp",
  "provider-mock",
  "provider-ollama",
  "provider-openai",

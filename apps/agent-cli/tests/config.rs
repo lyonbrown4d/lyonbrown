@@ -90,8 +90,78 @@ fn missing_optional_global_and_workspace_files_use_typed_defaults() {
     assert_eq!(loaded.model.provider, "ollama");
     assert_eq!(loaded.profile, "default-dev");
     assert_eq!(loaded.ollama.endpoint, "http://127.0.0.1:11434");
+    assert!(loaded.llamacpp.model_path.is_none());
+    assert_eq!(loaded.llamacpp.context_size, 4_096);
+    assert_eq!(loaded.llamacpp.max_output_tokens, 2_048);
+    assert_eq!(loaded.llamacpp.batch_size, 512);
     assert!(!loaded.approval.approve_all);
     assert!(!loaded.approval.deny_all);
+}
+
+#[test]
+fn llamacpp_configuration_supports_files_and_environment() {
+    let root = TestDir::new();
+    root.write(
+        "agent.toml",
+        "[model]\nprovider = 'llamacpp'\nmodel = 'qwen-local'\n\
+         [llamacpp]\nmodel_path = 'models/qwen.gguf'\ncontext_size = 8192\nthreads = 6\n",
+    );
+    let environment = HashMap::from([
+        ("LYONBROWN_LLAMACPP__GPU_LAYERS".into(), "24".into()),
+        (
+            "LYONBROWN_LLAMACPP__MAX_OUTPUT_TOKENS".into(),
+            "1024".into(),
+        ),
+    ]);
+
+    let loaded = RuntimeConfig::load(LoadOptions {
+        global_config: root.path().join("missing.toml"),
+        workspace_dir: root.path().to_owned(),
+        environment: Some(environment),
+        ..Default::default()
+    })
+    .unwrap();
+
+    assert_eq!(loaded.model.provider, "llamacpp");
+    assert_eq!(loaded.model.model.as_deref(), Some("qwen-local"));
+    assert_eq!(
+        loaded.llamacpp.model_path.as_deref(),
+        Some(Path::new("models/qwen.gguf"))
+    );
+    assert_eq!(loaded.llamacpp.context_size, 8_192);
+    assert_eq!(loaded.llamacpp.max_output_tokens, 1_024);
+    assert_eq!(loaded.llamacpp.threads, 6);
+    assert_eq!(loaded.llamacpp.gpu_layers, 24);
+}
+
+#[test]
+fn selected_llamacpp_requires_a_model_path() {
+    let root = TestDir::new();
+    root.write("agent.toml", "[model]\nprovider = 'llamacpp'\n");
+
+    let error = RuntimeConfig::load(LoadOptions {
+        global_config: root.path().join("missing.toml"),
+        workspace_dir: root.path().to_owned(),
+        environment: Some(HashMap::new()),
+        ..Default::default()
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("llamacpp.model_path"));
+}
+
+#[test]
+fn llamacpp_output_limit_must_fit_context_window() {
+    let root = TestDir::new();
+    let invalid = root.write(
+        "invalid.toml",
+        "[model]\nprovider = 'llamacpp'\n[llamacpp]\nmodel_path = 'model.gguf'\n\
+         context_size = 128\nmax_output_tokens = 256\n",
+    );
+
+    let error = load_explicit(&root, invalid).unwrap_err();
+
+    assert!(error.to_string().contains("max_output_tokens"));
 }
 
 #[test]
