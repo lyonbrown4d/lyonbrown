@@ -12,8 +12,6 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 
 ## Current status
 
-- Complete: M0–M4, including the core, providers, Tool Runtime, profiles, workspaces, skills, and prompt compilation
-- Delivered early: the Ratatui/Crossterm `agent .` terminal UI
-- Delivered early: a feature-gated in-process llama.cpp provider and CLI configuration path; a real-GGUF smoke run remains an M9 acceptance item
-- Next: M5 — Secrets
-- The remaining M5–M8 work is pending; cross-platform process sandboxing is Phase 2
+- Complete: M0–M9 MVP implementation and local acceptance, including secrets, remote providers and fallback, MCP, SQLite session resume, and a real-GGUF completion with embedded llama.cpp.
+- `agent .` provides the Ratatui/Crossterm UI; `agent ask`, `agent chat`, `agent sessions`, and `agent resume` provide headless and session entry points.
+- Cross-platform process sandboxing remains Phase 2 and is outside this MVP.

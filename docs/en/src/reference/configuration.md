@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Lyonbrown uses `config-rs` to layer TOML, YAML, JSON, JSON5, RON, and INI. Precedence from lowest to highest is: built-in defaults, `~/.agent/config.toml`, workspace `agent.toml`, a `--config` file, `LYONBROWN_` environment variables, and CLI flags. Nested environment keys use double underscores, for example `LYONBROWN_MODEL__PROVIDER=ollama`.
+Lyonbrown uses `config-rs` to layer TOML, YAML, JSON, JSON5, RON, and INI. Precedence from lowest to highest is: built-in defaults, `~/.agent/config.toml`, workspace `agent.toml`, a `--config` file, `LYONBROWN_` environment variables, and CLI flags. Nested environment keys use double underscores, for example `LYONBROWN_MODEL__PROVIDER=ollama`. Workspace profile, model routing, provider endpoints, remote credentials, approval, and storage settings are rejected by default; pass `--trust-workspace-config` after reviewing the workspace configuration.
 
 ## Ollama
 
@@ -15,6 +15,51 @@ endpoint = "http://127.0.0.1:11434"
 ```
 
 Run `agent ask "hello"`, `agent chat`, or `agent .` inside a workspace to open the TUI. The TUI and headless CLI share the same Kernel, event stream, and approval policy.
+
+## Remote models and fallback
+
+Configure an API-key reference, never a plaintext key. `env:` reads a process environment variable; `file:` reads `~/.agent/secrets/<name>`. The provider resolves the reference when it sends a request.
+
+```toml
+[model]
+provider = "ollama"
+
+[anthropic]
+enabled = true
+endpoint = "https://api.anthropic.com"
+api_key_ref = "env:ANTHROPIC_API_KEY"
+
+[openai]
+enabled = true
+endpoint = "https://api.openai.com/v1"
+api_key_ref = "env:OPENAI_API_KEY"
+```
+
+Remote providers are disabled by default. Set `model.provider = "anthropic"` or `"openai"` to select one directly. Alternatively, keep a local provider selected and enable a remote provider: if a local Worker encounters a timeout or HTTP 5xx while opening the stream or before its first output, the Kernel can retry once on a remote Frontier model. Automatic fallback applies only to Public context; tool results and Confidential/Secret context are not sent remotely through fallback. Explicitly selecting a remote provider remains the user's data-boundary decision. HTTP 401/429 and failures after model output do not trigger fallback.
+
+A repository's `agent.toml` can select profiles, providers, and service endpoints. The CLI rejects workspace profile, model, approval-policy, and storage settings by default; pass `--trust-workspace-config` to load them, and only when you trust that repository configuration.
+
+## MCP tools
+
+```toml
+[mcp.servers.files]
+command = "C:/path/to/mcp-server.exe"
+args = ["--stdio"]
+```
+
+The CLI connects to configured stdio servers at startup and registers tools as `mcp.files.<tool>`. MCP tools have Execute risk by default and use the common approval, 60-second timeout, and output-redaction path. MCP commands in workspace `agent.toml` are rejected by default; after trusting the workspace, use `agent --trust-workspace-mcp chat` (or the relevant subcommand). Model settings and MCP commands use separate trust flags. Global and explicit `--config` MCP configuration is treated as user-trusted. Prefer an explicit executable path.
+
+## Session storage and resume
+
+SQLite WAL storage is enabled by default at `~/.agent/agent.db`. Use `agent sessions` to find a session ID, then `agent resume <session-id>` to continue it. To disable storage or choose another path:
+
+```toml
+[storage]
+enabled = true
+path = "./.agent/session.db"
+```
+
+Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=false` and `LYONBROWN_STORAGE__PATH` are the environment equivalents. Event writes return success only after database commit. On resume, completed tool results are retained, while started calls without a recorded result are marked as having an unknown outcome and are not automatically replayed. In `agent chat` or the TUI, the first Ctrl-C cancels the current turn and exits; a second Ctrl-C forces interruption.
 
 ## Embedded llama.cpp
 

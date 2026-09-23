@@ -9,7 +9,7 @@ mod registry;
 mod runtime;
 
 pub use approval::{
-    AllowAllApproval, ApprovalDecision, ApprovalPolicy, ApprovalPrompt, SessionApprovalPolicy,
+  AllowAllApproval, ApprovalDecision, ApprovalPolicy, ApprovalPrompt, SessionApprovalPolicy,
 };
 pub use builtins::{EchoTool, ListFilesTool, ReadFileTool, ShellTool, WriteFileTool};
 pub use execute::{ToolExecutionError, ToolExecutor};

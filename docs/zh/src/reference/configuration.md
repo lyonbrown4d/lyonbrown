@@ -1,6 +1,6 @@
 # 配置参考
 
-Lyonbrown 使用 `config-rs` 分层加载 TOML、YAML、JSON、JSON5、RON 和 INI。优先级从低到高为：内置默认值、`~/.agent/config.toml`、工作区 `agent.toml`、`--config` 指定文件、`LYONBROWN_` 环境变量、CLI 参数。嵌套环境变量用双下划线，例如 `LYONBROWN_MODEL__PROVIDER=ollama`。
+Lyonbrown 使用 `config-rs` 分层加载 TOML、YAML、JSON、JSON5、RON 和 INI。优先级从低到高为：内置默认值、`~/.agent/config.toml`、工作区 `agent.toml`、`--config` 指定文件、`LYONBROWN_` 环境变量、CLI 参数。嵌套环境变量用双下划线，例如 `LYONBROWN_MODEL__PROVIDER=ollama`。工作区配置中的 profile、模型路由、Provider endpoint、远程凭据、审批与存储设置默认拒绝；确认信任后加 `--trust-workspace-config`。
 
 ## Ollama
 
@@ -15,6 +15,51 @@ endpoint = "http://127.0.0.1:11434"
 ```
 
 运行 `agent ask "你好"`、`agent chat`，或在工作区执行 `agent .` 打开 TUI。TUI 与 headless CLI 使用同一 Kernel、事件流和审批策略。
+
+## 远程模型与自动回退
+
+API key 只配置引用，不要写明文。`env:` 从进程环境读取，`file:` 从 `~/.agent/secrets/<name>` 读取；Provider 在发送请求时才解析引用。
+
+```toml
+[model]
+provider = "ollama"
+
+[anthropic]
+enabled = true
+endpoint = "https://api.anthropic.com"
+api_key_ref = "env:ANTHROPIC_API_KEY"
+
+[openai]
+enabled = true
+endpoint = "https://api.openai.com/v1"
+api_key_ref = "env:OPENAI_API_KEY"
+```
+
+默认未启用远程 Provider。设 `model.provider = "anthropic"` 或 `"openai"` 可直接选用对应 Provider；也可保持本地 Provider，启用远程 Provider 后，在本地 Worker 建立流连接或首个输出前遇到超时或 HTTP 5xx，Kernel 会按路由策略向远程 Frontier 重试一次。自动回退仅适用于 Public 上下文；工具结果及标记为 Confidential/Secret 的上下文不会自动发往远程。显式选择远程 Provider 仍由用户自行决定数据边界。401/429、已有模型输出后的错误不触发回退。
+
+仓库中的 `agent.toml` 可以指定 profile、Provider 和服务 endpoint。CLI 默认拒绝 profile、模型、审批策略与存储设置，需显式传入 `--trust-workspace-config` 后才会加载；仅当你信任该仓库配置时启用。
+
+## MCP 工具
+
+```toml
+[mcp.servers.files]
+command = "C:/path/to/mcp-server.exe"
+args = ["--stdio"]
+```
+
+启动时连接已配置的 stdio server 并注册 `mcp.files.<tool>` 工具。MCP 工具默认风险为 Execute，仍走统一审批、60 秒超时和输出脱敏。工作区 `agent.toml` 中的 MCP 命令默认拒绝启动；确认信任该工作区后，运行 `agent --trust-workspace-mcp chat`（或对应子命令）才会加载。模型路由与 MCP 命令使用独立信任标志。全局或显式 `--config` 中的 MCP 配置视为用户已信任。推荐使用明确的可执行文件路径。
+
+## 会话存储与恢复
+
+默认开启 SQLite WAL 存储，路径为 `~/.agent/agent.db`。运行 `agent sessions` 查看会话 ID，`agent resume <session-id>` 继续会话。可用以下配置关闭或改路径：
+
+```toml
+[storage]
+enabled = true
+path = "./.agent/session.db"
+```
+
+相对存储路径以工作区为基准；也可设置 `LYONBROWN_STORAGE__ENABLED=false` 或 `LYONBROWN_STORAGE__PATH`。事件写入在提交到数据库后才返回成功；中断时恢复会保留已完成的工具结果，并把执行中但未记录结果的调用标为结果未知，不会自动重放。`agent chat`/TUI 运行时第一次 Ctrl-C 取消当前轮并退出，第二次强制中断。
 
 ## Embedded llama.cpp
 

@@ -1,7 +1,7 @@
 # Lyonbrown 第一阶段 MVP 实施计划
 
 > 依据：[Lyonbrown Local-First Agent Runtime 架构设计](../architecture/local-first-agent-runtime.md)（Draft v0.1）
-> 状态：M0–M4 已完成；下一阶段为 M5。TUI 与 embedded llama.cpp 已提前交付，后者仍需真实 GGUF smoke 完成 M9 验收
+> 状态：M0–M9 已实现并通过本机验收；M9 的真实 GGUF 冒烟测试在 Windows MSVC/CPU 上通过。跨平台 sandbox 仍属于 Phase 2。
 > 平台：Windows 11 · rustc/cargo 1.98.1 · Ollama 已装（qwen3.8-27b:q3-claude 作 Worker / translategemma:4b 可作 Control）
 
 ## Context（背景）
@@ -340,27 +340,27 @@ pub trait QualityGate: Send + Sync {
 **M5 — Secrets（已完成）**（1–2 天）
 - 构建：agent-secret（EnvSecretBroker、FileSecretBroker 读 `~/.agent/secrets/<name>`（裸值或 KEY=VALUE，创建时 0600）、CompositeBroker）；shell 工具 env 参数约定 `{NAME: "secret:<ref>"}` 仅执行期解析；redaction：会话级已解析值集合，扫出所有 ToolResult.output 与观察
 - 验收：**安全测试**——脚本 mock 请求 shell 带 `secret:test_value` 引用；子进程看到 env（测试用 `echo` 断言）；断言序列化事件日志中任何 AgentEvent 变体都不含 secret 明文（全变体扫描）；引用缺失 ⇒ `ToolResult{ok:false, error:"secret not found"}`，不 panic、不泄漏
-- 验证：`cargo test -p agent-secret -p agent-tool --test secret_e2e`
+- 验证：`cargo test -p agent-kernel --test secret_e2e`
 
-**M6 — 远程 Providers（Anthropic + OpenAI）+ 回退**（3 天）
+**M6 — 远程 Providers（Anthropic + OpenAI）+ 回退（已完成）**（3 天）
 - 构建：provider-anthropic（Messages API、SSE、`tool_use`/`tool_result` block、max_tokens 必填）；provider-openai（chat completions SSE、`tool_calls` delta 按 index 累积、忽略 reasoning 字段）；API key 走 SecretRef（`env:ANTHROPIC_API_KEY` 等），配置不落明文；scheduler 回退：本地 worker ModelError（timeout/5xx）⇒ 远程 Frontier 重试一次（`ModelSelected{reason:"fallback"}`）
 - 验收：**wiremock 离线测试**：SSE 流解析为 ModelEvent 序列（含 OpenAI 多段 tool-call delta 累积、Anthropic block 式）；auth 失败与 429 路径；回退测试（MockProvider 先失败一次、registry 第二项成功）
-- 验证：`cargo test -p provider-anthropic -p provider-openai`（离线）；有 key 才做 live smoke：`agent ask "..." --model claude-sonnet-4-5`
+- 验证：`cargo test -p provider-anthropic -p provider-openai`、`cargo test -p agent-kernel --test fallback`（离线）；有 key 才做远程 live smoke。
 
-**M7 — MCP**（2 天）
-- 构建：agent-mcp 基于 rmcp 3.4.0 pin 死：`~/.agent/config.toml` `[mcp.servers.<name>] { command, args }`（workspace `agent.toml` 覆盖）；启动时 spawn stdio server，`list_tools` → `ToolDefinition{name: "mcp.<server>.<tool>", source: Mcp, risk: Execute}`；`McpTool::invoke` 转换 rmcp content → string，60s 超时，redaction 与其他工具一致
+**M7 — MCP（已完成）**（2 天）
+- 构建：agent-mcp 基于 rmcp 3.4.0 pin 死：`~/.agent/config.toml` `[mcp.servers.<name>] { command, args }`（workspace `agent.toml` 仅在 `--trust-workspace-mcp` 下可覆盖 MCP 命令）；启动时 spawn stdio server，`list_tools` → `ToolDefinition{name: "mcp.<server>.<tool>", source: Mcp, risk: Execute}`；`McpTool::invoke` 转换 rmcp content → string，60s 超时，redaction 与其他工具一致
 - 验收：测试 fixture = 自写 Rust stdio MCP server（`agent-mcp/tests/` 内，无 npx/网络）；bridge 测试：工具列出、调用、结果往返；kernel e2e：mock provider 请求 `mcp.<server>.<tool>` 得到观察；server 崩溃 ⇒ 工具返回 error 结果，kernel 存活
 - 验证：`cargo test -p agent-mcp`（离线，spawn 本地 fixture server）
 
-**M8 — Storage、resume、收尾**（2 天）
+**M8 — Storage、resume、收尾（已完成）**（2 天）
 - 构建：agent-storage（rusqlite bundled、`~/.agent/agent.db`：`sessions`、`events(session_id, seq, json)`、`tool_audit`；WAL、spawn_blocking）；每事件落库；`agent resume <session-id>` 从事件重建 Session；Ctrl-C 第一次 = 取消当前 step（Cancelled 状态、干净退出）、第二次 = 强制；`agent sessions` 列表。基于 `ratatui` 0.30.2 + Crossterm 的 TUI 已提前在 M4 后交付（事件流、消息、工具审批/结果面板），并保留 headless CLI
-- 验收：resume 测试——模拟 2 step 后中断，resume 后模型看到前序上下文（mock 断言请求消息）；事件日志回放重建相同 Session 状态；全 workspace 测试绿
-- 验证：`cargo test --workspace && cargo clippy --workspace -- -D warnings`
+- 验收：resume 测试——模拟 2 step 后中断，resume 后模型看到前序上下文（mock 断言请求消息）；事件日志回放重建等价的工作记忆内容（条目 ID/时间戳不保证相同）；全 workspace 测试绿
+- 验证：`cargo test --workspace`、`cargo clippy --workspace --all-targets -- -D warnings`
 
-**M9 —（stretch）llama.cpp（实现已提前交付，真实模型验收待完成）**（1–2 天）
+**M9 —（stretch）llama.cpp（已完成本机真实模型验收）**（1–2 天）
 - 构建：`provider-llamacpp` 通过 `llama-cpp-2` 0.1.156 **进程内嵌入** llama.cpp：Agent 自己加载 GGUF、持有 backend/model/context 生命周期并把 token 流归一化为 `ModelEvent`；不依赖 HTTP daemon，也不启动外部推理进程。用 workspace feature `llama-cpp` 隔离原生构建（默认关），CPU 为默认后端，CUDA/Vulkan 后续按 feature 开启；模型只加载一次，推理先串行化，后续再引入 context pool
 - 验收：feature build 编译过；加载小 GGUF 完成一次补全。若预编译 artifact 在本机有问题，**砍掉 M9**——Ollama 已覆盖本地层，不阻塞 MVP
-- 验证：`cargo test -p provider-llamacpp --features llama-cpp`
+- 验证：`cargo test -p provider-llamacpp --features llama-cpp`；设置 `LYONBROWN_GGUF_MODEL` 后运行 `cargo test -p provider-llamacpp --features llama-cpp live_completion_smoke_test -- --ignored`。
 
 ---
 
@@ -464,16 +464,20 @@ async fn user_message_to_tool_call_to_answer() {
 ### 全局收尾验证（M8 后）
 
 ```bash
+cargo fmt --all -- --check
 cargo test --workspace
-cargo clippy --workspace -- -D warnings
-cargo run -p agent-cli -- ask "1+1等于几" --provider ollama --model translategemma:4b
+cargo clippy --workspace --all-targets -- -D warnings
+mdbook build docs/zh
+mdbook build docs/en
 ```
+
+Ollama 与远程 Provider 的 live smoke 需要对应服务、模型或 API key；离线验收不依赖它们。所有 `.rs` 文件还须满足 `AGENTS.md` 的 300 行上限。
 
 ---
 
 ## 关键文件
 
-- `crates/agent-kernel/src/kernel.rs` —— agent loop + `run_turn`，其余一切挂于其上（旁有 `state.rs`）
+- `crates/agent-kernel/src/kernel/` —— agent loop、上下文准备、回退与工具执行；`kernel.rs` 持有 Kernel 状态与公共入口。
 - `crates/agent-model/src/provider.rs` —— `ModelProvider`/`ModelRequest`/`ModelStream`/`ModelEvent`，所有 provider 与 mock 实现的供应商中立接缝
 - `crates/agent-core/src/event.rs` —— `AgentEvent`，resume、audit、redaction 扫描与 e2e 测试断言的契约
 - `crates/agent-tool/src/shell.rs` —— shell 工具（路径监狱、超时、延迟绑定 secret env 注入），最高风险内置工具

@@ -2,21 +2,25 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use agent_core::{AgentError, AgentEvent};
+use agent_core::{AgentError, AgentEvent, SessionId};
 use agent_kernel::{Kernel, KernelModelOptions};
+use agent_mcp::McpBridge;
 use agent_model::{ModelRegistry, RoutingPolicy};
 use agent_profile::{AgentProfile, ProfileError, ProfileLoader};
-use agent_secret::CompositeBroker;
+use agent_secret::{CompositeBroker, SecretBroker};
 use agent_skill::SkillRegistry;
+use agent_storage::SessionStore;
 use agent_tool::{
-    ListFilesTool, ReadFileTool, SessionApprovalPolicy, ShellTool, ToolRegistry, WriteFileTool,
+  ListFilesTool, ReadFileTool, SessionApprovalPolicy, ShellTool, ToolRegistry, WriteFileTool,
 };
 use agent_workspace::WorkspaceProfile;
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use provider_anthropic::AnthropicProvider;
 #[cfg(feature = "llama-cpp")]
 use provider_llamacpp::{GgufModel, LlamaCppConfig, LlamaCppProvider};
 use provider_ollama::OllamaProvider;
+use provider_openai::OpenAiProvider;
 
 use crate::approval::policy_from_config;
 use crate::config::{CliOverrides, LoadOptions, RuntimeConfig};
@@ -25,288 +29,263 @@ use crate::tui::TuiApprovalPrompt;
 #[derive(Debug, Parser)]
 #[command(name = "agent", version, about = "Local-first agent runtime")]
 pub struct Cli {
-    #[command(subcommand)]
-    pub command: Command,
+  #[command(subcommand)]
+  pub command: Command,
 
-    /// Explicit configuration file (TOML, YAML, JSON, JSON5, RON, or INI).
-    #[arg(long, global = true)]
-    pub config: Option<PathBuf>,
+  /// Explicit configuration file (TOML, YAML, JSON, JSON5, RON, or INI).
+  #[arg(long, global = true)]
+  pub config: Option<PathBuf>,
 
-    #[arg(long, global = true)]
-    pub provider: Option<String>,
+  #[arg(long, global = true)]
+  pub provider: Option<String>,
 
-    #[arg(long, global = true)]
-    pub model: Option<String>,
+  #[arg(long, global = true)]
+  pub model: Option<String>,
 
-    /// Agent profile ID from ~/.agent/profiles.
-    #[arg(long, global = true)]
-    pub profile: Option<String>,
+  /// Agent profile ID from ~/.agent/profiles.
+  #[arg(long, global = true)]
+  pub profile: Option<String>,
 
-    /// Ollama base URL.
-    #[arg(long, global = true)]
-    pub endpoint: Option<String>,
+  /// Ollama base URL.
+  #[arg(long, global = true)]
+  pub endpoint: Option<String>,
 
-    /// Allow all tool requests for this session.
-    #[arg(long, global = true, conflicts_with = "deny_all")]
-    pub approve_all: bool,
+  /// Allow all tool requests for this session.
+  #[arg(long, global = true, conflicts_with = "deny_all")]
+  pub approve_all: bool,
 
-    /// Deny all write, execute, and network tool requests for this session.
-    #[arg(long, global = true, conflicts_with = "approve_all")]
-    pub deny_all: bool,
+  /// Deny all write, execute, and network tool requests for this session.
+  #[arg(long, global = true, conflicts_with = "approve_all")]
+  pub deny_all: bool,
+
+  /// Trust MCP server commands defined by the workspace agent.toml.
+  #[arg(long, global = true)]
+  pub trust_workspace_mcp: bool,
+
+  /// Trust model, approval, and storage settings defined by workspace agent.toml.
+  #[arg(long, global = true)]
+  pub trust_workspace_config: bool,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Ask one question and stream the answer.
-    Ask { prompt: String },
-    /// Start a multi-turn terminal chat.
-    Chat,
-    /// Open the workspace terminal interface.
-    #[command(name = ".")]
-    Tui {
-        #[arg(skip = PathBuf::from("."))]
-        workspace: PathBuf,
-    },
+  /// Ask one question and stream the answer.
+  Ask { prompt: String },
+  /// Start a multi-turn terminal chat.
+  Chat,
+  /// Continue a stored session in the terminal chat.
+  Resume { session_id: String },
+  /// List stored sessions.
+  Sessions,
+  /// Open the workspace terminal interface.
+  #[command(name = ".")]
+  Tui {
+    #[arg(skip = PathBuf::from("."))]
+    workspace: PathBuf,
+  },
 }
 
 pub async fn run(cli: Cli) -> Result<()> {
-    let workspace = match &cli.command {
-        Command::Tui { workspace } => workspace.clone(),
-        _ => std::env::current_dir().context("failed to determine workspace directory")?,
-    };
-    let mut options = LoadOptions::for_workspace(&workspace);
-    options.explicit_config = cli.config;
-    options.cli = CliOverrides {
-        provider: cli.provider,
-        model: cli.model,
-        profile: cli.profile,
-        endpoint: cli.endpoint,
-        approve_all: cli.approve_all.then_some(true),
-        deny_all: cli.deny_all.then_some(true),
-        ..Default::default()
-    };
-    let config = RuntimeConfig::load(options)?;
-    let home = dirs::home_dir().context("home directory is unavailable")?;
-    let (approval, tui_approvals) = match &cli.command {
-        Command::Tui { .. } if !config.approval.approve_all && !config.approval.deny_all => {
-            let (prompt, requests) = TuiApprovalPrompt::channel();
-            (
-                SessionApprovalPolicy::interactive(Arc::new(prompt)),
-                Some(requests),
-            )
-        }
-        _ => (policy_from_config(&config.approval), None),
-    };
-    let mut kernel = build_kernel(&config, &workspace, &home, approval)?;
-
-    match cli.command {
-        Command::Ask { prompt } => ask(&mut kernel, &prompt).await,
-        Command::Chat => chat(&mut kernel).await,
-        Command::Tui { .. } => {
-            let requests = tui_approvals.unwrap_or_else(|| {
-                let (_sender, receiver) = std::sync::mpsc::channel();
-                receiver
-            });
-            crate::tui::run(kernel, requests).await
-        }
+  let workspace = match &cli.command {
+    Command::Tui { workspace } => workspace.clone(),
+    _ => std::env::current_dir().context("failed to determine workspace directory")?,
+  };
+  let mut options = LoadOptions::for_workspace(&workspace);
+  options.explicit_config = cli.config;
+  options.cli = CliOverrides {
+    provider: cli.provider,
+    model: cli.model,
+    profile: cli.profile,
+    endpoint: cli.endpoint,
+    approve_all: cli.approve_all.then_some(true),
+    deny_all: cli.deny_all.then_some(true),
+    trust_workspace_mcp: cli.trust_workspace_mcp,
+    trust_workspace_config: cli.trust_workspace_config,
+    ..Default::default()
+  };
+  let config = RuntimeConfig::load(options)?;
+  let home = dirs::home_dir().context("home directory is unavailable")?;
+  if matches!(cli.command, Command::Sessions) {
+    let store = SessionStore::open(storage_path(&config, &workspace, &home)).await?;
+    for session in store.sessions().await? {
+      println!(
+        "{}\t{}\t{}",
+        session.id, session.updated_at, session.event_count
+      );
     }
-}
-
-fn build_kernel(
-    config: &RuntimeConfig,
-    workspace: &Path,
-    home: &Path,
-    approval: SessionApprovalPolicy,
-) -> Result<Kernel> {
-    let registry = ModelRegistry::new();
-    registry.register(Arc::new(OllamaProvider::with_default_models(
-        &config.ollama.endpoint,
-    )?));
-    register_llamacpp(&registry, config, workspace)?;
-    let tools = ToolRegistry::new();
-    tools.register(Arc::new(ReadFileTool::new()));
-    tools.register(Arc::new(WriteFileTool::new()));
-    tools.register(Arc::new(ListFilesTool::new()));
-    tools.register(Arc::new(ShellTool::new()));
-
-    let workspace_profile = WorkspaceProfile::detect(workspace)?;
-    let profile = load_agent_profile(home, &config.profile)?;
-    let skills = SkillRegistry::load_from_root(home.join(".agent").join("skills"))?;
-    let broker = CompositeBroker::for_home(home)?;
-    let routing_policy = RoutingPolicy {
-        prefer_local: profile.model.prefer_local,
-        remote_escalation: profile.model.remote_escalation,
-        ..RoutingPolicy::default()
-    };
-
-    Ok(Kernel::builder()
-        .providers(registry)
-        .routing_policy(routing_policy)
-        .tools(tools)
-        .approval(approval)
-        .broker(broker)
-        .workspace_root(workspace)
-        .agent_profile(profile)
-        .workspace_profile(workspace_profile)
-        .skills(skills)
-        .model_options(KernelModelOptions {
-            provider: Some(config.model.provider.clone()),
-            model: config.model.model.clone(),
-            max_tokens: Some(config.model.max_tokens),
-            temperature: config.model.temperature,
-        })
-        .build())
-}
-
-#[cfg(feature = "llama-cpp")]
-fn register_llamacpp(
-    registry: &ModelRegistry,
-    config: &RuntimeConfig,
-    workspace: &Path,
-) -> Result<()> {
-    if config.model.provider != "llamacpp" {
-        return Ok(());
+    return Ok(());
+  }
+  let (approval, tui_approvals) = match &cli.command {
+    Command::Tui { .. } if !config.approval.approve_all && !config.approval.deny_all => {
+      let (prompt, requests) = TuiApprovalPrompt::channel();
+      (
+        SessionApprovalPolicy::interactive(Arc::new(prompt)),
+        Some(requests),
+      )
     }
-    let configured_path = config
-        .llamacpp
-        .model_path
-        .as_ref()
-        .context("llamacpp.model_path is required")?;
-    let model_path = if configured_path.is_absolute() {
-        configured_path.clone()
-    } else {
-        workspace.join(configured_path)
-    };
-    let model_id = config.model.model.as_deref().unwrap_or("local");
-    let model = GgufModel::new(
-        model_id,
-        model_path,
-        config.llamacpp.context_size,
-        config.llamacpp.max_output_tokens,
-    )?;
-    let provider = LlamaCppProvider::new(LlamaCppConfig {
-        model,
-        batch_size: config.llamacpp.batch_size,
-        threads: config.llamacpp.threads,
-        batch_threads: config.llamacpp.batch_threads,
-        gpu_layers: config.llamacpp.gpu_layers,
-        temperature: config.llamacpp.temperature,
-        seed: config.llamacpp.seed,
-    })?;
-    registry.register(Arc::new(provider));
-    Ok(())
+    _ => (policy_from_config(&config.approval), None),
+  };
+  let mut kernel = build_kernel(&config, &workspace, &home, approval).await?;
+
+  let result = match cli.command {
+    Command::Ask { prompt } => ask(&mut kernel, &prompt).await,
+    Command::Chat => chat(&mut kernel).await,
+    Command::Resume { session_id } => {
+      let id = SessionId(uuid::Uuid::parse_str(&session_id).context("invalid session ID")?);
+      let store = SessionStore::open(storage_path(&config, &workspace, &home)).await?;
+      let events = store.events(id).await?;
+      if events.is_empty() {
+        anyhow::bail!("session not found: {id}");
+      }
+      kernel.resume(&events)?;
+      chat(&mut kernel).await
+    }
+    Command::Sessions => unreachable!("sessions is handled before kernel startup"),
+    Command::Tui { .. } => {
+      let requests = tui_approvals.unwrap_or_else(|| {
+        let (_sender, receiver) = std::sync::mpsc::channel();
+        receiver
+      });
+      return crate::tui::run(kernel, requests).await;
+    }
+  };
+  let close = kernel.close_storage().await;
+  result?;
+  close?;
+  Ok(())
 }
 
-#[cfg(not(feature = "llama-cpp"))]
-fn register_llamacpp(
-    _registry: &ModelRegistry,
-    config: &RuntimeConfig,
-    _workspace: &Path,
-) -> Result<()> {
-    if config.model.provider == "llamacpp" {
-        anyhow::bail!(
-            "embedded llama.cpp support is not included in this build; rebuild agent-cli with --features llama-cpp"
-        );
-    }
-    Ok(())
-}
+mod build;
+use build::{build_kernel, storage_path};
 
 fn load_agent_profile(home: &Path, id: &str) -> Result<AgentProfile> {
-    match ProfileLoader::new(home).load(id) {
-        Ok(profile) => Ok(profile),
-        Err(ProfileError::Io { source, .. })
-            if id == "default-dev" && source.kind() == io::ErrorKind::NotFound =>
-        {
-            Ok(AgentProfile::builtin_default())
-        }
-        Err(error) => Err(error.into()),
+  match ProfileLoader::new(home).load(id) {
+    Ok(profile) => Ok(profile),
+    Err(ProfileError::Io { source, .. })
+      if id == "default-dev" && source.kind() == io::ErrorKind::NotFound =>
+    {
+      Ok(AgentProfile::builtin_default())
     }
+    Err(error) => Err(error.into()),
+  }
 }
 
 async fn ask(kernel: &mut Kernel, prompt: &str) -> Result<()> {
-    let stdout = io::stdout();
-    let mut output = stdout.lock();
-    run_kernel_turn(kernel, prompt, &mut output).await?;
-    writeln!(output)?;
-    Ok(())
+  let stdout = io::stdout();
+  let mut output = stdout.lock();
+  run_interruptible_turn(kernel, prompt, &mut output).await?;
+  writeln!(output)?;
+  Ok(())
 }
 
 async fn chat(kernel: &mut Kernel) -> Result<()> {
-    loop {
-        print!("> ");
-        io::stdout().flush()?;
-        let mut prompt = String::new();
-        if io::stdin().read_line(&mut prompt)? == 0 {
-            break;
-        }
-        let prompt = prompt.trim();
-        if prompt.is_empty() {
-            continue;
-        }
-        if matches!(prompt, "/exit" | "/quit") {
-            break;
-        }
-        let stdout = io::stdout();
-        let mut output = stdout.lock();
-        run_kernel_turn(kernel, prompt, &mut output).await?;
-        writeln!(output)?;
+  loop {
+    print!("> ");
+    io::stdout().flush()?;
+    let mut prompt = String::new();
+    if io::stdin().read_line(&mut prompt)? == 0 {
+      break;
     }
-    Ok(())
+    let prompt = prompt.trim();
+    if prompt.is_empty() {
+      continue;
+    }
+    if matches!(prompt, "/exit" | "/quit") {
+      break;
+    }
+    let stdout = io::stdout();
+    let mut output = stdout.lock();
+    if run_interruptible_turn(kernel, prompt, &mut output).await? {
+      break;
+    }
+    writeln!(output)?;
+  }
+  Ok(())
+}
+
+async fn run_interruptible_turn(
+  kernel: &mut Kernel,
+  prompt: &str,
+  output: &mut impl Write,
+) -> Result<bool> {
+  let cancellation = kernel.cancellation_token();
+  let turn = run_kernel_turn(kernel, prompt, output);
+  tokio::pin!(turn);
+  tokio::select! {
+    result = &mut turn => {
+      result?;
+      Ok(false)
+    }
+    signal = tokio::signal::ctrl_c() => {
+      signal?;
+      cancellation.cancel();
+      tokio::select! {
+        result = &mut turn => match result {
+          Ok(_) | Err(AgentError::Cancelled) => Ok(true),
+          Err(error) => Err(error.into()),
+        },
+        signal = tokio::signal::ctrl_c() => {
+          signal?;
+          anyhow::bail!("forced interrupt")
+        }
+      }
+    }
+  }
 }
 
 pub async fn run_kernel_turn(
-    kernel: &mut Kernel,
-    prompt: &str,
-    output: &mut impl Write,
+  kernel: &mut Kernel,
+  prompt: &str,
+  output: &mut impl Write,
 ) -> Result<Vec<AgentEvent>, AgentError> {
-    let mut events = kernel.subscribe();
-    let turn = kernel.run_turn(prompt);
-    tokio::pin!(turn);
-    loop {
-        tokio::select! {
-            biased;
-            event = events.recv() => {
-                match event {
+  let mut events = kernel.subscribe();
+  let turn = kernel.run_turn(prompt);
+  tokio::pin!(turn);
+  loop {
+    tokio::select! {
+        biased;
+        event = events.recv() => {
+            match event {
+                Ok(event) => render_event(&event, output)?,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                    return Err(AgentError::Tool(format!(
+                        "CLI event renderer lagged by {skipped} events"
+                    )));
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    return Err(AgentError::Tool("kernel event stream closed".into()));
+                }
+            }
+        }
+        result = &mut turn => {
+            let result = result?;
+            loop {
+                match events.try_recv() {
                     Ok(event) => render_event(&event, output)?,
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                    Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
+                    Err(tokio::sync::broadcast::error::TryRecvError::Closed) => break,
+                    Err(tokio::sync::broadcast::error::TryRecvError::Lagged(skipped)) => {
                         return Err(AgentError::Tool(format!(
                             "CLI event renderer lagged by {skipped} events"
                         )));
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                        return Err(AgentError::Tool("kernel event stream closed".into()));
-                    }
                 }
             }
-            result = &mut turn => {
-                let result = result?;
-                loop {
-                    match events.try_recv() {
-                        Ok(event) => render_event(&event, output)?,
-                        Err(tokio::sync::broadcast::error::TryRecvError::Empty) => break,
-                        Err(tokio::sync::broadcast::error::TryRecvError::Closed) => break,
-                        Err(tokio::sync::broadcast::error::TryRecvError::Lagged(skipped)) => {
-                            return Err(AgentError::Tool(format!(
-                                "CLI event renderer lagged by {skipped} events"
-                            )));
-                        }
-                    }
-                }
-                return Ok(result);
-            },
-        }
+            return Ok(result);
+        },
     }
+  }
 }
 
 fn render_event(event: &AgentEvent, output: &mut impl Write) -> Result<(), AgentError> {
-    if let AgentEvent::ModelDelta { delta, .. } = event {
-        let delta = crate::tui::terminal_safe(delta);
-        output
-            .write_all(delta.as_bytes())
-            .map_err(|error| AgentError::Tool(error.to_string()))?;
-        output
-            .flush()
-            .map_err(|error| AgentError::Tool(error.to_string()))?;
-    }
-    Ok(())
+  if let AgentEvent::ModelDelta { delta, .. } = event {
+    let delta = crate::tui::terminal_safe(delta);
+    output
+      .write_all(delta.as_bytes())
+      .map_err(|error| AgentError::Tool(error.to_string()))?;
+    output
+      .flush()
+      .map_err(|error| AgentError::Tool(error.to_string()))?;
+  }
+  Ok(())
 }

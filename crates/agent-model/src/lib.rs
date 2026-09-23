@@ -10,10 +10,10 @@ pub mod provider;
 
 pub use gate::{GateVerdict, HeuristicGate, QualityGate};
 pub use provider::{
-    ChatMessage, ModelError, ModelEvent, ModelProvider, ModelRequest, ModelStream, Role,
+  ChatMessage, ModelError, ModelEvent, ModelProvider, ModelRequest, ModelStream, Role,
 };
 pub use registry::{ModelRegistry, RegistryError, SelectedModel};
 pub use scheduler::{
-    Complexity, ModelScheduler, RoutePhase, RoutingPolicy, SchedulerDecision, SchedulerError,
-    SchedulerSelection, StepContext,
+  Complexity, ModelScheduler, RoutePhase, RoutingPolicy, SchedulerDecision, SchedulerError,
+  SchedulerSelection, StepContext,
 };

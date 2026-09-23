@@ -44,6 +44,7 @@ thiserror = { workspace = true }
 futures = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
+uuid = { workspace = true }
 
 [lints]
 workspace = true
@@ -51,3 +52,4 @@ workspace = true
 [dev-dependencies]
 provider-mock = { workspace = true }
 chrono = { workspace = true }
+wiremock = { workspace = true }

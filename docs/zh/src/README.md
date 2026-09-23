@@ -8,14 +8,12 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
 
 - [Runtime 架构设计](architecture/local-first-agent-runtime.md)：长期架构目标、核心原则、模块边界与阶段划分。
 - [第一阶段 MVP 实施计划](plans/mvp-implementation-plan.md)：M0–M9 的交付内容、验收标准、风险与验证命令。
-- [配置参考](reference/configuration.md)：分层配置、环境变量、TUI 与内嵌 llama.cpp。
+- [配置参考](reference/configuration.md)：分层配置、远程模型、MCP、会话存储、TUI 与内嵌 llama.cpp。
 
 ## 当前状态
 
-- 已完成：M0–M4（核心、Provider、Tool Runtime、Profile、Workspace、Skills 与 Prompt Compiler）
-- 已提前交付：基于 Ratatui/Crossterm 的 `agent .` TUI
-- 已提前交付：feature-gated 的进程内 embedded llama.cpp provider 与 CLI 配置入口；真实 GGUF smoke 仍是 M9 验收项
-- 下一阶段：M5 — Secrets
-- M5–M8 的其余工作待实施；跨平台进程 sandbox 在 Phase 2 实施
+- 已完成：M0–M9 的 MVP 实施与本机验收，包括 Secrets、远程 Provider 与回退、MCP、SQLite 会话恢复，以及进程内 llama.cpp 的真实 GGUF 补全。
+- `agent .` 使用 Ratatui/Crossterm TUI；`agent ask`、`agent chat`、`agent sessions` 和 `agent resume` 提供 headless/会话入口。
+- 跨平台进程 sandbox 仍属于 Phase 2，尚未纳入本轮 MVP。
 
 里程碑的详细范围和验收口径以 MVP 实施计划为准。架构文档描述长期方向，不直接表示当前实现进度。

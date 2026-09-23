@@ -1,7 +1,7 @@
 # Lyonbrown Phase-One MVP Implementation Plan
 
 > Based on: [Lyonbrown Local-First Agent Runtime Architecture](../architecture/local-first-agent-runtime.md) (Draft v0.1)  
-> Status: M0–M4 complete; M5 is next. The TUI and embedded llama.cpp implementation were delivered early; llama.cpp still requires a real-GGUF smoke run for M9 acceptance
+> Status: M0–M9 implemented and locally accepted; the M9 real-GGUF smoke test passed on Windows MSVC/CPU. Cross-platform sandboxing remains Phase 2.
 > Platform: Windows 11 · rustc/cargo 1.98.1 · Ollama installed (qwen3.8-27b:q3-claude as Worker / translategemma:4b available as Control)
 
 ## Context
@@ -311,31 +311,31 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 
 - Build: Env/File/Composite brokers; shell `{NAME:"secret:<ref>"}` resolution only at execution; session-wide resolved-value redaction
 - Acceptance: child sees secret env, serialized events never contain plaintext, missing ref returns a safe error without panic/leak
-- Verify: `cargo test -p agent-secret -p agent-tool --test secret_e2e`
+- Verify: `cargo test -p agent-kernel --test secret_e2e`
 
-**M6 — Remote Providers (Anthropic + OpenAI) + fallback** (3 days)
+**M6 — Remote Providers (Anthropic + OpenAI) + fallback (complete)** (3 days)
 
 - Build: Anthropic Messages SSE/content blocks; OpenAI chat SSE/indexed delta accumulation; keys through SecretRef; one local-error→Frontier retry with fallback event reason
 - Acceptance: offline wiremock event-sequence tests, auth/429 paths, mock fail-then-succeed fallback
-- Verify: offline provider tests; live smoke only with a key
+- Verify: `cargo test -p provider-anthropic -p provider-openai` and `cargo test -p agent-kernel --test fallback` (offline); remote live smoke only with a key.
 
-**M7 — MCP** (2 days)
+**M7 — MCP (complete)** (2 days)
 
-- Build: exact-pinned rmcp 3.4.0, config and workspace override; spawn stdio servers; register namespaced tools; 60s timeout and common redaction
+- Build: exact-pinned rmcp 3.4.0, config and workspace override (MCP commands require `--trust-workspace-mcp`); spawn stdio servers; register namespaced tools; 60s timeout and common redaction
 - Acceptance: local Rust fixture server, list/call round trip, kernel e2e observation, graceful server-crash error
 - Verify: `cargo test -p agent-mcp` (offline)
 
-**M8 — Storage, resume, finish** (2 days)
+**M8 — Storage, resume, finish (complete)** (2 days)
 
 - Build: bundled SQLite/WAL/spawn_blocking; persist every event; resume/session listing; first Ctrl-C cancels cleanly, second forces. The full `ratatui` 0.30.2 + Crossterm TUI was delivered early after M4 (event, message, approval, and tool-result panes) while retaining the headless CLI
-- Acceptance: resume after two interrupted steps preserves context; replay reconstructs identical Session; workspace green
-- Verify: `cargo test --workspace && cargo clippy --workspace -- -D warnings`
+- Acceptance: resume after two interrupted steps preserves context; replay reconstructs equivalent working-memory content (item IDs/timestamps may differ); workspace green
+- Verify: `cargo test --workspace` and `cargo clippy --workspace --all-targets -- -D warnings`
 
-**M9 — llama.cpp (stretch; implementation delivered early, real-model acceptance pending)** (1–2 days)
+**M9 — llama.cpp (stretch; real-model local acceptance complete)** (1–2 days)
 
 - Build: `provider-llamacpp` embeds llama.cpp **in process** through `llama-cpp-2` 0.1.156. The Agent loads GGUF itself, owns backend/model/context lifetimes, and normalizes streamed tokens into `ModelEvent`; there is no HTTP daemon or external inference process. Isolate native compilation behind the optional `llama-cpp` feature, default to CPU, add CUDA/Vulkan later by feature, load a model once, and serialize inference until a context pool is justified.
 - Acceptance: feature build and one small-GGUF completion. Drop M9 if the prebuilt artifact fails; Ollama already covers local inference and MVP does not depend on it.
-- Verify: `cargo test -p provider-llamacpp --features llama-cpp`
+- Verify: `cargo test -p provider-llamacpp --features llama-cpp`; with `LYONBROWN_GGUF_MODEL` set, run `cargo test -p provider-llamacpp --features llama-cpp live_completion_smoke_test -- --ignored`.
 
 ---
 
@@ -420,16 +420,20 @@ This test proves §37's core claim offline: **user message → model → tool ca
 ### Final global verification (after M8)
 
 ```bash
+cargo fmt --all -- --check
 cargo test --workspace
-cargo clippy --workspace -- -D warnings
-cargo run -p agent-cli -- ask "1+1等于几" --provider ollama --model translategemma:4b
+cargo clippy --workspace --all-targets -- -D warnings
+mdbook build docs/zh
+mdbook build docs/en
 ```
+
+Ollama and remote-provider live smoke tests require the corresponding service, model, or API key; offline acceptance does not. Every `.rs` file must also meet the 300-line limit in `AGENTS.md`.
 
 ---
 
 ## Key Files
 
-- `crates/agent-kernel/src/kernel.rs` — agent loop + `run_turn`; everything else attaches here, alongside `state.rs`
+- `crates/agent-kernel/src/kernel/` — agent loop, context preparation, fallback, and tool execution; `kernel.rs` holds Kernel state and public entry points.
 - `crates/agent-model/src/provider.rs` — provider-neutral seam for ModelProvider/Request/Stream/Event
 - `crates/agent-core/src/event.rs` — AgentEvent contract for resume, audit, redaction scanning, and e2e assertions
 - `crates/agent-tool/src/shell.rs` — highest-risk built-in: path jail, timeout, late-bound secret env injection

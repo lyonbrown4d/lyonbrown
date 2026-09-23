@@ -12,25 +12,25 @@ use serde::{Deserialize, Serialize};
 pub struct SecretRef(pub String);
 
 impl SecretRef {
-    /// 解析出 `(kind, name)`，如 `("env", "ANTHROPIC_API_KEY")`。
-    pub fn parts(&self) -> (&str, &str) {
-        match self.0.split_once(':') {
-            Some((k, v)) => (k, v),
-            None => ("", &self.0),
-        }
+  /// 解析出 `(kind, name)`，如 `("env", "ANTHROPIC_API_KEY")`。
+  pub fn parts(&self) -> (&str, &str) {
+    match self.0.split_once(':') {
+      Some((k, v)) => (k, v),
+      None => ("", &self.0),
     }
+  }
 
-    pub fn env(name: impl Into<String>) -> Self {
-        Self(format!("env:{}", name.into()))
-    }
+  pub fn env(name: impl Into<String>) -> Self {
+    Self(format!("env:{}", name.into()))
+  }
 
-    pub fn file(name: impl Into<String>) -> Self {
-        Self(format!("file:{}", name.into()))
-    }
+  pub fn file(name: impl Into<String>) -> Self {
+    Self(format!("file:{}", name.into()))
+  }
 }
 
 impl std::fmt::Display for SecretRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "{}", self.0)
+  }
 }

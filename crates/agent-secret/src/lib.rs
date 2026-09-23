@@ -14,21 +14,21 @@ use async_trait::async_trait;
 
 #[derive(Debug, thiserror::Error)]
 pub enum SecretError {
-    #[error("secret not found: {0}")]
-    NotFound(SecretRef),
-    #[error("invalid secret reference: {0}")]
-    InvalidReference(SecretRef),
-    #[error("secret provider error: {0}")]
-    Provider(String),
+  #[error("secret not found: {0}")]
+  NotFound(SecretRef),
+  #[error("invalid secret reference: {0}")]
+  InvalidReference(SecretRef),
+  #[error("secret provider error: {0}")]
+  Provider(String),
 }
 
 #[async_trait]
 pub trait SecretBroker: Send + Sync {
-    async fn resolve(&self, reference: &SecretRef) -> Result<String, SecretError>;
+  async fn resolve(&self, reference: &SecretRef) -> Result<String, SecretError>;
 
-    fn redact(&self, text: &str) -> String {
-        text.to_owned()
-    }
+  fn redact(&self, text: &str) -> String {
+    text.to_owned()
+  }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -36,7 +36,7 @@ pub struct NoopBroker;
 
 #[async_trait]
 impl SecretBroker for NoopBroker {
-    async fn resolve(&self, reference: &SecretRef) -> Result<String, SecretError> {
-        Err(SecretError::NotFound(reference.clone()))
-    }
+  async fn resolve(&self, reference: &SecretRef) -> Result<String, SecretError> {
+    Err(SecretError::NotFound(reference.clone()))
+  }
 }

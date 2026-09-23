@@ -1,5 +1,5 @@
 # Local-First 通用 Agent Runtime — workspace 根
-# 骨架已就绪；实现按 docs/zh/src/plans/mvp-implementation-plan.md 的 M0..M9 进行。
+# M0..M9 MVP 实现；范围与验收见 docs/zh/src/plans/mvp-implementation-plan.md。
 
 [workspace]
 resolver = "2"
@@ -74,7 +74,7 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 crossterm = "0.29"
 
 # --- MCP（pin 精确版本；rmcp 3.4.0 已核实为最新稳定版）---
-rmcp = { version = "3.4.0", features = ["client", "transport-child-process"] }
+rmcp = { version = "=3.4.0", features = ["client", "transport-child-process", "transport-io"] }
 
 # --- 测试（仅 dev-dependency）---
 wiremock = "0.6"

@@ -37,6 +37,8 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uuid",
+ "wiremock",
 ]
 
 [[package]]
@@ -93,11 +95,18 @@ name = "agent-mcp"
 version = "0.1.0"
 dependencies = [
  "agent-core",
+ "agent-kernel",
+ "agent-model",
+ "agent-secret",
  "agent-tool",
  "async-trait",
+ "provider-mock",
  "rmcp",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
+ "tokio-util",
  "toml",
 ]
 
@@ -158,8 +167,10 @@ dependencies = [
  "chrono",
  "dirs",
  "rusqlite",
+ "serde_json",
  "thiserror",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -2055,6 +2066,7 @@ version = "0.1.0"
 dependencies = [
  "agent-core",
  "agent-model",
+ "agent-secret",
  "async-trait",
  "futures",
  "reqwest",
@@ -2120,6 +2132,7 @@ version = "0.1.0"
 dependencies = [
  "agent-core",
  "agent-model",
+ "agent-secret",
  "async-trait",
  "futures",
  "reqwest",
