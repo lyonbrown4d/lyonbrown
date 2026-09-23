@@ -130,3 +130,49 @@ async fn accumulates_tool_use_input_json_deltas_into_tool_call() {
     }
   );
 }
+
+#[tokio::test]
+async fn parses_named_sse_events_with_multiline_data_and_crlf() {
+  let server = MockServer::start().await;
+  Mock::given(method("POST"))
+    .and(path("/v1/messages"))
+    .respond_with(ResponseTemplate::new(200).set_body_string(concat!(
+      "event: message_start\r\n",
+      "data: {\"type\":\"message_start\",\"message\":{\"usage\":\r\n",
+      "data: {\"input_tokens\":12}}}\r\n\r\n",
+      "event: content_block_delta\r\n",
+      "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\r\n",
+      "data: \"type\":\"text_delta\",\"text\":\"parsed\"}}\r\n\r\n",
+      "event: message_stop\r\n",
+      "data: {\"type\":\"message_stop\"}\r\n\r\n"
+    )))
+    .mount(&server)
+    .await;
+  let provider = AnthropicProvider::with_base_url(
+    "sk-test",
+    server.uri(),
+    vec![capabilities("claude-sonnet-4-5")],
+  )
+  .unwrap();
+
+  let events = provider
+    .stream(request("claude-sonnet-4-5"))
+    .await
+    .unwrap()
+    .events
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .unwrap();
+
+  assert_eq!(events[0], ModelEvent::Delta("parsed".into()));
+  assert_eq!(
+    events[1],
+    ModelEvent::Usage(agent_core::TokenUsage {
+      input: 12,
+      output: 0,
+      cache_read: 0,
+    })
+  );
+}

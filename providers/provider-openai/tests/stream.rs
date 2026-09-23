@@ -216,3 +216,36 @@ async fn rejects_stream_that_ends_without_done_marker() {
       .any(|event| matches!(event, Ok(ModelEvent::Done { .. })))
   );
 }
+
+#[tokio::test]
+async fn parses_multiline_sse_data_with_crlf() {
+  let server = MockServer::start().await;
+  Mock::given(method("POST"))
+    .and(path("/v1/chat/completions"))
+    .respond_with(ResponseTemplate::new(200).set_body_string(concat!(
+      "data: {\"choices\":[{\"delta\":{\"content\":\r\n",
+      "data: \"joined\"}}]}\r\n\r\n",
+      "data: [DONE]\r\n\r\n"
+    )))
+    .mount(&server)
+    .await;
+  let provider = OpenAiProvider::with_base_url(
+    "sk-test",
+    format!("{}/v1", server.uri()),
+    vec![capabilities("gpt-4o")],
+  )
+  .unwrap();
+
+  let events = provider
+    .stream(request("gpt-4o"))
+    .await
+    .unwrap()
+    .events
+    .collect::<Vec<_>>()
+    .await
+    .into_iter()
+    .collect::<Result<Vec<_>, _>>()
+    .unwrap();
+
+  assert_eq!(events[0], ModelEvent::Delta("joined".into()));
+}

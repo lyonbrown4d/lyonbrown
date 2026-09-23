@@ -61,6 +61,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # --- HTTP / CLI / 存储 ---
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream", "json"] }
+eventsource-stream = "0.2.3"
 clap = { version = "4", features = ["derive"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 ignore = "0.4.33"
