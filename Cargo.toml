@@ -78,6 +78,8 @@ cap-std = "4.0.3"
 llama-cpp-2 = { version = "=0.1.156", default-features = false }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm", "unstable-rendered-line-info"] }
 crossterm = "0.29"
+unicode-segmentation = "1.13.3"
+gpui = "=0.2.2"
 
 # --- MCP（pin 精确版本；rmcp 3.4.0 已核实为最新稳定版）---
 rmcp = { version = "=3.4.0", features = ["client", "transport-child-process", "transport-io"] }

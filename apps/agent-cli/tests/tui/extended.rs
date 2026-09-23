@@ -53,6 +53,90 @@ fn narrow_conversation_follows_newest_text_after_word_boundary_wraps() {
 }
 
 #[test]
+fn manual_scroll_hides_newest_text_and_reports_position_in_wide_layout() {
+  let mut state = TuiState::default();
+  for index in 0..24 {
+    state.reduce(AgentEvent::ModelDelta {
+      step_id: StepId::new(),
+      delta: format!("message-{index}"),
+    });
+  }
+
+  let output = scrolled_screen(&state, 6, 120, 12);
+  assert!(!output.contains("message-23"));
+  assert!(output.contains("6 from bottom"));
+  assert!(output.contains("BUSY"));
+  assert!(output.contains("↑↓ scroll"));
+}
+
+#[test]
+fn narrow_layout_shows_idle_follow_state_and_scroll_keys() {
+  let output = scrolled_screen(&TuiState::default(), 0, 52, 12);
+
+  assert!(output.contains("IDLE"));
+  assert!(output.contains("following"));
+  assert!(output.contains("↑↓ scroll"));
+  assert!(output.contains("←→ move"));
+}
+
+#[test]
+fn composer_cursor_uses_unicode_display_width() {
+  let mut state = TuiState::default();
+  for character in "a界b".chars() {
+    state.apply_input_key(KeyCode::Char(character));
+  }
+
+  let (output, cursor) = screen_with_cursor(&state, 20, 8);
+  assert!(output.contains("a界"), "{output}");
+  assert!(output.contains('b'), "{output}");
+  assert_eq!(cursor, Position::new(5, 5));
+}
+
+#[test]
+fn composer_cursor_stays_on_grapheme_boundaries() {
+  let mut state = TuiState::default();
+  for character in "e\u{301}👨‍👩‍👧‍👦".chars() {
+    state.apply_input_key(KeyCode::Char(character));
+  }
+  state.apply_input_key(KeyCode::Left);
+
+  let (_, cursor) = screen_with_cursor(&state, 20, 8);
+  assert_eq!(cursor, Position::new(2, 5));
+}
+
+#[test]
+fn composer_cursor_tracks_a_newly_joined_grapheme() {
+  let mut state = TuiState::default();
+  for character in "👨👩".chars() {
+    state.apply_input_key(KeyCode::Char(character));
+  }
+  state.apply_input_key(KeyCode::Left);
+  state.apply_input_key(KeyCode::Char('\u{200d}'));
+
+  let (_, joined_cursor) = screen_with_cursor(&state, 20, 8);
+  assert_eq!(joined_cursor, Position::new(3, 5));
+
+  state.apply_input_key(KeyCode::Char('!'));
+  let (output, continued_cursor) = screen_with_cursor(&state, 20, 8);
+  assert!(output.contains('!'));
+  assert_eq!(continued_cursor, Position::new(4, 5));
+}
+
+#[test]
+fn composer_viewport_follows_long_and_multiline_input() {
+  let mut state = TuiState::default();
+  for character in "hidden-prefix-界界界界\nmiddle\nsecond-line-with-visible-tail".chars() {
+    state.apply_input_key(KeyCode::Char(character));
+  }
+
+  let (output, cursor) = screen_with_cursor(&state, 20, 8);
+  assert!(output.contains("visible-tail"), "{output}");
+  assert!(!output.contains("hidden-prefix"));
+  assert_eq!(cursor.y, 6);
+  assert!((1..=18).contains(&cursor.x));
+}
+
+#[test]
 fn approval_bridge_sends_sanitized_request_and_returns_ui_decision() {
   let (prompt, requests) = TuiApprovalPrompt::channel();
   let prompt = Arc::new(prompt);

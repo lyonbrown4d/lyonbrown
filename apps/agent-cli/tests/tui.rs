@@ -1,13 +1,16 @@
 use std::{sync::Arc, thread};
 
-use agent_cli::tui::{TuiApprovalPrompt, TuiState, render, render_with_approval};
+use agent_cli::tui::{
+  TuiApprovalPrompt, TuiState, render, render_with_approval, render_with_scroll,
+};
 use agent_core::{
   AgentEvent, RiskLevel, SecretRef, SessionId, StepId, TokenUsage, ToolCallId, ToolDefinition,
   ToolInvocation, ToolResult, ToolSource,
 };
 use agent_tool::{ApprovalDecision, ApprovalPrompt};
 use chrono::Utc;
-use ratatui::{Terminal, backend::TestBackend};
+use crossterm::event::KeyCode;
+use ratatui::{Terminal, backend::Backend, backend::TestBackend, layout::Position};
 use serde_json::json;
 
 fn screen(state: &TuiState, width: u16, height: u16) -> String {
@@ -23,6 +26,42 @@ fn screen(state: &TuiState, width: u16, height: u16) -> String {
     })
     .collect::<Vec<_>>()
     .join("\n")
+}
+
+fn scrolled_screen(state: &TuiState, scroll: u16, width: u16, height: u16) -> String {
+  let backend = TestBackend::new(width, height);
+  let mut terminal = Terminal::new(backend).unwrap();
+  terminal
+    .draw(|frame| {
+      render_with_scroll(frame, state, scroll);
+    })
+    .unwrap();
+  let buffer = terminal.backend().buffer();
+  (0..height)
+    .map(|y| {
+      (0..width)
+        .map(|x| buffer[(x, y)].symbol().to_owned())
+        .collect::<String>()
+    })
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn screen_with_cursor(state: &TuiState, width: u16, height: u16) -> (String, Position) {
+  let backend = TestBackend::new(width, height);
+  let mut terminal = Terminal::new(backend).unwrap();
+  terminal.draw(|frame| render(frame, state)).unwrap();
+  let cursor = terminal.backend_mut().get_cursor_position().unwrap();
+  let buffer = terminal.backend().buffer();
+  let output = (0..height)
+    .map(|y| {
+      (0..width)
+        .map(|x| buffer[(x, y)].symbol().to_owned())
+        .collect::<String>()
+    })
+    .collect::<Vec<_>>()
+    .join("\n");
+  (output, cursor)
 }
 
 fn approval_screen(

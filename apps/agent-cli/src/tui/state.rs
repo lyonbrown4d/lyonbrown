@@ -1,6 +1,7 @@
 use agent_core::{AgentEvent, StepId};
+use crossterm::event::KeyCode;
 
-use super::terminal_safe;
+use super::{input::edit_input, terminal_safe};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Speaker {
@@ -27,10 +28,17 @@ pub struct TuiState {
   pulse: Vec<String>,
   streaming_step: Option<StepId>,
   pub(crate) input: String,
+  pub(crate) input_cursor: usize,
   pub(crate) busy: bool,
 }
 
 impl TuiState {
+  pub fn apply_input_key(&mut self, key: KeyCode) {
+    let (input, cursor) = edit_input(&self.input, self.input_cursor, key);
+    self.input = input;
+    self.input_cursor = cursor;
+  }
+
   pub fn transcript(&self) -> &[TranscriptEntry] {
     &self.transcript
   }
@@ -104,6 +112,7 @@ impl TuiState {
           self.streaming_step = Some(step_id);
         }
         self.status = "streaming".into();
+        self.busy = true;
       }
       AgentEvent::ModelCompleted { usage, .. } => {
         self.usage.0 = self.usage.0.saturating_add(usage.input);

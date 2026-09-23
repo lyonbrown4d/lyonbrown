@@ -6,17 +6,27 @@ use ratatui::{
   widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
-use super::{ApprovalRequest, Speaker, TuiState};
+use super::{ApprovalRequest, Speaker, TuiState, composer::render_composer};
 
 const MIDNIGHT_SLATE: Color = Color::Rgb(0x10, 0x18, 0x20);
-const DEEP_NAVY: Color = Color::Rgb(0x17, 0x2A, 0x3A);
+pub(super) const DEEP_NAVY: Color = Color::Rgb(0x17, 0x2A, 0x3A);
 const SIGNAL_CYAN: Color = Color::Rgb(0x36, 0xC5, 0xD0);
 const APPROVAL_AMBER: Color = Color::Rgb(0xF2, 0xB8, 0x4B);
-const PAPER: Color = Color::Rgb(0xE8, 0xEE, 0xF2);
-const MUTED_STEEL: Color = Color::Rgb(0x78, 0x90, 0x9C);
+pub(super) const PAPER: Color = Color::Rgb(0xE8, 0xEE, 0xF2);
+pub(super) const MUTED_STEEL: Color = Color::Rgb(0x78, 0x90, 0x9C);
+
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct RenderMetrics {
+  pub approval_max_scroll: u16,
+  pub conversation_max_scroll: u16,
+}
 
 pub fn render(frame: &mut Frame<'_>, state: &TuiState) {
-  let _ = render_with_approval(frame, state, None, 0);
+  let _ = render_cockpit(frame, state, None, 0, 0);
+}
+
+pub fn render_with_scroll(frame: &mut Frame<'_>, state: &TuiState, conversation_scroll: u16) {
+  let _ = render_cockpit(frame, state, None, 0, conversation_scroll);
 }
 
 #[doc(hidden)]
@@ -26,6 +36,16 @@ pub fn render_with_approval(
   approval: Option<&ApprovalRequest>,
   approval_scroll: u16,
 ) -> u16 {
+  render_cockpit(frame, state, approval, approval_scroll, 0).approval_max_scroll
+}
+
+pub(crate) fn render_cockpit(
+  frame: &mut Frame<'_>,
+  state: &TuiState,
+  approval: Option<&ApprovalRequest>,
+  approval_scroll: u16,
+  conversation_scroll: u16,
+) -> RenderMetrics {
   frame.render_widget(
     Block::default().style(Style::default().bg(MIDNIGHT_SLATE)),
     frame.area(),
@@ -37,25 +57,30 @@ pub fn render_with_approval(
     .constraints([Constraint::Min(1), Constraint::Length(composer_height)])
     .split(frame.area());
 
-  if frame.area().width >= 90 {
+  let conversation_max_scroll = if frame.area().width >= 90 {
     let columns = Layout::default()
       .direction(Direction::Horizontal)
       .constraints([Constraint::Min(35), Constraint::Length(30)])
       .split(rows[0]);
-    render_conversation(frame, columns[0], state);
+    let max_scroll = render_conversation(frame, columns[0], state, conversation_scroll);
     render_runtime(frame, columns[1], state);
+    max_scroll
   } else {
-    render_conversation(frame, rows[0], state);
-  }
-  render_composer(frame, rows[1], state);
-  if let Some(request) = approval {
+    render_conversation(frame, rows[0], state, conversation_scroll)
+  };
+  render_composer(frame, rows[1], state, approval.is_none() && !state.busy);
+  let approval_max_scroll = if let Some(request) = approval {
     render_approval(frame, request, approval_scroll)
   } else {
     0
+  };
+  RenderMetrics {
+    approval_max_scroll,
+    conversation_max_scroll,
   }
 }
 
-fn panel(title: &'static str) -> Block<'static> {
+pub(super) fn panel(title: &str) -> Block<'_> {
   Block::default()
     .title(Span::styled(
       title,
@@ -68,7 +93,12 @@ fn panel(title: &'static str) -> Block<'static> {
     .style(Style::default().bg(MIDNIGHT_SLATE).fg(PAPER))
 }
 
-fn render_conversation(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
+fn render_conversation(
+  frame: &mut Frame<'_>,
+  area: Rect,
+  state: &TuiState,
+  distance_from_bottom: u16,
+) -> u16 {
   let mut lines = Vec::new();
   for entry in state.transcript() {
     let (label, color) = match entry.speaker {
@@ -88,14 +118,22 @@ fn render_conversation(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
   let rendered_lines = Paragraph::new(text.clone())
     .wrap(Wrap { trim: false })
     .line_count(content_width);
-  let paragraph = Paragraph::new(text)
-    .block(panel(" CONVERSATION "))
-    .wrap(Wrap { trim: false });
-  let viewport_height = usize::from(area.height.saturating_sub(2));
-  let scroll = rendered_lines
-    .saturating_sub(viewport_height)
+  let max_scroll = rendered_lines
+    .saturating_sub(usize::from(area.height.saturating_sub(2)))
     .min(usize::from(u16::MAX)) as u16;
+  let distance_from_bottom = distance_from_bottom.min(max_scroll);
+  let position = if distance_from_bottom == 0 {
+    "following".to_owned()
+  } else {
+    format!("{distance_from_bottom} from bottom")
+  };
+  let title = format!(" CONVERSATION · {position} · ↑↓ scroll ");
+  let paragraph = Paragraph::new(text)
+    .block(panel(&title))
+    .wrap(Wrap { trim: false });
+  let scroll = max_scroll.saturating_sub(distance_from_bottom);
   frame.render_widget(paragraph.scroll((scroll, 0)), area);
+  max_scroll
 }
 
 fn render_runtime(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
@@ -141,24 +179,6 @@ fn render_runtime(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
     Paragraph::new(lines)
       .block(panel(" RUNTIME "))
       .wrap(Wrap { trim: true }),
-    area,
-  );
-}
-
-fn render_composer(frame: &mut Frame<'_>, area: Rect, state: &TuiState) {
-  let title = if state.busy { " BUSY " } else { " Message " };
-  let content = if state.input.is_empty() {
-    "Enter send · Esc/Ctrl-C quit"
-  } else {
-    &state.input
-  };
-  let color = if state.input.is_empty() {
-    MUTED_STEEL
-  } else {
-    PAPER
-  };
-  frame.render_widget(
-    Paragraph::new(Span::styled(content, Style::default().fg(color))).block(panel(title)),
     area,
   );
 }

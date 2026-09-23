@@ -45,6 +45,7 @@ thiserror = { workspace = true }
 futures = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
+unicode-segmentation = { workspace = true }
 uuid = { workspace = true }
 
 [lints]

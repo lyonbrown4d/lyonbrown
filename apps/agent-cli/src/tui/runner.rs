@@ -7,7 +7,13 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use tokio::{sync::broadcast, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 
-use super::{ApprovalRequest, TuiState, terminal::TerminalSession, ui::render_with_approval};
+use super::{
+  ApprovalRequest, TuiState,
+  terminal::TerminalSession,
+  ui::{RenderMetrics, render_cockpit},
+};
+
+pub use super::input::{edit_input, next_conversation_scroll};
 
 type TurnTask = JoinHandle<(
   Kernel,
@@ -23,6 +29,8 @@ pub struct Runtime {
   pub approvals: Option<mpsc::Receiver<ApprovalRequest>>,
   pub approval_scroll: u16,
   pub approval_max_scroll: u16,
+  pub conversation_scroll: u16,
+  pub conversation_max_scroll: u16,
 }
 
 pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> Result<()> {
@@ -43,6 +51,8 @@ pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> 
     approvals: Some(approvals),
     approval_scroll: 0,
     approval_max_scroll: 0,
+    conversation_scroll: 0,
+    conversation_max_scroll: 0,
   };
 
   let result = run_event_loop(&mut terminal, &mut runtime, &cancellation).await;
@@ -89,17 +99,22 @@ async fn run_event_loop(
     }
     runtime.state.busy = runtime.task.is_some();
 
-    let mut approval_max_scroll = 0;
+    let mut metrics = RenderMetrics::default();
     terminal.terminal.draw(|frame| {
-      approval_max_scroll = render_with_approval(
+      metrics = render_cockpit(
         frame,
         &runtime.state,
         runtime.approval.as_ref(),
         runtime.approval_scroll,
+        runtime.conversation_scroll,
       );
     })?;
-    runtime.approval_max_scroll = approval_max_scroll;
-    runtime.approval_scroll = runtime.approval_scroll.min(approval_max_scroll);
+    runtime.approval_max_scroll = metrics.approval_max_scroll;
+    runtime.approval_scroll = runtime.approval_scroll.min(metrics.approval_max_scroll);
+    runtime.conversation_max_scroll = metrics.conversation_max_scroll;
+    runtime.conversation_scroll = runtime
+      .conversation_scroll
+      .min(metrics.conversation_max_scroll);
 
     if event::poll(Duration::from_millis(25))?
       && let Event::Key(key) = event::read()?
@@ -157,6 +172,15 @@ async fn run_event_loop(
         }
         continue;
       }
+      let next_scroll = next_conversation_scroll(
+        runtime.conversation_scroll,
+        runtime.conversation_max_scroll,
+        key.code,
+      );
+      if next_scroll != runtime.conversation_scroll {
+        runtime.conversation_scroll = next_scroll;
+        continue;
+      }
       if !can_accept_input(runtime.task.is_some(), runtime.kernel.is_some()) {
         continue;
       }
@@ -165,6 +189,7 @@ async fn run_event_loop(
           let prompt = runtime.state.input.trim().to_owned();
           if !prompt.is_empty() {
             runtime.state.input.clear();
+            runtime.state.input_cursor = 0;
             runtime.state.mark_submitted();
             let owned_kernel = runtime
               .kernel
@@ -178,11 +203,16 @@ async fn run_event_loop(
             }));
           }
         }
-        KeyCode::Backspace => {
-          runtime.state.input.pop();
-        }
-        KeyCode::Char(character) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-          runtime.state.input.push(character);
+        KeyCode::Left
+        | KeyCode::Right
+        | KeyCode::Home
+        | KeyCode::End
+        | KeyCode::Delete
+        | KeyCode::Backspace
+        | KeyCode::Char(_)
+          if !key.modifiers.contains(KeyModifiers::CONTROL) =>
+        {
+          runtime.state.apply_input_key(key.code);
         }
         _ => {}
       }
@@ -251,12 +281,18 @@ pub fn control_c_key(key: KeyEvent) -> bool {
   key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
 }
 
-fn approval_decision(key: KeyEvent) -> Option<ApprovalDecision> {
-  match key.code {
-    KeyCode::Char('y') => Some(ApprovalDecision::Allow),
-    KeyCode::Char('n') => Some(ApprovalDecision::Deny),
-    KeyCode::Char('a') => Some(ApprovalDecision::AllowSession),
-    KeyCode::Char('d') => Some(ApprovalDecision::DenyAll),
+pub fn approval_decision(key: KeyEvent) -> Option<ApprovalDecision> {
+  if key.modifiers != KeyModifiers::NONE && key.modifiers != KeyModifiers::SHIFT {
+    return None;
+  }
+  let KeyCode::Char(character) = key.code else {
+    return None;
+  };
+  match character.to_ascii_lowercase() {
+    'y' => Some(ApprovalDecision::Allow),
+    'n' => Some(ApprovalDecision::Deny),
+    'a' => Some(ApprovalDecision::AllowSession),
+    'd' => Some(ApprovalDecision::DenyAll),
     _ => None,
   }
 }
