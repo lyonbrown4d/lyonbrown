@@ -29,16 +29,17 @@ Agent Kernel（事件驱动 + 状态机）· Agent Profile · Workspace Runtime 
 
 根目录 `D:\Projects\lyonbrown`，edition 2024，resolver 2，workspace deps 表统一版本，`clippy::all` warn + `unsafe_code` forbid（llamacpp crate 后续单独放开）。M0 已完成 Git 初始化和 workspace 骨架搭建。
 
-### MVP crate 清单（11 crates + 5 providers + 1 app，共 17 个包）
+### MVP crate 清单（12 crates + 5 providers + 1 app，共 18 个包）
 
 | Crate | 职责 |
 |---|---|
 | `crates/agent-core` | 纯共享类型、无逻辑：ids、errors、ContextItem、AgentEvent、tool 类型、ModelCapabilities、SecretRef |
 | `crates/agent-kernel` | 状态机、agent loop、事件总线、session/working memory、retry/cancel |
 | `crates/agent-model` | ModelProvider trait、registry、scheduler、policy、quality gate |
-| `crates/agent-context` | Prompt Compiler（profile+workspace+skills→system prompt）、context budget、token 估算（retrieval/compression 属 Phase 2） |
+| `crates/agent-context` | Prompt Compiler（profile+workspace+skills→system prompt）、context budget、token 估算；语义检索/向量检索与 compression 属 Phase 2 |
 | `crates/agent-profile` | AgentProfile YAML 加载/校验 |
 | `crates/agent-workspace` | 仓库检测、WorkspaceProfile、AGENTS.md/CLAUDE.md 解析 |
+| `crates/agent-index` | `ignore` + `notify` 增量工作区索引，SQLite FTS5 关键词检索；CLI 通过只读 `search_workspace` 工具使用 |
 | `crates/agent-skill` | Skill YAML、registry、trigger 匹配 |
 | `crates/agent-tool` | Tool trait、registry、执行器、审批、超时、redaction 钩子 + 内置 Shell/FS 工具 |
 | `crates/agent-secret` | SecretBroker（env/file/composite）、延迟绑定、输出 redaction |
@@ -61,11 +62,13 @@ agent-core（无内部依赖）
   ├─► agent-secret ─► agent-tool ─► agent-mcp
   ├─► agent-model ◄── providers/*
   └─► agent-storage
+agent-index ─────────► agent-tool
   以上全部 ─► agent-kernel ─► apps/agent-cli
 ```
 
 - `agent-context` → core, profile, workspace, skill
-- `agent-tool` → core, secret（延迟绑定需要 broker）
+- `agent-tool` → core, secret（延迟绑定需要 broker）, index
+- `agent-index` → rusqlite, ignore, notify, blake3
 - `agent-mcp` → core, tool, rmcp
 - `agent-kernel` → core, model, context, tool, secret, storage, profile, workspace, skill
 - `agent-cli` → kernel + 全部 providers（feature-gated：`ollama` 默认开、`anthropic`/`openai` 开、`llama-cpp` 关）
@@ -78,6 +81,7 @@ agent-core（无内部依赖）
 - `agent-context/src/`：`lib.rs` `compiler.rs` `budget.rs` `tokens.rs`
 - `agent-profile/src/`：`lib.rs` `profile.rs`
 - `agent-workspace/src/`：`lib.rs` `detect.rs` `instructions.rs`
+- `agent-index/src/`：`lib.rs` `index.rs` `scan.rs` `watcher.rs`
 - `agent-skill/src/`：`lib.rs` `skill.rs` `registry.rs` `match.rs`
 - `agent-tool/src/`：`lib.rs` `registry.rs` `execute.rs` `approval.rs` `redact.rs` `shell.rs` `fs.rs`
 - `agent-secret/src/`：`lib.rs` `env_broker.rs` `file_broker.rs` `composite.rs` `redact.rs`

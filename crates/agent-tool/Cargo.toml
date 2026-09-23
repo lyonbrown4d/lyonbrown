@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 agent-core = { workspace = true }
+agent-index = { workspace = true }
 agent-secret = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
@@ -13,6 +14,10 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 serde_json = { workspace = true }
 cap-std = { workspace = true }
+jsonschema = { workspace = true }
+
+[dev-dependencies]
+uuid = { workspace = true }
 
 [lints]
 workspace = true

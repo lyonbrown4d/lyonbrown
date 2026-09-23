@@ -10,10 +10,12 @@ use crate::{ToolContext, ToolError};
 mod echo;
 mod files;
 mod shell;
+mod workspace_search;
 
 pub use echo::{EchoTool, ReadFileTool};
 pub use files::{ListFilesTool, WriteFileTool};
 pub use shell::ShellTool;
+pub use workspace_search::SearchWorkspaceTool;
 
 fn string_argument<'a>(invocation: &'a ToolInvocation, name: &str) -> Result<&'a str, ToolError> {
   invocation

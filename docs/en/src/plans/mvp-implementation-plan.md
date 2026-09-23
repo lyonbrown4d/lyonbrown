@@ -31,16 +31,17 @@ Agent Kernel (event-driven + state machine) · Agent Profile · Workspace Runtim
 
 Root: `D:\Projects\lyonbrown`; edition 2024; resolver 2; shared versions in workspace dependencies; `clippy::all` warn + `unsafe_code` forbid (the llamacpp crate may opt out later). M0 completed Git initialization and the workspace skeleton.
 
-### MVP crate inventory (11 crates + 5 providers + 1 app, 17 packages total)
+### MVP crate inventory (12 crates + 5 providers + 1 app, 18 packages total)
 
 | Crate | Responsibility |
 |---|---|
 | `crates/agent-core` | Pure shared types, no logic: ids, errors, ContextItem, AgentEvent, tool types, ModelCapabilities, SecretRef |
 | `crates/agent-kernel` | State machine, agent loop, event bus, session/working memory, retry/cancel |
 | `crates/agent-model` | ModelProvider trait, registry, scheduler, policy, quality gate |
-| `crates/agent-context` | Prompt Compiler (profile+workspace+skills→system prompt), context budget, token estimation (retrieval/compression are Phase 2) |
+| `crates/agent-context` | Prompt Compiler (profile+workspace+skills→system prompt), context budget, token estimation; semantic/vector retrieval and compression are Phase 2 |
 | `crates/agent-profile` | AgentProfile YAML loading/validation |
 | `crates/agent-workspace` | Repository detection, WorkspaceProfile, AGENTS.md/CLAUDE.md parsing |
+| `crates/agent-index` | Incremental workspace index via `ignore` + `notify`, SQLite FTS5 keyword search; exposed to the CLI as the read-only `search_workspace` tool |
 | `crates/agent-skill` | Skill YAML, registry, trigger matching |
 | `crates/agent-tool` | Tool trait, registry, executor, approval, timeout, redaction hooks + built-in Shell/FS tools |
 | `crates/agent-secret` | SecretBroker (env/file/composite), late binding, output redaction |
@@ -63,11 +64,13 @@ agent-core (no internal dependencies)
   ├─► agent-secret ─► agent-tool ─► agent-mcp
   ├─► agent-model ◄── providers/*
   └─► agent-storage
+agent-index ─────────► agent-tool
   all of the above ─► agent-kernel ─► apps/agent-cli
 ```
 
 - `agent-context` → core, profile, workspace, skill
-- `agent-tool` → core, secret (the broker is required for late binding)
+- `agent-tool` → core, secret (the broker is required for late binding), index
+- `agent-index` → rusqlite, ignore, notify, blake3
 - `agent-mcp` → core, tool, rmcp
 - `agent-kernel` → core, model, context, tool, secret, storage, profile, workspace, skill
 - `agent-cli` → kernel + all providers (feature-gated: `ollama` on by default, `anthropic`/`openai` on, `llama-cpp` off)
@@ -80,6 +83,7 @@ agent-core (no internal dependencies)
 - `agent-context/src/`: `lib.rs` `compiler.rs` `budget.rs` `tokens.rs`
 - `agent-profile/src/`: `lib.rs` `profile.rs`
 - `agent-workspace/src/`: `lib.rs` `detect.rs` `instructions.rs`
+- `agent-index/src/`: `lib.rs` `index.rs` `scan.rs` `watcher.rs`
 - `agent-skill/src/`: `lib.rs` `skill.rs` `registry.rs` `match.rs`
 - `agent-tool/src/`: `lib.rs` `registry.rs` `execute.rs` `approval.rs` `redact.rs` `shell.rs` `fs.rs`
 - `agent-secret/src/`: `lib.rs` `env_broker.rs` `file_broker.rs` `composite.rs` `redact.rs`

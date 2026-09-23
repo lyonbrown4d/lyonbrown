@@ -1,5 +1,5 @@
 # Local-First 通用 Agent Runtime — workspace 根
-# M0..M9 MVP 实现；范围与验收见 docs/zh/src/plans/mvp-implementation-plan.md。
+# M0..M9 MVP 与增量工作区索引；范围与验收见 docs/zh/src/plans/mvp-implementation-plan.md。
 
 [workspace]
 resolver = "2"
@@ -32,6 +32,7 @@ agent-tool = { path = "crates/agent-tool" }
 agent-secret = { path = "crates/agent-secret" }
 agent-mcp = { path = "crates/agent-mcp" }
 agent-storage = { path = "crates/agent-storage" }
+agent-index = { path = "crates/agent-index" }
 provider-ollama = { path = "providers/provider-ollama" }
 provider-anthropic = { path = "providers/provider-anthropic" }
 provider-openai = { path = "providers/provider-openai" }
@@ -62,6 +63,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream", "json"] }
 clap = { version = "4", features = ["derive"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+ignore = "0.4.33"
+jsonschema = { version = "0.57.0", default-features = false }
+notify = "8.2.0"
+blake3 = "1"
 
 # --- 基础 ---
 uuid = { version = "1", features = ["v4", "serde"] }

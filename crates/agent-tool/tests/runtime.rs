@@ -72,6 +72,26 @@ async fn echo_tool_returns_the_text_argument() {
 }
 
 #[tokio::test]
+async fn executor_rejects_arguments_that_do_not_match_tool_schema() {
+  let registry = ToolRegistry::new();
+  registry.register(Arc::new(EchoTool::new()));
+  let executor = ToolExecutor::new(registry, context(".".into(), Duration::from_secs(1)));
+  let invocation = ToolInvocation {
+    id: ToolCallId::new(),
+    name: "echo".into(),
+    arguments: json!({"text": "hello", "unexpected": true}),
+  };
+
+  let error = executor.execute(&invocation).await.unwrap_err();
+
+  assert!(matches!(
+    error,
+    ToolExecutionError::Tool(ToolError::InvalidArguments(message))
+      if message.contains("unexpected")
+  ));
+}
+
+#[tokio::test]
 async fn executor_times_out_a_hung_tool() {
   let registry = ToolRegistry::new();
   registry.register(Arc::new(PendingTool::new()));

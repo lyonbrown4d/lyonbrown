@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use agent_core::{ToolInvocation, ToolResult};
 
-use crate::{ToolContext, ToolError, ToolRegistry};
+use crate::{ToolContext, ToolError, ToolRegistry, registry::SchemaValidationError};
 
 pub struct ToolExecutor {
   registry: ToolRegistry,
@@ -22,6 +22,18 @@ impl ToolExecutor {
       .registry
       .get(&invocation.name)
       .ok_or_else(|| ToolExecutionError::NotFound(invocation.name.clone()))?;
+    self
+      .registry
+      .validate_arguments(invocation)
+      .map_err(|error| match error {
+        SchemaValidationError::InvalidSchema(reason) => ToolExecutionError::InvalidSchema {
+          tool: invocation.name.clone(),
+          reason,
+        },
+        SchemaValidationError::InvalidArguments(reason) => {
+          ToolError::InvalidArguments(reason).into()
+        }
+      })?;
     let started = Instant::now();
     let invocation_future = tool.invoke(&self.context, invocation);
 
@@ -49,6 +61,8 @@ pub enum ToolExecutionError {
   TimedOut { tool: String },
   #[error("tool execution cancelled")]
   Cancelled,
+  #[error("tool {tool} has an invalid input schema: {reason}")]
+  InvalidSchema { tool: String, reason: String },
   #[error(transparent)]
   Tool(#[from] ToolError),
 }

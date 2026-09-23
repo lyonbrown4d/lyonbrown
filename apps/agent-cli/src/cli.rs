@@ -11,7 +11,8 @@ use agent_secret::{CompositeBroker, SecretBroker};
 use agent_skill::SkillRegistry;
 use agent_storage::SessionStore;
 use agent_tool::{
-  ListFilesTool, ReadFileTool, SessionApprovalPolicy, ShellTool, ToolRegistry, WriteFileTool,
+  ListFilesTool, ReadFileTool, SearchWorkspaceTool, SessionApprovalPolicy, ShellTool, ToolRegistry,
+  WriteFileTool,
 };
 use agent_workspace::WorkspaceProfile;
 use anyhow::{Context, Result};

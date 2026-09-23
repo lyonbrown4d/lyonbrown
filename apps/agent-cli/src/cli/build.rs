@@ -39,6 +39,13 @@ pub(super) async fn build_kernel(
   tools.register(Arc::new(WriteFileTool::new()));
   tools.register(Arc::new(ListFilesTool::new()));
   tools.register(Arc::new(ShellTool::new()));
+  let index_path = agent_workspace::workspace_cache_path(home, workspace)?.join("index.db");
+  let index_root = workspace.to_path_buf();
+  let (index, watcher) = tokio::task::spawn_blocking(move || {
+    agent_index::WorkspaceIndex::open_and_watch(index_root, index_path)
+  })
+  .await??;
+  tools.register(Arc::new(SearchWorkspaceTool::new(index, watcher)));
   for (name, server) in &config.mcp.servers {
     McpBridge::connect(name, server).await?.register(&tools);
   }
