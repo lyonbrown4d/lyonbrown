@@ -40,7 +40,7 @@ provider-mock = { path = "providers/provider-mock" }
 provider-llamacpp = { path = "providers/provider-llamacpp" }
 
 # --- 异步 ---
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "time", "signal", "sync"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "io-util", "fs", "time", "signal", "sync"] }
 tokio-util = "0.7"
 tokio-stream = "0.1"
 futures = "0.3"
@@ -68,6 +68,8 @@ ignore = "0.4.33"
 jsonschema = { version = "0.57.0", default-features = false }
 notify = "8.2.0"
 blake3 = "1"
+sha2 = "0.10.9"
+hf-hub = "1.0.0"
 
 # --- 基础 ---
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -80,6 +82,9 @@ ratatui = { version = "0.30.2", default-features = false, features = ["crossterm
 crossterm = "0.29"
 unicode-segmentation = "1.13.3"
 gpui = "=0.2.2"
+sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
+# fluxdi 1.2.2 requires `debug` with `thread-safe` because its public Error/Scope Debug impls are feature-gated.
+fluxdi = { version = "=1.2.2", default-features = false, features = ["debug", "thread-safe"] }
 
 # --- MCP（pin 精确版本；rmcp 3.4.0 已核实为最新稳定版）---
 rmcp = { version = "=3.4.0", features = ["client", "transport-child-process", "transport-io"] }

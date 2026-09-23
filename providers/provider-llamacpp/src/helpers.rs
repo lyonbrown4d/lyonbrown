@@ -9,7 +9,7 @@ pub(super) fn capabilities(config: &LlamaCppConfig) -> ModelCapabilities {
     locality: Locality::Local,
     context_window: config.model.context_size,
     max_output_tokens: config.model.max_output_tokens,
-    supports_tools: false,
+    supports_tools: true,
     supports_streaming: true,
     supports_json: false,
     supports_thinking: false,
@@ -53,22 +53,39 @@ impl PromptMessage {
 }
 
 #[cfg(any(feature = "llama-cpp", test))]
-pub(super) fn prompt_messages(request: &ModelRequest) -> Vec<PromptMessage> {
+pub(super) fn prompt_messages(request: &ModelRequest) -> Result<Vec<PromptMessage>, ModelError> {
   let mut messages =
     Vec::with_capacity(request.messages.len() + usize::from(request.system.is_some()));
-  if let Some(system) = &request.system {
+  let mut system = request.system.clone().unwrap_or_default();
+  if !request.tools.is_empty() {
+    if !system.is_empty() {
+      system.push_str("\n\n");
+    }
+    system.push_str(&tool_protocol_guidance(&request.tools)?);
+  }
+  if !system.is_empty() {
     messages.push(PromptMessage::new("system", system));
   }
-  messages.extend(request.messages.iter().map(|message| {
+  for message in &request.messages {
     let role = match message.role {
       Role::System => "system",
       Role::User => "user",
       Role::Assistant => "assistant",
       Role::Tool => "tool",
     };
-    PromptMessage::new(role, &message.content)
-  }));
-  messages
+    let content = if message.role == Role::Assistant && !message.tool_calls.is_empty() {
+      message
+        .tool_calls
+        .iter()
+        .map(format_tool_call)
+        .collect::<Result<Vec<_>, _>>()?
+        .join("\n")
+    } else {
+      message.content.clone()
+    };
+    messages.push(PromptMessage::new(role, content));
+  }
+  Ok(messages)
 }
 
 #[cfg(any(feature = "llama-cpp", test))]
@@ -116,7 +133,15 @@ pub(super) fn render_prompt(
             "GGUF model is missing usable tokenizer.chat_template metadata; no fallback template is applied: {error}"
         ))
     })?;
-  let messages = prompt_messages(request)
+  let mut prompt_messages = prompt_messages(request)?;
+  apply_qwen3_thinking_control(
+    template.to_str().map_err(|error| {
+      ModelError::Other(format!("GGUF chat template is not valid UTF-8: {error}"))
+    })?,
+    &mut prompt_messages,
+    request.thinking,
+  );
+  let messages = prompt_messages
     .into_iter()
     .map(|message| LlamaChatMessage::new(message.role, message.content))
     .collect::<Result<Vec<_>, _>>()
@@ -197,11 +222,6 @@ pub(super) fn validate_request(
       "unknown model id {:?}",
       request.model
     )));
-  }
-  if !request.tools.is_empty() {
-    return Err(ProviderError::InvalidRequest(
-      "tool calling is not supported".into(),
-    ));
   }
   if request.json_mode {
     return Err(ProviderError::InvalidRequest(

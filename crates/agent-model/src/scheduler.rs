@@ -1,6 +1,10 @@
 use agent_core::{DataClassification, Locality, ModelCapabilities, ModelTier};
 
-use crate::{ModelProvider, ModelRegistry, RegistryError, SelectedModel};
+use std::sync::Arc;
+
+use async_trait::async_trait;
+
+use crate::{ModelProvider, ModelRegistry, RegistryError, SelectedModel, TaskRouter};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Complexity {
@@ -77,11 +81,21 @@ pub struct SchedulerSelection {
 pub struct ModelScheduler {
   registry: ModelRegistry,
   policy: RoutingPolicy,
+  router: Arc<dyn TaskRouter>,
 }
 
 impl ModelScheduler {
   pub fn new(registry: ModelRegistry, policy: RoutingPolicy) -> Self {
-    Self { registry, policy }
+    Self {
+      registry,
+      policy,
+      router: Arc::new(HeuristicTaskRouter),
+    }
+  }
+
+  pub fn with_router(mut self, router: Arc<dyn TaskRouter>) -> Self {
+    self.router = router;
+    self
   }
 
   pub fn allows_remote_fallback(&self) -> bool {
@@ -104,7 +118,13 @@ impl ModelScheduler {
     &self,
     context: &StepContext,
   ) -> Result<Vec<SchedulerSelection>, SchedulerError> {
-    let complexity = estimate_complexity(context);
+    let complexity = match self.router.classify(context).await {
+      Ok(complexity) => complexity,
+      Err(error) => {
+        tracing::warn!(%error, "task router failed; using deterministic fallback");
+        estimate_complexity(context)
+      }
+    };
     let mut candidates = self.registry.available_models().await?;
     candidates.retain(|candidate| self.is_allowed(candidate, context));
     if candidates.is_empty() {
@@ -241,6 +261,15 @@ fn estimate_complexity(context: &StepContext) -> Complexity {
     Complexity::Medium
   } else {
     Complexity::Low
+  }
+}
+
+struct HeuristicTaskRouter;
+
+#[async_trait]
+impl TaskRouter for HeuristicTaskRouter {
+  async fn classify(&self, context: &StepContext) -> Result<Complexity, crate::TaskRouterError> {
+    Ok(estimate_complexity(context))
   }
 }
 

@@ -11,6 +11,7 @@ use agent_core::{
 use agent_model::{
   ChatMessage, GateVerdict, HeuristicGate, ModelError, ModelEvent, ModelRegistry, ModelRequest,
   ModelScheduler, ModelStream, QualityGate, Role, RoutingPolicy, SchedulerSelection, StepContext,
+  TaskRouter,
 };
 use agent_profile::AgentProfile;
 use agent_secret::{NoopBroker, SecretBroker};
@@ -40,6 +41,7 @@ pub struct KernelModelOptions {
   pub model: Option<String>,
   pub max_tokens: Option<u32>,
   pub temperature: Option<f32>,
+  pub thinking: Option<bool>,
 }
 
 impl Default for KernelLimits {

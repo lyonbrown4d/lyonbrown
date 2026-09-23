@@ -64,7 +64,7 @@
     fn prompt_messages_preserve_deterministic_role_order() {
         let request = request("local-test");
         assert_eq!(
-            prompt_messages(&request),
+            prompt_messages(&request).expect("prompt messages"),
             vec![
                 PromptMessage::new("system", "Be concise."),
                 PromptMessage::new("user", "hello"),
@@ -125,7 +125,7 @@
             risk: RiskLevel::Read,
             requires_secrets: Vec::new(),
         });
-        assert!(validate_request(&config, &with_tools).is_err());
+        assert!(validate_request(&config, &with_tools).is_ok());
 
         let mut json = request("local-test");
         json.json_mode = true;
@@ -150,7 +150,7 @@
         assert_eq!(capability.context_window, 2_048);
         assert_eq!(capability.max_output_tokens, 256);
         assert!(capability.supports_streaming);
-        assert!(!capability.supports_tools);
+        assert!(capability.supports_tools);
         assert!(!capability.supports_json);
         assert!(!capability.supports_thinking);
     }

@@ -13,6 +13,11 @@
         validate_request,
     };
     use super::{Termination, termination_reason};
+    use super::{
+        MAX_BUFFERED_OUTPUT_BYTES, MAX_TOOL_CALL_BYTES, MAX_TOOL_GUIDANCE_BYTES,
+        ParsedModelOutput, append_buffered_output, apply_qwen3_thinking_control,
+        parse_model_output, tool_protocol_guidance,
+    };
     #[cfg(feature = "llama-cpp")]
     use agent_model::{ModelEvent, ModelProvider};
     #[cfg(feature = "llama-cpp")]

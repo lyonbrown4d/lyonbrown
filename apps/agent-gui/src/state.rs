@@ -1,4 +1,4 @@
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct CockpitState {
   runtime_details_expanded: bool,
 }

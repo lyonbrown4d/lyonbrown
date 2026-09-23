@@ -88,7 +88,8 @@ fn missing_optional_global_and_workspace_files_use_typed_defaults() {
   })
   .unwrap();
 
-  assert_eq!(loaded.model.provider, "ollama");
+  assert_eq!(loaded.model.provider, "llamacpp");
+  assert_eq!(loaded.model.thinking, Some(false));
   assert_eq!(loaded.profile, "default-dev");
   assert_eq!(loaded.ollama.endpoint, "http://127.0.0.1:11434");
   assert!(loaded.llamacpp.model_path.is_none());
@@ -140,11 +141,11 @@ fn llamacpp_configuration_supports_files_and_environment() {
 }
 
 #[test]
-fn selected_llamacpp_requires_a_model_path() {
+fn selected_llamacpp_uses_automatic_model_selection_without_a_path() {
   let root = TestDir::new();
   root.write("agent.toml", "[model]\nprovider = 'llamacpp'\n");
 
-  let error = RuntimeConfig::load(LoadOptions {
+  let loaded = RuntimeConfig::load(LoadOptions {
     global_config: root.path().join("missing.toml"),
     workspace_dir: root.path().to_owned(),
     environment: Some(HashMap::new()),
@@ -154,9 +155,10 @@ fn selected_llamacpp_requires_a_model_path() {
     },
     ..Default::default()
   })
-  .unwrap_err();
+  .unwrap();
 
-  assert!(error.to_string().contains("llamacpp.model_path"));
+  assert_eq!(loaded.model.provider, "llamacpp");
+  assert!(loaded.llamacpp.model_path.is_none());
 }
 
 #[test]

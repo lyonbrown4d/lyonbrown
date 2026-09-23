@@ -63,13 +63,14 @@ path = "./.agent/session.db"
 
 ## Embedded llama.cpp
 
-llama.cpp 是进程内 provider：Agent 直接加载 GGUF，不需要 HTTP daemon，也不会启动外部推理进程。原生依赖默认不编译；用 `--features llama-cpp` 启用 CPU 后端，`cuda` 或 `vulkan` feature 可选。
+llama.cpp 是默认 Provider，也是 `agent-cli` 的默认 feature：Agent 直接在进程内加载 GGUF，不需要 HTTP daemon，也不会启动外部推理进程。`cuda` 或 `vulkan` feature 可选；使用 `--no-default-features` 的精简构建不会包含它。
 
 ```toml
 [model]
 provider = "llamacpp"
 model = "qwen-local"
 max_tokens = 1024
+thinking = false
 
 [llamacpp]
 model_path = "models/qwen.gguf"
@@ -83,10 +84,10 @@ temperature = 0.7
 seed = 0
 ```
 
-相对模型路径以工作区为基准。也可以设置 `LYONBROWN_LLAMACPP__MODEL_PATH`。Windows 原生构建需要 MSVC、CMake/Ninja 和可被绑定生成器发现的 LLVM `libclang`；必要时设置 `LIBCLANG_PATH`。
+相对模型路径以工作区为基准。也可以设置 `LYONBROWN_LLAMACPP__MODEL_PATH`。`model.thinking` 默认是 `false`；对于 Qwen3 模板，embedded provider 会在渲染前应用官方 `/no_think` 控制。省略 `model_path` 时会按当前可用 RAM 自动选择、下载并校验 Qwen3 GGUF；详见[本地模型与任务路由](local-models-routing.md)。Windows 原生构建需要 MSVC、Windows SDK、CMake/Ninja 和可被绑定生成器发现的 LLVM `libclang`；必要时设置 `LIBCLANG_PATH`。
 
 ```powershell
-cargo run -p agent-cli --features llama-cpp -- --config agent.toml ask "用一句话介绍 Rust"
+cargo run -p agent-cli -- --config agent.toml ask "用一句话介绍 Rust"
 ```
 
 不带 feature 却选择 `llamacpp` 时，CLI 会明确报错，不会回退到外部服务。真实模型验收可设置 `LYONBROWN_GGUF_MODEL` 后运行 provider 中标记为 ignored 的 live smoke test。

@@ -228,6 +228,8 @@ fn generate(
   };
   let mut decoder = encoding_rs::UTF_8.new_decoder();
   let mut stop_buffer = StopBuffer::new(stops);
+  let buffer_output = !request.tools.is_empty();
+  let mut buffered_output = String::new();
   let mut generated = 0_u32;
   let mut termination = Termination::OutputLimit;
 
@@ -246,10 +248,12 @@ fn generate(
       .token_to_piece(token, &mut decoder, false, None)
       .map_err(|error| ModelError::Other(format!("cannot decode token: {error}")))?;
     let (delta, stopped) = stop_buffer.push(&piece);
-    if let Some(delta) = delta
-      && sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err()
-    {
-      return Ok(());
+    if let Some(delta) = delta {
+      if buffer_output {
+        append_buffered_output(&mut buffered_output, &delta)?;
+      } else if sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err() {
+        return Ok(());
+      }
     }
     if stopped {
       termination = Termination::StopString;
@@ -267,10 +271,20 @@ fn generate(
       .map_err(|error| ModelError::Other(format!("cannot decode generated token: {error}")))?;
   }
 
-  if let Some(delta) = stop_buffer.finish()
-    && sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err()
-  {
-    return Ok(());
+  if let Some(delta) = stop_buffer.finish() {
+    if buffer_output {
+      append_buffered_output(&mut buffered_output, &delta)?;
+    } else if sender.blocking_send(Ok(ModelEvent::Delta(delta))).is_err() {
+      return Ok(());
+    }
+  }
+  let mut stop_reason = termination_reason(termination);
+  if buffer_output {
+    let Some(reason) = emit_buffered_output(&buffered_output, &request.tools, sender, stop_reason)?
+    else {
+      return Ok(());
+    };
+    stop_reason = reason;
   }
   let usage = TokenUsage {
     input: prompt_len,
@@ -280,8 +294,6 @@ fn generate(
   if sender.blocking_send(Ok(ModelEvent::Usage(usage))).is_err() {
     return Ok(());
   }
-  let _ = sender.blocking_send(Ok(ModelEvent::Done {
-    stop_reason: termination_reason(termination),
-  }));
+  let _ = sender.blocking_send(Ok(ModelEvent::Done { stop_reason }));
   Ok(())
 }

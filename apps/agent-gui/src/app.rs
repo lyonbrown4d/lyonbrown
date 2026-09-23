@@ -11,6 +11,12 @@ pub struct Cockpit {
   state: CockpitState,
 }
 
+impl Cockpit {
+  pub(crate) fn new(state: CockpitState) -> Self {
+    Self { state }
+  }
+}
+
 impl Render for Cockpit {
   fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
     let compact = window.bounds().size.width < px(900.);

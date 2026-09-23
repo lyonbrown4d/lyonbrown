@@ -105,7 +105,11 @@ impl Kernel {
       max_tokens,
       temperature: self.model_options.temperature,
       json_mode: false,
-      thinking: None,
+      thinking: if selected.capabilities.supports_thinking {
+        self.model_options.thinking
+      } else {
+        Some(false)
+      },
       stop: vec![],
     };
     self.last_requests.push(request.clone());

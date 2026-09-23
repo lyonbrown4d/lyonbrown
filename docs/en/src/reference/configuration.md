@@ -63,13 +63,14 @@ Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=f
 
 ## Embedded llama.cpp
 
-The llama.cpp provider runs in process: the Agent loads GGUF directly, with no HTTP daemon or inference subprocess. Native dependencies are disabled by default. Enable the CPU backend with `--features llama-cpp`; the `cuda` and `vulkan` features are optional.
+The llama.cpp provider is the default provider and a default `agent-cli` feature. The Agent loads GGUF directly in process, with no HTTP daemon or inference subprocess. The `cuda` and `vulkan` features are optional; a minimal `--no-default-features` build excludes it.
 
 ```toml
 [model]
 provider = "llamacpp"
 model = "qwen-local"
 max_tokens = 1024
+thinking = false
 
 [llamacpp]
 model_path = "models/qwen.gguf"
@@ -83,10 +84,10 @@ temperature = 0.7
 seed = 0
 ```
 
-Relative model paths are resolved from the workspace. `LYONBROWN_LLAMACPP__MODEL_PATH` is the equivalent environment setting. Native Windows builds require MSVC, CMake/Ninja, and an LLVM `libclang` discoverable by the bindings generator; set `LIBCLANG_PATH` when necessary.
+Relative model paths are resolved from the workspace. `LYONBROWN_LLAMACPP__MODEL_PATH` is the equivalent environment setting. `model.thinking` defaults to `false`; for Qwen3 templates the embedded provider applies the official `/no_think` control before rendering. When `model_path` is omitted, Lyonbrown selects, downloads, and verifies a Qwen3 GGUF based on currently available RAM; see [Local Models and Task Routing](local-models-routing.md). Native Windows builds require MSVC, the Windows SDK, CMake/Ninja, and an LLVM `libclang` discoverable by the bindings generator; set `LIBCLANG_PATH` when necessary.
 
 ```powershell
-cargo run -p agent-cli --features llama-cpp -- --config agent.toml ask "Introduce Rust in one sentence"
+cargo run -p agent-cli -- --config agent.toml ask "Introduce Rust in one sentence"
 ```
 
 Selecting `llamacpp` without the feature produces an explicit error instead of falling back to an external service. For real-model acceptance, set `LYONBROWN_GGUF_MODEL` and run the provider's ignored live smoke test.

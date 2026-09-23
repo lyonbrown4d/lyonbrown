@@ -235,6 +235,7 @@ async fn configured_model_and_generation_options_reach_the_provider() {
       model: Some("worker".into()),
       max_tokens: Some(321),
       temperature: Some(0.4),
+      thinking: Some(false),
     })
     .build();
 
@@ -244,4 +245,5 @@ async fn configured_model_and_generation_options_reach_the_provider() {
   assert_eq!(request.model, "worker");
   assert_eq!(request.max_tokens, 321);
   assert_eq!(request.temperature, Some(0.4));
+  assert_eq!(request.thinking, Some(false));
 }

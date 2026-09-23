@@ -31,6 +31,7 @@ pub struct ModelConfig {
   pub model: Option<String>,
   pub max_tokens: u32,
   pub temperature: Option<f32>,
+  pub thinking: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -158,8 +159,9 @@ impl RuntimeConfig {
 
     let mut builder = Config::builder()
       .set_default("profile", "default-dev")?
-      .set_default("model.provider", "ollama")?
+      .set_default("model.provider", "llamacpp")?
       .set_default("model.max_tokens", 2_048_u32)?
+      .set_default("model.thinking", false)?
       .set_default("ollama.endpoint", "http://127.0.0.1:11434")?
       .set_default("anthropic.enabled", false)?
       .set_default("anthropic.endpoint", "https://api.anthropic.com")?
@@ -216,11 +218,6 @@ impl RuntimeConfig {
     if self.model.max_tokens == 0 {
       return Err(ConfigLoadError::Validation(
         "model.max_tokens must be greater than zero".into(),
-      ));
-    }
-    if self.model.provider == "llamacpp" && self.llamacpp.model_path.is_none() {
-      return Err(ConfigLoadError::Validation(
-        "llamacpp.model_path is required when model.provider is 'llamacpp'".into(),
       ));
     }
     if self.llamacpp.context_size == 0 {

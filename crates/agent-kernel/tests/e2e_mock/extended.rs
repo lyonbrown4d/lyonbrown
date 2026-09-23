@@ -62,7 +62,7 @@ async fn denied_tool_is_returned_as_an_observation_and_the_turn_continues() {
   let mut kernel = Kernel::builder()
     .providers(providers)
     .tools(tools)
-    .approval(DenyApproval)
+    .approval_arc(Arc::new(DenyApproval))
     .build();
 
   let events = kernel.run_turn("try the denied tool").await.unwrap();

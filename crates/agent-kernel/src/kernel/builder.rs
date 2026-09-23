@@ -3,6 +3,7 @@ use super::*;
 pub struct KernelBuilder {
   providers: ModelRegistry,
   routing_policy: RoutingPolicy,
+  task_router: Option<Arc<dyn TaskRouter>>,
   tools: ToolRegistry,
   approval: Arc<dyn ApprovalPolicy>,
   broker: Arc<dyn SecretBroker>,
@@ -29,6 +30,11 @@ impl KernelBuilder {
     self
   }
 
+  pub fn task_router(mut self, task_router: Arc<dyn TaskRouter>) -> Self {
+    self.task_router = Some(task_router);
+    self
+  }
+
   pub fn tools(mut self, tools: ToolRegistry) -> Self {
     self.tools = tools;
     self
@@ -36,6 +42,11 @@ impl KernelBuilder {
 
   pub fn approval(mut self, approval: impl ApprovalPolicy + 'static) -> Self {
     self.approval = Arc::new(approval);
+    self
+  }
+
+  pub fn approval_arc(mut self, approval: Arc<dyn ApprovalPolicy>) -> Self {
+    self.approval = approval;
     self
   }
 
@@ -124,11 +135,15 @@ impl KernelBuilder {
       .storage
       .as_ref()
       .map(|storage| storage.writer(session.id));
+    let mut scheduler = ModelScheduler::new(self.providers, self.routing_policy);
+    if let Some(router) = self.task_router {
+      scheduler = scheduler.with_router(router);
+    }
     Kernel {
       session,
       state: KernelState::Idle,
       bus: EventBus::default(),
-      scheduler: ModelScheduler::new(self.providers, self.routing_policy),
+      scheduler,
       tools: self.tools,
       approval: self.approval,
       broker: self.broker,
@@ -153,6 +168,7 @@ impl Default for KernelBuilder {
     Self {
       providers: ModelRegistry::new(),
       routing_policy: RoutingPolicy::default(),
+      task_router: None,
       tools: ToolRegistry::new(),
       approval: Arc::new(AllowAllApproval),
       broker: Arc::new(NoopBroker),

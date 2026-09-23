@@ -14,7 +14,9 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 
 #[cfg(feature = "llama-cpp")]
-use agent_core::{Locality, ModelCapabilities, ModelTier};
+use agent_core::{
+  Locality, ModelCapabilities, ModelTier, ToolCallId, ToolDefinition, ToolInvocation,
+};
 use agent_model::ModelError;
 #[cfg(feature = "llama-cpp")]
 use agent_model::{ModelRequest, Role};
@@ -198,7 +200,11 @@ impl From<ProviderError> for ModelError {
 #[cfg(feature = "llama-cpp")]
 mod helpers;
 mod native;
+#[cfg(feature = "llama-cpp")]
+mod tool_protocol;
 
 #[cfg(feature = "llama-cpp")]
 use helpers::*;
 pub use native::LlamaCppProvider;
+#[cfg(feature = "llama-cpp")]
+use tool_protocol::*;
