@@ -1,0 +1,17 @@
+[package]
+name = "agent-protocol"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+prost.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+
+[build-dependencies]
+prost-build = "0.14"
+protoc-bin-vendored = "3"
+tonic-prost-build = "0.14"
+
+[lints]
+workspace = true

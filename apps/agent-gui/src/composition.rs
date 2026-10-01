@@ -1,5 +1,6 @@
 use std::{error::Error, fmt};
 
+use agent_client::NativeAgentClient;
 use fluxdi::{Injector, Module, Provider, Shared};
 
 use crate::{app::Cockpit, state::CockpitState};
@@ -15,15 +16,21 @@ impl fmt::Display for CompositionError {
 
 impl Error for CompositionError {}
 
-struct GuiModule;
+struct GuiModule {
+  initial_state: CockpitState,
+  native_client: Option<NativeAgentClient>,
+}
 
 impl Module for GuiModule {
   fn providers(&self, injector: &Injector) {
-    injector.provide::<CockpitState>(Provider::root(|_| Shared::default()));
+    let initial_state = self.initial_state.clone();
+    let native_client = self.native_client.clone();
+    injector.provide::<CockpitState>(Provider::root(move |_| Shared::new(initial_state.clone())));
     injector.provide::<CockpitFactory>(
-      Provider::root(|injector| {
+      Provider::root(move |injector| {
         Shared::new(CockpitFactory {
           initial_state: injector.resolve(),
+          native_client: native_client.clone(),
         })
       })
       .with_dependency::<CockpitState>(),
@@ -33,11 +40,15 @@ impl Module for GuiModule {
 
 struct CockpitFactory {
   initial_state: Shared<CockpitState>,
+  native_client: Option<NativeAgentClient>,
 }
 
 impl CockpitFactory {
   fn create(&self) -> Cockpit {
-    Cockpit::new(self.initial_state.as_ref().clone())
+    Cockpit::new(
+      self.initial_state.as_ref().clone(),
+      self.native_client.clone(),
+    )
   }
 }
 
@@ -47,10 +58,32 @@ pub struct CompositionRoot {
 
 impl CompositionRoot {
   pub fn new() -> Result<Self, CompositionError> {
+    Self::build(CockpitState::default(), None)
+  }
+
+  /// Seeds a newly created cockpit with a cloned startup state.
+  ///
+  /// This is not a shared runtime state store and does not deliver live updates.
+  /// Use `with_native_client` when the caller has an explicit daemon endpoint.
+  pub fn with_initial_state(initial_state: CockpitState) -> Result<Self, CompositionError> {
+    Self::build(initial_state, None)
+  }
+
+  pub fn with_native_client(native_client: NativeAgentClient) -> Result<Self, CompositionError> {
+    Self::build(CockpitState::default(), Some(native_client))
+  }
+
+  fn build(
+    initial_state: CockpitState,
+    native_client: Option<NativeAgentClient>,
+  ) -> Result<Self, CompositionError> {
     let injector = Injector::root();
-    GuiModule
-      .configure(&injector)
-      .map_err(|error| CompositionError(error.to_string()))?;
+    GuiModule {
+      initial_state,
+      native_client,
+    }
+    .configure(&injector)
+    .map_err(|error| CompositionError(error.to_string()))?;
     let root = Self { injector };
     root.validate()?;
     Ok(root)

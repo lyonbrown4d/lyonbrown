@@ -1,8 +1,28 @@
 use gpui::{div, prelude::*, px};
 
-use crate::theme::{DATA_FONT, HAIRLINE, MUTED_STEEL, PANEL, PAPER, SIGNAL_CYAN, color};
+use crate::{
+  state::ConnectionState,
+  theme::{DATA_FONT, HAIRLINE, MUTED_STEEL, PANEL, PAPER, SIGNAL_CYAN, color},
+};
 
-pub fn signal_rail(details_expanded: bool) -> impl IntoElement {
+pub fn signal_rail(
+  details_expanded: bool,
+  connection: ConnectionState,
+  stale: bool,
+  can_submit: bool,
+) -> impl IntoElement {
+  let signal_status = if can_submit {
+    "snapshot available"
+  } else {
+    "unavailable"
+  };
+  let sync_status = if can_submit {
+    "fresh snapshot"
+  } else if stale {
+    "stale snapshot"
+  } else {
+    "snapshot pending"
+  };
   div()
     .w(px(238.))
     .flex_none()
@@ -19,18 +39,23 @@ pub fn signal_rail(details_expanded: bool) -> impl IntoElement {
         .text_color(color(MUTED_STEEL))
         .child("RUNTIME SIGNAL"),
     )
-    .child(signal("MODEL", "unavailable"))
-    .child(signal("TOOL", "unavailable"))
-    .child(signal("CONTEXT", "unavailable"))
-    .child(signal("APPROVAL", "unavailable"))
-    .when(details_expanded, |rail| rail.child(preview_details()))
+    .child(signal("MODEL", signal_status))
+    .child(signal("TOOL", signal_status))
+    .child(signal("CONTEXT", signal_status))
+    .child(signal("APPROVAL", signal_status))
+    .when(details_expanded, |rail| {
+      rail.child(preview_details(connection, can_submit))
+    })
     .child(div().flex_1())
     .child(
       div()
         .font_family(DATA_FONT)
         .text_xs()
         .text_color(color(MUTED_STEEL))
-        .child("no pulse / runtime not connected"),
+        .child(format!(
+          "{} / {sync_status}",
+          super::connection_label(connection).to_ascii_lowercase()
+        )),
     )
 }
 
@@ -62,7 +87,12 @@ fn signal(name: &'static str, detail: &'static str) -> impl IntoElement {
     )
 }
 
-fn preview_details() -> impl IntoElement {
+fn preview_details(connection: ConnectionState, can_submit: bool) -> impl IntoElement {
+  let command_status = if can_submit {
+    "commands enabled"
+  } else {
+    "commands disabled"
+  };
   div()
     .p_3()
     .rounded_sm()
@@ -71,5 +101,8 @@ fn preview_details() -> impl IntoElement {
     .font_family(DATA_FONT)
     .text_xs()
     .text_color(color(MUTED_STEEL))
-    .child("PREVIEW ONLY · no runtime provider attached")
+    .child(format!(
+      "{} · {command_status}",
+      super::connection_label(connection)
+    ))
 }

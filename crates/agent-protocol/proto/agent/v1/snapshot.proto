@@ -1,0 +1,204 @@
+syntax = "proto3";
+
+package lyonbrown.agent.v1;
+
+enum RuntimePhase {
+  RUNTIME_PHASE_UNSPECIFIED = 0;
+  RUNTIME_PHASE_INITIALIZING = 1;
+  RUNTIME_PHASE_MODEL_SETUP_REQUIRED = 2;
+  RUNTIME_PHASE_READY = 3;
+  RUNTIME_PHASE_PREPARING = 4;
+  RUNTIME_PHASE_STREAMING = 5;
+  RUNTIME_PHASE_AWAITING_APPROVAL = 6;
+  RUNTIME_PHASE_RUNNING_TOOL = 7;
+  RUNTIME_PHASE_CANCELLING = 8;
+  RUNTIME_PHASE_COMPLETED = 9;
+  RUNTIME_PHASE_FAILED_RECOVERABLE = 10;
+  RUNTIME_PHASE_FAILED_TERMINAL = 11;
+}
+
+enum TurnStatus {
+  TURN_STATUS_UNSPECIFIED = 0;
+  TURN_STATUS_PENDING = 1;
+  TURN_STATUS_RUNNING = 2;
+  TURN_STATUS_COMPLETED = 3;
+  TURN_STATUS_CANCELLED = 4;
+  TURN_STATUS_FAILED = 5;
+}
+
+enum ActivityPhase {
+  ACTIVITY_PHASE_UNSPECIFIED = 0;
+  ACTIVITY_PHASE_PREPARING = 1;
+  ACTIVITY_PHASE_STREAMING = 2;
+  ACTIVITY_PHASE_AWAITING_APPROVAL = 3;
+  ACTIVITY_PHASE_RUNNING_TOOL = 4;
+  ACTIVITY_PHASE_SUPERSEDED = 5;
+  ACTIVITY_PHASE_COMPLETED = 6;
+  ACTIVITY_PHASE_FAILED = 7;
+}
+
+enum ToolActivityState {
+  TOOL_ACTIVITY_STATE_UNSPECIFIED = 0;
+  TOOL_ACTIVITY_STATE_REQUESTED = 1;
+  TOOL_ACTIVITY_STATE_APPROVED = 2;
+  TOOL_ACTIVITY_STATE_RUNNING = 3;
+  TOOL_ACTIVITY_STATE_COMPLETED = 4;
+  TOOL_ACTIVITY_STATE_FAILED = 5;
+}
+
+enum ApprovalState {
+  APPROVAL_STATE_UNSPECIFIED = 0;
+  APPROVAL_STATE_PENDING = 1;
+  APPROVAL_STATE_APPROVED = 2;
+}
+
+enum RiskLevel {
+  RISK_LEVEL_UNSPECIFIED = 0;
+  RISK_LEVEL_READ = 1;
+  RISK_LEVEL_WRITE = 2;
+  RISK_LEVEL_EXECUTE = 3;
+  RISK_LEVEL_NETWORK = 4;
+}
+
+enum SandboxStatus {
+  SANDBOX_STATUS_UNSPECIFIED = 0;
+  SANDBOX_STATUS_WORKSPACE_RESTRICTED = 1;
+  SANDBOX_STATUS_HOST_UNSANDBOXED = 2;
+  SANDBOX_STATUS_UNKNOWN = 3;
+}
+
+enum StopReasonKind {
+  STOP_REASON_KIND_UNSPECIFIED = 0;
+  STOP_REASON_KIND_END_TURN = 1;
+  STOP_REASON_KIND_TOOL_USE = 2;
+  STOP_REASON_KIND_MAX_TOKENS = 3;
+  STOP_REASON_KIND_STOP = 4;
+  STOP_REASON_KIND_ERROR = 5;
+}
+
+message ModelRoute {
+  string provider = 1;
+  string model = 2;
+}
+
+message ModelFallback {
+  ModelRoute from = 1;
+  ModelRoute to = 2;
+  string reason = 3;
+}
+
+message RouteSummary {
+  ModelRoute selected = 1;
+  string reason = 2;
+  repeated ModelFallback fallbacks = 3;
+}
+
+message ModelSelection {
+  oneof selection {
+    bool auto = 1;
+    ModelRoute pinned = 2;
+  }
+}
+
+message ContextSummary {
+  uint32 system_tokens = 1;
+  uint32 context_tokens = 2;
+  uint32 dropped = 3;
+}
+
+message TokenUsage {
+  uint32 input = 1;
+  uint32 output = 2;
+  uint32 cache_read = 3;
+}
+
+message ToolResult {
+  string invocation_id = 1;
+  bool ok = 2;
+  string output = 3;
+  bool truncated = 4;
+  uint64 duration_ms = 5;
+  optional string error = 6;
+}
+
+message ToolActivity {
+  string call_id = 1;
+  string name = 2;
+  string arguments_json = 3;
+  ToolActivityState state = 4;
+  optional string approved_by = 5;
+  ToolResult result = 6;
+}
+
+message StopReason {
+  StopReasonKind kind = 1;
+  optional string error = 2;
+}
+
+message StepOutcome {
+  StopReason stop_reason = 1;
+  string text = 2;
+  repeated string tool_call_ids = 3;
+  bool escalated = 4;
+}
+
+message ActivitySnapshot {
+  string step_id = 1;
+  ActivityPhase phase = 2;
+  RouteSummary route = 3;
+  ContextSummary context = 4;
+  string assistant_text = 5;
+  TokenUsage usage = 6;
+  repeated ToolActivity tools = 7;
+  StepOutcome outcome = 8;
+}
+
+message TurnSnapshot {
+  string turn_id = 1;
+  string user_text = 2;
+  string assistant_text = 3;
+  TurnStatus status = 4;
+  repeated string steering = 5;
+  repeated ActivitySnapshot activities = 6;
+}
+
+message ToolPreview {
+  string tool = 1;
+  string action = 2;
+  string target = 3;
+  string impact = 4;
+  RiskLevel risk = 5;
+  SandboxStatus sandbox = 6;
+  optional string working_directory = 7;
+  repeated string required_secrets = 8;
+}
+
+message ApprovalSnapshot {
+  string request_id = 1;
+  string tool_name = 2;
+  string arguments_json = 3;
+  string step_id = 4;
+  ToolPreview preview = 5;
+  optional uint64 deadline_remaining_ms = 6;
+  ApprovalState state = 7;
+  optional string approved_by = 8;
+}
+
+message RuntimeSnapshot {
+  uint32 protocol_version = 1;
+  uint64 revision = 2;
+  RuntimePhase phase = 3;
+  optional string session_id = 4;
+  repeated TurnSnapshot turns = 5;
+  repeated string queued_follow_ups = 6;
+  ApprovalSnapshot pending_approval = 7;
+  optional string last_error = 8;
+  ModelSelection model_selection = 9;
+  RouteSummary route = 10;
+}
+
+message RuntimeEvent {
+  uint32 protocol_version = 1;
+  uint64 revision = 2;
+  RuntimeSnapshot snapshot = 3;
+}

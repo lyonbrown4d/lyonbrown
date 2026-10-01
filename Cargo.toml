@@ -23,7 +23,9 @@ all = "warn"
 # --- 内部 crate（严格 DAG：见 docs/zh/src/plans/mvp-implementation-plan.md §1）---
 agent-core = { path = "crates/agent-core" }
 agent-app = { path = "crates/agent-app" }
+agent-client = { path = "crates/agent-client" }
 agent-kernel = { path = "crates/agent-kernel" }
+agent-protocol = { path = "crates/agent-protocol" }
 agent-model = { path = "crates/agent-model" }
 agent-context = { path = "crates/agent-context" }
 agent-profile = { path = "crates/agent-profile" }
@@ -46,6 +48,9 @@ tokio-util = "0.7"
 tokio-stream = "0.1"
 futures = "0.3"
 async-trait = "0.1"
+prost = "0.14"
+tonic = { version = "0.14", features = ["transport"] }
+tonic-prost = "0.14"
 
 # --- 序列化 / 配置 ---
 serde = { version = "1", features = ["derive"] }

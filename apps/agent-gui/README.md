@@ -17,8 +17,17 @@ Wayland/X11 development libraries listed by GPUI; macOS requires Xcode command
 line tools. The layout collapses the side rails below 900 px while keeping the
 conversation and runtime-preview control available.
 
-The runtime rail always reports `NOT CONNECTED`; its control only expands or
-collapses explanatory preview details. It does not simulate model or tool work.
+The runtime rail and composer derive their status from `CockpitState`. The
+default remains disconnected, and the composer stays disabled until a connected
+state has accepted a fresh snapshot for the current daemon instance. The detail
+control only expands explanatory preview details; it does not simulate work.
+
+`CompositionRoot::with_initial_state` only clones startup state into a newly
+created cockpit. It is not a live shared store or a runtime transport bridge.
+`CompositionRoot::with_native_client` injects the shared native client; after
+the GPUI entity is created, the cockpit watches its atomic remote-state feed.
+The default composition does not create a client, discover an endpoint, or
+start a daemon, so it remains disconnected.
 
 ## Dependency note
 

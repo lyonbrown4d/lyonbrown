@@ -1,10 +1,7 @@
+use std::sync::Arc;
 use std::time::Duration;
 
-use agent_app::{
-  AgentCommand, AppController, ApprovalDecision as AppApprovalDecision, ApprovalInbox, RuntimeTask,
-  spawn_runtime, spawn_runtime_with_approvals,
-};
-use agent_kernel::Kernel;
+use agent_app::{AgentClient, AgentCommand, ApprovalDecision as AppApprovalDecision};
 use agent_tool::ApprovalDecision;
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
@@ -23,13 +20,17 @@ pub use commands::{
 pub use events::final_drain;
 
 mod commands;
+mod dispatch;
 mod events;
+
+pub use dispatch::CommandDispatcher;
+
+const CONTROL_COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub struct Runtime {
   pub state: TuiState,
-  pub controller: Option<AppController>,
+  pub client: Option<Arc<dyn AgentClient>>,
   pub snapshots: watch::Receiver<agent_app::RuntimeSnapshot>,
-  pub actor_task: Option<RuntimeTask>,
   pub approval: Option<ApprovalRequest>,
   pub approval_scroll: u16,
   pub approval_max_scroll: u16,
@@ -37,25 +38,16 @@ pub struct Runtime {
   pub conversation_max_scroll: u16,
 }
 
-pub async fn run(kernel: Kernel, approvals: Option<ApprovalInbox>) -> Result<()> {
-  let (controller, actor_task) = match approvals {
-    Some(approvals) => spawn_runtime_with_approvals(kernel, approvals, 32),
-    None => spawn_runtime(kernel, 32),
-  };
-  let snapshots = controller.subscribe();
+pub async fn run_client(client: Arc<dyn AgentClient>) -> Result<()> {
+  let snapshots = client.subscribe();
   let mut terminal = match TerminalSession::enter() {
     Ok(terminal) => terminal,
-    Err(error) => {
-      drop(controller);
-      actor_task.join().await?;
-      return Err(error).context("failed to initialize terminal interface");
-    }
+    Err(error) => return Err(error).context("failed to initialize terminal interface"),
   };
   let mut runtime = Runtime {
     state: TuiState::default(),
-    controller: Some(controller),
+    client: Some(client),
     snapshots,
-    actor_task: Some(actor_task),
     approval: None,
     approval_scroll: 0,
     approval_max_scroll: 0,
@@ -71,7 +63,9 @@ pub async fn run(kernel: Kernel, approvals: Option<ApprovalInbox>) -> Result<()>
 
 async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -> Result<()> {
   let mut cancel_requested = false;
+  let mut commands = CommandDispatcher::new();
   loop {
+    commands.check_results()?;
     sync_runtime_snapshot(runtime);
     if !runtime.state.is_busy() {
       cancel_requested = false;
@@ -103,10 +97,10 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
       if control_c_key(key) {
         if runtime.state.is_busy() {
           if cancel_requested {
-            let _ = execute(runtime, AgentCommand::ForceStop).await;
+            execute_control(runtime, AgentCommand::ForceStop).await?;
             return Ok(());
           }
-          execute(runtime, AgentCommand::CancelTurn).await?;
+          execute_control(runtime, AgentCommand::CancelTurn).await?;
           cancel_requested = true;
           continue;
         }
@@ -137,14 +131,14 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
           _ => {}
         }
         if let Some(decision) = approval_decision(key) {
-          execute(
+          dispatch(
             runtime,
+            &mut commands,
             AgentCommand::RespondApproval {
               request_id,
               decision: map_approval_decision(decision),
             },
-          )
-          .await?;
+          )?;
         }
         continue;
       }
@@ -158,7 +152,7 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
         continue;
       }
       let task_active = runtime.state.is_busy();
-      if !can_accept_input(task_active, runtime.controller.is_some()) {
+      if !can_accept_input(task_active, runtime.client.is_some()) {
         continue;
       }
       match key.code {
@@ -173,33 +167,41 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
             if let Some(queued) = prompt.strip_prefix("/queue ") {
               let queued = queued.trim().to_owned();
               if !queued.is_empty() {
-                execute(
+                dispatch(
                   runtime,
+                  &mut commands,
                   AgentCommand::QueueFollowUp {
                     text: queued.clone(),
                   },
-                )
-                .await?;
+                )?;
               }
               continue;
             }
             match composer_intent(task_active, key.modifiers) {
               ComposerIntent::StartTurn => {
                 runtime.state.mark_submitted();
-                execute(runtime, AgentCommand::StartTurn { text: prompt }).await?;
+                dispatch(
+                  runtime,
+                  &mut commands,
+                  AgentCommand::StartTurn { text: prompt },
+                )?;
               }
               ComposerIntent::SteerCurrentTurn => {
-                execute(runtime, AgentCommand::SteerCurrentTurn { text: prompt }).await?;
+                dispatch(
+                  runtime,
+                  &mut commands,
+                  AgentCommand::SteerCurrentTurn { text: prompt },
+                )?;
                 runtime.state.mark_steering_submitted();
               }
               ComposerIntent::QueueFollowUp => {
-                execute(
+                dispatch(
                   runtime,
+                  &mut commands,
                   AgentCommand::QueueFollowUp {
                     text: prompt.clone(),
                   },
-                )
-                .await?;
+                )?;
               }
             }
           }
@@ -222,15 +224,7 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
 }
 
 pub async fn shutdown(runtime: &mut Runtime) -> Result<()> {
-  if runtime.state.is_busy()
-    && let Some(controller) = runtime.controller.as_ref()
-  {
-    let _ = controller.execute(AgentCommand::CancelTurn).await;
-  }
-  runtime.controller.take();
-  if let Some(task) = runtime.actor_task.take() {
-    task.join().await?;
-  }
+  runtime.client.take();
   Ok(())
 }
 
@@ -261,12 +255,44 @@ fn map_approval_decision(decision: ApprovalDecision) -> AppApprovalDecision {
   }
 }
 
-async fn execute(runtime: &Runtime, command: AgentCommand) -> Result<()> {
-  runtime
-    .controller
+fn dispatch(
+  runtime: &Runtime,
+  commands: &mut CommandDispatcher,
+  command: AgentCommand,
+) -> Result<()> {
+  let client = runtime
+    .client
     .as_ref()
     .context("application runtime is unavailable")?
-    .execute(command)
-    .await
-    .map_err(anyhow::Error::from)
+    .clone();
+  commands.dispatch(client, command);
+  Ok(())
+}
+
+async fn execute_control(runtime: &Runtime, command: AgentCommand) -> Result<()> {
+  let client = runtime
+    .client
+    .as_ref()
+    .context("application runtime is unavailable")?;
+  execute_control_with_timeout(client.as_ref(), command, CONTROL_COMMAND_TIMEOUT).await
+}
+
+pub async fn execute_control_with_timeout(
+  client: &dyn AgentClient,
+  command: AgentCommand,
+  timeout: Duration,
+) -> Result<()> {
+  let action = match &command {
+    AgentCommand::CancelTurn => "cancel turn",
+    AgentCommand::ForceStop => "force-stop turn",
+    _ => anyhow::bail!("timed execution only supports turn control commands"),
+  };
+  match tokio::time::timeout(timeout, client.execute(command)).await {
+    Ok(Ok(())) => Ok(()),
+    Ok(Err(error)) => Err(anyhow::anyhow!("{action} command failed: {error}")),
+    Err(_) => Err(anyhow::anyhow!(
+      "{action} command timed out after {}ms",
+      timeout.as_millis()
+    )),
+  }
 }

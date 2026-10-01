@@ -1,0 +1,20 @@
+[package]
+name = "agent-client"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-app.workspace = true
+agent-core.workspace = true
+agent-protocol.workspace = true
+async-trait.workspace = true
+prost.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

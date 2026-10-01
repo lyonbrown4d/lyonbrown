@@ -5,13 +5,16 @@ mod sessions;
 use gpui::{AnyElement, div, prelude::*, px};
 
 use crate::{
-  state::RuntimeDetailsPlacement,
+  state::{ConnectionState, RuntimeDetailsPlacement},
   theme::{DEEP_PANEL, GRAPHITE, HAIRLINE, MUTED_STEEL, PAPER, UI_FONT, color},
 };
 
 pub fn cockpit(
   compact: bool,
   details_placement: RuntimeDetailsPlacement,
+  connection: ConnectionState,
+  stale: bool,
+  can_submit: bool,
   details_control: AnyElement,
 ) -> impl IntoElement {
   div()
@@ -21,7 +24,7 @@ pub fn cockpit(
     .bg(color(GRAPHITE))
     .font_family(UI_FONT)
     .text_color(color(PAPER))
-    .child(top_bar(compact))
+    .child(top_bar(compact, connection))
     .child(
       div()
         .flex()
@@ -30,17 +33,34 @@ pub fn cockpit(
         .when(!compact, |layout| layout.child(sessions::session_rail()))
         .child(conversation::conversation(
           details_placement == RuntimeDetailsPlacement::Conversation,
+          connection,
+          stale,
+          can_submit,
           details_control,
         ))
         .when(!compact, |layout| {
           layout.child(runtime::signal_rail(
             details_placement == RuntimeDetailsPlacement::RuntimeRail,
+            connection,
+            stale,
+            can_submit,
           ))
         }),
     )
 }
 
-fn top_bar(compact: bool) -> impl IntoElement {
+pub(super) fn connection_label(connection: ConnectionState) -> &'static str {
+  match connection {
+    ConnectionState::Disconnected => "DISCONNECTED",
+    ConnectionState::Connecting => "CONNECTING",
+    ConnectionState::Connected => "CONNECTED",
+    ConnectionState::Reconnecting => "RECONNECTING",
+    ConnectionState::Unavailable => "UNAVAILABLE",
+    ConnectionState::Incompatible => "INCOMPATIBLE",
+  }
+}
+
+fn top_bar(compact: bool, connection: ConnectionState) -> impl IntoElement {
   div()
     .h(px(46.))
     .flex_none()
@@ -77,6 +97,6 @@ fn top_bar(compact: bool) -> impl IntoElement {
         .text_color(color(PAPER))
         .child(if compact { "COMPACT" } else { "3-RAIL" })
         .child("/")
-        .child("NOT CONNECTED"),
+        .child(connection_label(connection)),
     )
 }

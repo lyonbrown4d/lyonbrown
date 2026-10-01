@@ -4,8 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+agent-client.workspace = true
 fluxdi.workspace = true
 gpui.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

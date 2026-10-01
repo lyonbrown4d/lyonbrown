@@ -1,5 +1,6 @@
 mod approval;
 mod composer;
+mod embedded;
 mod input;
 mod locale;
 mod model_setup;
@@ -12,10 +13,12 @@ mod ui;
 
 pub use approval::ApprovalRequest;
 pub(crate) use approval::approval_safe;
+pub use embedded::run_embedded;
+pub use embedded::run_embedded as run;
 pub use locale::Locale;
 pub use model_setup::{ModelSetupView, render_model_setup};
 pub use model_setup_runner::prepare_embedded_model;
-pub use runner::run;
+pub use runner::run_client;
 pub use state::{Speaker, TranscriptEntry, TuiState};
 pub use theme::Theme;
 pub use ui::{

@@ -15,7 +15,13 @@ fn main() {
         window_min_size: Some(size(px(680.), px(520.))),
         ..Default::default()
       },
-      |_, cx| cx.new(|_| cockpit),
+      |_, cx| {
+        cx.new(|entity_cx| {
+          let mut cockpit = cockpit;
+          cockpit.start_remote_state_watch(entity_cx);
+          cockpit
+        })
+      },
     )
     .expect("failed to open the Lyonbrown cockpit window");
     cx.activate(true);

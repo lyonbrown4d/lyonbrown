@@ -1,6 +1,8 @@
-use agent_app::{RuntimePhase, RuntimeSnapshot, TurnStatus, TurnView, spawn_runtime};
+use std::sync::Arc;
+use std::time::Duration;
+
+use agent_app::{AgentClient, RuntimePhase, RuntimeSnapshot, TurnStatus, TurnView, channel};
 use agent_core::{AgentEvent, TurnId};
-use agent_kernel::Kernel;
 use agent_tool::ApprovalDecision;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -201,14 +203,21 @@ fn conversation_scroll_uses_distance_from_bottom_and_page_down_resumes_following
 }
 
 #[tokio::test]
-async fn shutdown_joins_the_shared_runtime_actor() {
-  let (controller, actor_task) = spawn_runtime(Kernel::builder().build(), 4);
-  let snapshots = controller.subscribe();
+async fn shutdown_detaches_without_cancelling_the_remote_runtime() {
+  let (controller, mut endpoint) = channel(
+    RuntimeSnapshot {
+      phase: RuntimePhase::Streaming,
+      ..RuntimeSnapshot::default()
+    },
+    4,
+  );
+  let client: Arc<dyn AgentClient> = Arc::new(controller);
+  let observer = client.clone();
+  let snapshots = client.subscribe();
   let mut runtime = Runtime {
     state: TuiState::default(),
-    controller: Some(controller),
+    client: Some(client),
     snapshots,
-    actor_task: Some(actor_task),
     approval: None,
     approval_scroll: 0,
     approval_max_scroll: 0,
@@ -216,7 +225,16 @@ async fn shutdown_joins_the_shared_runtime_actor() {
     conversation_max_scroll: 0,
   };
 
-  shutdown(&mut runtime).await.unwrap();
+  tokio::time::timeout(Duration::from_millis(25), shutdown(&mut runtime))
+    .await
+    .expect("shutdown should detach without waiting for a command response")
+    .unwrap();
 
-  assert!(runtime.actor_task.is_none());
+  assert!(runtime.client.is_none());
+  assert!(
+    tokio::time::timeout(Duration::from_millis(25), endpoint.recv())
+      .await
+      .is_err()
+  );
+  drop(observer);
 }

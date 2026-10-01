@@ -1,6 +1,7 @@
 //! UI-neutral application commands, runtime projections, and transport.
 
 mod approval;
+mod client;
 mod command;
 mod error;
 mod projector;
@@ -9,6 +10,7 @@ mod transport;
 mod view;
 
 pub use approval::{ApprovalInbox, RuntimeApprovalPrompt, approval_channel};
+pub use client::{AgentClient, AgentClientError, AvailabilityKind, ProtocolErrorKind};
 pub use command::{AgentCommand, ApprovalDecision};
 pub use error::{RuntimeActorError, RuntimeCommandError, UnsupportedCommand};
 pub use projector::Projector;
