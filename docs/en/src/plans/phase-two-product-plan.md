@@ -36,7 +36,7 @@ Restart the application and recover the same working state
 - Kernel, state machine, AgentEvent, SQLite resume, and cancellation semantics are implemented.
 - The TUI uses the real Kernel and supports streaming conversation, runtime status, scrolling, and approval dialogs.
 - The GUI has a responsive GPUI three-column visual shell, but it only renders static sample data.
-- Embedded llama.cpp is enabled by default and chooses one Qwen3 GGUF from available RAM; Ollama, Anthropic, and OpenAI are configurable.
+- Embedded llama.cpp is enabled by default; the TUI recommends the smaller Qwen3 1.7B GGUF and requires confirmation before a cancellable background download. Ollama, Anthropic, and OpenAI are configurable.
 - The Scheduler already models Control / Worker / Frontier, Local / Remote, privacy filtering, and bounded fallback.
 
 ### 2.2 Main gaps

@@ -14,7 +14,7 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-Run `agent` to enter chat directly (`agent chat` remains a compatible explicit form), use `agent ask "hello"` for one-shot prompts, or run `agent .` inside a workspace to open the TUI. The TUI drives the Kernel through the shared `agent-app` command, snapshot, and approval contracts; the headless CLI retains a narrow direct Kernel entry point.
+Run `agent` to open the workspace chat TUI (`agent .` is the explicit equivalent), use `agent ask "hello"` for one-shot prompts, or use `agent chat` for the compatible headless terminal chat. The TUI drives the Kernel through the shared `agent-app` command, snapshot, and approval contracts; the headless CLI retains a narrow direct Kernel entry point.
 
 ## Remote models and fallback
 
@@ -95,7 +95,7 @@ temperature = 0.7
 seed = 0
 ```
 
-Relative model paths are resolved from the workspace. `LYONBROWN_LLAMACPP__MODEL_PATH` is the equivalent environment setting. `model.thinking` defaults to `false`; for Qwen3 templates the embedded provider applies the official `/no_think` control before rendering. When `model_path` is omitted, Lyonbrown selects, downloads, and verifies a Qwen3 GGUF based on currently available RAM; see [Local Models and Task Routing](local-models-routing.md). Native Windows builds require MSVC, the Windows SDK, CMake/Ninja, and an LLVM `libclang` discoverable by the bindings generator; set `LIBCLANG_PATH` when necessary.
+Relative model paths are resolved from the workspace. `LYONBROWN_LLAMACPP__MODEL_PATH` is the equivalent environment setting. `model.thinking` defaults to `false`; for Qwen3 templates the embedded provider applies the official `/no_think` control before rendering. When `model_path` is omitted, the TUI recommends the smaller `qwen3-1.7b-q4_k_m`, checks the verified cache, and asks before starting a background download. Exiting without downloading is always available. See [Local Models and Task Routing](local-models-routing.md). Native Windows builds require MSVC, the Windows SDK, CMake/Ninja, and an LLVM `libclang` discoverable by the bindings generator; set `LIBCLANG_PATH` when necessary.
 
 ```powershell
 cargo run -p agent-cli -- --config agent.toml ask "Introduce Rust in one sentence"

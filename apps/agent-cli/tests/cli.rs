@@ -52,8 +52,13 @@ fn dot_is_workspace_entrypoint_and_profile_can_be_overridden() {
 }
 
 #[test]
-fn command_is_optional_for_default_chat() {
-  assert!(Cli::try_parse_from(["agent"]).is_ok());
+fn no_subcommand_opens_the_workspace_chat_tui() {
+  let mut cli = Cli::try_parse_from(["agent"]).unwrap();
+
+  assert!(matches!(
+    cli.take_command_or_default(),
+    Command::Tui { workspace } if workspace == std::path::Path::new(".")
+  ));
 }
 
 #[test]

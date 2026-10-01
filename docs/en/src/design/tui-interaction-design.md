@@ -62,6 +62,21 @@ An overlay is temporary context. It neither changes the Session nor clears the C
 
 Escape closes only the top overlay or clears selection; it does not exit the TUI.
 
+### 2.5 First-run model setup
+
+Running `agent` enters the TUI before any model transfer begins. If the embedded model is not cached, the setup surface presents the recommended `qwen3-1.7b-q4_k_m`, its size, and two equally explicit outcomes:
+
+```text
+Local model  qwen3-1.7b-q4_k_m
+Recommended default · 1.03 GiB · download only after confirmation
+
+████████████████░░░░░░░░░░░░░░░░  512 MiB / 1.03 GiB  50%
+
+Enter/D  Download     Q/Esc  Exit without downloading
+```
+
+After confirmation, transfer runs as a cancellable background task while the TUI remains responsive. The progress row shows transferred bytes, total bytes when known, and percentage. `Esc` or `C` cancels cooperatively and removes staging data. Verification is a separate visible phase; the runtime never loads an unverified file. Headless commands do not display this flow and never initiate it implicitly.
+
 ## 3. Core interactions
 
 ### 3.1 Live steering and queueing

@@ -72,6 +72,10 @@ pub fn select_preset(available_memory_bytes: u64) -> Result<&'static ModelPreset
     })
 }
 
+pub fn default_preset() -> &'static ModelPreset {
+  &PRESETS[1]
+}
+
 pub fn preset_by_id(id: &str) -> Result<&'static ModelPreset> {
   PRESETS
     .iter()

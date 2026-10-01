@@ -14,7 +14,7 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-直接运行 `agent` 即可进入 chat（`agent chat` 继续作为兼容的显式写法）；单次提问使用 `agent ask "你好"`，在工作区执行 `agent .` 可打开 TUI。TUI 通过共享 `agent-app` 命令、状态投影和审批契约驱动 Kernel；headless CLI 继续使用窄 Kernel 入口。
+直接运行 `agent` 即可打开工作区 chat TUI（`agent .` 是对应的显式写法）；单次提问使用 `agent ask "你好"`，兼容的 headless 终端聊天使用 `agent chat`。TUI 通过共享 `agent-app` 命令、状态投影和审批契约驱动 Kernel；headless CLI 继续使用窄 Kernel 入口。
 
 ## 远程模型与自动回退
 
@@ -95,7 +95,7 @@ temperature = 0.7
 seed = 0
 ```
 
-相对模型路径以工作区为基准。也可以设置 `LYONBROWN_LLAMACPP__MODEL_PATH`。`model.thinking` 默认是 `false`；对于 Qwen3 模板，embedded provider 会在渲染前应用官方 `/no_think` 控制。省略 `model_path` 时会按当前可用 RAM 自动选择、下载并校验 Qwen3 GGUF；详见[本地模型与任务路由](local-models-routing.md)。Windows 原生构建需要 MSVC、Windows SDK、CMake/Ninja 和可被绑定生成器发现的 LLVM `libclang`；必要时设置 `LIBCLANG_PATH`。
+相对模型路径以工作区为基准。也可以设置 `LYONBROWN_LLAMACPP__MODEL_PATH`。`model.thinking` 默认是 `false`；对于 Qwen3 模板，embedded provider 会在渲染前应用官方 `/no_think` 控制。省略 `model_path` 时，TUI 默认推荐更小的 `qwen3-1.7b-q4_k_m`，先检查已校验缓存，并在启动后台下载前征求确认；用户始终可以不下载并退出。详见[本地模型与任务路由](local-models-routing.md)。Windows 原生构建需要 MSVC、Windows SDK、CMake/Ninja 和可被绑定生成器发现的 LLVM `libclang`；必要时设置 `LIBCLANG_PATH`。
 
 ```powershell
 cargo run -p agent-cli -- --config agent.toml ask "用一句话介绍 Rust"

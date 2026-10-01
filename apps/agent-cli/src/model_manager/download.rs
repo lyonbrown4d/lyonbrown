@@ -5,9 +5,11 @@ use futures::StreamExt;
 use hf_hub::HFClient;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::sync::watch;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use super::ModelPreset;
+use super::{DownloadPhase, ModelDownloadProgress, ModelPreset};
 
 pub async fn ensure_model(cache_dir: &Path, preset: &ModelPreset) -> Result<PathBuf> {
   ensure_model_from_endpoint(cache_dir, preset, "https://huggingface.co").await
@@ -19,19 +21,68 @@ pub async fn ensure_model_from_endpoint(
   preset: &ModelPreset,
   endpoint: &str,
 ) -> Result<PathBuf> {
+  let (progress, _observed) = watch::channel(ModelDownloadProgress::new(
+    DownloadPhase::Checking,
+    0,
+    Some(preset.download_bytes),
+  ));
+  ensure_model_from_endpoint_with_progress(
+    cache_dir,
+    preset,
+    endpoint,
+    progress,
+    CancellationToken::new(),
+  )
+  .await
+}
+
+pub async fn cached_model(cache_dir: &Path, preset: &ModelPreset) -> Result<Option<PathBuf>> {
   validate_filename(preset.filename)?;
+  let destination = cache_dir.join(preset.filename);
+  if is_valid_model(&destination, preset).await? {
+    Ok(Some(destination))
+  } else {
+    Ok(None)
+  }
+}
+
+#[doc(hidden)]
+pub async fn ensure_model_from_endpoint_with_progress(
+  cache_dir: &Path,
+  preset: &ModelPreset,
+  endpoint: &str,
+  progress: watch::Sender<ModelDownloadProgress>,
+  cancellation: CancellationToken,
+) -> Result<PathBuf> {
+  validate_filename(preset.filename)?;
+  publish(
+    &progress,
+    DownloadPhase::Checking,
+    0,
+    Some(preset.download_bytes),
+  );
+  if let Some(path) = cached_model(cache_dir, preset).await? {
+    let size = tokio::fs::metadata(&path).await?.len();
+    publish(&progress, DownloadPhase::Ready, size, Some(size));
+    return Ok(path);
+  }
   tokio::fs::create_dir_all(cache_dir)
     .await
     .with_context(|| format!("failed to create model cache {}", cache_dir.display()))?;
   let destination = cache_dir.join(preset.filename);
-  if is_valid_model(&destination, preset).await? {
-    return Ok(destination);
-  }
 
   let staging = cache_dir.join(format!(".download-{}", Uuid::new_v4()));
   tokio::fs::create_dir(&staging).await?;
   let result = async {
-    let downloaded = download_with_hf_hub(&staging, preset, endpoint).await?;
+    let downloaded =
+      download_with_hf_hub(&staging, preset, endpoint, &progress, &cancellation).await?;
+    let downloaded_size = tokio::fs::metadata(&downloaded).await?.len();
+    publish(
+      &progress,
+      DownloadPhase::Verifying,
+      downloaded_size,
+      Some(downloaded_size),
+    );
     if !is_valid_model(&downloaded, preset).await? {
       bail!(
         "downloaded model '{}' failed SHA-256 verification",
@@ -39,6 +90,8 @@ pub async fn ensure_model_from_endpoint(
       );
     }
     install_verified(&downloaded, &destination, preset).await?;
+    let size = tokio::fs::metadata(&destination).await?.len();
+    publish(&progress, DownloadPhase::Ready, size, Some(size));
     Ok(destination)
   }
   .await;
@@ -49,31 +102,35 @@ async fn download_with_hf_hub(
   staging: &Path,
   preset: &ModelPreset,
   endpoint: &str,
+  progress: &watch::Sender<ModelDownloadProgress>,
+  cancellation: &CancellationToken,
 ) -> Result<PathBuf> {
-  eprintln!(
-    "Downloading {} ({:.2} GiB) from Hugging Face...",
-    preset.id,
-    preset.download_bytes as f64 / (1024_u64.pow(3)) as f64
-  );
-  if let Some(size) = inspect_file_size(endpoint, preset)
-    .await
-    .with_context(|| format!("failed to inspect model '{}'", preset.id))?
-  {
+  let inspected = tokio::select! {
+    _ = cancellation.cancelled() => bail!("model download cancelled"),
+    result = inspect_file_size(endpoint, preset) => result,
+  }
+  .with_context(|| format!("failed to inspect model '{}'", preset.id))?;
+  if let Some(size) = inspected {
     enforce_size_limit(size, preset.max_bytes)?;
   }
   let client = HFClient::builder().endpoint(endpoint).build()?;
   let repository = client.model(preset.owner, preset.repository);
-  let (content_length, mut stream) = repository
+  let request = repository
     .download_file_stream()
     .filename(preset.filename)
     .revision(preset.revision)
-    .send()
-    .await
-    .with_context(|| format!("failed to download model '{}'", preset.id))?;
+    .send();
+  let (content_length, mut stream) = tokio::select! {
+    _ = cancellation.cancelled() => bail!("model download cancelled"),
+    result = request => result,
+  }
+  .with_context(|| format!("failed to download model '{}'", preset.id))?;
   if let Some(size) = content_length {
     enforce_size_limit(size, preset.max_bytes)?;
   }
 
+  let total = content_length.or(inspected).or(Some(preset.download_bytes));
+  publish(progress, DownloadPhase::Downloading, 0, total);
   let path = staging.join(preset.filename);
   let mut file = tokio::fs::OpenOptions::new()
     .write(true)
@@ -81,16 +138,35 @@ async fn download_with_hf_hub(
     .open(&path)
     .await?;
   let mut downloaded = 0_u64;
-  while let Some(chunk) = stream.next().await {
+  loop {
+    let next = tokio::select! {
+      _ = cancellation.cancelled() => bail!("model download cancelled"),
+      next = stream.next() => next,
+    };
+    let Some(chunk) = next else { break };
     let chunk = chunk.with_context(|| format!("failed to download model '{}'", preset.id))?;
     downloaded = downloaded
       .checked_add(chunk.len() as u64)
       .context("model download size overflow")?;
     enforce_size_limit(downloaded, preset.max_bytes)?;
     file.write_all(&chunk).await?;
+    publish(progress, DownloadPhase::Downloading, downloaded, total);
   }
   file.flush().await?;
   Ok(path)
+}
+
+fn publish(
+  progress: &watch::Sender<ModelDownloadProgress>,
+  phase: DownloadPhase,
+  downloaded_bytes: u64,
+  total_bytes: Option<u64>,
+) {
+  progress.send_replace(ModelDownloadProgress::new(
+    phase,
+    downloaded_bytes,
+    total_bytes,
+  ));
 }
 
 async fn inspect_file_size(endpoint: &str, preset: &ModelPreset) -> Result<Option<u64>> {

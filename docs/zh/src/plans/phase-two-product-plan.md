@@ -36,7 +36,7 @@
 - Kernel、状态机、AgentEvent、SQLite 恢复和取消语义已经落地。
 - TUI 已连接真实 Kernel，支持流式对话、运行状态、滚动和审批弹窗。
 - GUI 已有 GPUI 三栏响应式视觉骨架，但只展示静态样例，未连接 Runtime。
-- llama.cpp 默认启用，可按可用 RAM 选择一个 Qwen3 GGUF；Ollama、Anthropic 和 OpenAI 可配置。
+- llama.cpp 默认启用；TUI 推荐更小的 Qwen3 1.7B GGUF，并在可取消的后台下载前要求用户确认；Ollama、Anthropic 和 OpenAI 可配置。
 - Scheduler 已有 Control / Worker / Frontier、Local / Remote、隐私过滤和有限回退。
 
 ### 2.2 主要缺口

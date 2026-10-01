@@ -4,27 +4,27 @@
 
 `agent-cli` 默认启用 `llama-cpp` feature，默认 `model.provider` 也是 `llamacpp`。模型在 Agent 进程内加载，不要求 Ollama 或独立 HTTP daemon；Ollama 和远程 Provider 仍可通过配置显式选择。若使用 `--no-default-features` 构建，选择 `llamacpp` 会明确报错。
 
-当 `[llamacpp].model_path` 已配置时，CLI 直接使用该 GGUF。未配置路径时，模型管理器根据**当前可用 RAM**选择能容纳的最大内置 Qwen3 预设：
+当 `[llamacpp].model_path` 已配置时，CLI 直接使用该 GGUF。未配置路径时，TUI 默认推荐约 1.1 GB 的 `qwen3-1.7b-q4_k_m`。它会先检查经过校验的本地缓存，任何网络传输都必须由用户确认。可将 `[model].model` 设为其他内置 preset ID 覆盖默认推荐：
 
-| 当前可用 RAM | 自动预设 | 文件 |
-|---:|---|---|
-| 2–<4 GiB | `qwen3-0.6b-q8_0` | `Qwen3-0.6B-Q8_0.gguf` |
-| 4–<8 GiB | `qwen3-1.7b-q4_k_m` | `Qwen3-1.7B-Q4_K_M.gguf` |
-| 8–<14 GiB | `qwen3-4b-q4_k_m` | `Qwen3-4B-Q4_K_M.gguf` |
-| ≥14 GiB | `qwen3-8b-q4_k_m` | `Qwen3-8B-Q4_K_M.gguf` |
+| Preset | 下载大小 | 最低可用 RAM | 文件 |
+|---|---:|---:|---|
+| `qwen3-0.6b-q8_0` | 0.64 GB | 2 GiB | `Qwen3-0.6B-Q8_0.gguf` |
+| `qwen3-1.7b-q4_k_m`（默认） | 1.11 GB | 4 GiB | `Qwen3-1.7B-Q4_K_M.gguf` |
+| `qwen3-4b-q4_k_m` | 2.50 GB | 8 GiB | `Qwen3-4B-Q4_K_M.gguf` |
+| `qwen3-8b-q4_k_m` | 5.03 GB | 14 GiB | `Qwen3-8B-Q4_K_M.gguf` |
 
-这里使用的是启动时操作系统报告的可用内存，不是物理内存总量，也不根据 VRAM 单独分档。低于 2 GiB 时启动失败。设置 `[model].model` 为上述 preset ID 可以固定模型；若当时可用 RAM 低于该 preset 的门槛，仍会失败而不会静默降级。
+内存保护使用启动时操作系统报告的可用内存，不是物理内存总量，也不单独使用 VRAM。若当前可用 RAM 低于所选 preset 的门槛，启动会明确失败，不会静默更换用户选择。
 
 ## 下载、缓存与完整性
 
-自动模型通过 `hf-hub` 从 Qwen 的 Hugging Face 仓库下载，最终缓存到 `~/.agent/models/`。流程为：
+用户在 TUI 中确认后，模型才会通过后台任务从 Qwen 的 Hugging Face 仓库下载，并缓存到 `~/.agent/models/`。设置界面在下载时保持响应，显示字节数和百分比，并支持取消。`agent chat` 等 headless 命令绝不会隐式发起下载；它们只使用已配置或已校验的缓存，否则返回可操作的提示。流程为：
 
 1. 先验证已有缓存是否为普通文件且 SHA-256 与内置目录一致；有效则复用。
 2. 下载前检查远端元数据；下载时逐 chunk 累计字节数，因此缺失或伪造 `Content-Length` 也不能绕过每个 preset 的硬上限。
 3. 下载完成后计算 SHA-256；不匹配则删除 staging 并失败。
 4. 在同一文件系统内移动到随机 `.part` 路径，再原子重命名为最终 GGUF；下次启动再次校验。
 
-因此首次启动需要网络和足够磁盘空间。损坏或版本不匹配的缓存不会被加载，而是重新下载；校验失败不会降级为未经验证的文件。当前目录固定 `revision = "main"`，SHA-256 固定了可接受内容；上游替换文件时，需要先在代码中审查并更新目录摘要。
+下载不是强制步骤：用户可以不发起任何网络请求，直接退出设置。损坏或版本不匹配的缓存不会被加载；重新下载仍需用户明确确认。校验失败不会降级为未经验证的文件。当前目录固定 `revision = "main"`，SHA-256 固定了可接受内容；上游替换文件时，需要先在代码中审查并更新目录摘要。
 
 ## Windows 原生构建
 

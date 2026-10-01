@@ -142,7 +142,7 @@ fn llamacpp_configuration_supports_files_and_environment() {
 }
 
 #[test]
-fn selected_llamacpp_uses_automatic_model_selection_without_a_path() {
+fn selected_llamacpp_allows_tui_managed_model_without_a_path() {
   let root = TestDir::new();
   root.write("agent.toml", "[model]\nprovider = 'llamacpp'\n");
 

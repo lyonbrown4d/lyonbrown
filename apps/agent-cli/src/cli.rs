@@ -69,6 +69,14 @@ pub struct Cli {
   pub trust_workspace_config: bool,
 }
 
+impl Cli {
+  pub fn take_command_or_default(&mut self) -> Command {
+    self.command.take().unwrap_or_else(|| Command::Tui {
+      workspace: PathBuf::from("."),
+    })
+  }
+}
+
 #[derive(Debug, Subcommand)]
 pub enum Command {
   /// Ask one question and stream the answer.
@@ -88,7 +96,7 @@ pub enum Command {
 }
 
 pub async fn run(mut cli: Cli) -> Result<()> {
-  let command = cli.command.take().unwrap_or(Command::Chat);
+  let command = cli.take_command_or_default();
   let workspace = match &command {
     Command::Tui { workspace } => workspace.clone(),
     _ => std::env::current_dir().context("failed to determine workspace directory")?,
@@ -107,6 +115,8 @@ pub async fn run(mut cli: Cli) -> Result<()> {
     ..Default::default()
   };
   let config = RuntimeConfig::load(options)?;
+  #[cfg(feature = "llama-cpp")]
+  let mut config = config;
   let home = dirs::home_dir().context("home directory is unavailable")?;
   if matches!(command, Command::Sessions) {
     let store = SessionStore::open(storage_path(&config, &workspace, &home)).await?;
@@ -117,6 +127,19 @@ pub async fn run(mut cli: Cli) -> Result<()> {
       );
     }
     return Ok(());
+  }
+  #[cfg(feature = "llama-cpp")]
+  if config.model.provider == "llamacpp"
+    && config.llamacpp.model_path.is_none()
+    && matches!(&command, Command::Tui { .. })
+  {
+    let Some(prepared) =
+      crate::tui::prepare_embedded_model(&home, config.model.model.as_deref()).await?
+    else {
+      return Ok(());
+    };
+    config.model.model = Some(prepared.id.to_owned());
+    config.llamacpp.model_path = Some(prepared.path);
   }
   let (approval, tui_approvals) = match &command {
     Command::Tui { .. } if !config.approval.approve_all && !config.approval.deny_all => {

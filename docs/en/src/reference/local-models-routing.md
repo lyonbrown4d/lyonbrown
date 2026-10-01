@@ -4,27 +4,27 @@
 
 `agent-cli` enables the `llama-cpp` feature by default, and the default `model.provider` is `llamacpp`. The model is loaded in the Agent process, with no Ollama installation or separate HTTP daemon required. Ollama and remote providers remain explicit configuration choices. A build made with `--no-default-features` reports a clear error if `llamacpp` is selected.
 
-When `[llamacpp].model_path` is configured, the CLI uses that GGUF directly. Without a path, the model manager selects the largest built-in Qwen3 preset that fits the **currently available RAM**:
+When `[llamacpp].model_path` is configured, the CLI uses that GGUF directly. Without a path, the TUI recommends `qwen3-1.7b-q4_k_m` (about 1.1 GB). It checks the verified local cache first and asks before starting any network transfer. Set `[model].model` to another built-in preset ID to override that recommendation:
 
-| Currently available RAM | Automatic preset | File |
-|---:|---|---|
-| 2–<4 GiB | `qwen3-0.6b-q8_0` | `Qwen3-0.6B-Q8_0.gguf` |
-| 4–<8 GiB | `qwen3-1.7b-q4_k_m` | `Qwen3-1.7B-Q4_K_M.gguf` |
-| 8–<14 GiB | `qwen3-4b-q4_k_m` | `Qwen3-4B-Q4_K_M.gguf` |
-| ≥14 GiB | `qwen3-8b-q4_k_m` | `Qwen3-8B-Q4_K_M.gguf` |
+| Preset | Download | Minimum available RAM | File |
+|---|---:|---:|---|
+| `qwen3-0.6b-q8_0` | 0.64 GB | 2 GiB | `Qwen3-0.6B-Q8_0.gguf` |
+| `qwen3-1.7b-q4_k_m` (default) | 1.11 GB | 4 GiB | `Qwen3-1.7B-Q4_K_M.gguf` |
+| `qwen3-4b-q4_k_m` | 2.50 GB | 8 GiB | `Qwen3-4B-Q4_K_M.gguf` |
+| `qwen3-8b-q4_k_m` | 5.03 GB | 14 GiB | `Qwen3-8B-Q4_K_M.gguf` |
 
-This is available memory reported by the operating system at startup, not total physical RAM, and VRAM is not a separate selection input. Startup fails below 2 GiB. Set `[model].model` to one of the preset IDs to pin it. If available RAM is below that preset's threshold, startup still fails instead of silently downgrading.
+The memory guard uses available memory reported by the operating system at startup, not total physical RAM, and VRAM is not a separate input. If available RAM is below the selected preset's threshold, startup fails instead of silently changing the user's choice.
 
 ## Download, cache, and integrity
 
-Automatic models are downloaded from Qwen repositories on Hugging Face through `hf-hub` and installed in `~/.agent/models/`. The flow is:
+After the user confirms in the TUI, the model is downloaded from Qwen's Hugging Face repository in a background task and installed in `~/.agent/models/`. The setup surface remains responsive, shows bytes and percentage, and supports cancellation. `agent chat` and other headless commands never start a download implicitly; they use a configured or verified cached model and otherwise return an actionable error. The flow is:
 
 1. Verify that an existing cache entry is a regular file and its SHA-256 matches the built-in catalog; reuse it if valid.
 2. Check remote metadata before transfer and count every streamed chunk, so missing or misleading `Content-Length` headers cannot bypass the preset's hard byte limit.
 3. Compute SHA-256 after download; remove staging and fail on mismatch.
 4. Move it to a random `.part` path on the same filesystem, then atomically rename it to the final GGUF; validate it again on later startups.
 
-The first startup therefore needs network access and sufficient disk space. A corrupt or mismatched cache entry is not loaded and is downloaded again; checksum failure never falls back to an unverified file. The current catalog uses `revision = "main"` while pinning acceptable content by SHA-256. If upstream replaces a file, the catalog digest must be reviewed and updated in code.
+Downloading is optional: the user may exit setup without any network request. A corrupt or mismatched cache entry is not loaded; a new download still requires explicit confirmation. Checksum failure never falls back to an unverified file. The current catalog uses `revision = "main"` while pinning acceptable content by SHA-256. If upstream replaces a file, the catalog digest must be reviewed and updated in code.
 
 ## Native Windows prerequisites
 

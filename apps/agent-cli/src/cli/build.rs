@@ -98,9 +98,14 @@ async fn register_llamacpp(
     };
     (None, path)
   } else {
-    let (id, path) =
-      crate::model_manager::resolve_automatic_model(home, config.model.model.as_deref()).await?;
-    (Some(id), path)
+    let prepared = crate::model_manager::resolve_cached_model(home, config.model.model.as_deref())
+      .await?
+      .ok_or_else(|| {
+        anyhow::anyhow!(
+          "embedded model is not installed; run `agent` to choose and download it, or configure another provider"
+        )
+      })?;
+    (Some(prepared.id), prepared.path)
   };
   let model_id = config
     .model
