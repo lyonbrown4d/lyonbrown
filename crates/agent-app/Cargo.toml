@@ -1,0 +1,23 @@
+[package]
+name = "agent-app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+agent-core.workspace = true
+agent-kernel.workspace = true
+agent-tool.workspace = true
+async-trait.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+
+[dev-dependencies]
+agent-model.workspace = true
+chrono.workspace = true
+futures.workspace = true
+provider-mock.workspace = true
+
+[lints]
+workspace = true

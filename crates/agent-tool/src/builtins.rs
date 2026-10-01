@@ -53,6 +53,35 @@ fn success_result(invocation: &ToolInvocation, output: String, truncated: bool) 
   }
 }
 
+fn required_secret_refs(invocation: &ToolInvocation) -> Result<Vec<SecretRef>, ToolError> {
+  let Some(environment) = invocation.arguments.get("env") else {
+    return Ok(Vec::new());
+  };
+  let environment = environment
+    .as_object()
+    .ok_or_else(|| ToolError::InvalidArguments("env must be an object".into()))?;
+  let mut references = Vec::with_capacity(environment.len());
+  for value in environment.values() {
+    let encoded = value.as_str().ok_or_else(|| {
+      ToolError::InvalidArguments("environment values must be secret references".into())
+    })?;
+    let reference = encoded.strip_prefix("secret:").ok_or_else(|| {
+      ToolError::InvalidArguments("environment values must start with secret:".into())
+    })?;
+    let reference = SecretRef(reference.to_owned());
+    let (kind, name) = reference.parts();
+    if !matches!(kind, "env" | "file") || name.is_empty() {
+      return Err(ToolError::InvalidArguments(
+        "secret reference must be env:NAME or file:NAME".into(),
+      ));
+    }
+    references.push(reference);
+  }
+  references.sort_by(|left, right| left.0.cmp(&right.0));
+  references.dedup();
+  Ok(references)
+}
+
 fn platform_shell(command_text: &str) -> Command {
   #[cfg(windows)]
   {

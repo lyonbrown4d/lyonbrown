@@ -8,7 +8,9 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
 
 - [Runtime 架构设计](architecture/local-first-agent-runtime.md)：长期架构目标、核心原则、模块边界与阶段划分。
 - [FluxDI 组合根](architecture/composition-root.md)：应用装配边界、依赖图验证与替换策略。
+- [TUI 视觉与交互设计基线](design/tui-interaction-design.md)：单一对话流、中英文界面、六套内置主题、实时引导、内联审批和控制面板。
 - [第一阶段 MVP 实施计划](plans/mvp-implementation-plan.md)：M0–M9 的交付内容、验收标准、风险与验证命令。
+- [第二阶段产品与交互实施计划](plans/phase-two-product-plan.md)：模型控制面、TUI/GUI 与跨端交互契约。
 - [配置参考](reference/configuration.md)：分层配置、远程模型、MCP、会话存储与 TUI。
 - [本地模型与任务路由](reference/local-models-routing.md)：默认 llama.cpp、Qwen3 自动选择、模型缓存和类型化路由。
 

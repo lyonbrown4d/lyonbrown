@@ -95,6 +95,7 @@ pub struct LlamaCppRuntimeConfig {
 pub struct ApprovalConfig {
   pub approve_all: bool,
   pub deny_all: bool,
+  pub timeout_seconds: u64,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -180,6 +181,7 @@ impl RuntimeConfig {
       .set_default("llamacpp.seed", 0_u32)?
       .set_default("approval.approve_all", false)?
       .set_default("approval.deny_all", false)?
+      .set_default("approval.timeout_seconds", 300_u64)?
       .set_default("secrets", Vec::<String>::new())?
       .add_source(File::from(options.global_config).required(false));
     if let Some(source) = workspace_source {
@@ -257,6 +259,11 @@ impl RuntimeConfig {
     if self.approval.approve_all && self.approval.deny_all {
       return Err(ConfigLoadError::Validation(
         "approval.approve_all and approval.deny_all cannot both be true".into(),
+      ));
+    }
+    if self.approval.timeout_seconds == 0 {
+      return Err(ConfigLoadError::Validation(
+        "approval.timeout_seconds must be greater than zero".into(),
       ));
     }
     for reference in &self.secrets {

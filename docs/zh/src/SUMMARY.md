@@ -6,4 +6,6 @@
 - [跨平台 Sandbox 设计](architecture/cross-platform-sandbox.md)
 - [配置参考](reference/configuration.md)
 - [本地模型与任务路由](reference/local-models-routing.md)
+- [TUI 视觉与交互设计基线](design/tui-interaction-design.md)
 - [第一阶段 MVP 实施计划](plans/mvp-implementation-plan.md)
+- [第二阶段产品与交互实施计划](plans/phase-two-product-plan.md)

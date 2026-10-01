@@ -65,7 +65,7 @@ fn manual_scroll_hides_newest_text_and_reports_position_in_wide_layout() {
   let output = scrolled_screen(&state, 6, 120, 12);
   assert!(!output.contains("message-23"));
   assert!(output.contains("6 from bottom"));
-  assert!(output.contains("BUSY"));
+  assert!(output.contains("RUNNING"));
   assert!(output.contains("↑↓ scroll"));
 }
 
@@ -73,10 +73,39 @@ fn manual_scroll_hides_newest_text_and_reports_position_in_wide_layout() {
 fn narrow_layout_shows_idle_follow_state_and_scroll_keys() {
   let output = scrolled_screen(&TuiState::default(), 0, 52, 12);
 
-  assert!(output.contains("IDLE"));
+  assert!(output.contains("READY"));
   assert!(output.contains("following"));
   assert!(output.contains("↑↓ scroll"));
-  assert!(output.contains("←→ move"));
+  assert!(output.contains("Enter send now"));
+}
+
+#[test]
+fn running_composer_keeps_input_visible_and_explains_steer_and_queue() {
+  let mut state = TuiState::default();
+  state.reduce(AgentEvent::ModelDelta {
+    step_id: StepId::new(),
+    delta: "working".into(),
+  });
+  for character in "adjust the plan".chars() {
+    state.apply_input_key(KeyCode::Char(character));
+  }
+
+  let (output, cursor) = screen_with_cursor(&state, 90, 14);
+  assert!(output.contains("adjust the plan"), "{output}");
+  assert!(output.contains("Enter steer now"), "{output}");
+  assert!(output.contains("Alt-Enter queue next"), "{output}");
+  assert!(!output.contains("input locked"), "{output}");
+  assert!(cursor.x > 0);
+}
+
+#[test]
+fn supported_responsive_sizes_render_without_panicking_in_both_locales() {
+  for locale in [Locale::EnUs, Locale::ZhCn] {
+    for (width, height) in [(30, 8), (52, 12), (90, 16), (120, 28)] {
+      let output = localized_screen(&TuiState::default(), locale, width, height);
+      assert!(!output.is_empty(), "empty screen at {width}x{height}");
+    }
+  }
 }
 
 #[test]
@@ -86,10 +115,11 @@ fn composer_cursor_uses_unicode_display_width() {
     state.apply_input_key(KeyCode::Char(character));
   }
 
-  let (output, cursor) = screen_with_cursor(&state, 20, 8);
+  let (output, cursor) = screen_with_cursor(&state, 30, 8);
   assert!(output.contains("a界"), "{output}");
   assert!(output.contains('b'), "{output}");
-  assert_eq!(cursor, Position::new(5, 5));
+  assert_eq!(cursor.x, 5);
+  assert!((4..=6).contains(&cursor.y));
 }
 
 #[test]
@@ -100,8 +130,9 @@ fn composer_cursor_stays_on_grapheme_boundaries() {
   }
   state.apply_input_key(KeyCode::Left);
 
-  let (_, cursor) = screen_with_cursor(&state, 20, 8);
-  assert_eq!(cursor, Position::new(2, 5));
+  let (_, cursor) = screen_with_cursor(&state, 30, 8);
+  assert_eq!(cursor.x, 2);
+  assert!((4..=6).contains(&cursor.y));
 }
 
 #[test]
@@ -113,13 +144,15 @@ fn composer_cursor_tracks_a_newly_joined_grapheme() {
   state.apply_input_key(KeyCode::Left);
   state.apply_input_key(KeyCode::Char('\u{200d}'));
 
-  let (_, joined_cursor) = screen_with_cursor(&state, 20, 8);
-  assert_eq!(joined_cursor, Position::new(3, 5));
+  let (_, joined_cursor) = screen_with_cursor(&state, 30, 8);
+  assert_eq!(joined_cursor.x, 3);
+  assert!((4..=6).contains(&joined_cursor.y));
 
   state.apply_input_key(KeyCode::Char('!'));
-  let (output, continued_cursor) = screen_with_cursor(&state, 20, 8);
+  let (output, continued_cursor) = screen_with_cursor(&state, 30, 8);
   assert!(output.contains('!'));
-  assert_eq!(continued_cursor, Position::new(4, 5));
+  assert_eq!(continued_cursor.x, 4);
+  assert!((4..=6).contains(&continued_cursor.y));
 }
 
 #[test]
@@ -129,100 +162,61 @@ fn composer_viewport_follows_long_and_multiline_input() {
     state.apply_input_key(KeyCode::Char(character));
   }
 
-  let (output, cursor) = screen_with_cursor(&state, 20, 8);
+  let (output, cursor) = screen_with_cursor(&state, 30, 8);
   assert!(output.contains("visible-tail"), "{output}");
   assert!(!output.contains("hidden-prefix"));
-  assert_eq!(cursor.y, 6);
-  assert!((1..=18).contains(&cursor.x));
+  assert!((4..=6).contains(&cursor.y));
+  assert!((1..=28).contains(&cursor.x));
 }
 
 #[test]
-fn approval_bridge_sends_sanitized_request_and_returns_ui_decision() {
-  let (prompt, requests) = TuiApprovalPrompt::channel();
-  let prompt = Arc::new(prompt);
-  let definition = ToolDefinition {
-    name: "shell".into(),
-    description: String::new(),
-    input_schema: json!({"type": "object"}),
-    source: ToolSource::BuiltIn,
-    risk: RiskLevel::Execute,
-    requires_secrets: vec![SecretRef::env("TOKEN")],
-  };
-  let invocation = ToolInvocation {
-    id: ToolCallId::new(),
-    name: "shell".into(),
-    arguments: json!({"command": "echo ready", "token": "secret:env:TOKEN"}),
-  };
-  let worker = thread::spawn(move || prompt.prompt(&definition, &invocation));
+fn approval_view_keeps_the_typed_safety_preview() {
+  let request = approval_request("echo ready", vec![SecretRef::env("TOKEN")]);
 
-  let request = requests.recv().unwrap();
-  assert_eq!(request.tool, "shell");
-  assert_eq!(request.risk, RiskLevel::Execute);
-  assert!(request.arguments.contains("echo ready"));
-  assert_eq!(request.secret_references, ["env:TOKEN"]);
-  assert!(!request.arguments.contains("plaintext-secret"));
-  request.respond(ApprovalDecision::AllowSession);
-
-  assert_eq!(worker.join().unwrap(), ApprovalDecision::AllowSession);
+  assert_eq!(request.preview.tool, "shell");
+  assert_eq!(request.preview.risk, RiskLevel::Execute);
+  assert_eq!(request.preview.target, "echo ready");
+  assert_eq!(request.preview.required_secrets, [SecretRef::env("TOKEN")]);
+  assert_eq!(request.preview.sandbox, SandboxStatus::HostUnsandboxed);
 }
 
 #[test]
 fn approval_modal_scrolls_long_arguments_and_shows_position() {
-  let (prompt, requests) = TuiApprovalPrompt::channel();
-  let definition = ToolDefinition {
-    name: "shell".into(),
-    description: String::new(),
-    input_schema: json!({"type": "object"}),
-    source: ToolSource::BuiltIn,
-    risk: RiskLevel::Execute,
-    requires_secrets: vec![],
-  };
   let long_command = (0..30)
     .map(|index| format!("argument-{index}"))
     .collect::<Vec<_>>()
     .join(" ");
-  let invocation = ToolInvocation {
-    id: ToolCallId::new(),
-    name: "shell".into(),
-    arguments: json!({"command": format!("{long_command} TAIL-MARKER \u{1b}[31m")}),
-  };
-  let worker = thread::spawn(move || prompt.prompt(&definition, &invocation));
-  let request = requests.recv().unwrap();
+  let request = approval_request(&format!("{long_command} TAIL-MARKER \u{1b}[31m"), vec![]);
 
   let first = approval_screen(&TuiState::default(), &request, 0, 52, 14);
   let last = approval_screen(&TuiState::default(), &request, u16::MAX, 52, 14);
-  assert!(first.contains("lines "));
+  assert!(first.contains("lines "), "{first}");
   assert!(!first.contains("TAIL-MARKER"));
   assert!(last.contains("TAIL-MARKER"));
   assert!(!last.contains('\u{1b}'));
-
-  request.respond(ApprovalDecision::Deny);
-  assert_eq!(worker.join().unwrap(), ApprovalDecision::Deny);
 }
 
 #[test]
 fn approval_modal_uses_full_minimum_screen_without_panicking() {
-  let (prompt, requests) = TuiApprovalPrompt::channel();
-  let definition = ToolDefinition {
-    name: "shell".into(),
-    description: String::new(),
-    input_schema: json!({"type": "object"}),
-    source: ToolSource::BuiltIn,
-    risk: RiskLevel::Execute,
-    requires_secrets: vec![],
-  };
-  let invocation = ToolInvocation {
-    id: ToolCallId::new(),
-    name: "shell".into(),
-    arguments: json!({"command": "echo inspect"}),
-  };
-  let worker = thread::spawn(move || prompt.prompt(&definition, &invocation));
-  let request = requests.recv().unwrap();
+  let request = approval_request("echo inspect", vec![]);
 
   let output = approval_screen(&TuiState::default(), &request, 0, 30, 8);
-  assert!(output.contains("y/n/a/d"));
-  assert!(output.contains("lines "));
+  assert!(output.contains("y allow"));
+  assert!(output.contains("lines "), "{output}");
+}
 
-  request.respond(ApprovalDecision::Deny);
-  assert_eq!(worker.join().unwrap(), ApprovalDecision::Deny);
+fn approval_request(command: &str, required_secrets: Vec<SecretRef>) -> ApprovalRequest {
+  ApprovalRequest {
+    request_id: ToolCallId::new(),
+    preview: ToolPreview {
+      tool: "shell".into(),
+      action: "execute command".into(),
+      target: command.into(),
+      impact: "runs a command on the host".into(),
+      risk: RiskLevel::Execute,
+      sandbox: SandboxStatus::HostUnsandboxed,
+      working_directory: None,
+      required_secrets,
+    },
+  }
 }

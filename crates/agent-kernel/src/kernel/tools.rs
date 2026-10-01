@@ -35,42 +35,63 @@ impl Kernel {
           duration_ms: 0,
           error: Some(format!("tool not found: {}", invocation.name)),
         },
-        Some(tool) => match self.approval.approve(tool.definition(), &invocation) {
-          ApprovalDecision::Deny | ApprovalDecision::DenyAll => ToolResult {
+        Some(tool) => match tool.preview(&self.tool_context, &invocation) {
+          Err(error) => ToolResult {
             invocation_id: invocation.id,
             ok: false,
             output: String::new(),
             truncated: false,
             duration_ms: 0,
-            error: Some("tool denied by approval policy".into()),
+            error: Some(error.to_string()),
           },
-          ApprovalDecision::Allow | ApprovalDecision::AllowSession => {
-            self.emit(AgentEvent::ToolApproved {
-              step_id,
-              tool_call_id: invocation.id,
-              by: "policy".into(),
-              ts: Utc::now(),
-            })?;
-            self.emit(AgentEvent::ToolStarted {
-              step_id,
-              tool_call_id: invocation.id,
-              ts: Utc::now(),
-            })?;
-            let executor = ToolExecutor::new(self.tools.clone(), self.tool_context.clone());
-            match executor.execute(&invocation).await {
-              Ok(result) => result,
-              Err(ToolExecutionError::Cancelled) => {
-                self.cancel_turn(turn_id)?;
-                return Err(AgentError::Cancelled);
-              }
-              Err(error) => ToolResult {
+          Ok(preview) => {
+            let response = self
+              .approval
+              .approve(ApprovalRequest::new(invocation.id, preview))
+              .await;
+            let decision = if response.request_id == invocation.id {
+              response.decision
+            } else {
+              ApprovalDecision::Deny
+            };
+            match decision {
+              ApprovalDecision::Deny | ApprovalDecision::DenyAll => ToolResult {
                 invocation_id: invocation.id,
                 ok: false,
                 output: String::new(),
                 truncated: false,
                 duration_ms: 0,
-                error: Some(error.to_string()),
+                error: Some("tool denied by approval policy".into()),
               },
+              ApprovalDecision::Allow | ApprovalDecision::AllowSession => {
+                self.emit(AgentEvent::ToolApproved {
+                  step_id,
+                  tool_call_id: invocation.id,
+                  by: "policy".into(),
+                  ts: Utc::now(),
+                })?;
+                self.emit(AgentEvent::ToolStarted {
+                  step_id,
+                  tool_call_id: invocation.id,
+                  ts: Utc::now(),
+                })?;
+                let executor = ToolExecutor::new(self.tools.clone(), self.tool_context.clone());
+                match executor.execute(&invocation).await {
+                  Ok(result) => result,
+                  Err(ToolExecutionError::Cancelled) => {
+                    self.cancel_turn(turn_id)?;
+                    return Err(AgentError::Cancelled);
+                  }
+                  Err(error) => ToolResult {
+                    invocation_id: invocation.id,
+                    ok: false,
+                    output: String::new(),
+                    truncated: false,
+                    duration_ms: 0,
+                    error: Some(error.to_string()),
+                  },
+                }
+              }
             }
           }
         },

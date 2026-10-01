@@ -1,55 +1,33 @@
-use std::sync::mpsc;
+use agent_app::ApprovalView;
+use agent_core::{ToolCallId, ToolPreview};
 
-use agent_core::{RiskLevel, ToolDefinition, ToolInvocation};
-use agent_tool::{ApprovalDecision, ApprovalPrompt};
-
-use super::terminal_safe;
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ApprovalRequest {
-  pub tool: String,
-  pub risk: RiskLevel,
-  pub arguments: String,
-  pub secret_references: Vec<String>,
-  reply: mpsc::Sender<ApprovalDecision>,
+  pub request_id: ToolCallId,
+  pub preview: ToolPreview,
 }
 
 impl ApprovalRequest {
-  pub fn respond(self, decision: ApprovalDecision) {
-    let _ = self.reply.send(decision);
+  pub(crate) fn from_view(view: &ApprovalView) -> Option<Self> {
+    Some(Self {
+      request_id: view.request_id,
+      preview: view.preview.clone()?,
+    })
   }
 }
 
-pub struct TuiApprovalPrompt {
-  requests: mpsc::Sender<ApprovalRequest>,
-}
-
-impl TuiApprovalPrompt {
-  pub fn channel() -> (Self, mpsc::Receiver<ApprovalRequest>) {
-    let (sender, receiver) = mpsc::channel();
-    (Self { requests: sender }, receiver)
-  }
-}
-
-impl ApprovalPrompt for TuiApprovalPrompt {
-  fn prompt(&self, definition: &ToolDefinition, invocation: &ToolInvocation) -> ApprovalDecision {
-    let (reply, response) = mpsc::channel();
-    let request = ApprovalRequest {
-      tool: terminal_safe(&definition.name),
-      risk: definition.risk,
-      arguments: serde_json::to_string_pretty(&invocation.arguments)
-        .unwrap_or_else(|_| "<invalid JSON>".into()),
-      secret_references: definition
-        .requires_secrets
-        .iter()
-        .map(ToString::to_string)
-        .map(|name| terminal_safe(&name))
-        .collect(),
-      reply,
-    };
-    if self.requests.send(request).is_err() {
-      return ApprovalDecision::Deny;
-    }
-    response.recv().unwrap_or(ApprovalDecision::Deny)
-  }
+pub(crate) fn approval_safe(value: &str) -> String {
+  value
+    .chars()
+    .map(|character| match character {
+      '\n' => "\\n".to_owned(),
+      '\r' => "\\r".to_owned(),
+      '\t' => "\\t".to_owned(),
+      '\u{061c}' | '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}' => {
+        "�".to_owned()
+      }
+      _ if character.is_control() => "�".to_owned(),
+      _ => character.to_string(),
+    })
+    .collect()
 }

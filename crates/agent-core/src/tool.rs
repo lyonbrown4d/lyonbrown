@@ -1,5 +1,7 @@
 //! 工具类型：定义、调用、结果。Tool trait 本体在 agent-tool（需要 async + broker）。
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -17,6 +19,32 @@ pub enum RiskLevel {
   Execute,
   /// 网络。
   Network,
+}
+
+/// Where a tool invocation will execute relative to the workspace boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxStatus {
+  /// The operation is capability-restricted to the workspace.
+  WorkspaceRestricted,
+  /// The operation runs directly on the host without sandbox isolation.
+  HostUnsandboxed,
+  /// The tool does not declare an execution boundary.
+  Unknown,
+}
+
+/// Serializable, UI-neutral description of a typed tool invocation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolPreview {
+  pub tool: String,
+  pub action: String,
+  pub target: String,
+  pub impact: String,
+  pub risk: RiskLevel,
+  pub sandbox: SandboxStatus,
+  pub working_directory: Option<PathBuf>,
+  /// Logical secret references only. Secret values must never be included.
+  pub required_secrets: Vec<SecretRef>,
 }
 
 /// 工具来源。

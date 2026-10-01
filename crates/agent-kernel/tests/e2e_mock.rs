@@ -8,8 +8,8 @@ use agent_kernel::{Kernel, KernelLimits, KernelState};
 use agent_model::{ModelRegistry, Role};
 use agent_secret::{NoopBroker, SecretBroker, SecretError};
 use agent_tool::{
-  AllowAllApproval, ApprovalDecision, ApprovalPolicy, EchoTool, Tool, ToolContext, ToolError,
-  ToolRegistry,
+  AllowAllApproval, ApprovalDecision, ApprovalPolicy, ApprovalRequest, ApprovalResponse, EchoTool,
+  Tool, ToolContext, ToolError, ToolRegistry,
 };
 use async_trait::async_trait;
 use provider_mock::{MockProvider, ScriptedStep};

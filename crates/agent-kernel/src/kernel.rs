@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{
+  Arc,
+  atomic::{AtomicU64, Ordering},
+};
 use std::time::Duration;
 
 use agent_context::{CompileRequest, PromptCompiler, TokenEstimator};
@@ -18,15 +21,16 @@ use agent_secret::{NoopBroker, SecretBroker};
 use agent_skill::{Skill, SkillRegistry};
 use agent_storage::{EventWriter, SessionStore};
 use agent_tool::{
-  AllowAllApproval, ApprovalDecision, ApprovalPolicy, ToolContext, ToolExecutionError,
-  ToolExecutor, ToolRegistry,
+  AllowAllApproval, ApprovalDecision, ApprovalPolicy, ApprovalRequest, ToolContext,
+  ToolExecutionError, ToolExecutor, ToolRegistry,
 };
 use agent_workspace::{ProjectType, WorkspaceProfile};
 use chrono::Utc;
 use futures::StreamExt;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-use crate::{EventBus, KernelState, Session};
+use crate::{EventBus, KernelControl, KernelState, Session, control::ActiveTurnGuard};
 
 #[derive(Debug, Clone)]
 pub struct KernelLimits {
@@ -74,6 +78,10 @@ pub struct Kernel {
   last_requests: Vec<ModelRequest>,
   storage: Option<SessionStore>,
   writer: Option<EventWriter>,
+  steering_tx: mpsc::UnboundedSender<(u64, String)>,
+  steering_rx: mpsc::UnboundedReceiver<(u64, String)>,
+  steering_active_generation: Arc<AtomicU64>,
+  active_steering_generation: u64,
 }
 
 impl Kernel {
@@ -129,11 +137,47 @@ impl Kernel {
     self.cancellation.clone()
   }
 
+  /// Return the cancellation handle for the next turn, renewing a token that
+  /// was consumed by a previously cancelled turn.
+  pub fn renew_cancellation(&mut self) -> CancellationToken {
+    if self.cancellation.is_cancelled() {
+      self.cancellation = CancellationToken::new();
+      self.tool_context.cancel = self.cancellation.clone();
+    }
+    self.cancellation.clone()
+  }
+
+  pub fn control(&self) -> KernelControl {
+    KernelControl::new(
+      self.steering_tx.clone(),
+      self.steering_active_generation.clone(),
+    )
+  }
+
+  /// Open the steering boundary before an application runtime publishes that
+  /// a turn has started. Direct callers may keep using [`Self::run_turn`],
+  /// which performs this preparation automatically.
+  pub fn prepare_turn_control(&mut self) {
+    if self.steering_active_generation.load(Ordering::Acquire) != 0 {
+      return;
+    }
+    self.active_steering_generation = self.active_steering_generation.wrapping_add(1).max(1);
+    self
+      .steering_active_generation
+      .store(self.active_steering_generation, Ordering::Release);
+  }
+
   pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<AgentEvent> {
     self.bus.subscribe()
   }
 
   pub async fn run_turn(&mut self, user_text: &str) -> Result<Vec<AgentEvent>, AgentError> {
+    self.renew_cancellation();
+    self.prepare_turn_control();
+    let _active_turn = ActiveTurnGuard::enter(
+      self.steering_active_generation.clone(),
+      self.active_steering_generation,
+    );
     let result = self.run_turn_inner(user_text).await;
     if let Some(writer) = &self.writer {
       writer

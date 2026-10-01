@@ -1,6 +1,6 @@
 use super::*;
 use crate::Tool;
-use agent_core::{RiskLevel, ToolDefinition, ToolSource};
+use agent_core::{RiskLevel, SandboxStatus, ToolDefinition, ToolPreview, ToolSource};
 use async_trait::async_trait;
 use cap_std::fs::OpenOptions;
 use serde_json::json;
@@ -43,6 +43,22 @@ impl Default for WriteFileTool {
 impl Tool for WriteFileTool {
   fn definition(&self) -> &ToolDefinition {
     &self.definition
+  }
+
+  fn preview(
+    &self,
+    context: &ToolContext,
+    invocation: &ToolInvocation,
+  ) -> Result<ToolPreview, ToolError> {
+    let path = string_argument(invocation, "path")?;
+    validate_relative_path(path)?;
+    Ok(file_preview(
+      &self.definition,
+      context,
+      "Write file",
+      path,
+      "Creates or replaces a file inside the workspace.",
+    ))
   }
 
   async fn invoke(
@@ -107,6 +123,26 @@ impl Tool for ListFilesTool {
     &self.definition
   }
 
+  fn preview(
+    &self,
+    context: &ToolContext,
+    invocation: &ToolInvocation,
+  ) -> Result<ToolPreview, ToolError> {
+    let path = invocation
+      .arguments
+      .get("path")
+      .and_then(serde_json::Value::as_str)
+      .unwrap_or(".");
+    validate_relative_path(path)?;
+    Ok(file_preview(
+      &self.definition,
+      context,
+      "List directory",
+      path,
+      "Reads directory names inside the workspace.",
+    ))
+  }
+
   async fn invoke(
     &self,
     context: &ToolContext,
@@ -141,5 +177,24 @@ impl Tool for ListFilesTool {
     .map_err(|error| ToolError::Io(error.to_string()))?
     .map_err(|error| ToolError::Io(error.to_string()))?;
     Ok(success_result(invocation, output, false))
+  }
+}
+
+fn file_preview(
+  definition: &ToolDefinition,
+  context: &ToolContext,
+  action: &str,
+  target: &str,
+  impact: &str,
+) -> ToolPreview {
+  ToolPreview {
+    tool: definition.name.clone(),
+    action: action.into(),
+    target: target.into(),
+    impact: impact.into(),
+    risk: definition.risk,
+    sandbox: SandboxStatus::WorkspaceRestricted,
+    working_directory: Some(context.workspace_root.clone()),
+    required_secrets: definition.requires_secrets.clone(),
   }
 }

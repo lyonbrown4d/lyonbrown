@@ -1,6 +1,6 @@
 use super::*;
 use crate::Tool;
-use agent_core::{RiskLevel, ToolDefinition, ToolSource};
+use agent_core::{RiskLevel, SandboxStatus, ToolDefinition, ToolPreview, ToolSource};
 use async_trait::async_trait;
 use serde_json::json;
 use std::io::Read;
@@ -96,6 +96,25 @@ impl Default for ReadFileTool {
 impl Tool for ReadFileTool {
   fn definition(&self) -> &ToolDefinition {
     &self.definition
+  }
+
+  fn preview(
+    &self,
+    context: &ToolContext,
+    invocation: &ToolInvocation,
+  ) -> Result<ToolPreview, ToolError> {
+    let path = string_argument(invocation, "path")?;
+    validate_relative_path(path)?;
+    Ok(ToolPreview {
+      tool: self.definition.name.clone(),
+      action: "Read file".into(),
+      target: path.into(),
+      impact: "Reads a UTF-8 file inside the workspace.".into(),
+      risk: self.definition.risk,
+      sandbox: SandboxStatus::WorkspaceRestricted,
+      working_directory: Some(context.workspace_root.clone()),
+      required_secrets: self.definition.requires_secrets.clone(),
+    })
   }
 
   async fn invoke(

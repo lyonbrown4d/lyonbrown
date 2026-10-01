@@ -1,3 +1,4 @@
+use agent_app::{RuntimePhase, RuntimeSnapshot};
 use agent_core::{AgentEvent, StepId};
 use crossterm::event::KeyCode;
 
@@ -30,6 +31,7 @@ pub struct TuiState {
   pub(crate) input: String,
   pub(crate) input_cursor: usize,
   pub(crate) busy: bool,
+  queued_follow_up: Option<String>,
 }
 
 impl TuiState {
@@ -64,6 +66,14 @@ impl TuiState {
       }
       AgentEvent::TurnStarted { .. } => {
         self.status = "thinking".into();
+        self.busy = true;
+      }
+      AgentEvent::TurnSteered { text, .. } => {
+        self.transcript.push(TranscriptEntry {
+          speaker: Speaker::User,
+          text: terminal_safe(&text),
+        });
+        self.status = "steering current turn".into();
         self.busy = true;
       }
       AgentEvent::StepStarted { step_id, .. } => {
@@ -180,6 +190,67 @@ impl TuiState {
     self.busy = true;
   }
 
+  pub fn is_busy(&self) -> bool {
+    self.busy
+  }
+
+  pub fn sync_snapshot(&mut self, snapshot: &RuntimeSnapshot) {
+    self.transcript.clear();
+    for turn in &snapshot.turns {
+      self.transcript.push(TranscriptEntry {
+        speaker: Speaker::User,
+        text: terminal_safe(&turn.user_text),
+      });
+      self
+        .transcript
+        .extend(turn.steering.iter().map(|text| TranscriptEntry {
+          speaker: Speaker::User,
+          text: terminal_safe(text),
+        }));
+      if !turn.assistant_text.is_empty() {
+        self.transcript.push(TranscriptEntry {
+          speaker: Speaker::Assistant,
+          text: terminal_safe(&turn.assistant_text),
+        });
+      }
+    }
+    if let Some(message) = &snapshot.last_error {
+      self.transcript.push(TranscriptEntry {
+        speaker: Speaker::System,
+        text: terminal_safe(message),
+      });
+    }
+    self.status = phase_status(snapshot.phase).into();
+    self.busy = matches!(
+      snapshot.phase,
+      RuntimePhase::Preparing
+        | RuntimePhase::Streaming
+        | RuntimePhase::AwaitingApproval
+        | RuntimePhase::RunningTool
+        | RuntimePhase::Cancelling
+    );
+    if let Some(route) = &snapshot.route {
+      self.model = format!(
+        "{}/{}",
+        terminal_safe(&route.selected.provider),
+        terminal_safe(&route.selected.model)
+      );
+      self.reason = terminal_safe(&route.reason);
+    }
+  }
+
+  pub(crate) fn mark_steering_submitted(&mut self) {
+    self.status = "steering queued for current turn".into();
+  }
+
+  pub(crate) fn set_queued_follow_up(&mut self, text: Option<String>) {
+    self.queued_follow_up = text.map(|value| terminal_safe(&value));
+  }
+
+  pub(crate) fn queued_follow_up(&self) -> Option<&str> {
+    self.queued_follow_up.as_deref()
+  }
+
   pub(crate) fn set_error(&mut self, message: impl Into<String>) {
     self.status = "error".into();
     self.transcript.push(TranscriptEntry {
@@ -203,31 +274,18 @@ impl TuiState {
       &self.model
     }
   }
-  pub(crate) fn reason(&self) -> &str {
-    if self.reason.is_empty() {
-      "—"
-    } else {
-      &self.reason
-    }
-  }
-  pub(crate) fn usage(&self) -> (u32, u32, u32) {
-    self.usage
-  }
-  pub(crate) fn step(&self) -> &str {
-    if self.step.is_empty() {
-      "—"
-    } else {
-      &self.step
-    }
-  }
-  pub(crate) fn tool(&self) -> &str {
-    if self.tool.is_empty() {
-      "—"
-    } else {
-      &self.tool
-    }
-  }
-  pub(crate) fn pulse(&self) -> &[String] {
-    &self.pulse
+}
+
+fn phase_status(phase: RuntimePhase) -> &'static str {
+  match phase {
+    RuntimePhase::Initializing => "initializing",
+    RuntimePhase::ModelSetupRequired => "model setup required",
+    RuntimePhase::Ready | RuntimePhase::Completed => "idle",
+    RuntimePhase::Preparing => "preparing step",
+    RuntimePhase::Streaming => "streaming",
+    RuntimePhase::AwaitingApproval => "awaiting approval",
+    RuntimePhase::RunningTool => "tool running",
+    RuntimePhase::Cancelling => "cancelling",
+    RuntimePhase::FailedRecoverable | RuntimePhase::FailedTerminal => "error",
   }
 }

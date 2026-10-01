@@ -16,4 +16,6 @@ pub use event::{AgentEvent, StepOutcome};
 pub use ids::{ObservationId, SessionId, StepId, ToolCallId, TurnId};
 pub use model::{Locality, ModelCapabilities, ModelTier, StopReason, TokenUsage};
 pub use secret::SecretRef;
-pub use tool::{RiskLevel, ToolDefinition, ToolInvocation, ToolResult, ToolSource};
+pub use tool::{
+  RiskLevel, SandboxStatus, ToolDefinition, ToolInvocation, ToolPreview, ToolResult, ToolSource,
+};

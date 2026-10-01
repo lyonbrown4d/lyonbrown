@@ -1,13 +1,11 @@
-use std::{sync::Arc, thread};
-
 use agent_cli::tui::{
-  TuiApprovalPrompt, TuiState, render, render_with_approval, render_with_scroll,
+  ApprovalRequest, Locale, RenderContext, TuiState, render, render_with_approval,
+  render_with_context, render_with_scroll,
 };
 use agent_core::{
-  AgentEvent, RiskLevel, SecretRef, SessionId, StepId, TokenUsage, ToolCallId, ToolDefinition,
-  ToolInvocation, ToolResult, ToolSource,
+  AgentEvent, RiskLevel, SandboxStatus, SecretRef, SessionId, StepId, TokenUsage, ToolCallId,
+  ToolInvocation, ToolPreview, ToolResult,
 };
-use agent_tool::{ApprovalDecision, ApprovalPrompt};
 use chrono::Utc;
 use crossterm::event::KeyCode;
 use ratatui::{Terminal, backend::Backend, backend::TestBackend, layout::Position};
@@ -17,6 +15,27 @@ fn screen(state: &TuiState, width: u16, height: u16) -> String {
   let backend = TestBackend::new(width, height);
   let mut terminal = Terminal::new(backend).unwrap();
   terminal.draw(|frame| render(frame, state)).unwrap();
+  let buffer = terminal.backend().buffer();
+  (0..height)
+    .map(|y| {
+      (0..width)
+        .map(|x| buffer[(x, y)].symbol().to_owned())
+        .collect::<String>()
+    })
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn localized_screen(state: &TuiState, locale: Locale, width: u16, height: u16) -> String {
+  let backend = TestBackend::new(width, height);
+  let mut terminal = Terminal::new(backend).unwrap();
+  let context = RenderContext {
+    locale,
+    ..RenderContext::default()
+  };
+  terminal
+    .draw(|frame| render_with_context(frame, state, context))
+    .unwrap();
   let buffer = terminal.backend().buffer();
   (0..height)
     .map(|y| {
@@ -120,7 +139,7 @@ fn terminal_control_sequences_are_never_kept_as_renderable_text() {
 }
 
 #[test]
-fn wide_layout_shows_instrument_panel_and_event_rail() {
+fn wide_layout_uses_one_vertical_flow_without_runtime_rail() {
   let mut state = TuiState::default();
   state.reduce(AgentEvent::ModelSelected {
     step_id: StepId::new(),
@@ -131,22 +150,40 @@ fn wide_layout_shows_instrument_panel_and_event_rail() {
   });
   let output = screen(&state, 120, 28);
 
-  assert!(output.contains("CONVERSATION"));
-  assert!(output.contains("RUNTIME"));
-  assert!(output.contains("STEP"));
-  assert!(output.contains("TOOL"));
+  assert!(output.contains("ACTIVITY"));
+  assert!(!output.contains("RUNTIME"));
+  assert!(!output.contains("EVENT PULSE"));
   assert!(output.contains("test-model"));
-  assert!(output.contains("EVENT PULSE"));
-  assert!(output.contains("Enter send"));
+  assert!(output.contains("Enter send now"));
 }
 
 #[test]
 fn narrow_layout_collapses_status_panel_but_keeps_composer() {
   let output = screen(&TuiState::default(), 72, 20);
 
-  assert!(output.contains("CONVERSATION"));
+  assert!(output.contains("ACTIVITY"));
   assert!(!output.contains("RUNTIME"));
   assert!(output.contains("Message"));
+}
+
+#[test]
+fn locale_selection_translates_chrome_but_not_model_ids_or_keys() {
+  let mut state = TuiState::default();
+  state.reduce(AgentEvent::ModelSelected {
+    step_id: StepId::new(),
+    provider: "local-provider".into(),
+    model: "model-id".into(),
+    reason: "route".into(),
+    ts: Utc::now(),
+  });
+
+  let output = localized_screen(&state, Locale::ZhCn, 90, 16);
+  let compact = output.replace(' ', "");
+  assert!(compact.contains("活动"), "{output}");
+  assert!(compact.contains("消息"), "{output}");
+  assert!(output.contains("local-provider/model-id"));
+  assert!(output.contains("Enter"));
+  assert_eq!(Locale::from_id("unknown"), Locale::EnUs);
 }
 
 #[test]
@@ -188,7 +225,7 @@ fn tool_and_error_events_update_runtime_status() {
 }
 
 #[test]
-fn reducer_tracks_token_usage() {
+fn token_usage_is_not_rendered_as_permanent_diagnostics() {
   let mut state = TuiState::default();
   state.reduce(AgentEvent::ModelCompleted {
     step_id: StepId::new(),
@@ -199,7 +236,9 @@ fn reducer_tracks_token_usage() {
     },
     ts: Utc::now(),
   });
-  assert!(screen(&state, 100, 24).contains("12 in / 7 out"));
+  let output = screen(&state, 100, 24);
+  assert!(!output.contains("TOKENS"));
+  assert!(!output.contains("12 in / 7 out"));
 }
 
 #[test]

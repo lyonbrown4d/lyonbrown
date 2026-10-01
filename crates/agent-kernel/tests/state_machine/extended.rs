@@ -71,6 +71,11 @@ fn expected_transition(
       error: message.clone(),
     });
   }
+  if matches!(state, KernelState::Cancelled)
+    && matches!(event, AgentEvent::UserMessageReceived { .. })
+  {
+    return Some(KernelState::Idle);
+  }
   if matches!(event, AgentEvent::TurnCancelled { .. })
     && matches!(
       state,

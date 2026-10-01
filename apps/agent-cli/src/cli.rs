@@ -26,7 +26,7 @@ use provider_openai::OpenAiProvider;
 
 use crate::approval::policy_from_config;
 use crate::config::{CliOverrides, LoadOptions, RuntimeConfig};
-use crate::tui::TuiApprovalPrompt;
+use agent_app::approval_channel;
 
 #[derive(Debug, Parser)]
 #[command(name = "agent", version, about = "Local-first agent runtime")]
@@ -119,9 +119,12 @@ pub async fn run(cli: Cli) -> Result<()> {
   }
   let (approval, tui_approvals) = match &cli.command {
     Command::Tui { .. } if !config.approval.approve_all && !config.approval.deny_all => {
-      let (prompt, requests) = TuiApprovalPrompt::channel();
+      let (prompt, requests) = approval_channel(4);
       (
-        SessionApprovalPolicy::interactive(Arc::new(prompt)),
+        SessionApprovalPolicy::interactive_with_timeout(
+          Arc::new(prompt),
+          std::time::Duration::from_secs(config.approval.timeout_seconds),
+        ),
         Some(requests),
       )
     }
@@ -150,11 +153,7 @@ pub async fn run(cli: Cli) -> Result<()> {
     }
     Command::Sessions => unreachable!("sessions is handled before kernel startup"),
     Command::Tui { .. } => {
-      let requests = tui_approvals.unwrap_or_else(|| {
-        let (_sender, receiver) = std::sync::mpsc::channel();
-        receiver
-      });
-      return crate::tui::run(kernel, requests).await;
+      return crate::tui::run(kernel, tui_approvals).await;
     }
   };
   let close = kernel.close_storage().await;

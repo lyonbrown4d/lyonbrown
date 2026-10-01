@@ -1,11 +1,14 @@
-use std::{sync::mpsc, time::Duration};
+use std::time::Duration;
 
+use agent_app::{
+  AgentCommand, AppController, ApprovalDecision as AppApprovalDecision, ApprovalInbox, RuntimeTask,
+  spawn_runtime, spawn_runtime_with_approvals,
+};
 use agent_kernel::Kernel;
 use agent_tool::ApprovalDecision;
 use anyhow::{Context, Result};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use tokio::{sync::broadcast, task::JoinHandle};
-use tokio_util::sync::CancellationToken;
+use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
+use tokio::sync::watch;
 
 use super::{
   ApprovalRequest, TuiState,
@@ -14,90 +17,65 @@ use super::{
 };
 
 pub use super::input::{edit_input, next_conversation_scroll};
+pub use commands::{
+  ComposerIntent, approval_decision, can_accept_input, composer_intent, control_c_key, quit_key,
+};
+pub use events::final_drain;
 
-type TurnTask = JoinHandle<(
-  Kernel,
-  Result<Vec<agent_core::AgentEvent>, agent_core::AgentError>,
-)>;
+mod commands;
+mod events;
 
 pub struct Runtime {
   pub state: TuiState,
-  pub kernel: Option<Kernel>,
-  pub events: Option<broadcast::Receiver<agent_core::AgentEvent>>,
-  pub task: Option<TurnTask>,
+  pub controller: Option<AppController>,
+  pub snapshots: watch::Receiver<agent_app::RuntimeSnapshot>,
+  pub actor_task: Option<RuntimeTask>,
   pub approval: Option<ApprovalRequest>,
-  pub approvals: Option<mpsc::Receiver<ApprovalRequest>>,
   pub approval_scroll: u16,
   pub approval_max_scroll: u16,
   pub conversation_scroll: u16,
   pub conversation_max_scroll: u16,
 }
 
-pub async fn run(kernel: Kernel, approvals: mpsc::Receiver<ApprovalRequest>) -> Result<()> {
-  let cancellation = kernel.cancellation_token();
+pub async fn run(kernel: Kernel, approvals: Option<ApprovalInbox>) -> Result<()> {
+  let (controller, actor_task) = match approvals {
+    Some(approvals) => spawn_runtime_with_approvals(kernel, approvals, 32),
+    None => spawn_runtime(kernel, 32),
+  };
+  let snapshots = controller.subscribe();
   let mut terminal = match TerminalSession::enter() {
     Ok(terminal) => terminal,
     Err(error) => {
-      cancellation.cancel();
+      drop(controller);
+      actor_task.join().await?;
       return Err(error).context("failed to initialize terminal interface");
     }
   };
   let mut runtime = Runtime {
     state: TuiState::default(),
-    kernel: Some(kernel),
-    events: None,
-    task: None,
+    controller: Some(controller),
+    snapshots,
+    actor_task: Some(actor_task),
     approval: None,
-    approvals: Some(approvals),
     approval_scroll: 0,
     approval_max_scroll: 0,
     conversation_scroll: 0,
     conversation_max_scroll: 0,
   };
 
-  let result = run_event_loop(&mut terminal, &mut runtime, &cancellation).await;
-  let close = shutdown(&mut runtime, &cancellation).await;
+  let result = run_event_loop(&mut terminal, &mut runtime).await;
+  let close = shutdown(&mut runtime).await;
   result?;
   close
 }
 
-async fn run_event_loop(
-  terminal: &mut TerminalSession,
-  runtime: &mut Runtime,
-  cancellation: &CancellationToken,
-) -> Result<()> {
+async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -> Result<()> {
   let mut cancel_requested = false;
   loop {
-    drain_events(&mut runtime.events, &mut runtime.state);
-    if runtime.approval.is_none()
-      && let Some(approvals) = runtime.approvals.as_ref()
-      && let Ok(request) = approvals.try_recv()
-    {
-      runtime.approval = Some(request);
-      runtime.approval_scroll = 0;
+    sync_runtime_snapshot(runtime);
+    if !runtime.state.is_busy() {
+      cancel_requested = false;
     }
-    if runtime.task.as_ref().is_some_and(JoinHandle::is_finished) {
-      let finished = runtime.task.take().expect("finished task exists").await;
-      final_drain(&mut runtime.events, &mut runtime.state);
-      match finished {
-        Ok((returned_kernel, Ok(_))) => runtime.kernel = Some(returned_kernel),
-        Ok((returned_kernel, Err(error))) => {
-          runtime.kernel = Some(returned_kernel);
-          runtime.state.set_error(error.to_string());
-        }
-        Err(error) => {
-          runtime
-            .state
-            .set_error(format!("turn task failed: {error}"));
-          anyhow::bail!("turn task failed: {error}");
-        }
-      }
-      runtime.events = None;
-      if cancel_requested {
-        return Ok(());
-      }
-    }
-    runtime.state.busy = runtime.task.is_some();
 
     let mut metrics = RenderMetrics::default();
     terminal.terminal.draw(|frame| {
@@ -123,18 +101,12 @@ async fn run_event_loop(
         continue;
       }
       if control_c_key(key) {
-        if runtime.task.is_some() {
+        if runtime.state.is_busy() {
           if cancel_requested {
-            if let Some(task) = runtime.task.take() {
-              task.abort();
-              let _ = task.await;
-            }
+            let _ = execute(runtime, AgentCommand::ForceStop).await;
             return Ok(());
           }
-          if let Some(request) = runtime.approval.take() {
-            request.respond(ApprovalDecision::Deny);
-          }
-          cancellation.cancel();
+          execute(runtime, AgentCommand::CancelTurn).await?;
           cancel_requested = true;
           continue;
         }
@@ -143,7 +115,8 @@ async fn run_event_loop(
       if quit_key(key) {
         return Ok(());
       }
-      if runtime.approval.is_some() {
+      if let Some(approval) = runtime.approval.as_ref() {
+        let request_id = approval.request_id;
         match key.code {
           KeyCode::Up => runtime.approval_scroll = runtime.approval_scroll.saturating_sub(1),
           KeyCode::Down => {
@@ -164,11 +137,14 @@ async fn run_event_loop(
           _ => {}
         }
         if let Some(decision) = approval_decision(key) {
-          runtime
-            .approval
-            .take()
-            .expect("approval exists")
-            .respond(decision);
+          execute(
+            runtime,
+            AgentCommand::RespondApproval {
+              request_id,
+              decision: map_approval_decision(decision),
+            },
+          )
+          .await?;
         }
         continue;
       }
@@ -181,7 +157,8 @@ async fn run_event_loop(
         runtime.conversation_scroll = next_scroll;
         continue;
       }
-      if !can_accept_input(runtime.task.is_some(), runtime.kernel.is_some()) {
+      let task_active = runtime.state.is_busy();
+      if !can_accept_input(task_active, runtime.controller.is_some()) {
         continue;
       }
       match key.code {
@@ -190,17 +167,41 @@ async fn run_event_loop(
           if !prompt.is_empty() {
             runtime.state.input.clear();
             runtime.state.input_cursor = 0;
-            runtime.state.mark_submitted();
-            let owned_kernel = runtime
-              .kernel
-              .take()
-              .context("kernel unavailable between turns")?;
-            runtime.events = Some(owned_kernel.subscribe());
-            runtime.task = Some(tokio::spawn(async move {
-              let mut owned_kernel = owned_kernel;
-              let result = owned_kernel.run_turn(&prompt).await;
-              (owned_kernel, result)
-            }));
+            if prompt == "/quit" {
+              return Ok(());
+            }
+            if let Some(queued) = prompt.strip_prefix("/queue ") {
+              let queued = queued.trim().to_owned();
+              if !queued.is_empty() {
+                execute(
+                  runtime,
+                  AgentCommand::QueueFollowUp {
+                    text: queued.clone(),
+                  },
+                )
+                .await?;
+              }
+              continue;
+            }
+            match composer_intent(task_active, key.modifiers) {
+              ComposerIntent::StartTurn => {
+                runtime.state.mark_submitted();
+                execute(runtime, AgentCommand::StartTurn { text: prompt }).await?;
+              }
+              ComposerIntent::SteerCurrentTurn => {
+                execute(runtime, AgentCommand::SteerCurrentTurn { text: prompt }).await?;
+                runtime.state.mark_steering_submitted();
+              }
+              ComposerIntent::QueueFollowUp => {
+                execute(
+                  runtime,
+                  AgentCommand::QueueFollowUp {
+                    text: prompt.clone(),
+                  },
+                )
+                .await?;
+              }
+            }
           }
         }
         KeyCode::Left
@@ -220,79 +221,52 @@ async fn run_event_loop(
   }
 }
 
-pub async fn shutdown(runtime: &mut Runtime, cancellation: &CancellationToken) -> Result<()> {
-  if let Some(request) = runtime.approval.take() {
-    request.respond(ApprovalDecision::Deny);
+pub async fn shutdown(runtime: &mut Runtime) -> Result<()> {
+  if runtime.state.is_busy()
+    && let Some(controller) = runtime.controller.as_ref()
+  {
+    let _ = controller.execute(AgentCommand::CancelTurn).await;
   }
-  runtime.approvals.take();
-  cancellation.cancel();
-
-  if let Some(mut task) = runtime.task.take() {
-    match tokio::time::timeout(Duration::from_secs(2), &mut task).await {
-      Ok(Ok((kernel, _))) => runtime.kernel = Some(kernel),
-      Ok(Err(_)) => {}
-      Err(_) => {
-        task.abort();
-        let _ = task.await;
-      }
-    }
-    final_drain(&mut runtime.events, &mut runtime.state);
-  }
-  if let Some(kernel) = runtime.kernel.as_mut() {
-    kernel.close_storage().await?;
+  runtime.controller.take();
+  if let Some(task) = runtime.actor_task.take() {
+    task.join().await?;
   }
   Ok(())
 }
 
-pub fn can_accept_input(task_active: bool, kernel_available: bool) -> bool {
-  !task_active && kernel_available
+fn sync_runtime_snapshot(runtime: &mut Runtime) {
+  let snapshot = runtime.snapshots.borrow().clone();
+  let next_approval = snapshot
+    .approval
+    .as_ref()
+    .and_then(ApprovalRequest::from_view);
+  if runtime.approval.as_ref().map(|request| request.request_id)
+    != next_approval.as_ref().map(|request| request.request_id)
+  {
+    runtime.approval_scroll = 0;
+  }
+  runtime.approval = next_approval;
+  runtime
+    .state
+    .set_queued_follow_up(snapshot.queued_follow_ups.first().cloned());
+  runtime.state.sync_snapshot(&snapshot);
 }
 
-pub fn final_drain(
-  receiver: &mut Option<broadcast::Receiver<agent_core::AgentEvent>>,
-  state: &mut TuiState,
-) {
-  drain_events(receiver, state);
-}
-
-fn drain_events(
-  receiver: &mut Option<broadcast::Receiver<agent_core::AgentEvent>>,
-  state: &mut TuiState,
-) {
-  let Some(receiver) = receiver else { return };
-  loop {
-    match receiver.try_recv() {
-      Ok(event) => state.reduce(event),
-      Err(broadcast::error::TryRecvError::Empty | broadcast::error::TryRecvError::Closed) => {
-        break;
-      }
-      Err(broadcast::error::TryRecvError::Lagged(skipped)) => {
-        state.set_error(format!("event stream lagged by {skipped} events"));
-      }
-    }
+fn map_approval_decision(decision: ApprovalDecision) -> AppApprovalDecision {
+  match decision {
+    ApprovalDecision::Allow => AppApprovalDecision::AllowOnce,
+    ApprovalDecision::AllowSession => AppApprovalDecision::AllowForSession,
+    ApprovalDecision::Deny => AppApprovalDecision::DenyOnce,
+    ApprovalDecision::DenyAll => AppApprovalDecision::DenyRemaining,
   }
 }
 
-pub fn quit_key(key: KeyEvent) -> bool {
-  key.code == KeyCode::Esc
-}
-
-pub fn control_c_key(key: KeyEvent) -> bool {
-  key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
-}
-
-pub fn approval_decision(key: KeyEvent) -> Option<ApprovalDecision> {
-  if key.modifiers != KeyModifiers::NONE && key.modifiers != KeyModifiers::SHIFT {
-    return None;
-  }
-  let KeyCode::Char(character) = key.code else {
-    return None;
-  };
-  match character.to_ascii_lowercase() {
-    'y' => Some(ApprovalDecision::Allow),
-    'n' => Some(ApprovalDecision::Deny),
-    'a' => Some(ApprovalDecision::AllowSession),
-    'd' => Some(ApprovalDecision::DenyAll),
-    _ => None,
-  }
+async fn execute(runtime: &Runtime, command: AgentCommand) -> Result<()> {
+  runtime
+    .controller
+    .as_ref()
+    .context("application runtime is unavailable")?
+    .execute(command)
+    .await
+    .map_err(anyhow::Error::from)
 }

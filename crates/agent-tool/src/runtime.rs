@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_core::{ToolDefinition, ToolInvocation, ToolResult};
+use agent_core::{SandboxStatus, ToolDefinition, ToolInvocation, ToolPreview, ToolResult};
 use agent_secret::SecretBroker;
 use async_trait::async_trait;
 use cap_std::ambient_authority;
@@ -58,6 +58,28 @@ pub enum ToolError {
 #[async_trait]
 pub trait Tool: Send + Sync {
   fn definition(&self) -> &ToolDefinition;
+
+  fn preview(
+    &self,
+    _context: &ToolContext,
+    _invocation: &ToolInvocation,
+  ) -> Result<ToolPreview, ToolError> {
+    let definition = self.definition();
+    let mut required_secrets = definition.requires_secrets.clone();
+    required_secrets.sort_by(|left, right| left.0.cmp(&right.0));
+    required_secrets.dedup();
+    Ok(ToolPreview {
+      tool: definition.name.clone(),
+      action: "Invoke tool".into(),
+      target: definition.name.clone(),
+      impact: definition.description.clone(),
+      risk: definition.risk,
+      sandbox: SandboxStatus::Unknown,
+      working_directory: None,
+      required_secrets,
+    })
+  }
+
   async fn invoke(
     &self,
     context: &ToolContext,

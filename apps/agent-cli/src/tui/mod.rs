@@ -1,15 +1,22 @@
 mod approval;
 mod composer;
 mod input;
+mod locale;
 pub mod runner;
 mod state;
 mod terminal;
+mod theme;
 mod ui;
 
-pub use approval::{ApprovalRequest, TuiApprovalPrompt};
+pub use approval::ApprovalRequest;
+pub(crate) use approval::approval_safe;
+pub use locale::Locale;
 pub use runner::run;
 pub use state::{Speaker, TranscriptEntry, TuiState};
-pub use ui::{render, render_with_approval, render_with_scroll};
+pub use theme::Theme;
+pub use ui::{
+  RenderContext, render, render_with_approval, render_with_context, render_with_scroll,
+};
 
 pub(crate) fn terminal_safe(value: &str) -> String {
   value

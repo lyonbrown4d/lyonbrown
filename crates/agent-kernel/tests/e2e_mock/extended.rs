@@ -82,6 +82,31 @@ async fn denied_tool_is_returned_as_an_observation_and_the_turn_continues() {
 }
 
 #[tokio::test]
+async fn kernel_awaits_approval_with_the_typed_tool_preview() {
+  let mock = Arc::new(MockProvider::scripted(vec![
+    ScriptedStep::tool_call("echo", json!({"text": "approved"})),
+    ScriptedStep::text("done"),
+  ]));
+  let providers = ModelRegistry::new();
+  providers.register(mock);
+  let tools = ToolRegistry::new();
+  tools.register(Arc::new(EchoTool::new()));
+  let captured = Arc::new(std::sync::Mutex::new(None));
+  let mut kernel = Kernel::builder()
+    .providers(providers)
+    .tools(tools)
+    .approval(CapturingApproval(captured.clone()))
+    .build();
+
+  let events = kernel.run_turn("approve the tool").await.unwrap();
+
+  let preview = captured.lock().unwrap().clone().unwrap();
+  assert_eq!(preview.tool, "echo");
+  assert_eq!(preview.risk, RiskLevel::Read);
+  assert!(events.iter().any(|event| event.kind() == "ToolApproved"));
+}
+
+#[tokio::test]
 async fn tool_output_is_redacted_before_events_and_model_observations() {
   let mock = Arc::new(MockProvider::scripted(vec![
     ScriptedStep::tool_call("fixed_secret", json!({})),
@@ -143,13 +168,27 @@ struct RedactingBroker;
 
 struct DenyApproval;
 
+#[async_trait]
 impl ApprovalPolicy for DenyApproval {
-  fn approve(
-    &self,
-    _definition: &ToolDefinition,
-    _invocation: &ToolInvocation,
-  ) -> ApprovalDecision {
-    ApprovalDecision::Deny
+  async fn approve(&self, request: ApprovalRequest) -> ApprovalResponse {
+    ApprovalResponse {
+      request_id: request.request_id,
+      decision: ApprovalDecision::Deny,
+    }
+  }
+}
+
+struct CapturingApproval(Arc<std::sync::Mutex<Option<agent_core::ToolPreview>>>);
+
+#[async_trait]
+impl ApprovalPolicy for CapturingApproval {
+  async fn approve(&self, request: ApprovalRequest) -> ApprovalResponse {
+    tokio::task::yield_now().await;
+    *self.0.lock().unwrap() = Some(request.preview);
+    ApprovalResponse {
+      request_id: request.request_id,
+      decision: ApprovalDecision::Allow,
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 use super::*;
 use crate::Tool;
-use agent_core::{RiskLevel, ToolDefinition, ToolSource};
+use agent_core::{RiskLevel, SandboxStatus, ToolDefinition, ToolPreview, ToolSource};
 use async_trait::async_trait;
 use serde_json::json;
 use std::process::Stdio;
@@ -45,6 +45,33 @@ impl Default for ShellTool {
 impl Tool for ShellTool {
   fn definition(&self) -> &ToolDefinition {
     &self.definition
+  }
+
+  fn preview(
+    &self,
+    context: &ToolContext,
+    invocation: &ToolInvocation,
+  ) -> Result<ToolPreview, ToolError> {
+    let command = string_argument(invocation, "command")?;
+    if command.trim().is_empty() {
+      return Err(ToolError::InvalidArguments(
+        "command must not be empty".into(),
+      ));
+    }
+    let mut required_secrets = self.definition.requires_secrets.clone();
+    required_secrets.extend(required_secret_refs(invocation)?);
+    required_secrets.sort_by(|left, right| left.0.cmp(&right.0));
+    required_secrets.dedup();
+    Ok(ToolPreview {
+      tool: self.definition.name.clone(),
+      action: "Execute shell command".into(),
+      target: command.into(),
+      impact: "Runs this full command on the host without sandbox isolation (unsandboxed).".into(),
+      risk: self.definition.risk,
+      sandbox: SandboxStatus::HostUnsandboxed,
+      working_directory: Some(context.workspace_root.clone()),
+      required_secrets,
+    })
   }
 
   async fn invoke(

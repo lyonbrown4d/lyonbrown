@@ -3,11 +3,13 @@
 //! 验收测试：`tests/e2e_mock.rs`（离线，规格见 `docs/zh/src/plans/mvp-implementation-plan.md` §7）
 
 mod bus;
+mod control;
 mod kernel;
 mod session;
 mod state;
 
 pub use bus::EventBus;
+pub use control::{KernelControl, KernelControlError};
 pub use kernel::{Kernel, KernelBuilder, KernelLimits, KernelModelOptions};
 pub use session::Session;
 pub use state::{KernelState, TransitionError};

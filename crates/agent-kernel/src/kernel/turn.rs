@@ -6,7 +6,10 @@ impl Kernel {
     user_text: &str,
   ) -> Result<Vec<AgentEvent>, AgentError> {
     let log_start = self.bus.log().len();
-    if !matches!(self.state, KernelState::Idle | KernelState::Failed { .. }) {
+    if !matches!(
+      self.state,
+      KernelState::Idle | KernelState::Failed { .. } | KernelState::Cancelled
+    ) {
       return Err(AgentError::Transition(format!(
         "cannot start turn from {:?}",
         self.state
@@ -46,6 +49,7 @@ impl Kernel {
       "user",
     );
 
+    let mut active_text = user_text.to_owned();
     let mut steps = 0;
     let mut escalations = 0;
     let mut used_tool = false;
@@ -53,6 +57,9 @@ impl Kernel {
       if self.cancellation.is_cancelled() {
         self.cancel_turn(turn_id)?;
         return Err(AgentError::Cancelled);
+      }
+      if let Some(steering) = self.apply_pending_steering(turn_id)? {
+        active_text = steering;
       }
       if steps >= self.limits.max_steps_per_turn {
         let message = format!(
@@ -76,7 +83,14 @@ impl Kernel {
         ts: Utc::now(),
       })?;
       let prepared = self
-        .prepare_step(user_text, turn_id, step_id, steps, escalations, used_tool)
+        .prepare_step(
+          &active_text,
+          turn_id,
+          step_id,
+          steps,
+          escalations,
+          used_tool,
+        )
         .await?;
       let (selected, response) = self.start_model(turn_id, step_id, prepared).await?;
       let mut stream = response.events;
@@ -127,6 +141,11 @@ impl Kernel {
         usage,
         ts: Utc::now(),
       })?;
+
+      if let Some(steering) = self.apply_pending_steering(turn_id)? {
+        active_text = steering;
+        continue;
+      }
 
       if tool_calls.is_empty() && matches!(stop_reason, StopReason::ToolUse) {
         let error = AgentError::Model("provider returned ToolUse without any tool calls".into());
@@ -189,5 +208,33 @@ impl Kernel {
         }
       }
     }
+  }
+
+  fn apply_pending_steering(&mut self, turn_id: TurnId) -> Result<Option<String>, AgentError> {
+    let mut latest = None;
+    while let Ok((generation, text)) = self.steering_rx.try_recv() {
+      if generation != self.active_steering_generation {
+        continue;
+      }
+      self.emit(AgentEvent::TurnSteered {
+        session_id: self.session.id,
+        turn_id,
+        text: text.clone(),
+        ts: Utc::now(),
+      })?;
+      self.session.push_message(
+        ChatMessage {
+          role: Role::User,
+          content: text.clone(),
+          tool_call_id: None,
+          tool_name: None,
+          tool_calls: vec![],
+        },
+        ContextItemKind::Message,
+        "steer",
+      );
+      latest = Some(text);
+    }
+    Ok(latest)
   }
 }

@@ -14,6 +14,7 @@ cuda = ["llama-cpp", "provider-llamacpp/cuda"]
 vulkan = ["llama-cpp", "provider-llamacpp/vulkan"]
 
 [dependencies]
+agent-app = { workspace = true }
 agent-core = { workspace = true }
 agent-kernel = { workspace = true }
 agent-index = { workspace = true }
@@ -41,6 +42,7 @@ serde_json = { workspace = true }
 config = { workspace = true }
 dirs = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
 ratatui = { workspace = true }

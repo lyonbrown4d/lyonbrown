@@ -14,7 +14,7 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-Run `agent ask "hello"`, `agent chat`, or `agent .` inside a workspace to open the TUI. The TUI and headless CLI share the same Kernel, event stream, and approval policy.
+Run `agent ask "hello"`, `agent chat`, or `agent .` inside a workspace to open the TUI. The TUI drives the Kernel through the shared `agent-app` command, snapshot, and approval contracts; the headless CLI retains a narrow direct Kernel entry point.
 
 ## Remote models and fallback
 
@@ -39,6 +39,17 @@ Remote providers are disabled by default. Set `model.provider = "anthropic"` or 
 
 A repository's `agent.toml` can select profiles, providers, and service endpoints. The CLI rejects workspace profile, model, approval-policy, and storage settings by default; pass `--trust-workspace-config` to load them, and only when you trust that repository configuration.
 
+## Tool approval
+
+```toml
+[approval]
+approve_all = false
+deny_all = false
+timeout_seconds = 300
+```
+
+Interactive approvals deny after 300 seconds by default. Set `approval.timeout_seconds` to another positive value when needed. Client disconnects, mismatched response IDs, and timeouts all fail closed. The TUI defaults to Deny once, and `Enter` activates that safe action.
+
 ## MCP tools
 
 ```toml
@@ -59,7 +70,7 @@ enabled = true
 path = "./.agent/session.db"
 ```
 
-Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=false` and `LYONBROWN_STORAGE__PATH` are the environment equivalents. Event writes return success only after database commit. On resume, completed tool results are retained, while started calls without a recorded result are marked as having an unknown outcome and are not automatically replayed. In `agent chat` or the TUI, the first Ctrl-C cancels the current turn and exits; a second Ctrl-C forces interruption.
+Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=false` and `LYONBROWN_STORAGE__PATH` are the environment equivalents. Event writes return success only after database commit. On resume, completed tool results are retained, while started calls without a recorded result are marked as having an unknown outcome and are not automatically replayed. In the TUI, the first Ctrl-C cancels the current turn and the second forces it to stop. Escape does not quit; use Ctrl-D or `/quit` for an explicit exit.
 
 ## Embedded llama.cpp
 

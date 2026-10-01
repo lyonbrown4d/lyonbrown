@@ -8,7 +8,9 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 
 - [Architecture: Local-First Agent Runtime](architecture/local-first-agent-runtime.md)
 - [FluxDI Composition Root](architecture/composition-root.md)
+- [TUI Visual and Interaction Baseline](design/tui-interaction-design.md)
 - [Phase-One MVP Implementation Plan](plans/mvp-implementation-plan.md)
+- [Phase-Two Product and Interaction Plan](plans/phase-two-product-plan.md)
 - [Configuration Reference](reference/configuration.md)
 - [Local Models and Task Routing](reference/local-models-routing.md)
 

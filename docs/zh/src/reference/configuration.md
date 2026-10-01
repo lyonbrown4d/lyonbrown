@@ -14,7 +14,7 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-运行 `agent ask "你好"`、`agent chat`，或在工作区执行 `agent .` 打开 TUI。TUI 与 headless CLI 使用同一 Kernel、事件流和审批策略。
+运行 `agent ask "你好"`、`agent chat`，或在工作区执行 `agent .` 打开 TUI。TUI 通过共享 `agent-app` 命令、状态投影和审批契约驱动 Kernel；headless CLI 继续使用窄 Kernel 入口。
 
 ## 远程模型与自动回退
 
@@ -39,6 +39,17 @@ api_key_ref = "env:OPENAI_API_KEY"
 
 仓库中的 `agent.toml` 可以指定 profile、Provider 和服务 endpoint。CLI 默认拒绝 profile、模型、审批策略与存储设置，需显式传入 `--trust-workspace-config` 后才会加载；仅当你信任该仓库配置时启用。
 
+## 工具审批
+
+```toml
+[approval]
+approve_all = false
+deny_all = false
+timeout_seconds = 300
+```
+
+交互审批默认在 300 秒后拒绝，可通过 `approval.timeout_seconds` 调整；值必须大于零。客户端断开、响应 ID 不匹配或超时都按拒绝处理。TUI 的审批默认动作是 Deny once，`Enter` 直接执行该安全动作。
+
 ## MCP 工具
 
 ```toml
@@ -59,7 +70,7 @@ enabled = true
 path = "./.agent/session.db"
 ```
 
-相对存储路径以工作区为基准；也可设置 `LYONBROWN_STORAGE__ENABLED=false` 或 `LYONBROWN_STORAGE__PATH`。事件写入在提交到数据库后才返回成功；中断时恢复会保留已完成的工具结果，并把执行中但未记录结果的调用标为结果未知，不会自动重放。`agent chat`/TUI 运行时第一次 Ctrl-C 取消当前轮并退出，第二次强制中断。
+相对存储路径以工作区为基准；也可设置 `LYONBROWN_STORAGE__ENABLED=false` 或 `LYONBROWN_STORAGE__PATH`。事件写入在提交到数据库后才返回成功；中断时恢复会保留已完成的工具结果，并把执行中但未记录结果的调用标为结果未知，不会自动重放。TUI 运行时第一次 Ctrl-C 取消当前轮，第二次强制停止；Esc 不退出，使用 Ctrl-D 或 `/quit` 明确退出。
 
 ## Embedded llama.cpp
 

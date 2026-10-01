@@ -33,7 +33,8 @@ impl Session {
       .iter()
       .find_map(|event| match event {
         AgentEvent::SessionStarted { session_id, .. }
-        | AgentEvent::UserMessageReceived { session_id, .. } => Some(*session_id),
+        | AgentEvent::UserMessageReceived { session_id, .. }
+        | AgentEvent::TurnSteered { session_id, .. } => Some(*session_id),
         _ => None,
       })
       .ok_or_else(|| AgentError::Storage("event log has no session ID".into()))?;
@@ -53,6 +54,9 @@ impl Session {
           step_text.entry(*step_id).or_default().push_str(delta);
         }
         AgentEvent::UserMessageReceived {
+          session_id, text, ..
+        }
+        | AgentEvent::TurnSteered {
           session_id, text, ..
         } => {
           if *session_id != id {
@@ -77,6 +81,9 @@ impl Session {
             ContextItemKind::Message,
             "user",
           );
+          if matches!(event, AgentEvent::TurnSteered { .. }) {
+            step_text.clear();
+          }
         }
         AgentEvent::ToolRequested {
           step_id,

@@ -40,8 +40,12 @@ impl KernelState {
       (Self::Idle, AgentEvent::SessionStarted { .. })
       | (Self::Idle, AgentEvent::UserMessageReceived { .. })
       | (Self::Failed { .. }, AgentEvent::UserMessageReceived { .. })
+      | (Self::Cancelled, AgentEvent::UserMessageReceived { .. })
       | (Self::Idle, AgentEvent::SessionClosed { .. }) => Self::Idle,
       (Self::Idle, AgentEvent::TurnStarted { .. }) => Self::PreparingContext,
+      (Self::PreparingContext, AgentEvent::TurnSteered { .. }) => Self::PreparingContext,
+      (Self::ModelRunning, AgentEvent::TurnSteered { .. })
+      | (Self::Observation, AgentEvent::TurnSteered { .. }) => Self::PreparingContext,
       (Self::PreparingContext, AgentEvent::StepStarted { .. }) => Self::PreparingContext,
       (Self::PreparingContext, AgentEvent::ContextPrepared { .. }) => Self::SelectingModel,
       (Self::SelectingModel, AgentEvent::ContextPrepared { .. }) => Self::SelectingModel,

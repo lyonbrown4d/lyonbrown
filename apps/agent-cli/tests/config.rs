@@ -98,6 +98,7 @@ fn missing_optional_global_and_workspace_files_use_typed_defaults() {
   assert_eq!(loaded.llamacpp.batch_size, 512);
   assert!(!loaded.approval.approve_all);
   assert!(!loaded.approval.deny_all);
+  assert_eq!(loaded.approval.timeout_seconds, 300);
 }
 
 #[test]

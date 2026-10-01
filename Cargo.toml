@@ -22,6 +22,7 @@ all = "warn"
 [workspace.dependencies]
 # --- 内部 crate（严格 DAG：见 docs/zh/src/plans/mvp-implementation-plan.md §1）---
 agent-core = { path = "crates/agent-core" }
+agent-app = { path = "crates/agent-app" }
 agent-kernel = { path = "crates/agent-kernel" }
 agent-model = { path = "crates/agent-model" }
 agent-context = { path = "crates/agent-context" }

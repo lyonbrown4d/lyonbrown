@@ -1,21 +1,17 @@
-use std::{sync::Arc, thread};
-
-use agent_core::{
-  AgentEvent, RiskLevel, ToolCallId, ToolDefinition, ToolInvocation, ToolSource, TurnId,
-};
+use agent_app::{RuntimePhase, RuntimeSnapshot, TurnStatus, TurnView, spawn_runtime};
+use agent_core::{AgentEvent, TurnId};
 use agent_kernel::Kernel;
-use agent_tool::{ApprovalDecision, ApprovalPrompt};
+use agent_tool::ApprovalDecision;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use serde_json::json;
 use tokio::sync::broadcast;
 use unicode_segmentation::UnicodeSegmentation;
 
+use agent_cli::tui::TuiState;
 use agent_cli::tui::runner::{
-  Runtime, approval_decision, can_accept_input, control_c_key, edit_input, final_drain,
-  next_conversation_scroll, quit_key, shutdown,
+  ComposerIntent, Runtime, approval_decision, can_accept_input, composer_intent, control_c_key,
+  edit_input, final_drain, next_conversation_scroll, quit_key, shutdown,
 };
-use agent_cli::tui::{TuiApprovalPrompt, TuiState};
 
 #[test]
 fn final_drain_consumes_events_queued_at_task_completion() {
@@ -37,7 +33,7 @@ fn final_drain_consumes_events_queued_at_task_completion() {
 }
 
 #[test]
-fn input_remains_locked_until_task_join_returns_kernel() {
+fn composer_accepts_input_while_a_turn_is_active() {
   let mut state = TuiState::default();
   state.reduce(AgentEvent::TurnCompleted {
     turn_id: TurnId::new(),
@@ -45,15 +41,60 @@ fn input_remains_locked_until_task_join_returns_kernel() {
     ts: Utc::now(),
   });
   assert_eq!(state.status(), "idle");
-  assert!(!can_accept_input(true, false));
-  assert!(!can_accept_input(true, true));
+  assert!(can_accept_input(true, false));
+  assert!(can_accept_input(true, true));
   assert!(!can_accept_input(false, false));
   assert!(can_accept_input(false, true));
 }
 
 #[test]
-fn escape_quits_and_control_c_is_a_separate_interrupt_key() {
-  assert!(quit_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
+fn tui_state_projects_the_shared_runtime_snapshot() {
+  let mut snapshot = RuntimeSnapshot {
+    phase: RuntimePhase::Streaming,
+    ..RuntimeSnapshot::default()
+  };
+  snapshot.turns.push(TurnView {
+    turn_id: TurnId::new(),
+    user_text: "inspect".into(),
+    steering: vec!["focus on tests".into()],
+    assistant_text: "working".into(),
+    status: TurnStatus::Running,
+    activities: vec![],
+  });
+  let mut state = TuiState::default();
+
+  state.sync_snapshot(&snapshot);
+
+  assert!(state.is_busy());
+  assert_eq!(state.status(), "streaming");
+  assert_eq!(state.transcript().len(), 3);
+  assert_eq!(state.transcript()[1].text, "focus on tests");
+  assert_eq!(state.transcript()[2].text, "working");
+}
+
+#[test]
+fn enter_intent_distinguishes_submit_steer_and_queue() {
+  assert_eq!(
+    composer_intent(false, KeyModifiers::NONE),
+    ComposerIntent::StartTurn
+  );
+  assert_eq!(
+    composer_intent(true, KeyModifiers::NONE),
+    ComposerIntent::SteerCurrentTurn
+  );
+  assert_eq!(
+    composer_intent(true, KeyModifiers::ALT),
+    ComposerIntent::QueueFollowUp
+  );
+}
+
+#[test]
+fn explicit_quit_and_control_c_are_separate_from_escape() {
+  assert!(!quit_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
+  assert!(quit_key(KeyEvent::new(
+    KeyCode::Char('d'),
+    KeyModifiers::CONTROL
+  )));
   assert!(!quit_key(KeyEvent::new(
     KeyCode::Char('c'),
     KeyModifiers::CONTROL
@@ -121,6 +162,14 @@ fn is_grapheme_boundary(value: &str, cursor: usize) -> bool {
 #[test]
 fn approval_shortcuts_reject_command_modifiers_and_accept_plain_or_shifted_keys() {
   assert_eq!(
+    approval_decision(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    Some(ApprovalDecision::Deny)
+  );
+  assert_eq!(
+    approval_decision(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+    Some(ApprovalDecision::Deny)
+  );
+  assert_eq!(
     approval_decision(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)),
     Some(ApprovalDecision::Allow)
   );
@@ -152,48 +201,22 @@ fn conversation_scroll_uses_distance_from_bottom_and_page_down_resumes_following
 }
 
 #[tokio::test]
-async fn shutdown_denies_approval_cancels_and_joins_turn_task() {
-  let (prompt, approvals) = TuiApprovalPrompt::channel();
-  let definition = ToolDefinition {
-    name: "shell".into(),
-    description: String::new(),
-    input_schema: json!({"type": "object"}),
-    source: ToolSource::BuiltIn,
-    risk: RiskLevel::Execute,
-    requires_secrets: vec![],
-  };
-  let invocation = ToolInvocation {
-    id: ToolCallId::new(),
-    name: "shell".into(),
-    arguments: json!({"command": "echo pending"}),
-  };
-  let prompt = Arc::new(prompt);
-  let approval_worker = thread::spawn(move || prompt.prompt(&definition, &invocation));
-  let pending = approvals.recv().unwrap();
-
-  let kernel = Kernel::builder().build();
-  let cancellation = kernel.cancellation_token();
-  let task_cancellation = cancellation.clone();
-  let task = tokio::spawn(async move {
-    task_cancellation.cancelled().await;
-    (kernel, Err(agent_core::AgentError::Cancelled))
-  });
+async fn shutdown_joins_the_shared_runtime_actor() {
+  let (controller, actor_task) = spawn_runtime(Kernel::builder().build(), 4);
+  let snapshots = controller.subscribe();
   let mut runtime = Runtime {
     state: TuiState::default(),
-    kernel: None,
-    events: None,
-    task: Some(task),
-    approval: Some(pending),
-    approvals: Some(approvals),
+    controller: Some(controller),
+    snapshots,
+    actor_task: Some(actor_task),
+    approval: None,
     approval_scroll: 0,
     approval_max_scroll: 0,
     conversation_scroll: 0,
     conversation_max_scroll: 0,
   };
 
-  shutdown(&mut runtime, &cancellation).await.unwrap();
+  shutdown(&mut runtime).await.unwrap();
 
-  assert!(cancellation.is_cancelled());
-  assert!(runtime.task.is_none());
-  assert_eq!(approval_worker.join().unwrap(), ApprovalDecision::Deny);
+  assert!(runtime.actor_task.is_none());
 }

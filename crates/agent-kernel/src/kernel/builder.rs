@@ -112,6 +112,8 @@ impl KernelBuilder {
 
   pub fn build(self) -> Kernel {
     let cancellation = CancellationToken::new();
+    let (steering_tx, steering_rx) = tokio::sync::mpsc::unbounded_channel();
+    let steering_active_generation = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
     let tool_context = ToolContext::new(
       self.workspace_root.clone(),
       self.broker.clone(),
@@ -159,6 +161,10 @@ impl KernelBuilder {
       last_requests: Vec::new(),
       storage: self.storage,
       writer,
+      steering_tx,
+      steering_rx,
+      steering_active_generation,
+      active_steering_generation: 0,
     }
   }
 }

@@ -135,17 +135,28 @@ async fn read_file_stays_inside_the_workspace_root() {
   ));
 }
 
-#[test]
-fn allow_all_policy_approves_every_risk_level() {
-  let invocation = ToolInvocation {
-    id: ToolCallId::new(),
-    name: "echo".into(),
-    arguments: json!({"text": "hello"}),
-  };
-  let definition = EchoTool::new().definition().clone();
+#[tokio::test]
+async fn allow_all_policy_approves_every_risk_level() {
+  let id = ToolCallId::new();
+  let request = agent_tool::ApprovalRequest::new(
+    id,
+    agent_core::ToolPreview {
+      tool: "echo".into(),
+      action: "echo".into(),
+      target: "echo".into(),
+      impact: "none".into(),
+      risk: RiskLevel::Read,
+      sandbox: agent_core::SandboxStatus::Unknown,
+      working_directory: None,
+      required_secrets: vec![],
+    },
+  );
 
   assert_eq!(
-    AllowAllApproval.approve(&definition, &invocation),
-    ApprovalDecision::Allow
+    AllowAllApproval.approve(request).await,
+    agent_tool::ApprovalResponse {
+      request_id: id,
+      decision: ApprovalDecision::Allow,
+    }
   );
 }

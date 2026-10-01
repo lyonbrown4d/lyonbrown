@@ -38,6 +38,12 @@ pub enum AgentEvent {
     turn_id: TurnId,
     ts: DateTime<Utc>,
   },
+  TurnSteered {
+    session_id: SessionId,
+    turn_id: TurnId,
+    text: String,
+    ts: DateTime<Utc>,
+  },
   StepStarted {
     session_id: SessionId,
     turn_id: TurnId,
@@ -139,6 +145,7 @@ impl AgentEvent {
       Self::SessionStarted { .. } => "SessionStarted",
       Self::UserMessageReceived { .. } => "UserMessageReceived",
       Self::TurnStarted { .. } => "TurnStarted",
+      Self::TurnSteered { .. } => "TurnSteered",
       Self::StepStarted { .. } => "StepStarted",
       Self::ContextPrepared { .. } => "ContextPrepared",
       Self::ModelSelected { .. } => "ModelSelected",
