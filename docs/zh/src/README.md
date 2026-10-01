@@ -17,7 +17,7 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
 ## 当前状态
 
 - 已完成：M0–M9 的 MVP 实施与本机验收，包括 Secrets、远程 Provider 与回退、MCP、SQLite 会话恢复，以及默认启用的进程内 llama.cpp。
-- `agent .` 使用 Ratatui/Crossterm TUI；`agent ask`、`agent chat`、`agent sessions` 和 `agent resume` 提供 headless/会话入口。
+- `agent` 默认直接进入 chat；`agent .` 使用 Ratatui/Crossterm TUI，`agent ask`、`agent sessions` 和 `agent resume` 提供其他 headless/会话入口。
 - 跨平台进程 sandbox 仍属于 Phase 2，尚未纳入本轮 MVP。
 
 里程碑的详细范围和验收口径以 MVP 实施计划为准。架构文档描述长期方向，不直接表示当前实现进度。

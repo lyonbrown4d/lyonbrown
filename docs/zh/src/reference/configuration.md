@@ -14,7 +14,7 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-运行 `agent ask "你好"`、`agent chat`，或在工作区执行 `agent .` 打开 TUI。TUI 通过共享 `agent-app` 命令、状态投影和审批契约驱动 Kernel；headless CLI 继续使用窄 Kernel 入口。
+直接运行 `agent` 即可进入 chat（`agent chat` 继续作为兼容的显式写法）；单次提问使用 `agent ask "你好"`，在工作区执行 `agent .` 可打开 TUI。TUI 通过共享 `agent-app` 命令、状态投影和审批契约驱动 Kernel；headless CLI 继续使用窄 Kernel 入口。
 
 ## 远程模型与自动回退
 

@@ -47,6 +47,18 @@ async fn mount_metadata(server: &MockServer, size: usize) {
     .await;
 }
 
+async fn mount_metadata_without_repo_commit(server: &MockServer, size: usize) {
+  Mock::given(method("HEAD"))
+    .and(path("/test-owner/test-repo/resolve/main/test.gguf"))
+    .respond_with(
+      ResponseTemplate::new(200)
+        .insert_header("content-length", size.to_string())
+        .insert_header("etag", "\"test-etag\""),
+    )
+    .mount(server)
+    .await;
+}
+
 async fn mount_unknown_metadata(server: &MockServer) {
   Mock::given(method("HEAD"))
     .and(path("/test-owner/test-repo/resolve/main/test.gguf"))
@@ -79,6 +91,28 @@ async fn missing_model_is_downloaded_and_verified() {
   let server = MockServer::start().await;
   let bytes = b"GGUF-test-model";
   mount_metadata(&server, bytes.len()).await;
+  Mock::given(method("GET"))
+    .and(path("/test-owner/test-repo/resolve/main/test.gguf"))
+    .respond_with(ResponseTemplate::new(200).set_body_bytes(bytes))
+    .expect(1)
+    .mount(&server)
+    .await;
+  let root = temp_dir();
+  let preset = test_preset(bytes, 1024);
+
+  let path = ensure_model_from_endpoint(&root, &preset, &server.uri())
+    .await
+    .unwrap();
+
+  assert_eq!(std::fs::read(path).unwrap(), bytes);
+  std::fs::remove_dir_all(root).unwrap();
+}
+
+#[tokio::test]
+async fn download_does_not_require_repo_commit_header() {
+  let server = MockServer::start().await;
+  let bytes = b"GGUF-without-repo-commit";
+  mount_metadata_without_repo_commit(&server, bytes.len()).await;
   Mock::given(method("GET"))
     .and(path("/test-owner/test-repo/resolve/main/test.gguf"))
     .respond_with(ResponseTemplate::new(200).set_body_bytes(bytes))

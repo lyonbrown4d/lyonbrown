@@ -17,5 +17,5 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 ## Current status
 
 - Complete: M0–M9 MVP implementation and local acceptance, including secrets, remote providers and fallback, MCP, SQLite session resume, and embedded llama.cpp enabled by default.
-- `agent .` provides the Ratatui/Crossterm UI; `agent ask`, `agent chat`, `agent sessions`, and `agent resume` provide headless and session entry points.
+- `agent` enters chat by default; `agent .` provides the Ratatui/Crossterm UI, while `agent ask`, `agent sessions`, and `agent resume` provide additional headless and session entry points.
 - Cross-platform process sandboxing remains Phase 2 and is outside this MVP.

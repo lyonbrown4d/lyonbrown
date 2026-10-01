@@ -31,7 +31,7 @@ fn ask_accepts_prompt_and_provider_overrides_after_subcommand() {
   assert_eq!(cli.provider.as_deref(), Some("ollama"));
   assert_eq!(cli.model.as_deref(), Some("translategemma:4b"));
   assert!(cli.approve_all);
-  assert!(matches!(cli.command, Command::Ask { prompt } if prompt == "say hi"));
+  assert!(matches!(cli.command, Some(Command::Ask { prompt }) if prompt == "say hi"));
 }
 
 #[test]
@@ -39,7 +39,7 @@ fn chat_subcommand_is_available() {
   let cli = Cli::try_parse_from(["agent", "chat", "--endpoint", "http://localhost:11434"]).unwrap();
 
   assert_eq!(cli.endpoint.as_deref(), Some("http://localhost:11434"));
-  assert!(matches!(cli.command, Command::Chat));
+  assert!(matches!(cli.command, Some(Command::Chat)));
 }
 
 #[test]
@@ -47,13 +47,13 @@ fn dot_is_workspace_entrypoint_and_profile_can_be_overridden() {
   let cli = Cli::try_parse_from(["agent", ".", "--profile", "careful"]).unwrap();
   assert_eq!(cli.profile.as_deref(), Some("careful"));
   assert!(
-    matches!(cli.command, Command::Tui { workspace } if workspace == std::path::Path::new("."))
+    matches!(cli.command, Some(Command::Tui { workspace }) if workspace == std::path::Path::new("."))
   );
 }
 
 #[test]
-fn command_is_required() {
-  assert!(Cli::try_parse_from(["agent"]).is_err());
+fn command_is_optional_for_default_chat() {
+  assert!(Cli::try_parse_from(["agent"]).is_ok());
 }
 
 #[test]

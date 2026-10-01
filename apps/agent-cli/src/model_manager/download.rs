@@ -55,16 +55,14 @@ async fn download_with_hf_hub(
     preset.id,
     preset.download_bytes as f64 / (1024_u64.pow(3)) as f64
   );
+  if let Some(size) = inspect_file_size(endpoint, preset)
+    .await
+    .with_context(|| format!("failed to inspect model '{}'", preset.id))?
+  {
+    enforce_size_limit(size, preset.max_bytes)?;
+  }
   let client = HFClient::builder().endpoint(endpoint).build()?;
   let repository = client.model(preset.owner, preset.repository);
-  let metadata = repository
-    .get_file_metadata()
-    .filepath(preset.filename)
-    .revision(preset.revision)
-    .send()
-    .await
-    .with_context(|| format!("failed to inspect model '{}'", preset.id))?;
-  enforce_size_limit(metadata.file_size, preset.max_bytes)?;
   let (content_length, mut stream) = repository
     .download_file_stream()
     .filename(preset.filename)
@@ -93,6 +91,37 @@ async fn download_with_hf_hub(
   }
   file.flush().await?;
   Ok(path)
+}
+
+async fn inspect_file_size(endpoint: &str, preset: &ModelPreset) -> Result<Option<u64>> {
+  let mut url = reqwest::Url::parse(endpoint).context("invalid Hugging Face endpoint")?;
+  let mut segments = url
+    .path_segments_mut()
+    .map_err(|_| anyhow::anyhow!("Hugging Face endpoint cannot be a base URL"))?;
+  segments.pop_if_empty();
+  segments
+    .push(preset.owner)
+    .push(preset.repository)
+    .push("resolve")
+    .push(preset.revision)
+    .push(preset.filename);
+  drop(segments);
+
+  let response = reqwest::Client::builder()
+    .redirect(reqwest::redirect::Policy::none())
+    .build()?
+    .head(url)
+    .send()
+    .await?
+    .error_for_status()?;
+  Ok(
+    response
+      .headers()
+      .get("x-linked-size")
+      .or_else(|| response.headers().get(reqwest::header::CONTENT_LENGTH))
+      .and_then(|value| value.to_str().ok())
+      .and_then(|value| value.parse().ok()),
+  )
 }
 
 fn enforce_size_limit(size: u64, max_bytes: u64) -> Result<()> {

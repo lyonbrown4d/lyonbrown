@@ -32,7 +32,7 @@ use agent_app::approval_channel;
 #[command(name = "agent", version, about = "Local-first agent runtime")]
 pub struct Cli {
   #[command(subcommand)]
-  pub command: Command,
+  pub command: Option<Command>,
 
   /// Explicit configuration file (TOML, YAML, JSON, JSON5, RON, or INI).
   #[arg(long, global = true)]
@@ -87,8 +87,9 @@ pub enum Command {
   },
 }
 
-pub async fn run(cli: Cli) -> Result<()> {
-  let workspace = match &cli.command {
+pub async fn run(mut cli: Cli) -> Result<()> {
+  let command = cli.command.take().unwrap_or(Command::Chat);
+  let workspace = match &command {
     Command::Tui { workspace } => workspace.clone(),
     _ => std::env::current_dir().context("failed to determine workspace directory")?,
   };
@@ -107,7 +108,7 @@ pub async fn run(cli: Cli) -> Result<()> {
   };
   let config = RuntimeConfig::load(options)?;
   let home = dirs::home_dir().context("home directory is unavailable")?;
-  if matches!(cli.command, Command::Sessions) {
+  if matches!(command, Command::Sessions) {
     let store = SessionStore::open(storage_path(&config, &workspace, &home)).await?;
     for session in store.sessions().await? {
       println!(
@@ -117,7 +118,7 @@ pub async fn run(cli: Cli) -> Result<()> {
     }
     return Ok(());
   }
-  let (approval, tui_approvals) = match &cli.command {
+  let (approval, tui_approvals) = match &command {
     Command::Tui { .. } if !config.approval.approve_all && !config.approval.deny_all => {
       let (prompt, requests) = approval_channel(4);
       (
@@ -138,7 +139,7 @@ pub async fn run(cli: Cli) -> Result<()> {
   .await?;
   let mut kernel = root.build_kernel()?;
 
-  let result = match cli.command {
+  let result = match command {
     Command::Ask { prompt } => ask(&mut kernel, &prompt).await,
     Command::Chat => chat(&mut kernel).await,
     Command::Resume { session_id } => {

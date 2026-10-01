@@ -14,7 +14,7 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-Run `agent ask "hello"`, `agent chat`, or `agent .` inside a workspace to open the TUI. The TUI drives the Kernel through the shared `agent-app` command, snapshot, and approval contracts; the headless CLI retains a narrow direct Kernel entry point.
+Run `agent` to enter chat directly (`agent chat` remains a compatible explicit form), use `agent ask "hello"` for one-shot prompts, or run `agent .` inside a workspace to open the TUI. The TUI drives the Kernel through the shared `agent-app` command, snapshot, and approval contracts; the headless CLI retains a narrow direct Kernel entry point.
 
 ## Remote models and fallback
 
