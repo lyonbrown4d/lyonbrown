@@ -35,6 +35,8 @@ message HandshakeResponse {
   string server_version = 2;
   string server_instance_id = 3;
   repeated string capabilities = 4;
+  // Canonical SHA-256 identity of the workspace and runtime configuration.
+  string scope_fingerprint = 5;
 }
 
 message StartTurnRequest {
@@ -74,6 +76,16 @@ message SelectSessionModelRequest {
   ModelSelection selection = 2;
 }
 
+message StartModelDownloadRequest {
+  RequestMetadata metadata = 1;
+  string model_id = 2;
+}
+
+message CancelModelDownloadRequest {
+  RequestMetadata metadata = 1;
+  string operation_id = 2;
+}
+
 message CommandResponse {
   uint32 protocol_version = 1;
   string command_id = 2;
@@ -90,6 +102,12 @@ enum CommandErrorCode {
   COMMAND_ERROR_CODE_NO_PENDING_APPROVAL = 6;
   COMMAND_ERROR_CODE_APPROVAL_REQUEST_MISMATCH = 7;
   COMMAND_ERROR_CODE_UNSUPPORTED = 8;
+  COMMAND_ERROR_CODE_MODEL_SETUP_REQUIRED = 9;
+  COMMAND_ERROR_CODE_MODEL_DOWNLOAD_UNAVAILABLE = 10;
+  COMMAND_ERROR_CODE_INVALID_MODEL_ID = 11;
+  COMMAND_ERROR_CODE_NO_ACTIVE_MODEL_DOWNLOAD = 12;
+  COMMAND_ERROR_CODE_MODEL_DOWNLOAD_OPERATION_MISMATCH = 13;
+  COMMAND_ERROR_CODE_MODEL_DOWNLOAD_CANCELLATION_TOO_LATE = 14;
 }
 
 enum UnsupportedCommand {
@@ -97,11 +115,23 @@ enum UnsupportedCommand {
   UNSUPPORTED_COMMAND_FORCE_STOP = 1;
   UNSUPPORTED_COMMAND_RESPOND_APPROVAL = 2;
   UNSUPPORTED_COMMAND_SELECT_SESSION_MODEL = 3;
+  UNSUPPORTED_COMMAND_START_MODEL_DOWNLOAD = 4;
+  UNSUPPORTED_COMMAND_CANCEL_MODEL_DOWNLOAD = 5;
 }
 
 message ApprovalRequestMismatchDetail {
   string expected_request_id = 1;
   string received_request_id = 2;
+}
+
+message InvalidModelIdDetail {
+  string requested_model_id = 1;
+  string configured_model_id = 2;
+}
+
+message ModelDownloadOperationMismatchDetail {
+  string expected_operation_id = 1;
+  string received_operation_id = 2;
 }
 
 message CommandErrorDetail {
@@ -111,6 +141,8 @@ message CommandErrorDetail {
     string steering_reason = 2;
     ApprovalRequestMismatchDetail approval_request_mismatch = 3;
     UnsupportedCommand unsupported_command = 4;
+    InvalidModelIdDetail invalid_model_id = 5;
+    ModelDownloadOperationMismatchDetail model_download_operation_mismatch = 6;
   }
 }
 

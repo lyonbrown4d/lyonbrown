@@ -1,19 +1,23 @@
+mod support;
+
 use std::sync::Arc;
 
 use agent_app::{AgentCommand, RuntimeCommandError, RuntimeSnapshot};
 use agent_core::ToolCallId;
 use agent_protocol::PROTOCOL_VERSION;
-use agent_protocol::v1::agent_service_server::AgentService;
 use agent_protocol::v1::command_error_detail::Context;
 use agent_protocol::v1::{
-  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, RequestMetadata,
-  StartTurnRequest, UnsupportedCommand as WireUnsupportedCommand,
+  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, InvalidModelIdDetail,
+  ModelDownloadOperationMismatchDetail, RequestMetadata, StartTurnRequest,
+  UnsupportedCommand as WireUnsupportedCommand,
 };
-use agentd::{AgentGrpcService, RuntimeHost, VersionedSnapshot};
+use agentd::{RuntimeHost, VersionedSnapshot};
 use async_trait::async_trait;
 use prost::Message;
 use tokio::sync::watch;
-use tonic::{Code, Request};
+use tonic::Code;
+
+use support::spawn_authenticated;
 
 #[derive(Clone)]
 struct RejectingHost {
@@ -43,8 +47,8 @@ impl RuntimeHost for RejectingHost {
   }
 }
 
-fn request(command_id: usize, server_instance_id: &str) -> Request<StartTurnRequest> {
-  Request::new(StartTurnRequest {
+fn request(command_id: usize, server_instance_id: &str) -> StartTurnRequest {
+  StartTurnRequest {
     metadata: Some(RequestMetadata {
       protocol_version: PROTOCOL_VERSION,
       client_instance_id: "typed-error-test".into(),
@@ -52,13 +56,19 @@ fn request(command_id: usize, server_instance_id: &str) -> Request<StartTurnRequ
       expected_server_instance_id: server_instance_id.into(),
     }),
     text: "hello".into(),
-  })
+  }
 }
 
 async fn status_for(error: RuntimeCommandError, command_id: usize) -> tonic::Status {
-  let service = AgentGrpcService::new(Arc::new(RejectingHost::new(error)));
-  let request = request(command_id, service.server_instance_id());
-  service.start_turn(request).await.unwrap_err()
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let server = spawn_authenticated(listener, Arc::new(RejectingHost::new(error)));
+  let request = request(command_id, &server.server_instance_id());
+  server
+    .raw_client()
+    .await
+    .start_turn(request)
+    .await
+    .unwrap_err()
 }
 
 #[tokio::test]
@@ -72,6 +82,56 @@ async fn every_runtime_command_error_has_a_typed_wire_detail() {
       RuntimeCommandError::RuntimeStopped,
       Code::Unavailable,
       CommandErrorCode::RuntimeStopped,
+      None,
+    ),
+    (
+      RuntimeCommandError::ModelSetupRequired,
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelSetupRequired,
+      None,
+    ),
+    (
+      RuntimeCommandError::ModelDownloadUnavailable,
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelDownloadUnavailable,
+      None,
+    ),
+    (
+      RuntimeCommandError::InvalidModelId {
+        requested: "other".into(),
+        configured: "configured".into(),
+      },
+      Code::InvalidArgument,
+      CommandErrorCode::InvalidModelId,
+      Some(Context::InvalidModelId(InvalidModelIdDetail {
+        requested_model_id: "other".into(),
+        configured_model_id: "configured".into(),
+      })),
+    ),
+    (
+      RuntimeCommandError::NoActiveModelDownload,
+      Code::FailedPrecondition,
+      CommandErrorCode::NoActiveModelDownload,
+      None,
+    ),
+    (
+      RuntimeCommandError::ModelDownloadOperationMismatch {
+        expected: "current".into(),
+        received: "stale".into(),
+      },
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelDownloadOperationMismatch,
+      Some(Context::ModelDownloadOperationMismatch(
+        ModelDownloadOperationMismatchDetail {
+          expected_operation_id: "current".into(),
+          received_operation_id: "stale".into(),
+        },
+      )),
+    ),
+    (
+      RuntimeCommandError::ModelDownloadCancellationTooLate,
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelDownloadCancellationTooLate,
       None,
     ),
     (

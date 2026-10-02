@@ -17,7 +17,11 @@ pub(super) fn render_composer(
   theme: Theme,
   messages: Messages,
 ) {
-  let (mode, hint) = if state.busy {
+  let (mode, hint) = if state.is_model_setup_required() {
+    (messages.model_setup, messages.model_setup_hint)
+  } else if !state.can_submit() {
+    (messages.unavailable, messages.connection_wait_hint)
+  } else if state.busy {
     (messages.running, messages.running_hint)
   } else {
     (messages.ready, messages.ready_hint)

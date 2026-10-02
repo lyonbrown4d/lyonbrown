@@ -11,6 +11,8 @@ use tokio_util::sync::CancellationToken;
 use crate::approval::PendingApproval;
 use crate::{ApprovalInbox, Projector, RuntimeActorError, RuntimeEndpoint};
 
+mod cleanup;
+
 type TurnResult = Result<Vec<AgentEvent>, AgentError>;
 type TurnTask = JoinHandle<(Kernel, TurnResult)>;
 
@@ -27,6 +29,7 @@ pub(super) struct Actor {
   pub(super) pending_approval: Option<PendingApproval>,
   pub(super) commands_open: bool,
   replay_required: bool,
+  shutdown: CancellationToken,
 }
 
 pub(super) async fn run(
@@ -34,6 +37,7 @@ pub(super) async fn run(
   endpoint: RuntimeEndpoint,
   projector: Projector,
   approvals: Option<ApprovalInbox>,
+  shutdown: CancellationToken,
 ) -> Result<(), RuntimeActorError> {
   let events = kernel.subscribe();
   Actor {
@@ -46,6 +50,7 @@ pub(super) async fn run(
     control: None,
     cancellation: None,
     approvals,
+    shutdown,
     pending_approval: None,
     commands_open: true,
     replay_required: false,
@@ -57,6 +62,9 @@ pub(super) async fn run(
 impl Actor {
   async fn run(mut self) -> Result<(), RuntimeActorError> {
     loop {
+      if self.commands_open && self.shutdown.is_cancelled() {
+        self.close_commands();
+      }
       if self.turn_task.is_none() {
         if !self.commands_open {
           self.close_kernel().await?;
@@ -67,15 +75,19 @@ impl Actor {
           self.start_turn(text);
           continue;
         }
-        let Some(request) = self.endpoint.recv_request().await else {
-          self.commands_open = false;
-          continue;
-        };
-        self.handle_command(request);
+        tokio::select! {
+          biased;
+          () = self.shutdown.cancelled() => self.close_commands(),
+          request = self.endpoint.recv_request() => match request {
+            Some(request) => self.handle_command(request),
+            None => self.close_commands(),
+          }
+        }
         continue;
       }
 
       tokio::select! {
+        () = self.shutdown.cancelled(), if self.commands_open => self.close_commands(),
         request = self.endpoint.recv_request(), if self.commands_open => {
           match request {
             Some(request) => self.handle_command(request),
@@ -130,6 +142,7 @@ impl Actor {
 
   fn close_commands(&mut self) {
     self.commands_open = false;
+    self.endpoint.close_commands();
     self.deny_pending();
     self.queued.clear();
     self.publish_queue();
@@ -200,6 +213,7 @@ impl Actor {
           .kernel
           .as_ref()
           .expect("finished turn returns its kernel"),
+        crate::RuntimePhase::Ready,
       );
       self.projector.set_queued_follow_ups(&self.queued);
       self.replay_required = false;

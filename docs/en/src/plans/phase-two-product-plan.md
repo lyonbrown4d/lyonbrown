@@ -34,18 +34,32 @@ Restart the application and recover the same working state
 ### 2.1 Existing foundation
 
 - Kernel, state machine, AgentEvent, SQLite resume, and cancellation semantics are implemented.
-- The TUI uses the real Kernel and supports streaming conversation, runtime status, scrolling, and approval dialogs.
-- The GUI has a responsive GPUI three-column visual shell, but it only renders static sample data.
-- Embedded llama.cpp is enabled by default; the TUI recommends the smaller Qwen3 1.7B GGUF and requires confirmation before a cancellable background download. Ollama, Anthropic, and OpenAI are configurable.
+- The product has one local C/S boundary: `agentd` owns the Kernel and both TUI
+  and GUI use the authenticated gRPC contract.
+- llama.cpp is enabled by default in `agentd`. A missing GGUF produces
+  `ModelSetupRequired`; it does not trigger a startup download.
+- The default managed preset is `qwen3-1.7b-q4_k_m`. The daemon supports
+  explicit background download, cancellation, and progress on the single
+  `RuntimeSnapshot` stream. A missing configured path is not presented as a
+  downloadable preset.
+- An in-process `agentd` epoch supervisor activates installed models. It keeps
+  the old control plane available while building the replacement and publishing
+  its endpoint, and rolls back to a retryable state on failure.
+- Ollama, Anthropic, and OpenAI remain configurable providers.
 - The Scheduler already models Control / Worker / Frontier, Local / Remote, privacy filtering, and bounded fallback.
 
 ### 2.2 Main gaps
 
 - `model.provider + model.model` still centers the production path on one primary model rather than a role-based model pool.
-- First launch may download a large model without a unified confirmation, progress, cancellation, disk, and resource experience.
-- The TUI owns its AgentEvent reducer while the GUI owns unrelated static state, creating behavioral drift.
+- Daemon-side download and epoch replacement are implemented. TUI and GUI have
+  not yet wired the shared confirmation, progress, cancellation, and failure
+  retry controls, and disk/resource explanations remain incomplete.
+- TUI and GUI share remote projections, but the complete product interaction
+  loop still needs end-to-end verification.
 - The TUI lacks session and model pickers, a command palette, activity details, and discoverable help.
-- The GUI has no real session, streaming, approval, cancellation, or resume loop.
+- The GUI now submits real remote `StartTurn` commands and subscribes to daemon
+  state, but the session transcript, streaming, approval, cancellation, and
+  resume loop is not complete.
 - The current Quality Gate only handles model errors and empty answers.
 - Shell execution is still host/unsandboxed, and the UI must never imply otherwise.
 
@@ -53,21 +67,25 @@ Restart the application and recover the same working state
 
 ### D10. TUI is the reference client; GUI is a graphical peer
 
-The TUI validates new interaction contracts first because it already uses the real Kernel, is inexpensive to test, and serves keyboard and SSH workflows. The GUI does not copy its layout, but it must reuse the same application commands, event projections, and approval semantics.
+The TUI validates new interaction contracts first because it is inexpensive to
+test and serves keyboard and SSH workflows. The GUI does not copy its layout,
+but both clients must use the same gRPC commands, projections, and approval
+semantics. Neither client may access the Kernel directly.
 
-“Reference client” does not make the GUI secondary. New Runtime capabilities are validated in the shared contract and TUI before entering the GUI so that two clients do not independently guess at Kernel behavior.
+“Reference client” does not make the GUI secondary. New Runtime capabilities are validated in the shared protocol and TUI before entering the GUI so that two clients do not independently guess at daemon behavior.
 
 ### D11. Add a UI-neutral application layer
 
-Add `crates/agent-app` with a narrow scope:
+Keep `crates/agent-app` behind `agentd` with a narrow scope:
 
 - Accept typed `AgentCommand` values for session creation, task submission, cancellation, resume, model selection, and approval responses.
 - Own Kernel and session lifecycles instead of moving a mutable Kernel between UI tasks.
 - Project AgentEvent into stable `RuntimeSnapshot`, `TurnView`, `ActivityView`, and `ApprovalView` values.
-- Expose subscriptions and point-in-time snapshots to Ratatui and GPUI.
+- Expose subscriptions and point-in-time snapshots through the gRPC service.
 - Contain no Ratatui, GPUI, color, layout, or key-binding knowledge.
 
-Headless CLI paths may retain a narrow direct entry point, while TUI and GUI must use this layer. Each app keeps its own FluxDI composition root.
+`agentd` is the only composition root. TUI and GUI use `agent-client`; there is
+no direct or headless Kernel compatibility path.
 
 ### D12. Replace “one model” configuration with roles and policy
 
@@ -79,7 +97,9 @@ The fixed model roles are:
 
 Sessions default to `Auto`. Users may pin the session Worker without creating a new session or clearing working memory. Per-message overrides are deferred in phase two to avoid unclear scope and routing explanations.
 
-The old `[model]` section remains compatible for one release and maps to the Worker role. The new structure becomes authoritative:
+The role-based schema replaces the old `[model]` schema without a runtime
+compatibility mapper. Migration is explicit and configuration errors fail
+closed:
 
 ```toml
 [models]
@@ -115,7 +135,28 @@ When an embedded model is first required, the Runtime returns a structured `Mode
 - current RAM, optional GPU backend, and expected execution mode;
 - Download, Choose another model, and Exit actions.
 
-Only a headless command with explicit `--yes`, or an already valid cache, may continue without interaction. Downloads have progress, cancellation, retry, and atomic-install states and never hide under a generic “thinking” state.
+An already valid cache may continue without interaction. Download starts only
+after an explicit unary `StartModelDownload`; cancellation uses
+`CancelModelDownload`. There is no headless `--yes` bypass. Progress and results
+use the single versioned `RuntimeSnapshot` stream rather than a second model
+event stream.
+
+Managed state carries its source, phase, allowed actions, byte progress,
+failure, and `operation_id`. Closing a client does not cancel the daemon job.
+Cancel must match the current operation and returns TooLate after `Installing`
+begins. The recovery action is Retry, not resume. A client submits only the
+built-in preset ID selected by current configuration; URL, digest, and
+destination come from the daemon catalog. A missing explicitly configured
+`model_path` cannot start a managed download.
+
+The in-process epoch supervisor activates the installed model. The old control
+plane stays available while the replacement Runtime is built. The supervisor
+starts the new endpoint and atomically publishes its descriptor before stopping
+the old endpoint. Address, token, and server UUID rotate while scope, PID, and
+the lifetime lock remain stable; clients reconnect and resynchronize
+automatically. Build or transition failure keeps the old control plane and
+fails closed. Runtime shutdown performs explicit graceful cleanup followed by
+abort cleanup for any remaining task.
 
 ### D14. Conversation, activity, and inspection are separate information layers
 
@@ -328,7 +369,15 @@ Acceptance: identical scripted event traces project to identical TUI/GUI state; 
 
 ### M11 — Model control plane
 
-Deliver role-based configuration, model inventory, doctor/install/status, download progress, hardware probes, session pinning, structured RoutingDecision, and old-config migration.
+Status: daemon download/cancel, Snapshot progress, integrity verification, and
+epoch activation foundations are implemented. TUI and GUI controls are not yet
+wired.
+
+Deliver the remaining role-based configuration, model inventory,
+doctor/install/status commands, both clients' download controls, hardware
+probes, session pinning, structured RoutingDecision, and old-config migration.
+TUI and GUI must use the same Snapshot/RPCs and must not implement a second
+downloader.
 
 Acceptance: first run never downloads silently; valid offline cache starts; insufficient resources and remote fallback are explained accurately.
 
@@ -386,6 +435,7 @@ The following choices require evidence from the preceding milestone:
 
 | Decision gate | Trigger | Required evidence |
 |---|---|---|
+| One product package or separate TUI/GUI bundles | Before the first public installer | Both options must atomically include the exact-version sibling `agentd`; compare install size, upgrade behavior, and release complexity |
 | Keep a dedicated Router resident | M15 | Clear latency, memory, or task-success improvement over Worker reuse |
 | Long-term GPUI commitment | After M13 | Three platforms, IME, accessibility, performance, and upgrade cost |
 | Add per-turn model overrides | After M14 | Frequent real need without damaging routing clarity |

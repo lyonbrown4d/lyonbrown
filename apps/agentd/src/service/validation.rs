@@ -2,7 +2,8 @@ use agent_app::{ApprovalDecision, RuntimeCommandError, UnsupportedCommand};
 use agent_protocol::PROTOCOL_VERSION;
 use agent_protocol::v1::command_error_detail::Context;
 use agent_protocol::v1::{
-  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, RequestMetadata,
+  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, InvalidModelIdDetail,
+  ModelDownloadOperationMismatchDetail, RequestMetadata,
   UnsupportedCommand as WireUnsupportedCommand,
 };
 use prost::Message;
@@ -63,6 +64,47 @@ pub(super) fn map_command_error(error: RuntimeCommandError) -> Status {
     RuntimeCommandError::RuntimeStopped => {
       (Code::Unavailable, CommandErrorCode::RuntimeStopped, None)
     }
+    RuntimeCommandError::ModelSetupRequired => (
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelSetupRequired,
+      None,
+    ),
+    RuntimeCommandError::ModelDownloadUnavailable => (
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelDownloadUnavailable,
+      None,
+    ),
+    RuntimeCommandError::InvalidModelId {
+      requested,
+      configured,
+    } => (
+      Code::InvalidArgument,
+      CommandErrorCode::InvalidModelId,
+      Some(Context::InvalidModelId(InvalidModelIdDetail {
+        requested_model_id: requested.clone(),
+        configured_model_id: configured.clone(),
+      })),
+    ),
+    RuntimeCommandError::NoActiveModelDownload => (
+      Code::FailedPrecondition,
+      CommandErrorCode::NoActiveModelDownload,
+      None,
+    ),
+    RuntimeCommandError::ModelDownloadOperationMismatch { expected, received } => (
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelDownloadOperationMismatch,
+      Some(Context::ModelDownloadOperationMismatch(
+        ModelDownloadOperationMismatchDetail {
+          expected_operation_id: expected.clone(),
+          received_operation_id: received.clone(),
+        },
+      )),
+    ),
+    RuntimeCommandError::ModelDownloadCancellationTooLate => (
+      Code::FailedPrecondition,
+      CommandErrorCode::ModelDownloadCancellationTooLate,
+      None,
+    ),
     RuntimeCommandError::TurnAlreadyActive => (
       Code::FailedPrecondition,
       CommandErrorCode::TurnAlreadyActive,
@@ -118,5 +160,7 @@ fn unsupported_command(command: UnsupportedCommand) -> WireUnsupportedCommand {
     UnsupportedCommand::ForceStop => WireUnsupportedCommand::ForceStop,
     UnsupportedCommand::RespondApproval => WireUnsupportedCommand::RespondApproval,
     UnsupportedCommand::SelectSessionModel => WireUnsupportedCommand::SelectSessionModel,
+    UnsupportedCommand::StartModelDownload => WireUnsupportedCommand::StartModelDownload,
+    UnsupportedCommand::CancelModelDownload => WireUnsupportedCommand::CancelModelDownload,
   }
 }

@@ -1,15 +1,20 @@
+mod support;
+
 use std::sync::Arc;
 use std::time::Duration;
 
 use agent_app::{AgentCommand, ModelSelection, RuntimePhase, RuntimeSnapshot};
 use agent_client::{AgentClient, ApprovalDecision as ClientApprovalDecision, Command};
+use agent_local::{AUTHORIZATION_METADATA_KEY, SecretToken, bearer_authorization};
 use agent_protocol::v1::agent_service_client::AgentServiceClient as RawAgentClient;
 use agent_protocol::v1::{HealthRequest, RequestMetadata};
-use agentd::{RuntimeHost, ServeError, VersionedSnapshot, serve};
+use agentd::{RuntimeHost, ServeError, VersionedSnapshot, serve_authenticated};
 use async_trait::async_trait;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
+
+use support::{spawn_authenticated, test_identity, test_scope};
 
 #[derive(Clone)]
 struct TestHost {
@@ -57,23 +62,16 @@ impl RuntimeHost for TestHost {
 async fn connected_client() -> (TestHost, AgentClient, CancellationToken) {
   let host = TestHost::new();
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-  let address = listener.local_addr().unwrap();
-  let shutdown = CancellationToken::new();
-  let server_shutdown = shutdown.clone();
   let server_host = host.clone();
-  tokio::spawn(async move {
-    serve(listener, Arc::new(server_host), server_shutdown.cancelled())
-      .await
-      .unwrap();
-  });
-  let mut client = AgentClient::connect(format!("http://{address}"), "test-tui")
+  let server = spawn_authenticated(listener, Arc::new(server_host));
+  let mut client = AgentClient::connect(server.target, "test-tui")
     .await
     .unwrap();
   client
     .handshake("agent-tui", env!("CARGO_PKG_VERSION"))
     .await
     .unwrap();
-  (host, client, shutdown)
+  (host, client, server.shutdown)
 }
 
 #[tokio::test]
@@ -120,12 +118,8 @@ async fn server_stream_delivers_revisioned_runtime_events() {
 async fn graceful_shutdown_completes_with_an_open_event_stream() {
   let host = TestHost::new();
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-  let address = listener.local_addr().unwrap();
-  let shutdown = CancellationToken::new();
-  let server_shutdown = shutdown.clone();
-  let server =
-    tokio::spawn(async move { serve(listener, Arc::new(host), server_shutdown.cancelled()).await });
-  let mut client = AgentClient::connect(format!("http://{address}"), "shutdown-test")
+  let server = spawn_authenticated(listener, Arc::new(host));
+  let mut client = AgentClient::connect(server.target, "shutdown-test")
     .await
     .unwrap();
   client
@@ -134,9 +128,9 @@ async fn graceful_shutdown_completes_with_an_open_event_stream() {
     .unwrap();
   let _open_stream = client.subscribe_events(1).await.unwrap();
 
-  shutdown.cancel();
+  server.shutdown.cancel();
 
-  tokio::time::timeout(Duration::from_secs(1), server)
+  tokio::time::timeout(Duration::from_secs(1), server.task)
     .await
     .expect("server shutdown must not wait forever for an event stream")
     .unwrap()
@@ -148,9 +142,16 @@ async fn server_rejects_non_loopback_listener() {
   let host = TestHost::new();
   let listener = TcpListener::bind("0.0.0.0:0").await.unwrap();
 
-  let error = serve(listener, Arc::new(host), std::future::pending())
-    .await
-    .unwrap_err();
+  let error = serve_authenticated(
+    listener,
+    Arc::new(host),
+    SecretToken::generate().unwrap(),
+    test_identity(),
+    test_scope(),
+    std::future::pending(),
+  )
+  .await
+  .unwrap_err();
 
   assert!(matches!(error, ServeError::NonLoopback(_)));
 }
@@ -187,6 +188,11 @@ async fn client_exposes_handshake_and_every_command() {
     })
     .await
     .unwrap();
+  client
+    .start_model_download("qwen3-1.7b-q4_k_m")
+    .await
+    .unwrap();
+  client.cancel_model_download("download-1").await.unwrap();
 
   let commands = host.commands.lock().await;
   assert!(matches!(
@@ -197,9 +203,12 @@ async fn client_exposes_handshake_and_every_command() {
       AgentCommand::CancelTurn,
       AgentCommand::ForceStop,
       AgentCommand::RespondApproval { request_id: actual, decision: agent_app::ApprovalDecision::AllowOnce },
-      AgentCommand::SelectSessionModel { selection: ModelSelection::Pinned { provider, model } }
+      AgentCommand::SelectSessionModel { selection: ModelSelection::Pinned { provider, model } },
+      AgentCommand::StartModelDownload { model_id },
+      AgentCommand::CancelModelDownload { operation_id }
     ] if steer == "focus here" && queued == "then test it" && actual.as_uuid() == request_id
       && provider == "local" && model == "worker"
+      && model_id == "qwen3-1.7b-q4_k_m" && operation_id == "download-1"
   ));
   shutdown.cancel();
 }
@@ -229,28 +238,39 @@ async fn incompatible_protocol_version_reports_supported_version() {
   let host = TestHost::new();
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
   let address = listener.local_addr().unwrap();
+  let token = SecretToken::generate().unwrap();
+  let server_token = token.clone();
   let shutdown = CancellationToken::new();
   let server_shutdown = shutdown.clone();
   tokio::spawn(async move {
-    serve(listener, Arc::new(host), server_shutdown.cancelled())
-      .await
-      .unwrap();
+    serve_authenticated(
+      listener,
+      Arc::new(host),
+      server_token,
+      test_identity(),
+      test_scope(),
+      server_shutdown.cancelled(),
+    )
+    .await
+    .unwrap();
   });
   let mut client = RawAgentClient::connect(format!("http://{address}"))
     .await
     .unwrap();
 
-  let error = client
-    .health(HealthRequest {
-      metadata: Some(RequestMetadata {
-        protocol_version: 99,
-        client_instance_id: "future-gui".into(),
-        command_id: "health-1".into(),
-        expected_server_instance_id: String::new(),
-      }),
-    })
-    .await
-    .unwrap_err();
+  let mut request = tonic::Request::new(HealthRequest {
+    metadata: Some(RequestMetadata {
+      protocol_version: 99,
+      client_instance_id: "future-gui".into(),
+      command_id: "health-1".into(),
+      expected_server_instance_id: String::new(),
+    }),
+  });
+  request.metadata_mut().insert(
+    AUTHORIZATION_METADATA_KEY,
+    bearer_authorization(&token).parse().unwrap(),
+  );
+  let error = client.health(request).await.unwrap_err();
 
   assert_eq!(error.code(), tonic::Code::FailedPrecondition);
   assert!(

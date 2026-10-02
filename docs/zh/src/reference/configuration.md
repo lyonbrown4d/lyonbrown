@@ -14,7 +14,10 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-直接运行 `agent` 即可打开工作区 chat TUI（`agent .` 是对应的显式写法）；单次提问使用 `agent ask "你好"`，兼容的 headless 终端聊天使用 `agent chat`。TUI 通过共享 `agent-app` 命令、状态投影和审批契约驱动 Kernel；headless CLI 继续使用窄 Kernel 入口。
+直接运行 `agent` 即可打开工作区 chat TUI，`agent .` 是对应的显式写法。
+不再保留 `ask`、`chat`、`sessions` 或 `resume` 兼容子命令。TUI 与 GUI 通过
+同一套已认证 gRPC 契约连接 `agentd`；只有 `agentd` 创建 Kernel 并持有 Runtime
+状态。
 
 ## 远程模型与自动回退
 
@@ -58,11 +61,17 @@ command = "C:/path/to/mcp-server.exe"
 args = ["--stdio"]
 ```
 
-启动时连接已配置的 stdio server 并注册 `mcp.files.<tool>` 工具。MCP 工具默认风险为 Execute，仍走统一审批、60 秒超时和输出脱敏。工作区 `agent.toml` 中的 MCP 命令默认拒绝启动；确认信任该工作区后，运行 `agent --trust-workspace-mcp chat`（或对应子命令）才会加载。模型路由与 MCP 命令使用独立信任标志。全局或显式 `--config` 中的 MCP 配置视为用户已信任。推荐使用明确的可执行文件路径。
+`agentd` 连接已配置的 stdio server 并注册 `mcp.files.<tool>` 工具。MCP 工具
+默认风险为 Execute，仍走统一审批、60 秒超时和输出脱敏。工作区 `agent.toml`
+中的 MCP 命令默认拒绝启动；审阅并信任该工作区后，运行
+`agent --trust-workspace-mcp`。模型路由与 MCP 命令使用独立信任标志。全局或
+显式 `--config` 中的 MCP 配置视为用户已信任。推荐使用明确的可执行文件路径。
 
 ## 会话存储与恢复
 
-默认开启 SQLite WAL 存储，路径为 `~/.agent/agent.db`。运行 `agent sessions` 查看会话 ID，`agent resume <session-id>` 继续会话。可用以下配置关闭或改路径：
+默认开启 SQLite WAL 存储，路径为 `~/.agent/agent.db`，并由 `agentd` 持有。
+Session 列表和恢复是基于 gRPC 的 client 交互，不再通过直读存储或旧 CLI 子命令
+完成。可用以下配置关闭或改路径：
 
 ```toml
 [storage]
@@ -72,9 +81,12 @@ path = "./.agent/session.db"
 
 相对存储路径以工作区为基准；也可设置 `LYONBROWN_STORAGE__ENABLED=false` 或 `LYONBROWN_STORAGE__PATH`。事件写入在提交到数据库后才返回成功；中断时恢复会保留已完成的工具结果，并把执行中但未记录结果的调用标为结果未知，不会自动重放。TUI 运行时第一次 Ctrl-C 取消当前轮，第二次强制停止；Esc 不退出，使用 Ctrl-D 或 `/quit` 明确退出。
 
-## Embedded llama.cpp
+## 由 daemon 持有的 llama.cpp
 
-llama.cpp 是默认 Provider，也是 `agent-cli` 的默认 feature：Agent 直接在进程内加载 GGUF，不需要 HTTP daemon，也不会启动外部推理进程。`cuda` 或 `vulkan` feature 可选；使用 `--no-default-features` 的精简构建不会包含它。
+llama.cpp 是默认 Provider，也是 `agentd` 的默认 feature。daemon 直接在自身
+进程内加载 GGUF，不需要独立的 HTTP 推理服务，也不会启动外部推理进程。
+`cuda` 或 `vulkan` feature 可选；使用 `--no-default-features` 的精简 `agentd`
+构建不会包含它。client 不加载 GGUF，也不回退到内嵌 Kernel。
 
 ```toml
 [model]
@@ -95,10 +107,27 @@ temperature = 0.7
 seed = 0
 ```
 
-相对模型路径以工作区为基准。也可以设置 `LYONBROWN_LLAMACPP__MODEL_PATH`。`model.thinking` 默认是 `false`；对于 Qwen3 模板，embedded provider 会在渲染前应用官方 `/no_think` 控制。省略 `model_path` 时，TUI 默认推荐更小的 `qwen3-1.7b-q4_k_m`，先检查已校验缓存，并在启动后台下载前征求确认；用户始终可以不下载并退出。详见[本地模型与任务路由](local-models-routing.md)。Windows 原生构建需要 MSVC、Windows SDK、CMake/Ninja 和可被绑定生成器发现的 LLVM `libclang`；必要时设置 `LIBCLANG_PATH`。
+相对模型路径以工作区为基准。也可以设置
+`LYONBROWN_LLAMACPP__MODEL_PATH`。`model.thinking` 默认是 `false`；对于
+Qwen3 模板，provider 会在渲染前应用官方 `/no_think` 控制。省略
+`model_path` 时，`agentd` 会检查默认 `qwen3-1.7b-q4_k_m` 的已校验缓存；
+若缓存缺失，Runtime 进入 `ModelSetupRequired`，打开 client 不会触发下载。
+daemon 已提供显式后台 Start/Cancel RPC，并在统一的 `RuntimeSnapshot` stream
+发布进度；TUI/GUI controls 属于下一小节点。配置的 `model_path` 缺失时不提供
+托管下载。详见
+[本地模型与任务路由](local-models-routing.md)。Windows 原生构建需要 MSVC、
+Windows SDK、CMake/Ninja 和可被绑定生成器发现的 LLVM `libclang`；必要时设置
+`LIBCLANG_PATH`。
 
 ```powershell
-cargo run -p agent-cli -- --config agent.toml ask "用一句话介绍 Rust"
+.\scripts\build-windows.ps1
+.\target\debug\agent.exe --config agent.toml .
 ```
 
-不带 feature 却选择 `llamacpp` 时，CLI 会明确报错，不会回退到外部服务。真实模型验收可设置 `LYONBROWN_GGUF_MODEL` 后运行 provider 中标记为 ignored 的 live smoke test。
+该脚本会原地修复中断的 llama.cpp CMake generation，默认不清理或另建
+`target`，并同时生成同目录的 `agent.exe` 与 `agentd.exe`；只执行
+`cargo run -p agent-cli` 不是完整的 C/S 开发启动方式。
+
+在未包含该 feature 的 daemon 中选择 `llamacpp` 时会明确报错，不会回退到
+外部服务。真实模型验收可设置 `LYONBROWN_GGUF_MODEL` 后运行 provider 中标记
+为 ignored 的 live smoke test。

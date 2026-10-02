@@ -104,6 +104,34 @@ fn workspace_remote_endpoint_requires_explicit_config_trust() {
 }
 
 #[test]
+fn workspace_provider_selection_requires_explicit_config_trust() {
+  let root = std::env::temp_dir().join(format!(
+    "lyonbrown-untrusted-provider-selection-{}-{}",
+    std::process::id(),
+    std::time::SystemTime::now()
+      .duration_since(std::time::UNIX_EPOCH)
+      .unwrap()
+      .as_nanos()
+  ));
+  std::fs::create_dir_all(&root).unwrap();
+  std::fs::write(root.join("agent.toml"), "[model]\nprovider = 'ollama'\n").unwrap();
+  let result = RuntimeConfig::load(LoadOptions {
+    global_config: root.join("missing.toml"),
+    workspace_dir: root.clone(),
+    explicit_config: None,
+    environment: Some(Default::default()),
+    cli: Default::default(),
+  });
+  std::fs::remove_dir_all(&root).unwrap();
+  assert!(
+    result
+      .unwrap_err()
+      .to_string()
+      .contains("trust-workspace-config")
+  );
+}
+
+#[test]
 fn workspace_profile_override_requires_explicit_config_trust() {
   let root = std::env::temp_dir().join(format!(
     "lyonbrown-untrusted-profile-{}-{}",

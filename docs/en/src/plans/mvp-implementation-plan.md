@@ -1,5 +1,12 @@
 # Lyonbrown Phase-One MVP Implementation Plan
 
+> Historical record: this document describes the phase-one monolithic CLI that
+> was delivered before the C/S migration. Its `agent-cli` feature ownership,
+> direct-Kernel commands, embedded-model defaults, and headless entry points are
+> superseded and are not compatibility requirements. The current product
+> boundary is defined by [Local gRPC Client/Server Architecture](../architecture/grpc-client-server.md):
+> `agentd` is the sole Runtime/model owner and TUI/GUI are gRPC clients.
+>
 > Based on: [Lyonbrown Local-First Agent Runtime Architecture](../architecture/local-first-agent-runtime.md) (Draft v0.1)  
 > Status: M0–M9 implemented and locally accepted; the M9 real-GGUF smoke test passed on Windows MSVC/CPU. Cross-platform sandboxing remains Phase 2.
 > Platform: Windows 11 · rustc/cargo 1.98.1 · Ollama installed (qwen3.8-27b:q3-claude as Worker / translategemma:4b available as Control)

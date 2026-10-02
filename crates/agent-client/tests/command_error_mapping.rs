@@ -3,8 +3,8 @@ use agent_client::{AgentClientError, AvailabilityKind, ProtocolErrorKind};
 use agent_core::ToolCallId;
 use agent_protocol::v1::command_error_detail::Context;
 use agent_protocol::v1::{
-  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail,
-  UnsupportedCommand as WireUnsupportedCommand,
+  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, InvalidModelIdDetail,
+  ModelDownloadOperationMismatchDetail, UnsupportedCommand as WireUnsupportedCommand,
 };
 use prost::Message;
 use tonic::{Code, Status};
@@ -37,6 +37,56 @@ fn known_command_error_details_restore_runtime_errors() {
       Code::Unavailable,
       detail(CommandErrorCode::RuntimeStopped),
       RuntimeCommandError::RuntimeStopped,
+    ),
+    (
+      Code::FailedPrecondition,
+      detail(CommandErrorCode::ModelSetupRequired),
+      RuntimeCommandError::ModelSetupRequired,
+    ),
+    (
+      Code::FailedPrecondition,
+      detail(CommandErrorCode::ModelDownloadUnavailable),
+      RuntimeCommandError::ModelDownloadUnavailable,
+    ),
+    (
+      Code::InvalidArgument,
+      CommandErrorDetail {
+        code: CommandErrorCode::InvalidModelId as i32,
+        context: Some(Context::InvalidModelId(InvalidModelIdDetail {
+          requested_model_id: "other".into(),
+          configured_model_id: "configured".into(),
+        })),
+      },
+      RuntimeCommandError::InvalidModelId {
+        requested: "other".into(),
+        configured: "configured".into(),
+      },
+    ),
+    (
+      Code::FailedPrecondition,
+      detail(CommandErrorCode::NoActiveModelDownload),
+      RuntimeCommandError::NoActiveModelDownload,
+    ),
+    (
+      Code::FailedPrecondition,
+      CommandErrorDetail {
+        code: CommandErrorCode::ModelDownloadOperationMismatch as i32,
+        context: Some(Context::ModelDownloadOperationMismatch(
+          ModelDownloadOperationMismatchDetail {
+            expected_operation_id: "current".into(),
+            received_operation_id: "stale".into(),
+          },
+        )),
+      },
+      RuntimeCommandError::ModelDownloadOperationMismatch {
+        expected: "current".into(),
+        received: "stale".into(),
+      },
+    ),
+    (
+      Code::FailedPrecondition,
+      detail(CommandErrorCode::ModelDownloadCancellationTooLate),
+      RuntimeCommandError::ModelDownloadCancellationTooLate,
     ),
     (
       Code::FailedPrecondition,
@@ -164,4 +214,19 @@ fn legacy_statuses_without_details_keep_the_coarse_mapping() {
       ..
     }
   ));
+}
+
+#[test]
+fn unauthenticated_status_has_a_stable_non_retryable_kind() {
+  let secret = "Bearer secret-must-not-escape";
+  let mapped = error::status_error(Status::unauthenticated(secret));
+
+  assert_eq!(
+    mapped,
+    AgentClientError::Protocol {
+      kind: ProtocolErrorKind::AuthenticationFailed,
+      message: "authentication required".into(),
+    }
+  );
+  assert!(!mapped.to_string().contains(secret));
 }

@@ -1,53 +1,4 @@
-use std::sync::Arc;
-
-use agent_app::{
-  AgentClient, AgentClientError, AgentCommand, AvailabilityKind, ProtocolErrorKind,
-  RuntimeCommandError, RuntimePhase, RuntimeSnapshot, channel,
-};
-
-#[tokio::test]
-async fn app_controller_works_through_object_safe_client_port() {
-  let (controller, mut runtime) = channel(RuntimeSnapshot::default(), 2);
-  let client: Arc<dyn AgentClient> = Arc::new(controller);
-  let mut snapshots = client.subscribe();
-
-  let (result, command) = tokio::join!(
-    client.execute(AgentCommand::StartTurn {
-      text: "shared UI port".into(),
-    }),
-    runtime.recv()
-  );
-  result.unwrap();
-  assert!(matches!(
-    command,
-    Some(AgentCommand::StartTurn { text }) if text == "shared UI port"
-  ));
-
-  runtime
-    .publish(RuntimeSnapshot {
-      phase: RuntimePhase::Ready,
-      ..RuntimeSnapshot::default()
-    })
-    .unwrap();
-  snapshots.changed().await.unwrap();
-
-  assert_eq!(client.snapshot().phase, RuntimePhase::Ready);
-  assert_eq!(snapshots.borrow().phase, RuntimePhase::Ready);
-}
-
-#[tokio::test]
-async fn command_failure_is_exposed_as_client_error() {
-  let (controller, runtime) = channel(RuntimeSnapshot::default(), 1);
-  let client: Arc<dyn AgentClient> = Arc::new(controller);
-  drop(runtime);
-
-  let error = client.execute(AgentCommand::CancelTurn).await.unwrap_err();
-
-  assert_eq!(
-    error,
-    AgentClientError::Command(RuntimeCommandError::RuntimeStopped)
-  );
-}
+use agent_app::{AgentClientError, AvailabilityKind, ProtocolErrorKind};
 
 #[test]
 fn availability_errors_have_a_stable_kind_and_human_message() {
@@ -96,5 +47,17 @@ fn protocol_errors_have_a_stable_kind_and_human_message() {
   assert_eq!(
     error.to_string(),
     "agent protocol failed (incompatible_version): server requires protocol v2"
+  );
+}
+
+#[test]
+fn authentication_failure_has_a_stable_protocol_code() {
+  assert_eq!(
+    ProtocolErrorKind::AuthenticationFailed.code(),
+    "authentication_failed"
+  );
+  assert_eq!(
+    ProtocolErrorKind::AuthenticationFailed.to_string(),
+    "authentication_failed"
   );
 }

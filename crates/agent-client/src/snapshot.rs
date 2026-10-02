@@ -1,5 +1,6 @@
 mod activity;
 mod common;
+mod model_setup;
 
 use std::time::{Duration, Instant};
 
@@ -15,6 +16,7 @@ use uuid::Uuid;
 
 use activity::turn_from_wire;
 use common::{json_value, route_from_wire, tool_preview_from_wire};
+use model_setup::model_setup_from_wire;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DecodedSnapshot {
@@ -39,6 +41,8 @@ pub enum SnapshotDecodeError {
   },
   #[error("invalid model selection")]
   ModelSelection,
+  #[error("invalid model setup: {0}")]
+  InvalidModelSetup(&'static str),
 }
 
 pub fn decode_snapshot(wire: RuntimeSnapshot) -> Result<DecodedSnapshot, SnapshotDecodeError> {
@@ -65,6 +69,7 @@ pub fn decode_snapshot(wire: RuntimeSnapshot) -> Result<DecodedSnapshot, Snapsho
     )?,
     route: wire.route.map(route_from_wire).transpose()?,
     last_error: wire.last_error,
+    model_setup: wire.model_setup.map(model_setup_from_wire).transpose()?,
   };
   Ok(DecodedSnapshot {
     revision: wire.revision,

@@ -5,10 +5,10 @@ use agent_core::ToolCallId;
 use agent_protocol::PROTOCOL_VERSION;
 use agent_protocol::v1::agent_service_server::AgentService;
 use agent_protocol::v1::{
-  CancelTurnRequest, CommandResponse, ForceStopRequest, GetSnapshotRequest, HandshakeRequest,
-  HandshakeResponse, HealthRequest, HealthResponse, HealthStatus, RespondApprovalRequest,
-  RuntimeEvent, RuntimeSnapshot, SelectSessionModelRequest, StartTurnRequest,
-  SteerCurrentTurnRequest, SubscribeEventsRequest,
+  CancelModelDownloadRequest, CancelTurnRequest, CommandResponse, ForceStopRequest,
+  GetSnapshotRequest, HandshakeRequest, HandshakeResponse, HealthRequest, HealthResponse,
+  HealthStatus, RespondApprovalRequest, RuntimeEvent, RuntimeSnapshot, SelectSessionModelRequest,
+  StartModelDownloadRequest, StartTurnRequest, SteerCurrentTurnRequest, SubscribeEventsRequest,
 };
 use futures::{Stream, stream};
 use tonic::{Request, Response, Status};
@@ -24,6 +24,7 @@ const MAX_CLIENT_NAME_BYTES: usize = 128;
 const MAX_CLIENT_VERSION_BYTES: usize = 64;
 const MAX_PROVIDER_BYTES: usize = 128;
 const MAX_MODEL_BYTES: usize = 256;
+const MAX_MODEL_DOWNLOAD_ID_BYTES: usize = 128;
 type EventStream = Pin<Box<dyn Stream<Item = Result<RuntimeEvent, Status>> + Send>>;
 
 #[tonic::async_trait]
@@ -53,11 +54,14 @@ impl AgentService for AgentGrpcService {
       &request.client_version,
       MAX_CLIENT_VERSION_BYTES,
     )?;
+    let mut capabilities = vec!["streaming".into(), "approvals".into()];
+    capabilities.extend(self.host.capabilities().iter().map(|value| (*value).into()));
     Ok(Response::new(HandshakeResponse {
       protocol_version: PROTOCOL_VERSION,
       server_version: env!("CARGO_PKG_VERSION").into(),
       server_instance_id: self.server_instance_id.clone(),
-      capabilities: vec!["streaming".into(), "approvals".into()],
+      capabilities,
+      scope_fingerprint: self.scope_fingerprint.as_str().to_owned(),
     }))
   }
 
@@ -196,6 +200,47 @@ impl AgentService for AgentGrpcService {
       .execute(
         request.metadata,
         AgentCommand::SelectSessionModel { selection },
+        command_fingerprint,
+      )
+      .await
+  }
+
+  async fn start_model_download(
+    &self,
+    request: Request<StartModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    let request = request.into_inner();
+    validate_required_bounded("model_id", &request.model_id, MAX_MODEL_DOWNLOAD_ID_BYTES)?;
+    let command_fingerprint = fingerprint("start_model_download", &[request.model_id.as_bytes()]);
+    self
+      .execute(
+        request.metadata,
+        AgentCommand::StartModelDownload {
+          model_id: request.model_id,
+        },
+        command_fingerprint,
+      )
+      .await
+  }
+
+  async fn cancel_model_download(
+    &self,
+    request: Request<CancelModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    let request = request.into_inner();
+    validate_required_bounded(
+      "operation_id",
+      &request.operation_id,
+      MAX_MODEL_DOWNLOAD_ID_BYTES,
+    )?;
+    let command_fingerprint =
+      fingerprint("cancel_model_download", &[request.operation_id.as_bytes()]);
+    self
+      .execute(
+        request.metadata,
+        AgentCommand::CancelModelDownload {
+          operation_id: request.operation_id,
+        },
         command_fingerprint,
       )
       .await

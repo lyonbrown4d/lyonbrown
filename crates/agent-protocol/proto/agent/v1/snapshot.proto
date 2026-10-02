@@ -184,6 +184,58 @@ message ApprovalSnapshot {
   optional string approved_by = 8;
 }
 
+enum ModelSetupSource {
+  MODEL_SETUP_SOURCE_UNSPECIFIED = 0;
+  MODEL_SETUP_SOURCE_MANAGED_PRESET = 1;
+  MODEL_SETUP_SOURCE_CONFIGURED_PATH = 2;
+}
+
+enum ModelSetupPhase {
+  MODEL_SETUP_PHASE_UNSPECIFIED = 0;
+  MODEL_SETUP_PHASE_REQUIRED = 1;
+  MODEL_SETUP_PHASE_WAITING_FOR_LOCK = 2;
+  MODEL_SETUP_PHASE_CHECKING = 3;
+  MODEL_SETUP_PHASE_DOWNLOADING = 4;
+  MODEL_SETUP_PHASE_VERIFYING = 5;
+  MODEL_SETUP_PHASE_INSTALLING = 6;
+  MODEL_SETUP_PHASE_ACTIVATING = 7;
+  MODEL_SETUP_PHASE_READY = 8;
+  MODEL_SETUP_PHASE_CANCELLED = 9;
+  MODEL_SETUP_PHASE_FAILED = 10;
+}
+
+enum ModelSetupAction {
+  MODEL_SETUP_ACTION_UNSPECIFIED = 0;
+  MODEL_SETUP_ACTION_DOWNLOAD = 1;
+  MODEL_SETUP_ACTION_CANCEL = 2;
+  MODEL_SETUP_ACTION_RETRY = 3;
+}
+
+message ManagedModel {
+  string id = 1;
+  uint64 expected_download_bytes = 2;
+  uint64 max_bytes = 3;
+  uint64 min_available_memory_bytes = 4;
+  string sha256 = 5;
+}
+
+message ModelSetupFailure {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message ModelSetupSnapshot {
+  ModelSetupSource source = 1;
+  ModelSetupPhase phase = 2;
+  ManagedModel managed_model = 3;
+  optional string operation_id = 4;
+  uint64 downloaded_bytes = 5;
+  optional uint64 total_bytes = 6;
+  ModelSetupFailure failure = 7;
+  repeated ModelSetupAction allowed_actions = 8;
+}
+
 message RuntimeSnapshot {
   uint32 protocol_version = 1;
   uint64 revision = 2;
@@ -195,6 +247,7 @@ message RuntimeSnapshot {
   optional string last_error = 8;
   ModelSelection model_selection = 9;
   RouteSummary route = 10;
+  ModelSetupSnapshot model_setup = 11;
 }
 
 message RuntimeEvent {

@@ -1,5 +1,12 @@
 # Lyonbrown Local-First Agent Runtime Architecture
 
+> This document defines the long-term Kernel and domain architecture. Product
+> deployment and process ownership are governed by
+> [Local gRPC Client/Server Architecture](grpc-client-server.md): `agentd` is the
+> only Runtime/model owner, while TUI and GUI are authenticated gRPC clients.
+> Older diagrams that name CLI/Desktop/Web as adapters do not authorize an
+> embedded Runtime compatibility path.
+
 > Version: Draft v0.1  
 > Status: Long-term architecture direction; see the [Phase-One MVP Implementation Plan](../plans/mvp-implementation-plan.md) for current implementation progress  
 > Positioning: A long-lived, model-provider-neutral, local-first general-purpose Agent Runtime  

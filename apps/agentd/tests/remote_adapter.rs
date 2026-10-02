@@ -1,3 +1,5 @@
+mod support;
+
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -8,12 +10,14 @@ use agent_app::{
 };
 use agent_client::{ConnectionState, RemoteAgentClient, RemoteClientOptions};
 use agent_core::ToolCallId;
-use agentd::{RuntimeHost, VersionedSnapshot, serve};
+use agentd::{RuntimeHost, VersionedSnapshot};
 use async_trait::async_trait;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
+
+use support::spawn_authenticated;
 
 #[derive(Clone)]
 struct TestHost {
@@ -93,21 +97,15 @@ impl RuntimeHost for TestHost {
 async fn connected(host: TestHost) -> (RemoteAgentClient, CancellationToken, std::net::SocketAddr) {
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
   let address = listener.local_addr().unwrap();
-  let shutdown = CancellationToken::new();
-  let server_shutdown = shutdown.clone();
-  tokio::spawn(async move {
-    serve(listener, Arc::new(host), server_shutdown.cancelled())
-      .await
-      .unwrap();
-  });
+  let server = spawn_authenticated(listener, Arc::new(host));
   let client = RemoteAgentClient::connect(
-    format!("http://{address}"),
+    server.target,
     "remote-test",
     RemoteClientOptions::for_tests(),
   )
   .await
   .unwrap();
-  (client, shutdown, address)
+  (client, server.shutdown, address)
 }
 
 #[tokio::test]

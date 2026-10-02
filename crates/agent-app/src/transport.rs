@@ -89,6 +89,13 @@ impl RuntimeEndpoint {
     self.commands.recv().await
   }
 
+  pub(crate) fn close_commands(&mut self) {
+    self.commands.close();
+    while let Ok(request) = self.commands.try_recv() {
+      request.respond(Err(RuntimeCommandError::RuntimeStopped));
+    }
+  }
+
   pub fn publish(&self, snapshot: RuntimeSnapshot) -> Result<(), SnapshotSendError> {
     self.snapshots.send(snapshot).map_err(|_| SnapshotSendError)
   }

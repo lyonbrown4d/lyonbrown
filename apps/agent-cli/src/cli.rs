@@ -1,38 +1,26 @@
-use std::io;
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
-use agent_core::SessionId;
-use agent_mcp::McpBridge;
-#[cfg(feature = "llama-cpp")]
-use agent_model::ModelTaskRouter;
-use agent_model::{ModelRegistry, TaskRouter};
-use agent_profile::{AgentProfile, ProfileError, ProfileLoader};
-use agent_secret::{CompositeBroker, SecretBroker};
-use agent_skill::SkillRegistry;
-use agent_storage::SessionStore;
-use agent_tool::{
-  ListFilesTool, ReadFileTool, SearchWorkspaceTool, SessionApprovalPolicy, ShellTool, ToolRegistry,
-  WriteFileTool,
+use agent_client::{NativeAgentClient, RemoteClientOptions};
+use agent_launch::{
+  CommandDaemonSpawner, CoordinatorTargetResolver, GrpcReadinessProbe, LaunchCoordinator,
+  LaunchRequest, LocalDiscoverySource, canonicalize_optional_path, scoped_run_directory,
 };
-use agent_workspace::WorkspaceProfile;
 use anyhow::{Context, Result};
-use clap::{Parser, Subcommand};
-use provider_anthropic::AnthropicProvider;
-#[cfg(feature = "llama-cpp")]
-use provider_llamacpp::{GgufModel, LlamaCppConfig, LlamaCppProvider};
-use provider_ollama::OllamaProvider;
-use provider_openai::OpenAiProvider;
+use clap::Parser;
 
-use crate::approval::policy_from_config;
 use crate::config::{CliOverrides, LoadOptions, RuntimeConfig};
-use agent_app::approval_channel;
 
-#[derive(Debug, Parser)]
+const DAEMON_START_TIMEOUT: Duration = Duration::from_secs(15);
+
+#[derive(Debug, Clone, Parser)]
 #[command(name = "agent", version, about = "Local-first agent runtime")]
 pub struct Cli {
-  #[command(subcommand)]
-  pub command: Option<Command>,
+  /// Workspace served by the local agent daemon.
+  #[arg(default_value = ".", value_name = "WORKSPACE")]
+  pub workspace: PathBuf,
 
   /// Explicit configuration file (TOML, YAML, JSON, JSON5, RON, or INI).
   #[arg(long, global = true)]
@@ -69,45 +57,27 @@ pub struct Cli {
   pub trust_workspace_config: bool,
 }
 
-impl Cli {
-  pub fn take_command_or_default(&mut self) -> Command {
-    self.command.take().unwrap_or_else(|| Command::Tui {
-      workspace: PathBuf::from("."),
-    })
-  }
-}
-
-#[derive(Debug, Subcommand)]
-pub enum Command {
-  /// Ask one question and stream the answer.
-  Ask { prompt: String },
-  /// Start a multi-turn terminal chat.
-  Chat,
-  /// Continue a stored session in the terminal chat.
-  Resume { session_id: String },
-  /// List stored sessions.
-  Sessions,
-  /// Open the workspace terminal interface.
-  #[command(name = ".")]
-  Tui {
-    #[arg(skip = PathBuf::from("."))]
-    workspace: PathBuf,
-  },
-}
-
 pub async fn run(mut cli: Cli) -> Result<()> {
-  let command = cli.take_command_or_default();
-  let workspace = match &command {
-    Command::Tui { workspace } => workspace.clone(),
-    _ => std::env::current_dir().context("failed to determine workspace directory")?,
-  };
+  let workspace = std::fs::canonicalize(&cli.workspace).with_context(|| {
+    format!(
+      "failed to resolve workspace {}",
+      cli.workspace.to_string_lossy()
+    )
+  })?;
+  let config_display = cli.config.as_ref().map(|path| path.display().to_string());
+  cli.config = canonicalize_optional_path(cli.config.as_deref()).with_context(|| {
+    format!(
+      "failed to resolve configuration {}",
+      config_display.as_deref().unwrap_or("<none>")
+    )
+  })?;
   let mut options = LoadOptions::for_workspace(&workspace);
-  options.explicit_config = cli.config;
+  options.explicit_config = cli.config.clone();
   options.cli = CliOverrides {
-    provider: cli.provider,
-    model: cli.model,
-    profile: cli.profile,
-    endpoint: cli.endpoint,
+    provider: cli.provider.clone(),
+    model: cli.model.clone(),
+    profile: cli.profile.clone(),
+    endpoint: cli.endpoint.clone(),
     approve_all: cli.approve_all.then_some(true),
     deny_all: cli.deny_all.then_some(true),
     trust_workspace_mcp: cli.trust_workspace_mcp,
@@ -115,92 +85,82 @@ pub async fn run(mut cli: Cli) -> Result<()> {
     ..Default::default()
   };
   let config = RuntimeConfig::load(options)?;
-  #[cfg(feature = "llama-cpp")]
-  let mut config = config;
   let home = dirs::home_dir().context("home directory is unavailable")?;
-  if matches!(command, Command::Sessions) {
-    let store = SessionStore::open(storage_path(&config, &workspace, &home)).await?;
-    for session in store.sessions().await? {
-      println!(
-        "{}\t{}\t{}",
-        session.id, session.updated_at, session.event_count
-      );
-    }
-    return Ok(());
-  }
-  #[cfg(feature = "llama-cpp")]
-  if config.model.provider == "llamacpp"
-    && config.llamacpp.model_path.is_none()
-    && matches!(&command, Command::Tui { .. })
-  {
-    let Some(prepared) =
-      crate::tui::prepare_embedded_model(&home, config.model.model.as_deref()).await?
-    else {
-      return Ok(());
-    };
-    config.model.model = Some(prepared.id.to_owned());
-    config.llamacpp.model_path = Some(prepared.path);
-  }
-  let (approval, tui_approvals) = match &command {
-    Command::Tui { .. } if !config.approval.approve_all && !config.approval.deny_all => {
-      let (prompt, requests) = approval_channel(4);
-      (
-        SessionApprovalPolicy::interactive_with_timeout(
-          Arc::new(prompt),
-          std::time::Duration::from_secs(config.approval.timeout_seconds),
-        ),
-        Some(requests),
-      )
-    }
-    _ => (policy_from_config(&config.approval), None),
-  };
-  let root = composition::CompositionRoot::bootstrap(
-    config.clone(),
-    composition::RuntimePaths::new(workspace.clone(), home.clone()),
-    Arc::new(approval),
-  )
-  .await?;
-  let mut kernel = root.build_kernel()?;
-
-  let result = match command {
-    Command::Ask { prompt } => ask(&mut kernel, &prompt).await,
-    Command::Chat => chat(&mut kernel).await,
-    Command::Resume { session_id } => {
-      let id = SessionId(uuid::Uuid::parse_str(&session_id).context("invalid session ID")?);
-      let store = SessionStore::open(storage_path(&config, &workspace, &home)).await?;
-      let events = store.events(id).await?;
-      if events.is_empty() {
-        anyhow::bail!("session not found: {id}");
-      }
-      kernel.resume(&events)?;
-      chat(&mut kernel).await
-    }
-    Command::Sessions => unreachable!("sessions is handled before kernel startup"),
-    Command::Tui { .. } => {
-      return crate::tui::run(kernel, tui_approvals).await;
-    }
-  };
-  let close = kernel.close_storage().await;
-  result?;
-  close?;
-  Ok(())
+  let request = LaunchRequest::new(
+    workspace.clone(),
+    config.fingerprint()?,
+    true,
+    DAEMON_START_TIMEOUT,
+  )?;
+  let run_directory = scoped_run_directory(&home, &workspace, request.scope_fingerprint())?;
+  let agentd = sibling_agentd_path(&std::env::current_exe()?)?;
+  let coordinator = Arc::new(LaunchCoordinator::new(
+    Arc::new(LocalDiscoverySource::new(run_directory)),
+    Arc::new(CommandDaemonSpawner::new(
+      agentd,
+      daemon_fixed_arguments(&cli),
+    )),
+    Arc::new(GrpcReadinessProbe::default()),
+  ));
+  let resolver = Arc::new(CoordinatorTargetResolver::new(coordinator, request));
+  let client = NativeAgentClient::start_with_resolver(
+    resolver,
+    uuid::Uuid::new_v4().to_string(),
+    RemoteClientOptions::default(),
+  )?;
+  crate::tui::run_native_client(client).await
 }
 
-mod build;
-pub mod composition;
-use build::storage_path;
-mod interactive;
-pub use interactive::run_kernel_turn;
-use interactive::{ask, chat};
+pub fn sibling_agentd_path(agent_executable: &Path) -> Result<PathBuf> {
+  let directory = agent_executable
+    .parent()
+    .context("agent executable has no parent directory")?;
+  let name = if cfg!(windows) {
+    "agentd.exe"
+  } else {
+    "agentd"
+  };
+  Ok(directory.join(name))
+}
 
-fn load_agent_profile(home: &Path, id: &str) -> Result<AgentProfile> {
-  match ProfileLoader::new(home).load(id) {
-    Ok(profile) => Ok(profile),
-    Err(ProfileError::Io { source, .. })
-      if id == "default-dev" && source.kind() == io::ErrorKind::NotFound =>
-    {
-      Ok(AgentProfile::builtin_default())
-    }
-    Err(error) => Err(error.into()),
+pub fn daemon_fixed_arguments(cli: &Cli) -> Vec<OsString> {
+  let mut arguments = Vec::new();
+  push_value(&mut arguments, "--config", cli.config.as_deref());
+  push_string(&mut arguments, "--provider", cli.provider.as_deref());
+  push_string(&mut arguments, "--model", cli.model.as_deref());
+  push_string(&mut arguments, "--profile", cli.profile.as_deref());
+  push_string(&mut arguments, "--endpoint", cli.endpoint.as_deref());
+  push_flag(&mut arguments, "--approve-all", cli.approve_all);
+  push_flag(&mut arguments, "--deny-all", cli.deny_all);
+  push_flag(
+    &mut arguments,
+    "--trust-workspace-mcp",
+    cli.trust_workspace_mcp,
+  );
+  push_flag(
+    &mut arguments,
+    "--trust-workspace-config",
+    cli.trust_workspace_config,
+  );
+  arguments
+}
+
+fn push_value(arguments: &mut Vec<OsString>, flag: &str, value: Option<&Path>) {
+  if let Some(value) = value {
+    arguments.push(flag.into());
+    arguments.push(value.as_os_str().to_owned());
+  }
+}
+
+fn push_string(arguments: &mut Vec<OsString>, flag: &str, value: Option<&str>) {
+  if let Some(value) = value {
+    arguments.push(flag.into());
+    arguments.push(value.into());
+  }
+}
+
+fn push_flag(arguments: &mut Vec<OsString>, flag: &str, enabled: bool) {
+  if enabled {
+    arguments.push(flag.into());
   }
 }

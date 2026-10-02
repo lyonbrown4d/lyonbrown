@@ -15,13 +15,15 @@ use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::{AgentClient, ApprovalDecision, Command};
+use crate::{
+  AgentClient, ApprovalDecision, AuthenticatedTarget, AuthenticatedTargetResolver, Command,
+};
 use driver::{DriverContext, establish, run_driver};
 use error::status_error;
 pub use types::{ConnectionState, RemoteClientOptions, RemoteState, VersionedRemoteSnapshot};
 
 struct RemoteInner {
-  commands: Mutex<AgentClient>,
+  commands: Arc<Mutex<AgentClient>>,
   snapshots: watch::Sender<RuntimeSnapshot>,
   remote_snapshots: watch::Sender<VersionedRemoteSnapshot>,
   connection: watch::Sender<ConnectionState>,
@@ -44,13 +46,25 @@ pub struct RemoteAgentClient {
 
 impl RemoteAgentClient {
   pub async fn connect(
-    endpoint: impl Into<String>,
+    target: AuthenticatedTarget,
     client_instance_id: impl Into<String>,
     options: RemoteClientOptions,
   ) -> Result<Self, AgentClientError> {
-    let endpoint = endpoint.into();
+    Self::connect_with_resolver(
+      crate::resolver::fixed_target_resolver(target),
+      client_instance_id,
+      options,
+    )
+    .await
+  }
+
+  pub async fn connect_with_resolver(
+    resolver: Arc<dyn AuthenticatedTargetResolver>,
+    client_instance_id: impl Into<String>,
+    options: RemoteClientOptions,
+  ) -> Result<Self, AgentClientError> {
     let client_instance_id = client_instance_id.into();
-    let established = establish(&endpoint, &client_instance_id, &options).await?;
+    let established = establish(&resolver, &client_instance_id, &options).await?;
     let initial_revision = established.snapshot.revision;
     let initial_snapshot = established.snapshot.snapshot.clone();
     let server_instance_id = established.server_instance_id.clone();
@@ -70,8 +84,9 @@ impl RemoteAgentClient {
     });
     let revision = Arc::new(AtomicU64::new(initial_revision));
     let cancellation = CancellationToken::new();
+    let commands = Arc::new(Mutex::new(command_client));
     let inner = Arc::new(RemoteInner {
-      commands: Mutex::new(command_client),
+      commands: Arc::clone(&commands),
       snapshots,
       remote_snapshots,
       connection,
@@ -83,7 +98,8 @@ impl RemoteAgentClient {
     tokio::spawn(run_driver(
       established,
       DriverContext {
-        endpoint,
+        resolver,
+        commands,
         client_instance_id,
         options,
         snapshots: inner.snapshots.clone(),
@@ -217,6 +233,10 @@ fn command_to_wire(command: AgentCommand) -> Command {
       },
     },
     AgentCommand::SelectSessionModel { selection } => Command::SelectSessionModel { selection },
+    AgentCommand::StartModelDownload { model_id } => Command::StartModelDownload { model_id },
+    AgentCommand::CancelModelDownload { operation_id } => {
+      Command::CancelModelDownload { operation_id }
+    }
   }
 }
 

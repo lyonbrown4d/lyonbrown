@@ -23,12 +23,20 @@ impl Actor {
       AgentCommand::SelectSessionModel { .. } => Err(RuntimeCommandError::Unsupported(
         UnsupportedCommand::SelectSessionModel,
       )),
+      AgentCommand::StartModelDownload { .. } => Err(RuntimeCommandError::Unsupported(
+        UnsupportedCommand::StartModelDownload,
+      )),
+      AgentCommand::CancelModelDownload { .. } => Err(RuntimeCommandError::Unsupported(
+        UnsupportedCommand::CancelModelDownload,
+      )),
     };
     request.respond(result);
   }
 
   fn start_command(&mut self, text: String) -> Result<(), RuntimeCommandError> {
-    if self.turn_task.is_some() {
+    if self.projector.snapshot().phase == RuntimePhase::ModelSetupRequired {
+      Err(RuntimeCommandError::ModelSetupRequired)
+    } else if self.turn_task.is_some() {
       Err(RuntimeCommandError::TurnAlreadyActive)
     } else if text.trim().is_empty() {
       Err(RuntimeCommandError::EmptyText)
@@ -39,6 +47,9 @@ impl Actor {
   }
 
   fn steer_command(&self, text: String) -> Result<(), RuntimeCommandError> {
+    if self.projector.snapshot().phase == RuntimePhase::ModelSetupRequired {
+      return Err(RuntimeCommandError::ModelSetupRequired);
+    }
     if text.trim().is_empty() {
       return Err(RuntimeCommandError::EmptyText);
     }
@@ -51,6 +62,9 @@ impl Actor {
   }
 
   fn queue_command(&mut self, text: String) -> Result<(), RuntimeCommandError> {
+    if self.projector.snapshot().phase == RuntimePhase::ModelSetupRequired {
+      return Err(RuntimeCommandError::ModelSetupRequired);
+    }
     if text.trim().is_empty() {
       return Err(RuntimeCommandError::EmptyText);
     }

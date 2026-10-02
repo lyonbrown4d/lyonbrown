@@ -1,3 +1,4 @@
+use agent_app::AgentCommand;
 use agent_gui::state::{CockpitState, ConnectionState, RuntimeDetailsPlacement};
 
 #[test]
@@ -162,4 +163,68 @@ fn expanded_details_render_in_the_visible_region_for_each_layout() {
     RuntimeDetailsPlacement::for_layout(false, true),
     RuntimeDetailsPlacement::RuntimeRail
   );
+}
+
+#[test]
+fn fresh_connected_state_prepares_one_trimmed_start_turn() {
+  let mut state = CockpitState::default();
+  state.apply_connection(ConnectionState::Connected, None);
+  assert!(state.apply_snapshot_revision("daemon-a", 1));
+
+  let command = state.begin_submission("  explain this module  ").unwrap();
+
+  assert_eq!(
+    command,
+    AgentCommand::StartTurn {
+      text: "explain this module".into(),
+    }
+  );
+  assert!(state.is_submitting());
+  assert!(!state.can_submit());
+  assert!(state.begin_submission("second command").is_none());
+}
+
+#[test]
+fn submission_is_rejected_without_a_fresh_ready_runtime_or_text() {
+  let mut state = CockpitState::default();
+  assert!(state.begin_submission("task").is_none());
+
+  state.apply_connection(ConnectionState::Connected, None);
+  assert!(state.apply_snapshot_revision("daemon-a", 1));
+  assert!(state.begin_submission(" \n ").is_none());
+
+  state.apply_connection(ConnectionState::Reconnecting, None);
+  assert!(state.begin_submission("task").is_none());
+}
+
+#[test]
+fn submission_failure_is_visible_bounded_and_allows_retry() {
+  let mut state = CockpitState::default();
+  state.apply_connection(ConnectionState::Connected, None);
+  assert!(state.apply_snapshot_revision("daemon-a", 1));
+  assert!(state.begin_submission("task").is_some());
+
+  state.finish_submission(Some(&format!("rpc failed\r\n{}", "x".repeat(700))));
+
+  assert!(!state.is_submitting());
+  assert!(state.can_submit());
+  let error = state.last_command_error().unwrap();
+  assert!(!error.contains(['\r', '\n']));
+  assert!(error.chars().count() <= 512);
+}
+
+#[test]
+fn successful_submission_clears_an_old_command_error() {
+  let mut state = CockpitState::default();
+  state.apply_connection(ConnectionState::Connected, None);
+  assert!(state.apply_snapshot_revision("daemon-a", 1));
+  assert!(state.begin_submission("first").is_some());
+  state.finish_submission(Some("failed"));
+  assert_eq!(state.last_command_error(), Some("failed"));
+
+  assert!(state.begin_submission("retry").is_some());
+  state.finish_submission(None);
+
+  assert_eq!(state.last_command_error(), None);
+  assert!(state.can_submit());
 }

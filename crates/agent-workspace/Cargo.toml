@@ -11,5 +11,8 @@ dirs = { workspace = true }
 which = { workspace = true }
 cap-std = { workspace = true }
 
+[target.'cfg(any(unix, windows))'.dependencies]
+file-id = "0.2.3"
+
 [lints]
 workspace = true

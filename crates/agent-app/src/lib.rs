@@ -14,10 +14,14 @@ pub use client::{AgentClient, AgentClientError, AvailabilityKind, ProtocolErrorK
 pub use command::{AgentCommand, ApprovalDecision};
 pub use error::{RuntimeActorError, RuntimeCommandError, UnsupportedCommand};
 pub use projector::Projector;
-pub use runtime::{RuntimeTask, spawn_runtime, spawn_runtime_with_approvals};
+pub use runtime::{
+  RuntimeShutdownHandle, RuntimeTask, spawn_runtime, spawn_runtime_waiting_for_model,
+  spawn_runtime_with_approvals,
+};
 pub use transport::{AppController, RuntimeEndpoint, SnapshotSendError, channel};
 pub use view::{
-  ActivityPhase, ActivityView, ApprovalState, ApprovalView, ContextSummary, ModelFallbackView,
-  ModelRoute, ModelSelection, RouteSummary, RuntimePhase, RuntimeSnapshot, ToolActivityState,
-  ToolActivityView, TurnStatus, TurnView,
+  ActivityPhase, ActivityView, ApprovalState, ApprovalView, ContextSummary, ManagedModelView,
+  ModelFallbackView, ModelRoute, ModelSelection, ModelSetupAction, ModelSetupFailureView,
+  ModelSetupPhase, ModelSetupSource, ModelSetupView, RouteSummary, RuntimePhase, RuntimeSnapshot,
+  ToolActivityState, ToolActivityView, TurnStatus, TurnView,
 };

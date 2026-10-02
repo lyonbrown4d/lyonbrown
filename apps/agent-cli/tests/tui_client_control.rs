@@ -129,3 +129,23 @@ async fn pending_submission_does_not_block_a_control_command() {
     ]
   );
 }
+
+#[tokio::test]
+async fn background_command_failure_is_reported_without_ending_the_ui_loop() {
+  let client = Arc::new(FakeClient::new(ExecuteOutcome::Unavailable));
+  let mut dispatcher = CommandDispatcher::new();
+  let port: Arc<dyn AgentClient> = client;
+
+  dispatcher.dispatch(
+    port,
+    AgentCommand::StartTurn {
+      text: "try once".into(),
+    },
+  );
+  tokio::task::yield_now().await;
+
+  let failures = dispatcher.drain_failures();
+  assert_eq!(failures.len(), 1);
+  assert!(failures[0].to_string().contains("daemon offline"));
+  assert!(dispatcher.drain_failures().is_empty());
+}

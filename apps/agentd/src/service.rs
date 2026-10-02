@@ -4,6 +4,7 @@ mod validation;
 use std::sync::Arc;
 
 use agent_app::AgentCommand;
+use agent_local::ScopeFingerprint;
 use agent_protocol::PROTOCOL_VERSION;
 use agent_protocol::v1::{CommandResponse, RequestMetadata};
 use tokio::sync::Mutex;
@@ -15,29 +16,40 @@ use crate::RuntimeHost;
 use crate::replay::{Fingerprint, ReplayCache, ReplayDecision};
 use validation::{map_command_error, validate_metadata};
 
-pub struct AgentGrpcService {
+pub(crate) struct AgentGrpcService {
   pub(super) host: Arc<dyn RuntimeHost>,
   replay_cache: Arc<Mutex<ReplayCache>>,
   pub(super) server_instance_id: String,
+  pub(super) scope_fingerprint: ScopeFingerprint,
   pub(super) stream_shutdown: CancellationToken,
 }
 
 impl AgentGrpcService {
-  pub fn new(host: Arc<dyn RuntimeHost>) -> Self {
-    Self::with_replay_capacity(host, 1024)
+  pub(crate) fn new_with_identity(
+    host: Arc<dyn RuntimeHost>,
+    server_instance_id: Uuid,
+    scope_fingerprint: ScopeFingerprint,
+  ) -> Self {
+    Self::with_replay_capacity_and_identity(host, 1024, server_instance_id, scope_fingerprint)
   }
 
-  pub fn with_replay_capacity(host: Arc<dyn RuntimeHost>, capacity: usize) -> Self {
+  fn with_replay_capacity_and_identity(
+    host: Arc<dyn RuntimeHost>,
+    capacity: usize,
+    server_instance_id: Uuid,
+    scope_fingerprint: ScopeFingerprint,
+  ) -> Self {
+    assert!(
+      !server_instance_id.is_nil(),
+      "server instance identity must not be nil"
+    );
     Self {
       host,
       replay_cache: Arc::new(Mutex::new(ReplayCache::new(capacity))),
-      server_instance_id: Uuid::new_v4().to_string(),
+      server_instance_id: server_instance_id.to_string(),
+      scope_fingerprint,
       stream_shutdown: CancellationToken::new(),
     }
-  }
-
-  pub fn server_instance_id(&self) -> &str {
-    &self.server_instance_id
   }
 
   pub(crate) fn with_stream_shutdown(mut self, shutdown: CancellationToken) -> Self {
@@ -100,6 +112,7 @@ impl Clone for AgentGrpcService {
       host: Arc::clone(&self.host),
       replay_cache: Arc::clone(&self.replay_cache),
       server_instance_id: self.server_instance_id.clone(),
+      scope_fingerprint: self.scope_fingerprint.clone(),
       stream_shutdown: self.stream_shutdown.clone(),
     }
   }

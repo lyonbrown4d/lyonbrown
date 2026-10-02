@@ -2,8 +2,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use agent_app::{
-  ActivityPhase, ActivityView, ApprovalState, ApprovalView, ContextSummary, ModelFallbackView,
-  ModelRoute, ModelSelection, RouteSummary, RuntimePhase, RuntimeSnapshot, ToolActivityState,
+  ActivityPhase, ActivityView, ApprovalState, ApprovalView, ContextSummary, ManagedModelView,
+  ModelFallbackView, ModelRoute, ModelSelection, ModelSetupAction, ModelSetupPhase,
+  ModelSetupSource, ModelSetupView, RouteSummary, RuntimePhase, RuntimeSnapshot, ToolActivityState,
   ToolActivityView, TurnStatus, TurnView,
 };
 use agent_client::decode_snapshot;
@@ -115,6 +116,22 @@ fn full_snapshot() -> RuntimeSnapshot {
     },
     route: Some(route()),
     last_error: Some("recoverable".into()),
+    model_setup: Some(ModelSetupView {
+      source: ModelSetupSource::ManagedPreset,
+      phase: ModelSetupPhase::Downloading,
+      managed_model: Some(ManagedModelView {
+        id: "qwen3-1.7b-q4_k_m".into(),
+        expected_download_bytes: 1_000,
+        max_bytes: 1_100,
+        min_available_memory_bytes: 2_000,
+        sha256: "ab".repeat(32),
+      }),
+      operation_id: Some("download-1".into()),
+      downloaded_bytes: 400,
+      total_bytes: Some(1_000),
+      failure: None,
+      allowed_actions: vec![ModelSetupAction::Cancel],
+    }),
   }
 }
 

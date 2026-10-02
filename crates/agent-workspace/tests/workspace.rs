@@ -2,7 +2,7 @@ use std::fs;
 
 use agent_workspace::{
   MAX_AGGREGATE_INSTRUCTION_BYTES, MAX_INSTRUCTION_FILE_BYTES, ProjectType, WorkspaceProfile,
-  load_repository_instructions, workspace_cache_path,
+  load_repository_instructions, workspace_cache_path, workspace_identity,
 };
 
 fn fixture_root(name: &str) -> std::path::PathBuf {
@@ -65,6 +65,52 @@ fn cache_path_is_stable_and_outside_the_repository() {
   assert!(first.starts_with(home.join(".agent/workspaces")));
   assert!(!first.starts_with(&root));
   assert!(!first.exists(), "computing a cache path must not write it");
+  fs::remove_dir_all(root).unwrap();
+  fs::remove_dir_all(home).unwrap();
+}
+
+#[cfg(windows)]
+#[test]
+fn workspace_identity_and_cache_ignore_windows_path_casing() {
+  let root = fixture_root("windows-identity");
+  let home = fixture_root("windows-identity-home");
+  let alternate_case = std::path::PathBuf::from(root.to_string_lossy().to_ascii_uppercase());
+
+  assert_eq!(
+    workspace_identity(&root).unwrap(),
+    workspace_identity(&alternate_case).unwrap()
+  );
+  assert_eq!(
+    workspace_cache_path(&home, &root).unwrap(),
+    workspace_cache_path(&home, &alternate_case).unwrap()
+  );
+
+  fs::remove_dir_all(root).unwrap();
+  fs::remove_dir_all(home).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn workspace_identity_and_cache_follow_directory_aliases() {
+  let root = fixture_root("unix-identity");
+  let home = fixture_root("unix-identity-home");
+  let alias = root.with_file_name(format!(
+    "agent-workspace-unix-identity-alias-{}",
+    std::process::id()
+  ));
+  let _ = fs::remove_file(&alias);
+  std::os::unix::fs::symlink(&root, &alias).unwrap();
+
+  assert_eq!(
+    workspace_identity(&root).unwrap(),
+    workspace_identity(&alias).unwrap()
+  );
+  assert_eq!(
+    workspace_cache_path(&home, &root).unwrap(),
+    workspace_cache_path(&home, &alias).unwrap()
+  );
+
+  fs::remove_file(alias).unwrap();
   fs::remove_dir_all(root).unwrap();
   fs::remove_dir_all(home).unwrap();
 }

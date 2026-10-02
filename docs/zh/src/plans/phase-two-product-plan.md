@@ -34,18 +34,26 @@
 ### 2.1 已有基础
 
 - Kernel、状态机、AgentEvent、SQLite 恢复和取消语义已经落地。
-- TUI 已连接真实 Kernel，支持流式对话、运行状态、滚动和审批弹窗。
-- GUI 已有 GPUI 三栏响应式视觉骨架，但只展示静态样例，未连接 Runtime。
-- llama.cpp 默认启用；TUI 推荐更小的 Qwen3 1.7B GGUF，并在可取消的后台下载前要求用户确认；Ollama、Anthropic 和 OpenAI 可配置。
+- 产品已统一本地 C/S 边界：`agentd` 持有 Kernel，TUI 与 GUI 都通过已认证
+  gRPC 契约访问。
+- llama.cpp 在 `agentd` 中默认启用；GGUF 缺失时进入
+  `ModelSetupRequired`，不会在启动时触发下载。
+- 默认托管 preset 是 `qwen3-1.7b-q4_k_m`。daemon 已支持显式后台下载、取消和
+  单一 `RuntimeSnapshot` 进度流；配置路径缺失时不会伪装成可下载 preset。
+- `agentd` 已使用 in-process epoch supervisor 激活安装后的模型；replacement 构建
+  和新 endpoint 发布期间保留旧 control plane，失败时回滚到可重试状态。
+- Ollama、Anthropic 和 OpenAI 仍是可配置 Provider。
 - Scheduler 已有 Control / Worker / Frontier、Local / Remote、隐私过滤和有限回退。
 
 ### 2.2 主要缺口
 
 - `model.provider + model.model` 仍以单一主模型配置为中心，生产路径没有形成真正的角色化模型池。
-- 首次运行可能触发大文件下载，但缺少统一的下载确认、进度、取消、磁盘和资源说明。
-- TUI 直接维护自己的 AgentEvent reducer；GUI 另有静态状态，两端存在行为漂移风险。
+- daemon 后台下载与 epoch 切换已实现；TUI/GUI 尚未接入共用的确认、进度、取消
+  和失败重试 controls，磁盘与资源说明也仍需补齐。
+- TUI 与 GUI 已共享远端投影，但完整产品交互闭环仍需端到端验证。
 - TUI 缺少会话选择、模型选择、命令面板、活动详情和可发现的帮助体系。
-- GUI 尚未完成任何真实的会话、流式输出、审批、取消或恢复闭环。
+- GUI 已能提交真实远程 `StartTurn` 并订阅 daemon 状态，但会话 transcript、
+  流式输出、审批、取消与恢复闭环仍未完成。
 - 当前 Quality Gate 只处理模型错误和空答案，不能支撑成熟的质量升级策略。
 - Shell 仍是 host/unsandboxed；界面必须如实展示，不能用视觉设计暗示已经隔离。
 
@@ -53,21 +61,24 @@
 
 ### D10. TUI 是参考客户端，GUI 是同等能力的图形客户端
 
-TUI 先实现和验证新的交互契约，因为它已连接真实 Kernel、测试成本低、适合 SSH 和键盘工作流。GUI 不复制 TUI 布局，但必须复用相同的应用命令、事件投影和审批语义。
+TUI 先实现和验证新的交互契约，因为它测试成本低、适合 SSH 和键盘工作流。
+GUI 不复制 TUI 布局，但两端必须使用相同的 gRPC 命令、投影和审批语义；任何
+client 都不能直接访问 Kernel。
 
-“参考客户端”不代表 GUI 是次要产品；它表示任何新的 Runtime 能力先在共享契约和 TUI 验证，再进入 GUI，避免两个客户端同时猜测 Kernel 行为。
+“参考客户端”不代表 GUI 是次要产品；它表示任何新的 Runtime 能力先在共享协议和 TUI 验证，再进入 GUI，避免两个客户端同时猜测 daemon 行为。
 
 ### D11. 新增 UI 中立的应用层，不让客户端直接编排 Kernel
 
-新增 `crates/agent-app`，职责限定为：
+`crates/agent-app` 保持在 `agentd` 后方，职责限定为：
 
 - 接收类型化 `AgentCommand`，例如创建会话、提交任务、取消、恢复、选择模型和回应审批；
 - 持有 Kernel 和会话生命周期，不把可变 Kernel 在 UI 任务之间搬运；
 - 将 AgentEvent 投影为稳定的 `RuntimeSnapshot`、`TurnView`、`ActivityView` 和 `ApprovalView`；
-- 暴露订阅流和一次性快照，供 Ratatui 与 GPUI 使用；
+- 通过 gRPC service 暴露订阅流和一次性快照；
 - 不包含 Ratatui、GPUI、颜色、布局或按键知识。
 
-CLI headless 模式可以继续直接使用窄入口，但 TUI 和 GUI 必须通过该应用层。各应用仍保留自己的 FluxDI Composition Root。
+`agentd` 是唯一 Composition Root。TUI 与 GUI 使用 `agent-client`，不保留直接
+或 headless Kernel 兼容入口。
 
 ### D12. 模型配置从“单模型”升级为“角色 + 策略”
 
@@ -79,7 +90,8 @@ CLI headless 模式可以继续直接使用窄入口，但 TUI 和 GUI 必须通
 
 会话默认使用 `Auto`，允许用户把 `worker` 固定到某个模型；切换只改变后续 step，不创建新会话、不清空工作记忆。第二阶段暂不做每条消息的临时模型覆盖，避免范围和解释成本失控。
 
-旧的 `[model]` 配置继续兼容一个发布周期，并映射为 `worker` 角色；新配置成为权威格式。
+角色化 schema 直接替换旧 `[model]` schema，不在 Runtime 中保留兼容映射。
+迁移必须显式完成，配置错误按 fail closed 处理。
 
 ```toml
 [models]
@@ -115,7 +127,22 @@ max_remote_cost_usd = 1.0
 - 当前 RAM、可选 GPU backend 和预计运行模式；
 - 下载、选择其他模型或退出三个动作。
 
-只有 headless 命令显式传入 `--yes` 或模型已缓存时才允许无交互继续。下载必须有进度、取消、重试和原子安装状态，不在普通“thinking”状态里隐藏。
+只有缓存已通过校验时才允许无交互继续。下载必须由 client 显式发出 unary
+`StartModelDownload`，取消使用 `CancelModelDownload`；不提供 headless `--yes`
+绕过。进度和结果进入唯一的版本化 `RuntimeSnapshot` stream，不创建第二条模型
+事件流。
+
+托管状态携带 source、phase、allowed actions、字节进度、failure 和
+`operation_id`。关闭 client 不取消 daemon 任务；Cancel 必须匹配当前 operation，
+进入 `Installing` 后返回 TooLate。失败后的动作叫 Retry，不叫 resume。client 只
+提交当前配置对应的内置 preset ID，URL、摘要和目标路径均由 daemon 目录决定。
+显式配置的 `model_path` 缺失时不能发起托管下载。
+
+安装后的激活由 in-process epoch supervisor 完成。旧 control plane 在 replacement
+Runtime 构建时继续服务；新 endpoint 启动并原子发布 descriptor 后才停止旧
+endpoint。地址、token 与 server UUID 轮换，scope、PID 与生命周期锁不变，client
+自动 reconnect/resync。构建或切换失败保留旧 control plane 并 fail closed；
+Runtime shutdown 显式执行 graceful cleanup，必要时再 abort 残留任务。
 
 ### D14. 对话、活动和检查器是三个不同的信息层
 
@@ -334,7 +361,10 @@ M13 只实现完整垂直切片：
 
 ### M11 — 模型控制面
 
-交付：角色化配置、模型目录、doctor/install/status、下载进度、硬件探测、session model pin、结构化 RoutingDecision 和旧配置迁移。
+状态：daemon 下载/取消、Snapshot 进度、完整性校验与 epoch 激活基础已经落地；
+TUI/GUI controls 尚未接入。
+
+交付：补齐角色化配置、模型目录、doctor/install/status、两端下载 controls、硬件探测、session model pin、结构化 RoutingDecision 和旧配置迁移。TUI 与 GUI 必须只使用相同的 Snapshot/RPC，不实现第二套下载器。
 
 验收：首次运行不会静默下载；离线已有缓存可启动；资源不足和远程回退被界面准确解释。
 
@@ -392,6 +422,7 @@ mdbook build docs/en
 
 | 决策门 | 触发点 | 需要的证据 |
 |---|---|---|
+| 单一产品包还是 TUI/GUI 独立 bundle | 首个公开安装器之前 | 两种方案都必须原子携带完全同版本的 sibling `agentd`，比较安装体积、升级行为与发布复杂度 |
 | 是否常驻独立 Router 模型 | M15 | 延迟、内存和任务成功率相对复用 Worker 有明确收益 |
 | 是否继续长期使用 GPUI | M13 完成后 | 三平台、IME、可访问性、性能和升级成本 |
 | 是否加入每 turn 模型覆盖 | M14 后 | 用户确有频繁临时切换需求，且路由解释仍清晰 |

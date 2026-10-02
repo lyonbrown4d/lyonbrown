@@ -1,5 +1,11 @@
 # Lyonbrown 第一阶段 MVP 实施计划
 
+> 历史记录：本文描述的是 C/S 迁移前已经交付的第一阶段单体 CLI。其中关于
+> `agent-cli` feature 归属、直接 Kernel 命令、内嵌模型默认值和 headless 入口的
+> 内容均已被替代，不构成兼容要求。当前产品边界以
+> [本地 gRPC C/S 架构](../architecture/grpc-client-server.md)为准：`agentd` 是
+> Runtime/模型的唯一所有者，TUI/GUI 都是 gRPC client。
+>
 > 依据：[Lyonbrown Local-First Agent Runtime 架构设计](../architecture/local-first-agent-runtime.md)（Draft v0.1）
 > 状态：M0–M9 已实现并通过本机验收；M9 的真实 GGUF 冒烟测试在 Windows MSVC/CPU 上通过。跨平台 sandbox 仍属于 Phase 2。
 > 平台：Windows 11 · rustc/cargo 1.98.1 · Ollama 已装（qwen3.8-27b:q3-claude 作 Worker / translategemma:4b 可作 Control）

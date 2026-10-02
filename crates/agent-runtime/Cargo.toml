@@ -1,0 +1,50 @@
+[package]
+name = "agent-runtime"
+version.workspace = true
+edition.workspace = true
+
+[features]
+default = []
+llama-cpp = ["dep:provider-llamacpp", "provider-llamacpp/llama-cpp"]
+cuda = ["llama-cpp", "provider-llamacpp/cuda"]
+vulkan = ["llama-cpp", "provider-llamacpp/vulkan"]
+
+[dependencies]
+agent-core = { workspace = true }
+agent-kernel = { workspace = true }
+agent-index = { workspace = true }
+agent-model = { workspace = true }
+agent-profile = { workspace = true }
+agent-workspace = { workspace = true }
+agent-skill = { workspace = true }
+agent-tool = { workspace = true }
+agent-secret = { workspace = true }
+agent-mcp = { workspace = true }
+agent-storage = { workspace = true }
+provider-ollama = { workspace = true }
+provider-anthropic = { workspace = true }
+provider-openai = { workspace = true }
+provider-llamacpp = { workspace = true, optional = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+config = { workspace = true }
+dirs = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+futures = { workspace = true }
+uuid = { workspace = true }
+sha2 = { workspace = true }
+sysinfo = { workspace = true }
+hf-hub = { workspace = true }
+reqwest = { workspace = true }
+fluxdi = { workspace = true }
+fs2 = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+wiremock = { workspace = true }
+
+[lints]
+workspace = true

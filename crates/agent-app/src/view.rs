@@ -50,6 +50,61 @@ pub struct RouteSummary {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelSetupSource {
+  ManagedPreset,
+  ConfiguredPath,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelSetupPhase {
+  Required,
+  WaitingForLock,
+  Checking,
+  Downloading,
+  Verifying,
+  Installing,
+  Activating,
+  Ready,
+  Cancelled,
+  Failed,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModelSetupAction {
+  Download,
+  Cancel,
+  Retry,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ManagedModelView {
+  pub id: String,
+  pub expected_download_bytes: u64,
+  pub max_bytes: u64,
+  pub min_available_memory_bytes: u64,
+  pub sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelSetupFailureView {
+  pub code: String,
+  pub message: String,
+  pub retryable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ModelSetupView {
+  pub source: ModelSetupSource,
+  pub phase: ModelSetupPhase,
+  pub managed_model: Option<ManagedModelView>,
+  pub operation_id: Option<String>,
+  pub downloaded_bytes: u64,
+  pub total_bytes: Option<u64>,
+  pub failure: Option<ModelSetupFailureView>,
+  pub allowed_actions: Vec<ModelSetupAction>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TurnStatus {
   Pending,
   Running,
@@ -174,6 +229,7 @@ pub struct RuntimeSnapshot {
   pub model_selection: ModelSelection,
   pub route: Option<RouteSummary>,
   pub last_error: Option<String>,
+  pub model_setup: Option<ModelSetupView>,
 }
 
 impl Default for RuntimeSnapshot {
@@ -187,6 +243,7 @@ impl Default for RuntimeSnapshot {
       model_selection: ModelSelection::Auto,
       route: None,
       last_error: None,
+      model_setup: None,
     }
   }
 }

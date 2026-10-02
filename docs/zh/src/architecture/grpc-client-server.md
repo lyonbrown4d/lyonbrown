@@ -1,6 +1,6 @@
 # 本地 gRPC C/S 架构
 
-> 状态：TUI/GUI 迭代已接受
+> 状态：已接受并进入落地验证
 >
 > 范围：本地 `agentd`、终端客户端与 GPUI 客户端
 >
@@ -8,22 +8,29 @@
 
 ## 决策
 
-Lyonbrown 把应用 Runtime 的所有权收敛到一个本地 `agentd`。目标架构中，TUI 与 GUI 都是同一套版本化 gRPC 契约的客户端，不再分别构建 Kernel。
+Lyonbrown 统一采用本地 Client/Server 架构。TUI 与 GUI 都是同一套版本化
+gRPC 契约的客户端；客户端不再创建 Kernel，也不保留 embedded 产品模式或
+未认证 transport 兼容入口。
 
 ```text
 agent TUI ──┐
             ├── gRPC / HTTP/2 / loopback ── agentd ── Kernel
-agent GUI ──┘                                  ├── 模型
+agent GUI ──┘                                  ├── llama-cpp 与其他模型
                                                ├── 工具与 MCP
                                                ├── 工作区索引
                                                └── Session 存储
 ```
 
-首个实现只绑定 loopback，不是远程控制 endpoint。迁移期间及测试场景保留 embedded Runtime，但它与 gRPC 路径使用同一套应用命令和快照语义。
+`agentd` 是 Runtime、模型、工具、MCP、索引、审批与 Session 的唯一所有者。
+TUI/GUI 只持有呈现状态、输入映射和 client 生命周期。这一边界也意味着关闭
+某个客户端不会隐式取消正在运行的 turn 或模型任务；取消必须通过显式 RPC。
+
+当前阶段只允许本机 loopback 通信，不把本地端口视为远程控制入口。
 
 ## 协议形态
 
-Protocol Buffers 是协议真相源。命令与查询使用 unary RPC；可合并的 Runtime 完整快照使用一条 server-streaming RPC。
+Protocol Buffers 是协议真相源。命令与查询使用 unary RPC；可合并的 Runtime
+完整快照使用一条 server-streaming RPC。
 
 | 形态 | 操作 |
 |---|---|
@@ -31,54 +38,133 @@ Protocol Buffers 是协议真相源。命令与查询使用 unary RPC；可合�
 | Unary query | 握手、健康检查、最新快照 |
 | Server stream | 带 revision 的最新 Runtime 完整快照 |
 
-每条命令包含 `command_id` 和 `client_instance_id`；每次投影更新包含单调递增的 `revision`。客户端重连后先取得 Snapshot，再从已应用的 revision 之后订阅。v1 的 stream 不是事件日志：慢客户端可能直接收到更新的完整快照，revision 可以跳号。客户端按 revision 去重，只应用更新快照；它不回放或猜测被合并的中间状态。
+每条命令包含 `command_id`、`client_instance_id` 和握手返回的
+`expected_server_instance_id`。daemon 在登记幂等键和执行命令之前原子校验
+server instance，防止旧 daemon 已执行但响应丢失后把同一命令重放到新实例。
 
-每条命令还携带握手得到的 `expected_server_instance_id`。daemon 在登记幂等键和执行命令之前原子校验该值；旧 daemon 已执行但响应丢失时，同一个命令不会被重放到重启后的新 daemon。外层事件 revision 必须与内层 Snapshot revision 一致，否则客户端把连接标记为协议失败。
+每次投影更新包含单调递增的 `revision`。客户端连接后先获取 Snapshot，再从
+已应用 revision 之后订阅。v1 stream 不是事件日志：慢客户端可能直接收到更
+新的完整快照，因此 revision 可以跳号。客户端只应用更新 revision，不推断被
+合并的中间状态。事件外层 revision 与内层 Snapshot revision 不一致时视为协议
+错误。
 
-daemon 使用有容量的进程内 replay cache，在一次逻辑调用的 transport 重试中复用同一个 `command_id`。这个保证只覆盖同一 daemon 实例且记录仍在 cache 中的场景；daemon 重启或记录淘汰后不提供跨进程 exactly-once。客户端不得在发现 `server_instance_id` 已变化后盲目重放未确认的非幂等命令。
+daemon 使用有容量的进程内 replay cache；一次逻辑调用的 transport 重试复用
+同一个 `command_id`。该保证只覆盖同一 daemon 实例且记录尚未淘汰的情况，不
+提供跨进程 exactly-once。发现 `server_instance_id` 变化后，客户端不得盲目重
+放未确认的非幂等命令。
 
-Wire contract 与 Rust 领域类型分离。`Instant`、内部错误和实现细节枚举必须映射成稳定 protobuf 值。新增字段使用新 tag，禁止复用已经发布的 tag。
+Wire contract 与 Rust 领域类型分离。新增 protobuf 字段只能使用新 tag，禁止
+复用已发布 tag。v1 的 gRPC 编解码预算为 16 MiB；超限 Snapshot 明确失败，后
+续应使用分页或有界历史裁剪，而不是无界提高上限。
 
-v1 的 gRPC 编解码预算统一为 16 MiB。超过预算的 Snapshot 明确失败；后续如果实际会话逼近此预算，应优先引入分页或有损历史裁剪，而不是继续无界提高上限。
+## 本地认证与作用域
 
-## 所有权
+`agentd` 仅监听随机分配的 `127.0.0.1` 端口。loopback 只限制网络可达性，不
+等同于身份认证，因此所有产品 RPC 都要求每次 daemon 启动随机生成的 bearer
+token。公开的未认证 client/server API 已删除；未携带或携带错误 token 的请求
+在进入业务 service 前统一拒绝。
 
-- `agent-protocol`：protobuf 定义、生成类型与协议版本。
-- `agent-client`：TUI/GUI 共用的连接、命令关联、Snapshot 获取、stream 订阅与重连策略。
-- `agentd`：组合根、Kernel/Runtime 生命周期、模型加载与下载任务、工作区索引、MCP、审批和 Session 存储。
-- TUI/GUI：只持有呈现状态、输入映射和 client 生命周期。
+discovery descriptor 包含以下最小信息：
 
-关闭客户端不会自动取消 turn 或模型下载；取消只能通过显式 RPC。daemon 仲裁多客户端：第一个有效响应解决审批，后到响应收到类型化冲突。
+- loopback 地址、PID 与 `server_instance_id`；
+- 每次启动生成的 bearer token；
+- workspace 和 Runtime 配置共同派生的 `scope_fingerprint`；
+- schema version 与 transport 类型。
 
-普通 TUI 命令在可取消后台任务中执行，不阻塞键盘事件循环；取消与强停使用独立并发 RPC 和短超时。daemon 收到关闭信号时会先终止 Snapshot stream，再等待 gRPC 优雅退出，因此在线客户端不会阻塞服务停止。
+客户端与 daemon 分别计算 Runtime 配置 fingerprint。workspace 文件系统身份与
+配置 fingerprint 一起派生 scope，因此等价的路径写法不会分裂出第二个 daemon；
+daemon 启动时校验配置 fingerprint，握手再返回
+scope fingerprint。客户端只有在 discovery、握手与预期 scope 三者一致时才复
+用该实例，避免连接到其他工作区或不同配置的 daemon。
 
-## 本地 endpoint 与生命周期
+## Runtime epoch 切换
 
-v1 使用 HTTP/2 gRPC 并仅监听 `127.0.0.1`，不得默认监听 `0.0.0.0`。自动启动 daemon 前还需补齐 endpoint discovery 与每次启动的本地认证；在此之前地址显式配置，只用于开发期本地连接。
+`agentd` 内部使用 in-process epoch supervisor 切换 Runtime。模型安装完成后，
+supervisor 会在旧 control plane 仍可服务时构建新 Runtime；构建成功后先启动新
+loopback endpoint，再原子发布新的 discovery descriptor，最后才优雅停止旧
+endpoint 和旧 Runtime。显式的 graceful shutdown 之后仍有 abort cleanup，避免
+异常任务跨 epoch 泄漏。
 
-loopback 不是身份认证。没有完成随机启动 token、仅当前用户可读的 discovery 文件和服务端 token 校验之前，不得把该 endpoint 设为默认产品路径，也不得允许它执行高权限工具。
+每次切换都会轮换 endpoint 地址、bearer token 与 `server_instance_id`，但
+workspace scope、daemon PID 和 daemon 全生命周期持有的 `agentd.lock` 保持不变。
+client 会重新执行 discovery、认证握手和 Snapshot resync，不把旧 epoch 的未确认
+命令盲目重放到新实例。
 
-目标启动顺序：
+若新 Runtime 构建或新 endpoint 启动失败，supervisor 保留仍在线的旧 control
+plane，发布可恢复失败并允许显式重试；只有在新 descriptor 成功发布后才允许旧
+endpoint 退出。这是本地 control plane 的 rollback/fail-closed 边界。
 
-1. client 发现或启动 `agentd`；
-2. client 完成版本与 capability 握手；
-3. client 请求当前 Snapshot；
-4. client 从该 Snapshot revision 开始订阅；
-5. client 通过 unary RPC 发送幂等命令。
+## 发现、复用与启动
 
-## 迁移顺序
+客户端入口统一经过 launch coordinator：
 
-1. 建立 protobuf、复用 Rust client 和可注入 daemon service，并完成离线测试。
-2. 为 TUI 增加 transport adapter，同时保留 embedded mode。
-3. 让 GPUI 状态模型接入同一个 client。
-4. 把 CLI composition 与模型设置所有权迁入 `agentd`。
-5. 增加 daemon discovery、认证、进程监管、重连与 revision 保留。
+1. 读取并严格校验 owner-only discovery descriptor；
+2. 使用 descriptor 中的 token 发起带超时的 gRPC 握手；
+3. 实例 ID、scope 与配置匹配时复用现有 daemon；
+4. 无可复用实例时竞争 startup lock，胜者启动 `agentd`；
+5. 等待 discovery 发布并完成认证握手，其他客户端随后复用同一实例；
+6. 获取当前 Snapshot 并开始订阅，再发送命令。
 
-移动端和远程 transport 后续在此契约上扩展，本地迭代不会因此提前扩大安全边界。
+该流程由 native client driver 在后台执行；TUI 与 GUI 会立即呈现“连接中”状态，
+不会因 daemon 启动而阻塞界面。daemon 重启后，重连会重新执行 discovery，使新
+endpoint、bearer token 与 server epoch 同时替换旧的命令和事件通道。
 
-## 当前落地状态
+启动协调和 daemon 所有权使用两把不同的锁：
 
-- 已完成：protobuf/tonic 基础契约、完整快照双向映射、daemon epoch 栅栏、取消安全的有限 replay cache、16 MiB 消息预算、loopback-only 可注入服务、优雅关闭，以及版本与 revision 校验。
-- 已完成：TUI 统一客户端端口、embedded 兼容入口、非阻塞命令提交，以及负责握手、首个快照、完整快照 stream、有限重试和重连的远程 adapter。
-- 已完成：GPUI 专用 native bridge、daemon epoch/连接状态模型，以及显式注入后的实时状态订阅；默认 GUI 仍不猜测 endpoint。
-- 尚未启用：`agentd` 可执行进程、默认 daemon 启动、endpoint discovery、本地认证、模型与 composition 所有权迁移。
+- `agentd.start.lock` 只用于客户端启动选主，在 daemon 就绪后释放；
+- `agentd.lock` 由 daemon 在整个生命周期持有，确保一个 scope 只有一个 owner。
+
+拆分锁可以避免客户端等待 readiness 时阻塞 daemon 获取生命周期锁。锁和
+discovery 文件位于同一个安全运行目录；descriptor 使用原子发布，token 不通
+过命令行参数或环境变量传递。
+
+Unix 已实现 owner-only 运行目录、文件权限、原子 discovery 发布和进程锁。
+Windows 通过受保护的 current-user-only DACL 提供等价边界，拒绝 reparse point，
+并在使用前校验 descriptor 与 lock 的句柄。两个平台都不会退化为宽松权限，也
+不会启动未认证 daemon。
+
+## 所有权与 Rust 生态选型
+
+- `agent-protocol`：protobuf 定义、生成类型与协议版本；
+- `agent-client`：认证连接、命令关联、Snapshot、stream、重试与重连；
+- `agent-local`：token、discovery、安全目录与双锁；
+- `agent-launch`：discover/reuse/spawn/readiness 协调；
+- `agent-runtime`：配置、composition、模型与 Runtime 服务；
+- `agentd`：唯一 composition root 和 gRPC server；
+- TUI/GUI：仅负责交互与呈现。
+
+实现优先复用成熟 Rust 生态：`tonic`/`prost` 承载 gRPC 与 protobuf，`tokio`
+承载异步 Runtime、进程与信号，`serde` 负责受限 schema，`getrandom`、`secrecy`
+和 `subtle` 用于 token 生成、秘密包装与常量时间比较，`file-id` 提供跨平台
+workspace 身份，Unix 文件安全边界使用 `rustix`。只有项目特有的 scope、
+生命周期与 UI 语义保留在自有 crate 中。
+
+## 模型与下载边界
+
+`llama-cpp` 是 `agentd` 的默认能力和默认 feature，不属于 TUI/GUI。模型缺失
+不会触发启动期下载：daemon 返回可操作的模型状态，客户端仍可进入界面并选择
+配置或显式开始后台下载。默认托管 preset 是 `qwen3-1.7b-q4_k_m`；用户显式配置
+的 `model_path` 缺失时不能改为托管下载，只能修复配置或选择其他模型。
+
+下载控制面使用 unary `StartModelDownload` / `CancelModelDownload`，所有进度和
+结果继续进入唯一的版本化 `RuntimeSnapshot` stream，不增加第二条模型事件流。
+托管模型状态包含来源、phase、允许动作、字节进度、failure 和 `operation_id`。
+phase 覆盖等待锁、检查、下载、校验、安装、激活、就绪、取消和失败；失败后的
+动作称为 Retry，而不是 resume。
+
+下载任务属于 daemon：关闭 TUI/GUI 不会取消任务。Cancel 必须携带当前
+`operation_id`，旧操作 ID 不能取消较新的下载。进入 `Installing` 后取消返回
+TooLate，因为此时原子落盘不能被中断。模型 ID、URL、摘要和目标路径均由 daemon
+内置目录决定，client 不能提交任意 URL 或文件路径。
+
+## 当前落地边界
+
+协议、认证、scope 握手、安全 discovery、双锁、launch coordinator、`agentd`
+composition、可重连共用 client 以及 TUI/GUI 统一 C/S 入口已经落地，并由
+workspace 测试覆盖。显式后台模型下载、单 Snapshot 进度流以及 in-process epoch
+切换也已落地。TUI 与 GUI 当前尚未接入模型下载 controls；下一小节点只为两端补
+上同一组 Snapshot/RPC 的呈现和操作，两端都不得自行下载。其余前端工作继续补足
+GUI 的完整会话、流式输出、审批、取消与恢复闭环。
+
+移动端与远程控制延后。未来可以扩展 transport 和认证体系，但不得复用本地
+discovery token 或在未建立远程身份、授权与加密边界前暴露当前 loopback 服务。

@@ -6,14 +6,14 @@ use agent_app::{
   AgentClientError, AvailabilityKind, ProtocolErrorKind, RuntimeSnapshot as AppSnapshot,
 };
 use agent_protocol::PROTOCOL_VERSION;
-use tokio::sync::watch;
+use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
 use tonic::Streaming;
 
 use super::{
   ConnectionState, RemoteClientOptions, RemoteState, VersionedRemoteSnapshot, status_error,
 };
-use crate::{AgentClient, DecodedSnapshot, decode_snapshot};
+use crate::{AgentClient, AuthenticatedTargetResolver, DecodedSnapshot, decode_snapshot};
 
 pub(super) struct Established {
   pub client: AgentClient,
@@ -23,7 +23,8 @@ pub(super) struct Established {
 }
 
 pub(super) struct DriverContext {
-  pub endpoint: String,
+  pub resolver: Arc<dyn AuthenticatedTargetResolver>,
+  pub commands: Arc<Mutex<AgentClient>>,
   pub client_instance_id: String,
   pub options: RemoteClientOptions,
   pub snapshots: watch::Sender<AppSnapshot>,
@@ -35,12 +36,13 @@ pub(super) struct DriverContext {
 }
 
 pub(super) async fn establish(
-  endpoint: &str,
+  resolver: &Arc<dyn AuthenticatedTargetResolver>,
   client_instance_id: &str,
   options: &RemoteClientOptions,
 ) -> Result<Established, AgentClientError> {
+  let target = resolver.resolve().await?;
   let connect = AgentClient::connect_with_timeouts(
-    endpoint,
+    target,
     client_instance_id.to_owned(),
     options.connect_timeout,
     options.rpc_timeout,
@@ -131,7 +133,7 @@ pub(super) async fn run_driver(mut established: Established, context: DriverCont
       let reconnect = tokio::select! {
         _ = context.cancellation.cancelled() => return,
         result = establish(
-          &context.endpoint,
+          &context.resolver,
           &context.client_instance_id,
           &context.options,
         ) => result,
@@ -139,6 +141,7 @@ pub(super) async fn run_driver(mut established: Established, context: DriverCont
       match reconnect {
         Ok(reconnected) => {
           server_instance_id = reconnected.server_instance_id.clone();
+          *context.commands.lock().await = reconnected.client.clone();
           apply_snapshot(
             reconnected.snapshot.clone(),
             &server_instance_id,
@@ -217,13 +220,13 @@ fn apply_snapshot(
       snapshot: snapshot.snapshot.clone(),
     };
     context.revision.store(snapshot.revision, Ordering::Release);
+    if resync {
+      context.connection.send_replace(connection.clone());
+    }
     context.remote_state.send_replace(RemoteState {
       connection: connection.clone(),
       snapshot: Some(remote_snapshot.clone()),
     });
-    if resync {
-      context.connection.send_replace(connection);
-    }
     context.remote_snapshots.send_replace(remote_snapshot);
     context.snapshots.send_replace(snapshot.snapshot);
   }

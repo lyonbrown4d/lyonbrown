@@ -1,6 +1,7 @@
 use agent_protocol::v1::command_error_detail::Context;
 use agent_protocol::v1::{
-  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, UnsupportedCommand,
+  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, InvalidModelIdDetail,
+  ModelDownloadOperationMismatchDetail, UnsupportedCommand,
 };
 use prost::Message;
 
@@ -24,6 +25,22 @@ fn command_error_details_round_trip_every_context_shape() {
       code: CommandErrorCode::Unsupported as i32,
       context: Some(Context::UnsupportedCommand(
         UnsupportedCommand::ForceStop as i32,
+      )),
+    },
+    CommandErrorDetail {
+      code: CommandErrorCode::InvalidModelId as i32,
+      context: Some(Context::InvalidModelId(InvalidModelIdDetail {
+        requested_model_id: "other".into(),
+        configured_model_id: "configured".into(),
+      })),
+    },
+    CommandErrorDetail {
+      code: CommandErrorCode::ModelDownloadOperationMismatch as i32,
+      context: Some(Context::ModelDownloadOperationMismatch(
+        ModelDownloadOperationMismatchDetail {
+          expected_operation_id: "current".into(),
+          received_operation_id: "stale".into(),
+        },
       )),
     },
   ];

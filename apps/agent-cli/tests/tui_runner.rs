@@ -1,12 +1,15 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_app::{AgentClient, RuntimePhase, RuntimeSnapshot, TurnStatus, TurnView, channel};
+use agent_app::{
+  AgentClient, AgentClientError, AgentCommand, RuntimePhase, RuntimeSnapshot, TurnStatus, TurnView,
+};
 use agent_core::{AgentEvent, TurnId};
 use agent_tool::ApprovalDecision;
+use async_trait::async_trait;
 use chrono::Utc;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 use unicode_segmentation::UnicodeSegmentation;
 
 use agent_cli::tui::TuiState;
@@ -43,7 +46,7 @@ fn composer_accepts_input_while_a_turn_is_active() {
     ts: Utc::now(),
   });
   assert_eq!(state.status(), "idle");
-  assert!(can_accept_input(true, false));
+  assert!(!can_accept_input(true, false));
   assert!(can_accept_input(true, true));
   assert!(!can_accept_input(false, false));
   assert!(can_accept_input(false, true));
@@ -204,20 +207,14 @@ fn conversation_scroll_uses_distance_from_bottom_and_page_down_resumes_following
 
 #[tokio::test]
 async fn shutdown_detaches_without_cancelling_the_remote_runtime() {
-  let (controller, mut endpoint) = channel(
-    RuntimeSnapshot {
-      phase: RuntimePhase::Streaming,
-      ..RuntimeSnapshot::default()
-    },
-    4,
-  );
-  let client: Arc<dyn AgentClient> = Arc::new(controller);
+  let client: Arc<dyn AgentClient> = Arc::new(DetachedClient::new());
   let observer = client.clone();
   let snapshots = client.subscribe();
   let mut runtime = Runtime {
     state: TuiState::default(),
     client: Some(client),
     snapshots,
+    remote_state: None,
     approval: None,
     approval_scroll: 0,
     approval_max_scroll: 0,
@@ -231,10 +228,35 @@ async fn shutdown_detaches_without_cancelling_the_remote_runtime() {
     .unwrap();
 
   assert!(runtime.client.is_none());
-  assert!(
-    tokio::time::timeout(Duration::from_millis(25), endpoint.recv())
-      .await
-      .is_err()
-  );
+  assert_eq!(observer.snapshot().phase, RuntimePhase::Streaming);
   drop(observer);
+}
+
+struct DetachedClient {
+  snapshots: watch::Sender<RuntimeSnapshot>,
+}
+
+impl DetachedClient {
+  fn new() -> Self {
+    let (snapshots, _) = watch::channel(RuntimeSnapshot {
+      phase: RuntimePhase::Streaming,
+      ..RuntimeSnapshot::default()
+    });
+    Self { snapshots }
+  }
+}
+
+#[async_trait]
+impl AgentClient for DetachedClient {
+  async fn execute(&self, _command: AgentCommand) -> Result<(), AgentClientError> {
+    panic!("shutdown must not send a runtime command")
+  }
+
+  fn snapshot(&self) -> RuntimeSnapshot {
+    self.snapshots.borrow().clone()
+  }
+
+  fn subscribe(&self) -> watch::Receiver<RuntimeSnapshot> {
+    self.snapshots.subscribe()
+  }
 }

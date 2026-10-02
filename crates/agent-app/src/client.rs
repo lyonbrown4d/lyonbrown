@@ -3,7 +3,7 @@ use std::fmt;
 use async_trait::async_trait;
 use tokio::sync::watch;
 
-use crate::{AgentCommand, AppController, RuntimeCommandError, RuntimeSnapshot};
+use crate::{AgentCommand, RuntimeCommandError, RuntimeSnapshot};
 
 /// Stable reason why an agent client cannot currently accept commands.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,6 +32,7 @@ impl fmt::Display for AvailabilityKind {
 /// Stable reason why the client and server protocol could not interoperate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtocolErrorKind {
+  AuthenticationFailed,
   IncompatibleVersion,
   InvalidSnapshot,
   Unsupported,
@@ -40,6 +41,7 @@ pub enum ProtocolErrorKind {
 impl ProtocolErrorKind {
   pub const fn code(self) -> &'static str {
     match self {
+      Self::AuthenticationFailed => "authentication_failed",
       Self::IncompatibleVersion => "incompatible_version",
       Self::InvalidSnapshot => "invalid_snapshot",
       Self::Unsupported => "unsupported",
@@ -86,27 +88,10 @@ impl AgentClientError {
   }
 }
 
-/// Unified UI port implemented by embedded and remote agent clients.
+/// Transport-independent UI port implemented by authenticated agent clients.
 #[async_trait]
 pub trait AgentClient: Send + Sync {
   async fn execute(&self, command: AgentCommand) -> Result<(), AgentClientError>;
   fn snapshot(&self) -> RuntimeSnapshot;
   fn subscribe(&self) -> watch::Receiver<RuntimeSnapshot>;
-}
-
-#[async_trait]
-impl AgentClient for AppController {
-  async fn execute(&self, command: AgentCommand) -> Result<(), AgentClientError> {
-    AppController::execute(self, command)
-      .await
-      .map_err(AgentClientError::from)
-  }
-
-  fn snapshot(&self) -> RuntimeSnapshot {
-    AppController::snapshot(self)
-  }
-
-  fn subscribe(&self) -> watch::Receiver<RuntimeSnapshot> {
-    AppController::subscribe(self)
-  }
 }

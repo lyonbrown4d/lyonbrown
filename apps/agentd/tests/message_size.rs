@@ -1,13 +1,17 @@
+mod support;
+
 use std::sync::Arc;
 
 use agent_app::{AgentCommand, RuntimeSnapshot};
 use agent_client::AgentClient;
 use agent_protocol::MAX_GRPC_MESSAGE_BYTES;
-use agentd::{RuntimeHost, VersionedSnapshot, serve};
+use agentd::{RuntimeHost, VersionedSnapshot};
 use async_trait::async_trait;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
+
+use support::spawn_authenticated;
 
 const ABOVE_TONIC_DEFAULT: usize = 5 * 1024 * 1024;
 const ABOVE_PROTOCOL_LIMIT: usize = MAX_GRPC_MESSAGE_BYTES + 1024 * 1024;
@@ -45,19 +49,12 @@ impl RuntimeHost for SnapshotHost {
 
 async fn connected(payload_bytes: usize) -> (AgentClient, CancellationToken) {
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-  let address = listener.local_addr().unwrap();
-  let shutdown = CancellationToken::new();
-  let server_shutdown = shutdown.clone();
   let host = SnapshotHost::with_payload(payload_bytes);
-  tokio::spawn(async move {
-    serve(listener, Arc::new(host), server_shutdown.cancelled())
-      .await
-      .unwrap();
-  });
-  let client = AgentClient::connect(format!("http://{address}"), "message-size-test")
+  let server = spawn_authenticated(listener, Arc::new(host));
+  let client = AgentClient::connect(server.target, "message-size-test")
     .await
     .unwrap();
-  (client, shutdown)
+  (client, server.shutdown)
 }
 
 #[tokio::test]

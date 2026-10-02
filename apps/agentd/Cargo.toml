@@ -3,11 +3,26 @@ name = "agentd"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = ["llama-cpp"]
+llama-cpp = ["agent-runtime/llama-cpp"]
+cuda = ["llama-cpp", "agent-runtime/cuda"]
+vulkan = ["llama-cpp", "agent-runtime/vulkan"]
+
 [dependencies]
 agent-app.workspace = true
 agent-core.workspace = true
+agent-launch = { path = "../../crates/agent-launch" }
+agent-local = { path = "../../crates/agent-local" }
+agent-kernel.workspace = true
+agent-runtime = { path = "../../crates/agent-runtime", default-features = false }
 agent-protocol.workspace = true
+agent-tool.workspace = true
+agent-workspace.workspace = true
+anyhow.workspace = true
 async-trait.workspace = true
+clap.workspace = true
+dirs.workspace = true
 futures.workspace = true
 prost.workspace = true
 sha2.workspace = true
@@ -15,11 +30,14 @@ tokio.workspace = true
 tokio-stream = { workspace = true, features = ["net"] }
 tokio-util.workspace = true
 tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
 uuid.workspace = true
 
 [dev-dependencies]
 agent-client.workspace = true
 serde_json.workspace = true
+tempfile = "3"
 
 [lints]
 workspace = true

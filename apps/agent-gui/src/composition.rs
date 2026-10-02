@@ -57,20 +57,17 @@ pub struct CompositionRoot {
 }
 
 impl CompositionRoot {
-  pub fn new() -> Result<Self, CompositionError> {
-    Self::build(CockpitState::default(), None)
-  }
-
-  /// Seeds a newly created cockpit with a cloned startup state.
-  ///
-  /// This is not a shared runtime state store and does not deliver live updates.
-  /// Use `with_native_client` when the caller has an explicit daemon endpoint.
-  pub fn with_initial_state(initial_state: CockpitState) -> Result<Self, CompositionError> {
-    Self::build(initial_state, None)
-  }
-
   pub fn with_native_client(native_client: NativeAgentClient) -> Result<Self, CompositionError> {
     Self::build(CockpitState::default(), Some(native_client))
+  }
+
+  pub fn unavailable(error: impl Into<String>) -> Result<Self, CompositionError> {
+    let mut state = CockpitState::default();
+    state.apply_connection(
+      crate::state::ConnectionState::Unavailable,
+      Some(error.into()),
+    );
+    Self::build(state, None)
   }
 
   fn build(

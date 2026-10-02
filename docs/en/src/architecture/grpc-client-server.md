@@ -1,6 +1,6 @@
 # Local gRPC Client/Server Architecture
 
-> Status: Accepted for the TUI/GUI iteration
+> Status: accepted and under implementation verification
 >
 > Scope: local `agentd`, terminal client, and GPUI client
 >
@@ -8,22 +8,32 @@
 
 ## Decision
 
-Lyonbrown moves application-runtime ownership into one local `agentd`. The TUI and GUI are clients of the same versioned gRPC contract and do not construct independent Kernels in the target architecture.
+Lyonbrown uses one local Client/Server architecture. The TUI and GUI are clients
+of the same versioned gRPC contract. Clients no longer construct a Kernel, and
+there is no embedded product mode or unauthenticated transport compatibility
+entry point.
 
 ```text
 agent TUI ──┐
             ├── gRPC / HTTP/2 / loopback ── agentd ── Kernel
-agent GUI ──┘                                  ├── models
+agent GUI ──┘                                  ├── llama-cpp and other models
                                                ├── tools and MCP
                                                ├── workspace index
                                                └── session storage
 ```
 
-The first implementation binds only to loopback. It is not a remote-control endpoint. An embedded runtime remains available during migration and for tests, but it uses the same application commands and snapshots.
+`agentd` is the sole owner of the runtime, models, tools, MCP connections,
+indexes, approvals, and sessions. TUI and GUI own only presentation state,
+input mapping, and client lifetime. Closing one client therefore does not
+implicitly cancel a running turn or model job; cancellation is an explicit RPC.
+
+This phase permits loopback communication only. The local endpoint is not a
+remote-control endpoint.
 
 ## Protocol shape
 
-Protocol Buffers are the source of truth. Unary RPCs carry commands and queries; one server-streaming RPC carries coalescible full runtime snapshots.
+Protocol Buffers are the source of truth. Unary RPCs carry commands and queries;
+one server-streaming RPC carries coalescible full runtime snapshots.
 
 | Shape | Operations |
 |---|---|
@@ -31,54 +41,166 @@ Protocol Buffers are the source of truth. Unary RPCs carry commands and queries;
 | Unary query | handshake, health, latest snapshot |
 | Server stream | latest full runtime snapshots with revisions |
 
-Every command contains a `command_id` and `client_instance_id`. Every projected update contains a monotonically increasing `revision`. A reconnecting client first obtains a snapshot and then subscribes after its last applied revision. The v1 stream is not an event log: a slow client may receive a newer full snapshot directly, so revisions may jump. Clients deduplicate by revision and apply only newer snapshots; they do not replay or infer coalesced intermediate state.
+Every command contains a `command_id`, `client_instance_id`, and the
+`expected_server_instance_id` returned by the handshake. The daemon checks the
+server instance atomically before reserving an idempotency key or executing the
+command. A command executed by an old daemon cannot be replayed into a new
+instance merely because its response was lost.
 
-Every command also carries the `expected_server_instance_id` obtained from the handshake. The daemon checks it atomically before reserving an idempotency key or executing the command. If an old daemon executes a command but its response is lost, that command cannot be replayed into a restarted daemon. An event-envelope revision must also equal its nested snapshot revision; a mismatch is a protocol failure.
+Every projected update contains a monotonically increasing `revision`. A client
+obtains a Snapshot before subscribing after its last applied revision. The v1
+stream is not an event log: a slow client may receive a newer full snapshot
+directly, so revisions may jump. Clients apply only newer revisions and do not
+infer coalesced intermediate state. An event revision that differs from its
+nested Snapshot revision is a protocol error.
 
-The daemon keeps a bounded in-memory replay cache, and transport retries for one logical call reuse the same `command_id`. This guarantee only covers the same daemon instance while the entry remains cached; daemon restarts and cache eviction do not provide cross-process exactly-once delivery. A client must not blindly replay an unconfirmed non-idempotent command after `server_instance_id` changes.
+The daemon keeps a bounded in-memory replay cache. Transport retries for one
+logical call reuse the same `command_id`. This guarantee covers only the same
+daemon while its entry remains cached; it is not cross-process exactly-once.
+Clients must not blindly replay an unconfirmed non-idempotent command after the
+`server_instance_id` changes.
 
-The wire contract is separate from Rust domain types. `Instant`, internal errors, and implementation-specific enums must be mapped to stable protobuf values. New fields use new protobuf tags; tags are never reused.
+The wire contract stays separate from Rust domain types. New protobuf fields
+use new tags, and published tags are never reused. Version one has a 16 MiB gRPC
+encode/decode budget. Oversized Snapshots fail explicitly; pagination or bounded
+history truncation should be added before raising that budget without a bound.
 
-Version one uses an explicit 16 MiB gRPC encode/decode budget. Oversized snapshots fail explicitly. If real sessions approach this budget, pagination or bounded history truncation should be introduced instead of increasing the limit without bound.
+## Local authentication and scope
 
-## Ownership
+`agentd` listens only on a randomly assigned `127.0.0.1` port. Loopback limits
+network reachability but does not authenticate the caller, so every product RPC
+requires a bearer token generated for each daemon launch. Public
+unauthenticated client and server APIs have been removed. Requests with a
+missing or incorrect token are rejected before entering the application service.
 
-- `agent-protocol` owns protobuf definitions, generated messages, and protocol versioning.
-- `agent-client` owns connection, command correlation, snapshot acquisition, stream subscription, and reconnect policy shared by TUI and GUI.
-- `agentd` owns composition, Kernel/runtime lifetime, model loading and download jobs, workspace indexes, MCP connections, approvals, and session storage.
-- TUI and GUI own only presentation state, input mapping, and client lifecycle.
+The discovery descriptor contains only the required connection material:
 
-Closing a client does not cancel a turn or model download. Cancellation is always an explicit RPC. The daemon arbitrates concurrent clients; the first valid response resolves an approval, and later responses receive a typed conflict.
+- the loopback address, PID, and `server_instance_id`;
+- the per-launch bearer token;
+- a `scope_fingerprint` derived from the workspace and runtime configuration;
+- the schema version and transport type.
 
-Ordinary TUI commands run in cancellable background tasks rather than blocking the keyboard event loop. Cancel and force-stop use independent concurrent RPCs with short deadlines. On daemon shutdown, snapshot streams are cancelled before gRPC drains, so connected clients cannot keep the server alive indefinitely.
+The client and daemon independently compute the runtime configuration
+fingerprint. The workspace filesystem identity and configuration fingerprint
+derive the scope, so equivalent path spelling does not fork a second daemon.
+The daemon validates the configuration fingerprint at startup and
+returns the scope fingerprint in its handshake. A client reuses the instance
+only when discovery, handshake, and expected scope all agree, preventing a
+connection to a daemon for another workspace or configuration.
 
-## Local endpoint and lifecycle
+## Runtime epoch transitions
 
-Version one uses gRPC over HTTP/2 on `127.0.0.1`. The daemon must never default to `0.0.0.0`. Endpoint discovery and per-launch authentication belong to a later hardening step before automatic daemon startup is enabled. Until then, the address is explicit and development-only.
+`agentd` uses an in-process epoch supervisor to replace a Runtime. After model
+installation, the supervisor builds the replacement while the old control
+plane remains available. On success it starts the new loopback endpoint,
+atomically publishes the new discovery descriptor, and only then gracefully
+stops the old endpoint and Runtime. Explicit graceful shutdown is followed by
+abort cleanup so exceptional tasks cannot leak across epochs.
 
-Loopback is not caller authentication. The endpoint must not become the default product path or execute privileged tools until it has a random per-launch token, a discovery file readable only by the current user, and server-side token validation.
+Each transition rotates the endpoint address, bearer token, and
+`server_instance_id`. The workspace scope, daemon PID, and daemon-lifetime
+`agentd.lock` stay unchanged. Clients rerun discovery and the authenticated
+handshake, then resynchronize from a Snapshot; they do not blindly replay an
+unconfirmed old-epoch command into the replacement.
 
-The intended startup sequence is:
+If building the Runtime or starting its endpoint fails, the supervisor keeps
+the old control plane online, publishes a recoverable failure, and permits an
+explicit retry. The old endpoint may exit only after the new descriptor has
+been published successfully. This is the rollback and fail-closed boundary for
+the local control plane.
 
-1. client discovers or starts `agentd`;
-2. client performs the version/capability handshake;
-3. client requests the current snapshot;
-4. client subscribes from that snapshot revision;
-5. client sends idempotent commands through unary RPCs.
+## Discovery, reuse, and startup
 
-## Migration
+Every client entry point goes through the launch coordinator:
 
-1. Establish protobuf, reusable Rust client, and an injectable daemon service with offline tests.
-2. Add a TUI transport adapter while retaining embedded mode.
-3. Connect the GPUI state model through the same client.
-4. Move CLI composition and model setup ownership into `agentd`.
-5. Add daemon discovery, authentication, process supervision, reconnect, and revision retention.
+1. Read and strictly validate the owner-only discovery descriptor.
+2. Use its token for a deadline-bound gRPC handshake.
+3. Reuse the daemon when instance ID, scope, and configuration match.
+4. When no instance is reusable, compete for the startup lock; the winner
+   spawns `agentd`.
+5. Wait for discovery publication and an authenticated handshake. Other clients
+   then reuse the same instance.
+6. Obtain the current Snapshot, start the subscription, and then send commands.
 
-Mobile and remote transports will extend this contract later; they do not broaden the security boundary of the local iteration.
+The native client driver performs this sequence in the background. TUI and GUI
+render the `Connecting` state immediately instead of blocking their interface.
+After a daemon restart, reconnect re-runs discovery so a new endpoint, bearer
+token, and server epoch replace the old command and event channels together.
 
-## Current implementation status
+Startup coordination and daemon ownership use separate locks:
 
-- Complete: the protobuf/tonic contract, lossless snapshot mapping, daemon-epoch fencing, a cancellation-safe bounded replay cache, a 16 MiB message budget, a loopback-only injectable service, graceful shutdown, and revision validation.
-- Complete: the shared TUI client port, embedded compatibility entry point, non-blocking command submission, and a remote adapter for handshake, initial snapshot, full-snapshot streaming, bounded retries, and reconnects.
-- Complete: the GPUI native bridge, daemon-epoch/connection-state model, and live state subscription after explicit client injection; the default GUI still does not guess an endpoint.
-- Not enabled yet: an `agentd` executable, default daemon startup, endpoint discovery, local authentication, or migration of model/composition ownership.
+- `agentd.start.lock` elects one client to start the daemon and is released
+  after readiness;
+- `agentd.lock` is held for the daemon lifetime and ensures one owner per scope.
+
+Separating the locks prevents a client waiting for readiness from blocking the
+daemon's lifetime lock. Locks and discovery live in the same secure run
+directory. The descriptor is published atomically, and the token is not passed
+through command-line arguments or environment variables.
+
+Unix enforces owner-only runtime directories and files, atomic discovery
+publication, and process locks. Windows enforces the equivalent boundary with
+protected current-user-only DACLs, rejects reparse points, and validates every
+descriptor and lock handle before use. Neither platform falls back to
+permissive access or an unauthenticated daemon.
+
+## Ownership and Rust ecosystem choices
+
+- `agent-protocol`: protobuf definitions, generated types, and versioning;
+- `agent-client`: authenticated connections, command correlation, Snapshots,
+  streams, retries, and reconnects;
+- `agent-local`: tokens, discovery, secure directories, and both locks;
+- `agent-launch`: discover/reuse/spawn/readiness coordination;
+- `agent-runtime`: configuration, composition, models, and runtime services;
+- `agentd`: the only composition root and gRPC server;
+- TUI/GUI: interaction and presentation only.
+
+The implementation prefers established Rust crates: `tonic`/`prost` for gRPC
+and protobuf, `tokio` for async runtime, processes, and signals, `serde` for the
+bounded schema, `getrandom`, `secrecy`, and `subtle` for token generation,
+secret wrapping, and constant-time comparison, `file-id` for cross-platform
+workspace identity, and `rustix` for the Unix file security boundary. Project
+code is reserved for Lyonbrown-specific scope,
+lifecycle, and UI semantics.
+
+## Model and download boundary
+
+`llama-cpp` is an `agentd` default capability and default feature, not a TUI or
+GUI responsibility. A missing model never triggers a startup download. The
+daemon exposes an actionable state while the client remains usable for
+configuration or an explicit background download. The default managed preset
+is `qwen3-1.7b-q4_k_m`. A missing explicitly configured `model_path` is not
+eligible for a managed download; the user must repair the configuration or
+choose another model.
+
+The download control plane uses unary `StartModelDownload` and
+`CancelModelDownload` calls. Progress and results remain on the single
+versioned `RuntimeSnapshot` stream instead of creating a second model event
+stream. Managed-model state carries its source, phase, allowed actions, byte
+progress, failure, and `operation_id`. Phases cover lock waiting, checking,
+downloading, verification, installation, activation, ready, cancelled, and
+failed. The recovery action after failure is Retry, never resume.
+
+The job belongs to the daemon, so closing a TUI or GUI does not cancel it.
+Cancel must carry the current `operation_id`; a stale operation cannot cancel a
+newer job. Cancellation becomes TooLate after the job enters `Installing`,
+because atomic installation cannot be interrupted. The daemon catalog owns the
+model ID, URL, digest, and destination; clients cannot submit arbitrary URLs or
+paths.
+
+## Current implementation boundary
+
+The protocol, authentication, scope handshake, secure discovery, two-lock
+design, launch coordinator, `agentd` composition, reconnecting shared client,
+and unified C/S entry points for TUI and GUI are implemented and covered by the
+workspace test suite. Explicit daemon-side background downloads, progress on
+the single Snapshot stream, and in-process epoch replacement are also
+implemented. TUI and GUI model-download controls are not wired yet. The next
+small milestone adds presentation and controls over the same Snapshot/RPCs;
+neither client will implement its own downloader. Remaining frontend work also
+includes the complete GUI session, streaming, approval, cancellation, and
+resume loop.
+
+Mobile and remote control remain deferred. A future transport and authentication
+system must not reuse the local discovery token or expose this loopback service
+before remote identity, authorization, and encryption boundaries exist.

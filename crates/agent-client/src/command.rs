@@ -1,9 +1,9 @@
 use agent_app::ModelSelection;
 use agent_protocol::v1::model_selection::Selection;
 use agent_protocol::v1::{
-  CancelTurnRequest, CommandResponse, ForceStopRequest, ModelRoute,
+  CancelModelDownloadRequest, CancelTurnRequest, CommandResponse, ForceStopRequest, ModelRoute,
   ModelSelection as WireModelSelection, QueueFollowUpRequest, RespondApprovalRequest,
-  SelectSessionModelRequest, StartTurnRequest, SteerCurrentTurnRequest,
+  SelectSessionModelRequest, StartModelDownloadRequest, StartTurnRequest, SteerCurrentTurnRequest,
 };
 use uuid::Uuid;
 
@@ -36,6 +36,12 @@ pub enum Command {
   },
   SelectSessionModel {
     selection: ModelSelection,
+  },
+  StartModelDownload {
+    model_id: String,
+  },
+  CancelModelDownload {
+    operation_id: String,
   },
 }
 
@@ -112,6 +118,21 @@ impl AgentClient {
           })
           .await?
       }
+      Command::StartModelDownload { model_id } => {
+        self
+          .inner
+          .start_model_download(StartModelDownloadRequest { metadata, model_id })
+          .await?
+      }
+      Command::CancelModelDownload { operation_id } => {
+        self
+          .inner
+          .cancel_model_download(CancelModelDownloadRequest {
+            metadata,
+            operation_id,
+          })
+          .await?
+      }
     };
     Ok(response.into_inner())
   }
@@ -170,6 +191,28 @@ impl AgentClient {
   ) -> Result<CommandResponse, tonic::Status> {
     self
       .execute_new(Command::SelectSessionModel { selection })
+      .await
+  }
+
+  pub async fn start_model_download(
+    &mut self,
+    model_id: impl Into<String>,
+  ) -> Result<CommandResponse, tonic::Status> {
+    self
+      .execute_new(Command::StartModelDownload {
+        model_id: model_id.into(),
+      })
+      .await
+  }
+
+  pub async fn cancel_model_download(
+    &mut self,
+    operation_id: impl Into<String>,
+  ) -> Result<CommandResponse, tonic::Status> {
+    self
+      .execute_new(Command::CancelModelDownload {
+        operation_id: operation_id.into(),
+      })
       .await
   }
 

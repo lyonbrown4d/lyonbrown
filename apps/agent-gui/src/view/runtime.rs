@@ -10,8 +10,11 @@ pub fn signal_rail(
   connection: ConnectionState,
   stale: bool,
   can_submit: bool,
+  model_setup_required: bool,
 ) -> impl IntoElement {
-  let signal_status = if can_submit {
+  let signal_status = if model_setup_required {
+    "model setup required"
+  } else if can_submit {
     "snapshot available"
   } else {
     "unavailable"

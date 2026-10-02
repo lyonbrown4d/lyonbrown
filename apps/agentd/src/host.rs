@@ -5,6 +5,11 @@ use async_trait::async_trait;
 use tokio::sync::watch;
 use tokio_util::sync::CancellationToken;
 
+mod managed;
+pub use managed::ManagedRuntimeHost;
+
+pub const CAPABILITY_MODEL_SETUP_DOWNLOAD_V1: &str = "model_setup.download.v1";
+
 #[derive(Debug, Clone)]
 pub struct VersionedSnapshot {
   pub revision: u64,
@@ -22,6 +27,9 @@ pub trait RuntimeHost: Send + Sync + 'static {
   async fn execute(&self, command: AgentCommand) -> Result<(), RuntimeCommandError>;
   fn snapshot(&self) -> VersionedSnapshot;
   fn subscribe(&self) -> watch::Receiver<VersionedSnapshot>;
+  fn capabilities(&self) -> &'static [&'static str] {
+    &[]
+  }
 }
 
 struct ForwarderGuard {
@@ -37,7 +45,7 @@ impl Drop for ForwarderGuard {
 /// Bridges the current in-process application controller into the daemon boundary.
 pub struct AppControllerHost {
   controller: AppController,
-  snapshots: watch::Receiver<VersionedSnapshot>,
+  snapshots: watch::Sender<VersionedSnapshot>,
   _forwarder: Arc<ForwarderGuard>,
 }
 
@@ -45,7 +53,8 @@ impl AppControllerHost {
   pub fn new(controller: AppController) -> Self {
     let mut source = controller.subscribe();
     let initial = VersionedSnapshot::new(1, source.borrow().clone());
-    let (sender, snapshots) = watch::channel(initial);
+    let (snapshots, _) = watch::channel(initial);
+    let sender = snapshots.clone();
     let cancellation = CancellationToken::new();
     let task_cancellation = cancellation.clone();
     tokio::spawn(async move {
@@ -82,6 +91,6 @@ impl RuntimeHost for AppControllerHost {
   }
 
   fn subscribe(&self) -> watch::Receiver<VersionedSnapshot> {
-    self.snapshots.clone()
+    self.snapshots.subscribe()
   }
 }

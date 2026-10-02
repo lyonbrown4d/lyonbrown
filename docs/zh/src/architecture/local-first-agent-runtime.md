@@ -1,5 +1,10 @@
 # Lyonbrown Local-First Agent Runtime 架构设计
 
+> 本文定义长期 Kernel 与领域架构。产品部署和进程所有权以
+> [本地 gRPC C/S 架构](grpc-client-server.md)为准：`agentd` 是 Runtime/模型的
+> 唯一所有者，TUI 与 GUI 都是经过认证的 gRPC client。旧图中作为适配器出现的
+> CLI/Desktop/Web 不表示允许内嵌 Runtime 兼容路径。
+
 > 版本：Draft v0.1  
 > 状态：长期架构方向稿；当前实施进度见 [第一阶段 MVP 实施计划](../plans/mvp-implementation-plan.md)
 > 定位：长期维护的、模型供应商中立（Model Provider Neutral）、本地优先（Local-first）的通用 Agent Runtime  

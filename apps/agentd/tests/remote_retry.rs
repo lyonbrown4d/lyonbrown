@@ -1,3 +1,5 @@
+mod support;
+
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -8,35 +10,14 @@ use agent_app::{
 use agent_client::{RemoteAgentClient, RemoteClientOptions};
 use agent_protocol::v1::agent_service_server::{AgentService, AgentServiceServer};
 use agent_protocol::v1::*;
-use agentd::{AgentGrpcService, RuntimeHost, VersionedSnapshot};
-use async_trait::async_trait;
+use agentd::VersionedSnapshot;
 use futures::Stream;
 use tokio::net::TcpListener;
-use tokio::sync::{Mutex, Notify, watch};
+use tokio::sync::{Mutex, Notify};
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::{Request, Response, Status};
 
-#[derive(Clone)]
-struct TestHost {
-  commands: Arc<Mutex<Vec<AgentCommand>>>,
-  snapshots: watch::Sender<VersionedSnapshot>,
-}
-
-#[async_trait]
-impl RuntimeHost for TestHost {
-  async fn execute(&self, command: AgentCommand) -> Result<(), agent_app::RuntimeCommandError> {
-    self.commands.lock().await.push(command);
-    Ok(())
-  }
-
-  fn snapshot(&self) -> VersionedSnapshot {
-    self.snapshots.borrow().clone()
-  }
-
-  fn subscribe(&self) -> watch::Receiver<VersionedSnapshot> {
-    self.snapshots.subscribe()
-  }
-}
+use support::{baseline::BaselineService, test_target};
 
 #[derive(Clone, Copy)]
 enum FailureMode {
@@ -47,7 +28,7 @@ enum FailureMode {
 
 #[derive(Clone)]
 struct FlakyService {
-  inner: AgentGrpcService,
+  inner: BaselineService,
   mode: FailureMode,
   attempts: Arc<AtomicUsize>,
   command_ids: Arc<Mutex<Vec<String>>>,
@@ -147,6 +128,20 @@ impl AgentService for FlakyService {
     self.inner.select_session_model(request).await
   }
 
+  async fn start_model_download(
+    &self,
+    request: Request<StartModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    self.inner.start_model_download(request).await
+  }
+
+  async fn cancel_model_download(
+    &self,
+    request: Request<CancelModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    self.inner.cancel_model_download(request).await
+  }
+
   async fn get_snapshot(
     &self,
     request: Request<GetSnapshotRequest>,
@@ -172,18 +167,13 @@ struct TestConnection {
 }
 
 async fn setup(mode: FailureMode) -> TestConnection {
-  let (snapshots, _) = watch::channel(VersionedSnapshot::new(1, RuntimeSnapshot::default()));
-  let host = TestHost {
-    commands: Arc::new(Mutex::new(Vec::new())),
-    snapshots,
-  };
   let command_ids = Arc::new(Mutex::new(Vec::new()));
   let command_epochs = Arc::new(Mutex::new(Vec::new()));
   let attempts = Arc::new(AtomicUsize::new(0));
   let start_gate = Arc::new(Notify::new());
   let cancel_seen = Arc::new(Notify::new());
   let service = FlakyService {
-    inner: AgentGrpcService::new(Arc::new(host)),
+    inner: BaselineService::new(VersionedSnapshot::new(1, RuntimeSnapshot::default())),
     mode,
     attempts: Arc::clone(&attempts),
     command_ids: Arc::clone(&command_ids),
@@ -201,7 +191,7 @@ async fn setup(mode: FailureMode) -> TestConnection {
       .unwrap();
   });
   let client = RemoteAgentClient::connect(
-    format!("http://{address}"),
+    test_target(address),
     "retry-test",
     RemoteClientOptions::for_tests(),
   )

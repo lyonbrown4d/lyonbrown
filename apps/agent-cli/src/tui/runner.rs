@@ -2,13 +2,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_app::{AgentClient, AgentCommand, ApprovalDecision as AppApprovalDecision};
+use agent_client::{NativeAgentClient, RemoteState};
 use agent_tool::ApprovalDecision;
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use tokio::sync::watch;
 
 use super::{
-  ApprovalRequest, TuiState,
+  ApprovalRequest, TuiState, apply_remote_state,
   terminal::TerminalSession,
   ui::{RenderMetrics, render_cockpit},
 };
@@ -20,9 +21,12 @@ pub use commands::{
 pub use events::final_drain;
 
 mod commands;
+mod control;
 mod dispatch;
 mod events;
+mod remote;
 
+pub use control::execute_control_with_timeout;
 pub use dispatch::CommandDispatcher;
 
 const CONTROL_COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
@@ -31,6 +35,7 @@ pub struct Runtime {
   pub state: TuiState,
   pub client: Option<Arc<dyn AgentClient>>,
   pub snapshots: watch::Receiver<agent_app::RuntimeSnapshot>,
+  pub remote_state: Option<watch::Receiver<RemoteState>>,
   pub approval: Option<ApprovalRequest>,
   pub approval_scroll: u16,
   pub approval_max_scroll: u16,
@@ -40,14 +45,34 @@ pub struct Runtime {
 
 pub async fn run_client(client: Arc<dyn AgentClient>) -> Result<()> {
   let snapshots = client.subscribe();
+  run_client_with_state(client, snapshots, None).await
+}
+
+pub async fn run_native_client(client: NativeAgentClient) -> Result<()> {
+  let remote_state = client.subscribe_remote_state();
+  let client: Arc<dyn AgentClient> = Arc::new(client);
+  let snapshots = client.subscribe();
+  run_client_with_state(client, snapshots, Some(remote_state)).await
+}
+
+async fn run_client_with_state(
+  client: Arc<dyn AgentClient>,
+  snapshots: watch::Receiver<agent_app::RuntimeSnapshot>,
+  remote_state: Option<watch::Receiver<RemoteState>>,
+) -> Result<()> {
+  let mut state = TuiState::default();
+  if let Some(remote_state) = remote_state.as_ref() {
+    apply_remote_state(&mut state, &remote_state.borrow());
+  }
   let mut terminal = match TerminalSession::enter() {
     Ok(terminal) => terminal,
     Err(error) => return Err(error).context("failed to initialize terminal interface"),
   };
   let mut runtime = Runtime {
-    state: TuiState::default(),
+    state,
     client: Some(client),
     snapshots,
+    remote_state,
     approval: None,
     approval_scroll: 0,
     approval_max_scroll: 0,
@@ -65,8 +90,10 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
   let mut cancel_requested = false;
   let mut commands = CommandDispatcher::new();
   loop {
-    commands.check_results()?;
-    sync_runtime_snapshot(runtime);
+    for error in commands.drain_failures() {
+      runtime.state.record_client_failure(error);
+    }
+    remote::sync_runtime_snapshot(runtime);
     if !runtime.state.is_busy() {
       cancel_requested = false;
     }
@@ -97,11 +124,17 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
       if control_c_key(key) {
         if runtime.state.is_busy() {
           if cancel_requested {
-            execute_control(runtime, AgentCommand::ForceStop).await?;
-            return Ok(());
+            match execute_control(runtime, AgentCommand::ForceStop).await {
+              Ok(()) => return Ok(()),
+              Err(error) => runtime.state.set_error(error.to_string()),
+            }
+            cancel_requested = false;
+            continue;
           }
-          execute_control(runtime, AgentCommand::CancelTurn).await?;
-          cancel_requested = true;
+          match execute_control(runtime, AgentCommand::CancelTurn).await {
+            Ok(()) => cancel_requested = true,
+            Err(error) => runtime.state.set_error(error.to_string()),
+          }
           continue;
         }
         return Ok(());
@@ -130,7 +163,9 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
           KeyCode::End => runtime.approval_scroll = runtime.approval_max_scroll,
           _ => {}
         }
-        if let Some(decision) = approval_decision(key) {
+        if let Some(decision) = approval_decision(key)
+          && runtime.state.can_submit()
+        {
           dispatch(
             runtime,
             &mut commands,
@@ -152,7 +187,10 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
         continue;
       }
       let task_active = runtime.state.is_busy();
-      if !can_accept_input(task_active, runtime.client.is_some()) {
+      if !can_accept_input(
+        task_active,
+        runtime.client.is_some() && runtime.state.can_submit(),
+      ) {
         continue;
       }
       match key.code {
@@ -228,24 +266,6 @@ pub async fn shutdown(runtime: &mut Runtime) -> Result<()> {
   Ok(())
 }
 
-fn sync_runtime_snapshot(runtime: &mut Runtime) {
-  let snapshot = runtime.snapshots.borrow().clone();
-  let next_approval = snapshot
-    .approval
-    .as_ref()
-    .and_then(ApprovalRequest::from_view);
-  if runtime.approval.as_ref().map(|request| request.request_id)
-    != next_approval.as_ref().map(|request| request.request_id)
-  {
-    runtime.approval_scroll = 0;
-  }
-  runtime.approval = next_approval;
-  runtime
-    .state
-    .set_queued_follow_up(snapshot.queued_follow_ups.first().cloned());
-  runtime.state.sync_snapshot(&snapshot);
-}
-
 fn map_approval_decision(decision: ApprovalDecision) -> AppApprovalDecision {
   match decision {
     ApprovalDecision::Allow => AppApprovalDecision::AllowOnce,
@@ -275,24 +295,4 @@ async fn execute_control(runtime: &Runtime, command: AgentCommand) -> Result<()>
     .as_ref()
     .context("application runtime is unavailable")?;
   execute_control_with_timeout(client.as_ref(), command, CONTROL_COMMAND_TIMEOUT).await
-}
-
-pub async fn execute_control_with_timeout(
-  client: &dyn AgentClient,
-  command: AgentCommand,
-  timeout: Duration,
-) -> Result<()> {
-  let action = match &command {
-    AgentCommand::CancelTurn => "cancel turn",
-    AgentCommand::ForceStop => "force-stop turn",
-    _ => anyhow::bail!("timed execution only supports turn control commands"),
-  };
-  match tokio::time::timeout(timeout, client.execute(command)).await {
-    Ok(Ok(())) => Ok(()),
-    Ok(Err(error)) => Err(anyhow::anyhow!("{action} command failed: {error}")),
-    Err(_) => Err(anyhow::anyhow!(
-      "{action} command timed out after {}ms",
-      timeout.as_millis()
-    )),
-  }
 }

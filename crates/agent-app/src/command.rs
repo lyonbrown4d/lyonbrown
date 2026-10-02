@@ -31,4 +31,8 @@ pub enum AgentCommand {
   },
   /// Change the session model policy from the next safe step onward.
   SelectSessionModel { selection: ModelSelection },
+  /// Ask the daemon to install one model from its managed catalog.
+  StartModelDownload { model_id: String },
+  /// Ask the daemon to cancel its active model download operation.
+  CancelModelDownload { operation_id: String },
 }

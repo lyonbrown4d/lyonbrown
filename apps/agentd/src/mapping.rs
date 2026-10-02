@@ -1,5 +1,6 @@
 mod activity;
 mod common;
+mod model_setup;
 
 use std::time::Instant;
 
@@ -15,6 +16,7 @@ use agent_protocol::v1::{
 use crate::VersionedSnapshot;
 use activity::turn_to_wire;
 use common::{route_to_wire, tool_preview_to_wire};
+use model_setup::model_setup_to_wire;
 
 pub fn snapshot_to_wire(versioned: VersionedSnapshot) -> RuntimeSnapshot {
   let snapshot = versioned.snapshot;
@@ -43,6 +45,7 @@ pub fn snapshot_to_wire(versioned: VersionedSnapshot) -> RuntimeSnapshot {
     last_error: snapshot.last_error,
     model_selection: Some(model_selection_to_wire(snapshot.model_selection)),
     route: snapshot.route.map(route_to_wire),
+    model_setup: snapshot.model_setup.map(model_setup_to_wire),
   }
 }
 

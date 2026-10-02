@@ -9,6 +9,10 @@ use cap_std::fs::Dir;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod identity;
+
+pub use identity::workspace_identity;
+
 const INSTRUCTION_FILES: [&str; 4] = ["AGENTS.md", "CLAUDE.md", "README.md", "CONTRIBUTING.md"];
 
 /// Maximum accepted size of one repository instruction file (256 KiB).
@@ -234,14 +238,9 @@ pub fn workspace_cache_path(
   workspace_root: impl AsRef<Path>,
 ) -> Result<PathBuf, WorkspaceError> {
   let workspace_root = workspace_root.as_ref();
-  let identity = workspace_root
-    .canonicalize()
-    .map_err(|source| WorkspaceError::Io {
-      path: workspace_root.to_path_buf(),
-      source,
-    })?;
+  let identity = workspace_identity(workspace_root)?;
   let mut hash = 0xcbf29ce484222325_u64;
-  for byte in identity.to_string_lossy().as_bytes() {
+  for byte in &identity {
     hash ^= u64::from(*byte);
     hash = hash.wrapping_mul(0x100000001b3);
   }

@@ -2,7 +2,8 @@ use agent_tool::ApprovalDecision;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub fn can_accept_input(task_active: bool, kernel_available: bool) -> bool {
-  task_active || kernel_available
+  let _ = task_active;
+  kernel_available
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

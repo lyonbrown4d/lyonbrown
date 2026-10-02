@@ -64,7 +64,15 @@ Escape closes only the top overlay or clears selection; it does not exit the TUI
 
 ### 2.5 First-run model setup
 
-Running `agent` enters the TUI before any model transfer begins. If the embedded model is not cached, the setup surface presents the recommended `qwen3-1.7b-q4_k_m`, its size, and two equally explicit outcomes:
+This subsection is the accepted design target for TUI model-download controls,
+not a claim that the surface below is implemented. Today, a missing model puts
+the daemon in `ModelSetupRequired`. Explicit background download, cancellation,
+and Snapshot progress RPCs are implemented in the daemon; the TUI controls
+below are not wired yet.
+
+Running `agent` enters the TUI before any model transfer begins. When the
+daemon-owned model is not cached, the target setup surface presents the
+recommended `qwen3-1.7b-q4_k_m`, its size, and two equally explicit outcomes:
 
 ```text
 Local model  qwen3-1.7b-q4_k_m
@@ -75,7 +83,11 @@ Recommended default · 1.03 GiB · download only after confirmation
 Enter/D  Download     Q/Esc  Exit without downloading
 ```
 
-After confirmation, transfer runs as a cancellable background task while the TUI remains responsive. The progress row shows transferred bytes, total bytes when known, and percentage. `Esc` or `C` cancels cooperatively and removes staging data. Verification is a separate visible phase; the runtime never loads an unverified file. Headless commands do not display this flow and never initiate it implicitly.
+Once implemented, confirmation starts a cancellable daemon task while the TUI
+remains responsive. The progress row shows transferred bytes, total bytes when
+known, and percentage. `Esc` or `C` cancels cooperatively and removes staging
+data. Verification is a separate visible phase; the Runtime never loads an
+unverified file. Opening either client never initiates a transfer implicitly.
 
 ## 3. Core interactions
 

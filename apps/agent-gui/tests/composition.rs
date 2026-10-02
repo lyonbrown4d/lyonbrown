@@ -1,38 +1,35 @@
-use agent_client::{NativeAgentClient, RemoteClientOptions};
+use agent_client::{AuthenticatedTarget, NativeAgentClient, RemoteClientOptions};
 use agent_gui::composition::CompositionRoot;
-use agent_gui::state::{CockpitState, ConnectionState};
+use agent_gui::state::ConnectionState;
+use agent_local::{DiscoveryDescriptor, ScopeFingerprint, SecretToken};
+use uuid::Uuid;
 
 #[test]
-fn composition_root_validates_and_creates_cockpit() {
-  let root = CompositionRoot::new().unwrap();
+fn unavailable_composition_requires_an_explicit_connection_error() {
+  let root = CompositionRoot::unavailable("agentd startup failed").unwrap();
 
   root.validate().unwrap();
   let cockpit = root.create_cockpit().unwrap();
   assert!(!cockpit.has_live_client());
-}
-
-#[test]
-fn composition_root_accepts_an_initial_offline_state() {
-  let mut state = CockpitState::default();
-  state.apply_connection(
-    ConnectionState::Unavailable,
-    Some("agentd is unavailable".into()),
-  );
-  let root = CompositionRoot::with_initial_state(state).unwrap();
-
-  let cockpit = root.create_cockpit().unwrap();
-
   assert_eq!(cockpit.state().connection(), ConnectionState::Unavailable);
   assert_eq!(
     cockpit.state().last_connection_error(),
-    Some("agentd is unavailable")
+    Some("agentd startup failed")
   );
 }
 
 #[test]
 fn composition_root_injects_a_native_client_without_claiming_connection() {
+  let descriptor = DiscoveryDescriptor::new(
+    "127.0.0.1:9".parse().unwrap(),
+    1,
+    Uuid::new_v4(),
+    SecretToken::generate().unwrap(),
+    ScopeFingerprint::parse(&"ab".repeat(32)).unwrap(),
+  )
+  .unwrap();
   let client = NativeAgentClient::start(
-    "http://127.0.0.1:9",
+    AuthenticatedTarget::from_descriptor(&descriptor),
     "gui-composition-test",
     RemoteClientOptions::for_tests(),
   )

@@ -1,3 +1,5 @@
+mod support;
+
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -7,42 +9,20 @@ use agent_app::{AgentClientError, ProtocolErrorKind, RuntimePhase as AppPhase, R
 use agent_client::{NativeAgentClient, RemoteAgentClient, RemoteClientOptions};
 use agent_protocol::v1::agent_service_server::{AgentService, AgentServiceServer};
 use agent_protocol::v1::*;
-use agentd::{AgentGrpcService, RuntimeHost, VersionedSnapshot};
-use async_trait::async_trait;
+use agentd::VersionedSnapshot;
 use futures::Stream;
 use tokio::net::TcpListener;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::{TcpListenerStream, UnboundedReceiverStream};
 use tonic::{Request, Response, Status};
+
+use support::{baseline::BaselineService, test_target};
 
 type EventSender = mpsc::UnboundedSender<Result<RuntimeEvent, Status>>;
 
 #[derive(Clone)]
-struct StaticHost {
-  snapshots: watch::Sender<VersionedSnapshot>,
-}
-
-#[async_trait]
-impl RuntimeHost for StaticHost {
-  async fn execute(
-    &self,
-    _command: agent_app::AgentCommand,
-  ) -> Result<(), agent_app::RuntimeCommandError> {
-    Ok(())
-  }
-
-  fn snapshot(&self) -> VersionedSnapshot {
-    self.snapshots.borrow().clone()
-  }
-
-  fn subscribe(&self) -> watch::Receiver<VersionedSnapshot> {
-    self.snapshots.subscribe()
-  }
-}
-
-#[derive(Clone)]
 struct EpochService {
-  inner: AgentGrpcService,
+  inner: BaselineService,
   generation: Arc<AtomicUsize>,
   streams: Arc<Mutex<Vec<EventSender>>>,
 }
@@ -131,6 +111,20 @@ impl AgentService for EpochService {
     self.inner.select_session_model(request).await
   }
 
+  async fn start_model_download(
+    &self,
+    request: Request<StartModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    self.inner.start_model_download(request).await
+  }
+
+  async fn cancel_model_download(
+    &self,
+    request: Request<CancelModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    self.inner.cancel_model_download(request).await
+  }
+
   async fn get_snapshot(
     &self,
     request: Request<GetSnapshotRequest>,
@@ -156,15 +150,14 @@ impl AgentService for EpochService {
 }
 
 fn epoch_service() -> EpochService {
-  let (snapshots, _) = watch::channel(VersionedSnapshot::new(
-    80,
-    RuntimeSnapshot {
-      phase: AppPhase::Streaming,
-      ..RuntimeSnapshot::default()
-    },
-  ));
   EpochService {
-    inner: AgentGrpcService::new(Arc::new(StaticHost { snapshots })),
+    inner: BaselineService::new(VersionedSnapshot::new(
+      80,
+      RuntimeSnapshot {
+        phase: AppPhase::Streaming,
+        ..RuntimeSnapshot::default()
+      },
+    )),
     generation: Arc::new(AtomicUsize::new(0)),
     streams: Arc::new(Mutex::new(Vec::new())),
   }
@@ -184,7 +177,7 @@ async fn daemon_restart_starts_new_epoch_and_accepts_lower_revision() {
       .unwrap();
   });
   let client = RemoteAgentClient::connect(
-    format!("http://{address}"),
+    test_target(address),
     "epoch-test",
     RemoteClientOptions::for_tests(),
   )
@@ -232,7 +225,7 @@ async fn native_driver_stops_on_incompatible_protocol() {
       .unwrap();
   });
   let client = NativeAgentClient::start(
-    format!("http://{address}"),
+    test_target(address),
     "native-incompatible",
     RemoteClientOptions::for_tests(),
   )

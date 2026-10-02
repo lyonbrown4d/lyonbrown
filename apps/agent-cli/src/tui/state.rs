@@ -2,7 +2,7 @@ use agent_app::{RuntimePhase, RuntimeSnapshot};
 use agent_core::{AgentEvent, StepId};
 use crossterm::event::KeyCode;
 
-use super::{input::edit_input, terminal_safe};
+use super::{connection::ConnectionProjection, input::edit_input, terminal_safe};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Speaker {
@@ -19,6 +19,7 @@ pub struct TranscriptEntry {
 
 #[derive(Debug, Default)]
 pub struct TuiState {
+  pub(super) connection: ConnectionProjection,
   transcript: Vec<TranscriptEntry>,
   status: String,
   model: String,
@@ -31,6 +32,7 @@ pub struct TuiState {
   pub(crate) input: String,
   pub(crate) input_cursor: usize,
   pub(crate) busy: bool,
+  pub(super) model_setup_required: bool,
   queued_follow_up: Option<String>,
 }
 
@@ -194,6 +196,10 @@ impl TuiState {
     self.busy
   }
 
+  pub fn is_model_setup_required(&self) -> bool {
+    self.model_setup_required
+  }
+
   pub fn sync_snapshot(&mut self, snapshot: &RuntimeSnapshot) {
     self.transcript.clear();
     for turn in &snapshot.turns {
@@ -221,6 +227,7 @@ impl TuiState {
       });
     }
     self.status = phase_status(snapshot.phase).into();
+    self.model_setup_required = snapshot.phase == RuntimePhase::ModelSetupRequired;
     self.busy = matches!(
       snapshot.phase,
       RuntimePhase::Preparing

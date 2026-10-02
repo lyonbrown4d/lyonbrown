@@ -1,3 +1,7 @@
+use agent_app::AgentCommand;
+
+const MAX_COMMAND_ERROR_CHARS: usize = 512;
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ConnectionState {
   #[default]
@@ -16,7 +20,10 @@ pub struct CockpitState {
   server_instance_id: Option<String>,
   revision: Option<u64>,
   stale: bool,
+  model_setup_required: bool,
   last_connection_error: Option<String>,
+  submitting: bool,
+  last_command_error: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -58,7 +65,44 @@ impl CockpitState {
   }
 
   pub fn can_submit(&self) -> bool {
-    self.connection == ConnectionState::Connected && self.revision.is_some() && !self.stale
+    self.connection == ConnectionState::Connected
+      && self.revision.is_some()
+      && !self.stale
+      && !self.model_setup_required
+      && !self.submitting
+  }
+
+  pub fn is_submitting(&self) -> bool {
+    self.submitting
+  }
+
+  pub fn last_command_error(&self) -> Option<&str> {
+    self.last_command_error.as_deref()
+  }
+
+  pub fn begin_submission(&mut self, prompt: &str) -> Option<AgentCommand> {
+    let prompt = prompt.trim();
+    if prompt.is_empty() || !self.can_submit() {
+      return None;
+    }
+    self.submitting = true;
+    self.last_command_error = None;
+    Some(AgentCommand::StartTurn {
+      text: prompt.to_owned(),
+    })
+  }
+
+  pub fn finish_submission(&mut self, error: Option<&str>) {
+    self.submitting = false;
+    self.last_command_error = error.map(sanitize_command_error);
+  }
+
+  pub fn is_model_setup_required(&self) -> bool {
+    self.model_setup_required
+  }
+
+  pub(crate) fn apply_runtime_phase(&mut self, phase: agent_app::RuntimePhase) {
+    self.model_setup_required = phase == agent_app::RuntimePhase::ModelSetupRequired;
   }
 
   pub fn apply_connection(&mut self, connection: ConnectionState, error: Option<String>) {
@@ -116,5 +160,25 @@ impl CockpitState {
 
   pub fn toggle_runtime_details(&mut self) {
     self.runtime_details_expanded = !self.runtime_details_expanded;
+  }
+}
+
+fn sanitize_command_error(error: &str) -> String {
+  let sanitized: String = error
+    .chars()
+    .map(|character| {
+      if character.is_control() {
+        ' '
+      } else {
+        character
+      }
+    })
+    .take(MAX_COMMAND_ERROR_CHARS)
+    .collect();
+  let sanitized = sanitized.trim();
+  if sanitized.is_empty() {
+    "runtime command failed".to_owned()
+  } else {
+    sanitized.to_owned()
   }
 }

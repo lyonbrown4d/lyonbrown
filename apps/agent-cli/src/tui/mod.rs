@@ -1,10 +1,8 @@
 mod approval;
 mod composer;
-mod embedded;
+mod connection;
 mod input;
 mod locale;
-mod model_setup;
-mod model_setup_runner;
 pub mod runner;
 mod state;
 mod terminal;
@@ -13,12 +11,10 @@ mod ui;
 
 pub use approval::ApprovalRequest;
 pub(crate) use approval::approval_safe;
-pub use embedded::run_embedded;
-pub use embedded::run_embedded as run;
+pub use connection::TuiConnectionState;
+pub use connection::apply_remote_state;
 pub use locale::Locale;
-pub use model_setup::{ModelSetupView, render_model_setup};
-pub use model_setup_runner::prepare_embedded_model;
-pub use runner::run_client;
+pub use runner::{run_client, run_native_client};
 pub use state::{Speaker, TranscriptEntry, TuiState};
 pub use theme::Theme;
 pub use ui::{

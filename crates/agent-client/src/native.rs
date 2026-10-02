@@ -13,7 +13,10 @@ use async_trait::async_trait;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
-use crate::{ConnectionState, RemoteClientOptions, RemoteState};
+use crate::{
+  AuthenticatedTarget, AuthenticatedTargetResolver, ConnectionState, RemoteClientOptions,
+  RemoteState,
+};
 use driver::{DriverContext, run};
 
 const COMMAND_CAPACITY: usize = 32;
@@ -58,10 +61,23 @@ impl NativeDriverMonitor {
 
 impl NativeAgentClient {
   pub fn start(
-    endpoint: impl Into<String>,
+    target: AuthenticatedTarget,
     client_instance_id: impl Into<String>,
     options: RemoteClientOptions,
   ) -> io::Result<Self> {
+    Self::start_with_resolver(
+      crate::resolver::fixed_target_resolver(target),
+      client_instance_id,
+      options,
+    )
+  }
+
+  pub fn start_with_resolver(
+    resolver: Arc<dyn AuthenticatedTargetResolver>,
+    client_instance_id: impl Into<String>,
+    options: RemoteClientOptions,
+  ) -> io::Result<Self> {
+    let client_instance_id = client_instance_id.into();
     let (commands, command_rx) = mpsc::channel(COMMAND_CAPACITY);
     let (snapshots, _) = watch::channel(RuntimeSnapshot::default());
     let (remote_state, _) = watch::channel(RemoteState {
@@ -71,8 +87,8 @@ impl NativeAgentClient {
     let cancellation = CancellationToken::new();
     let running = Arc::new(AtomicBool::new(true));
     let context = DriverContext {
-      endpoint: endpoint.into(),
-      client_instance_id: client_instance_id.into(),
+      resolver,
+      client_instance_id,
       options,
       commands: command_rx,
       snapshots: snapshots.clone(),

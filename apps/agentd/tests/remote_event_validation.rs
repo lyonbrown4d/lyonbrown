@@ -1,3 +1,5 @@
+mod support;
+
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -6,41 +8,21 @@ use agent_app::{AgentClientError, ProtocolErrorKind, RuntimeSnapshot};
 use agent_client::{ConnectionState, RemoteAgentClient, RemoteClientOptions};
 use agent_protocol::v1::agent_service_server::{AgentService, AgentServiceServer};
 use agent_protocol::v1::*;
-use agentd::{AgentGrpcService, RuntimeHost, VersionedSnapshot};
-use async_trait::async_trait;
+use agentd::VersionedSnapshot;
 use futures::Stream;
 use tokio::net::TcpListener;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use tokio_stream::wrappers::{TcpListenerStream, UnboundedReceiverStream};
 use tonic::{Request, Response, Status};
+
+use support::{baseline::BaselineService, test_target};
 
 type EventResult = Result<RuntimeEvent, Status>;
 type EventReceiver = mpsc::UnboundedReceiver<EventResult>;
 
 #[derive(Clone)]
-struct StaticHost(watch::Sender<VersionedSnapshot>);
-
-#[async_trait]
-impl RuntimeHost for StaticHost {
-  async fn execute(
-    &self,
-    _command: agent_app::AgentCommand,
-  ) -> Result<(), agent_app::RuntimeCommandError> {
-    Ok(())
-  }
-
-  fn snapshot(&self) -> VersionedSnapshot {
-    self.0.borrow().clone()
-  }
-
-  fn subscribe(&self) -> watch::Receiver<VersionedSnapshot> {
-    self.0.subscribe()
-  }
-}
-
-#[derive(Clone)]
 struct EventService {
-  inner: AgentGrpcService,
+  inner: BaselineService,
   events: mpsc::UnboundedSender<EventResult>,
   receiver: Arc<tokio::sync::Mutex<Option<EventReceiver>>>,
 }
@@ -112,6 +94,20 @@ impl AgentService for EventService {
     self.inner.select_session_model(request).await
   }
 
+  async fn start_model_download(
+    &self,
+    request: Request<StartModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    self.inner.start_model_download(request).await
+  }
+
+  async fn cancel_model_download(
+    &self,
+    request: Request<CancelModelDownloadRequest>,
+  ) -> Result<Response<CommandResponse>, Status> {
+    self.inner.cancel_model_download(request).await
+  }
+
   async fn get_snapshot(
     &self,
     request: Request<GetSnapshotRequest>,
@@ -137,10 +133,9 @@ impl AgentService for EventService {
 
 #[tokio::test]
 async fn mismatched_event_and_snapshot_revisions_fail_the_remote_driver() {
-  let (snapshots, _) = watch::channel(VersionedSnapshot::new(80, RuntimeSnapshot::default()));
   let (events, receiver) = mpsc::unbounded_channel();
   let service = EventService {
-    inner: AgentGrpcService::new(Arc::new(StaticHost(snapshots))),
+    inner: BaselineService::new(VersionedSnapshot::new(80, RuntimeSnapshot::default())),
     events,
     receiver: Arc::new(tokio::sync::Mutex::new(Some(receiver))),
   };
@@ -155,7 +150,7 @@ async fn mismatched_event_and_snapshot_revisions_fail_the_remote_driver() {
       .unwrap();
   });
   let client = RemoteAgentClient::connect(
-    format!("http://{address}"),
+    test_target(address),
     "revision-mismatch",
     RemoteClientOptions::for_tests(),
   )

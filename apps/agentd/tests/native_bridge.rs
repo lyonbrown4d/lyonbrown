@@ -1,3 +1,5 @@
+mod support;
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -5,12 +7,12 @@ use agent_app::{
   AgentClient as _, AgentClientError, AgentCommand, AvailabilityKind, RuntimePhase, RuntimeSnapshot,
 };
 use agent_client::{ConnectionState, NativeAgentClient, NativeDriverMonitor, RemoteClientOptions};
-use agentd::{RuntimeHost, VersionedSnapshot, serve};
+use agentd::{RuntimeHost, VersionedSnapshot};
 use async_trait::async_trait;
 use tokio::net::TcpListener;
 use tokio::sync::{Mutex, Notify, watch};
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
+
+use support::{TestCredentials, TestServer, spawn_authenticated};
 
 #[derive(Clone)]
 struct TestHost {
@@ -62,15 +64,8 @@ impl RuntimeHost for TestHost {
   }
 }
 
-fn spawn_server(listener: TcpListener, host: TestHost) -> (CancellationToken, JoinHandle<()>) {
-  let shutdown = CancellationToken::new();
-  let server_shutdown = shutdown.clone();
-  let task = tokio::spawn(async move {
-    serve(listener, Arc::new(host), server_shutdown.cancelled())
-      .await
-      .unwrap();
-  });
-  (shutdown, task)
+fn spawn_server(listener: TcpListener, host: TestHost) -> TestServer {
+  spawn_authenticated(listener, Arc::new(host))
 }
 
 async fn wait_connected(client: &NativeAgentClient) {
@@ -102,9 +97,10 @@ fn wait_stopped(monitor: &NativeDriverMonitor) {
 fn starts_without_an_external_tokio_runtime() {
   let reserved = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
   let address = reserved.local_addr().unwrap();
+  let credentials = TestCredentials::for_address(address);
   drop(reserved);
   let client = NativeAgentClient::start(
-    format!("http://{address}"),
+    credentials.target(),
     "native-no-runtime",
     RemoteClientOptions::for_tests(),
   )
@@ -131,10 +127,9 @@ fn starts_without_an_external_tokio_runtime() {
 async fn connects_publishes_snapshot_and_dispatches_command() {
   let host = TestHost::new(RuntimePhase::Ready);
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-  let address = listener.local_addr().unwrap();
-  let (shutdown, server) = spawn_server(listener, host.clone());
+  let server = spawn_server(listener, host.clone());
   let client = NativeAgentClient::start(
-    format!("http://{address}"),
+    server.target,
     "native-connected",
     RemoteClientOptions::for_tests(),
   )
@@ -154,17 +149,18 @@ async fn connects_publishes_snapshot_and_dispatches_command() {
   ));
 
   drop(client);
-  shutdown.cancel();
-  server.abort();
+  server.shutdown.cancel();
+  server.task.abort();
 }
 
 #[tokio::test]
 async fn retries_initial_transport_failure_until_server_appears() {
   let reserved = TcpListener::bind("127.0.0.1:0").await.unwrap();
   let address = reserved.local_addr().unwrap();
+  let credentials = TestCredentials::for_address(address);
   drop(reserved);
   let client = NativeAgentClient::start(
-    format!("http://{address}"),
+    credentials.target(),
     "native-late-server",
     RemoteClientOptions::for_tests(),
   )
@@ -172,22 +168,21 @@ async fn retries_initial_transport_failure_until_server_appears() {
   tokio::time::sleep(Duration::from_millis(30)).await;
 
   let listener = TcpListener::bind(address).await.unwrap();
-  let (shutdown, server) = spawn_server(listener, TestHost::new(RuntimePhase::Ready));
+  let server = credentials.spawn(listener, Arc::new(TestHost::new(RuntimePhase::Ready)));
   wait_connected(&client).await;
 
   drop(client);
-  shutdown.cancel();
-  server.abort();
+  server.shutdown.cancel();
+  server.task.abort();
 }
 
 #[tokio::test]
 async fn last_drop_stops_thread_resolves_pending_and_never_cancels_turn() {
   let host = TestHost::blocking();
   let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-  let address = listener.local_addr().unwrap();
-  let (shutdown, server) = spawn_server(listener, host.clone());
+  let server = spawn_server(listener, host.clone());
   let client = NativeAgentClient::start(
-    format!("http://{address}"),
+    server.target,
     "native-drop",
     RemoteClientOptions::for_tests(),
   )
@@ -224,6 +219,6 @@ async fn last_drop_stops_thread_resolves_pending_and_never_cancels_turn() {
     [AgentCommand::StartTurn { .. }]
   ));
 
-  shutdown.cancel();
-  server.abort();
+  server.shutdown.cancel();
+  server.task.abort();
 }

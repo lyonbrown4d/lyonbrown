@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 agent-app.workspace = true
 agent-core.workspace = true
+agent-local = { path = "../agent-local" }
 agent-protocol.workspace = true
 async-trait.workspace = true
 prost.workspace = true
@@ -15,6 +16,10 @@ tokio.workspace = true
 tokio-util.workspace = true
 tonic.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+futures.workspace = true
+tokio-stream = { workspace = true, features = ["net"] }
 
 [lints]
 workspace = true

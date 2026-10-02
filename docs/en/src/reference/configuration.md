@@ -14,7 +14,10 @@ max_tokens = 2048
 endpoint = "http://127.0.0.1:11434"
 ```
 
-Run `agent` to open the workspace chat TUI (`agent .` is the explicit equivalent), use `agent ask "hello"` for one-shot prompts, or use `agent chat` for the compatible headless terminal chat. The TUI drives the Kernel through the shared `agent-app` command, snapshot, and approval contracts; the headless CLI retains a narrow direct Kernel entry point.
+Run `agent` to open the workspace chat TUI; `agent .` is the explicit equivalent.
+There are no `ask`, `chat`, `sessions`, or `resume` compatibility subcommands.
+The TUI and GUI connect to `agentd` through the same authenticated gRPC
+contract. Only `agentd` constructs the Kernel and owns Runtime state.
 
 ## Remote models and fallback
 
@@ -58,11 +61,20 @@ command = "C:/path/to/mcp-server.exe"
 args = ["--stdio"]
 ```
 
-The CLI connects to configured stdio servers at startup and registers tools as `mcp.files.<tool>`. MCP tools have Execute risk by default and use the common approval, 60-second timeout, and output-redaction path. MCP commands in workspace `agent.toml` are rejected by default; after trusting the workspace, use `agent --trust-workspace-mcp chat` (or the relevant subcommand). Model settings and MCP commands use separate trust flags. Global and explicit `--config` MCP configuration is treated as user-trusted. Prefer an explicit executable path.
+`agentd` connects to configured stdio servers and registers tools as
+`mcp.files.<tool>`. MCP tools have Execute risk by default and use the common
+approval, 60-second timeout, and output-redaction path. MCP commands in
+workspace `agent.toml` are rejected by default; after reviewing the workspace,
+use `agent --trust-workspace-mcp`. Model settings and MCP commands use separate
+trust flags. Global and explicit `--config` MCP configuration is treated as
+user-trusted. Prefer an explicit executable path.
 
 ## Session storage and resume
 
-SQLite WAL storage is enabled by default at `~/.agent/agent.db`. Use `agent sessions` to find a session ID, then `agent resume <session-id>` to continue it. To disable storage or choose another path:
+SQLite WAL storage is enabled by default at `~/.agent/agent.db` and is owned by
+`agentd`. Session listing and resume are client interactions over gRPC, not
+direct-storage or legacy CLI subcommand paths. To disable storage or choose
+another path:
 
 ```toml
 [storage]
@@ -72,9 +84,13 @@ path = "./.agent/session.db"
 
 Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=false` and `LYONBROWN_STORAGE__PATH` are the environment equivalents. Event writes return success only after database commit. On resume, completed tool results are retained, while started calls without a recorded result are marked as having an unknown outcome and are not automatically replayed. In the TUI, the first Ctrl-C cancels the current turn and the second forces it to stop. Escape does not quit; use Ctrl-D or `/quit` for an explicit exit.
 
-## Embedded llama.cpp
+## Daemon-owned llama.cpp
 
-The llama.cpp provider is the default provider and a default `agent-cli` feature. The Agent loads GGUF directly in process, with no HTTP daemon or inference subprocess. The `cuda` and `vulkan` features are optional; a minimal `--no-default-features` build excludes it.
+The llama.cpp provider is the default provider and a default `agentd` feature.
+The daemon loads GGUF directly in process, with no separate HTTP inference
+service or inference subprocess. The `cuda` and `vulkan` features are optional;
+a minimal `agentd --no-default-features` build excludes it. Clients never load
+the GGUF and never fall back to an embedded Kernel.
 
 ```toml
 [model]
@@ -95,10 +111,31 @@ temperature = 0.7
 seed = 0
 ```
 
-Relative model paths are resolved from the workspace. `LYONBROWN_LLAMACPP__MODEL_PATH` is the equivalent environment setting. `model.thinking` defaults to `false`; for Qwen3 templates the embedded provider applies the official `/no_think` control before rendering. When `model_path` is omitted, the TUI recommends the smaller `qwen3-1.7b-q4_k_m`, checks the verified cache, and asks before starting a background download. Exiting without downloading is always available. See [Local Models and Task Routing](local-models-routing.md). Native Windows builds require MSVC, the Windows SDK, CMake/Ninja, and an LLVM `libclang` discoverable by the bindings generator; set `LIBCLANG_PATH` when necessary.
+Relative model paths are resolved from the workspace.
+`LYONBROWN_LLAMACPP__MODEL_PATH` is the equivalent environment setting.
+`model.thinking` defaults to `false`; for Qwen3 templates the provider applies
+the official `/no_think` control before rendering. When `model_path` is omitted,
+`agentd` checks the verified cache for the default
+`qwen3-1.7b-q4_k_m`. If it is absent, the Runtime enters
+`ModelSetupRequired`; opening a client does not start a download. The daemon
+provides explicit background Start/Cancel RPCs and publishes progress on the
+unified `RuntimeSnapshot` stream. TUI/GUI controls are the next small milestone.
+A missing configured `model_path` does not offer managed download. See
+[Local Models and Task Routing](local-models-routing.md).
+Native Windows builds require MSVC, the Windows SDK, CMake/Ninja, and an LLVM
+`libclang` discoverable by the bindings generator; set `LIBCLANG_PATH` when
+necessary.
 
 ```powershell
-cargo run -p agent-cli -- --config agent.toml ask "Introduce Rust in one sentence"
+.\scripts\build-windows.ps1
+.\target\debug\agent.exe --config agent.toml .
 ```
 
-Selecting `llamacpp` without the feature produces an explicit error instead of falling back to an external service. For real-model acceptance, set `LYONBROWN_GGUF_MODEL` and run the provider's ignored live smoke test.
+The build script repairs interrupted llama.cpp CMake generation in place and
+does not clean or recreate `target` by default. It produces the sibling
+`agent.exe` and `agentd.exe`; running
+`cargo run -p agent-cli` alone is not a complete C/S development launch.
+
+Selecting `llamacpp` in a daemon built without the feature produces an explicit
+error instead of falling back to an external service. For real-model acceptance,
+set `LYONBROWN_GGUF_MODEL` and run the provider's ignored live smoke test.

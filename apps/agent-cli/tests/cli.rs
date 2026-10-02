@@ -1,9 +1,11 @@
-use agent_cli::cli::{Cli, Command};
+use std::path::Path;
+
+use agent_cli::cli::Cli;
 use clap::Parser;
 
 #[test]
 fn installed_binary_is_named_agent() {
-  let binary = std::path::Path::new(env!("CARGO_BIN_EXE_agent"));
+  let binary = Path::new(env!("CARGO_BIN_EXE_agent"));
 
   assert_eq!(binary.file_stem().unwrap(), "agent");
   let output = std::process::Command::new(binary)
@@ -11,73 +13,56 @@ fn installed_binary_is_named_agent() {
     .output()
     .unwrap();
   assert!(output.status.success());
-  assert!(String::from_utf8_lossy(&output.stdout).contains("Usage: agent"));
+  let help = String::from_utf8_lossy(&output.stdout);
+  assert!(help.contains("[OPTIONS] [WORKSPACE]"));
+  assert!(!help.contains("Commands:"));
 }
 
 #[test]
-fn ask_accepts_prompt_and_provider_overrides_after_subcommand() {
+fn no_arguments_open_the_current_workspace() {
+  let cli = Cli::try_parse_from(["agent"]).unwrap();
+
+  assert_eq!(cli.workspace, Path::new("."));
+}
+
+#[test]
+fn workspace_and_daemon_overrides_are_flat_options() {
   let cli = Cli::try_parse_from([
     "agent",
-    "ask",
-    "say hi",
+    "project",
     "--provider",
     "ollama",
     "--model",
-    "translategemma:4b",
+    "qwen3:8b",
+    "--endpoint",
+    "http://127.0.0.1:11434",
     "--approve-all",
-  ])
-  .unwrap();
-
-  assert_eq!(cli.provider.as_deref(), Some("ollama"));
-  assert_eq!(cli.model.as_deref(), Some("translategemma:4b"));
-  assert!(cli.approve_all);
-  assert!(matches!(cli.command, Some(Command::Ask { prompt }) if prompt == "say hi"));
-}
-
-#[test]
-fn chat_subcommand_is_available() {
-  let cli = Cli::try_parse_from(["agent", "chat", "--endpoint", "http://localhost:11434"]).unwrap();
-
-  assert_eq!(cli.endpoint.as_deref(), Some("http://localhost:11434"));
-  assert!(matches!(cli.command, Some(Command::Chat)));
-}
-
-#[test]
-fn dot_is_workspace_entrypoint_and_profile_can_be_overridden() {
-  let cli = Cli::try_parse_from(["agent", ".", "--profile", "careful"]).unwrap();
-  assert_eq!(cli.profile.as_deref(), Some("careful"));
-  assert!(
-    matches!(cli.command, Some(Command::Tui { workspace }) if workspace == std::path::Path::new("."))
-  );
-}
-
-#[test]
-fn no_subcommand_opens_the_workspace_chat_tui() {
-  let mut cli = Cli::try_parse_from(["agent"]).unwrap();
-
-  assert!(matches!(
-    cli.take_command_or_default(),
-    Command::Tui { workspace } if workspace == std::path::Path::new(".")
-  ));
-}
-
-#[test]
-fn approve_all_and_deny_all_are_mutually_exclusive() {
-  assert!(Cli::try_parse_from(["agent", "ask", "hi", "--approve-all", "--deny-all"]).is_err());
-  let cli = Cli::try_parse_from(["agent", "ask", "hi", "--deny-all"]).unwrap();
-  assert!(cli.deny_all);
-}
-
-#[test]
-fn workspace_trust_flags_are_explicit_cli_options() {
-  let cli = Cli::try_parse_from([
-    "agent",
-    "ask",
-    "hi",
     "--trust-workspace-mcp",
     "--trust-workspace-config",
   ])
   .unwrap();
+
+  assert_eq!(cli.workspace, Path::new("project"));
+  assert_eq!(cli.provider.as_deref(), Some("ollama"));
+  assert_eq!(cli.model.as_deref(), Some("qwen3:8b"));
+  assert_eq!(cli.endpoint.as_deref(), Some("http://127.0.0.1:11434"));
+  assert!(cli.approve_all);
   assert!(cli.trust_workspace_mcp);
   assert!(cli.trust_workspace_config);
+}
+
+#[test]
+fn embedded_subcommands_are_not_recognized_as_commands() {
+  let cli = Cli::try_parse_from(["agent", "chat"]).unwrap();
+  assert_eq!(cli.workspace, Path::new("chat"));
+
+  assert!(Cli::try_parse_from(["agent", "ask", "hello"]).is_err());
+  assert!(Cli::try_parse_from(["agent", "sessions", "extra"]).is_err());
+}
+
+#[test]
+fn approve_all_and_deny_all_are_mutually_exclusive() {
+  assert!(Cli::try_parse_from(["agent", "--approve-all", "--deny-all"]).is_err());
+  let cli = Cli::try_parse_from(["agent", "--deny-all"]).unwrap();
+  assert!(cli.deny_all);
 }

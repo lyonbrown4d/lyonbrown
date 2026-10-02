@@ -26,6 +26,19 @@ fn connected(server_instance_id: &str, revision: u64) -> RemoteState {
 }
 
 #[test]
+fn model_setup_snapshot_keeps_gui_connected_but_disables_submission() {
+  let mut remote = connected("daemon-a", 1);
+  remote.snapshot.as_mut().unwrap().snapshot.phase = agent_app::RuntimePhase::ModelSetupRequired;
+  let mut state = CockpitState::default();
+
+  apply_remote_state(&mut state, &remote);
+
+  assert_eq!(state.connection(), ConnectionState::Connected);
+  assert!(!state.is_stale());
+  assert!(!state.can_submit());
+}
+
+#[test]
 fn connected_snapshot_can_restart_revision_for_a_new_daemon_epoch() {
   let mut state = CockpitState::default();
   apply_remote_state(&mut state, &connected("daemon-a", 42));

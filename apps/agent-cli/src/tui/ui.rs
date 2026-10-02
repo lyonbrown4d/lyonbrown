@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use super::{
-  ApprovalRequest, Locale, Speaker, Theme, TuiState,
+  ApprovalRequest, Locale, Speaker, Theme, TuiConnectionState, TuiState,
   composer::{render_approval, render_composer},
   locale::Messages,
 };
@@ -116,7 +116,14 @@ fn render_surface(
   render_context_line(frame, rows[0], state, theme, messages);
   let conversation_max_scroll =
     render_conversation(frame, rows[1], state, conversation_scroll, theme, messages);
-  render_composer(frame, rows[2], state, approval.is_none(), theme, messages);
+  render_composer(
+    frame,
+    rows[2],
+    state,
+    approval.is_none() && state.can_submit(),
+    theme,
+    messages,
+  );
   render_status_line(frame, rows[3], state, theme, messages);
   let approval_max_scroll = approval
     .map(|request| render_approval(frame, request, approval_scroll, theme, messages))
@@ -153,11 +160,21 @@ fn render_context_line(
   messages: Messages,
 ) {
   let context = format!(
-    " {} · {} · {} · {} ",
+    " {} · {} · {} · {} · {} · {}{} ",
     messages.workspace,
     messages.auto,
     messages.local,
-    state.model()
+    state.model(),
+    connection_label(state.connection(), messages),
+    if state.is_snapshot_stale() {
+      messages.stale
+    } else {
+      messages.fresh
+    },
+    state
+      .connection_error()
+      .map(|error| format!(" · {error}"))
+      .unwrap_or_default()
   );
   frame.render_widget(
     Paragraph::new(context).style(
@@ -221,7 +238,21 @@ fn render_status_line(
   theme: Theme,
   messages: Messages,
 ) {
-  let (symbol, mode, color, actions) = if state.busy {
+  let (symbol, mode, color, actions) = if state.is_model_setup_required() {
+    (
+      "○",
+      messages.model_setup,
+      theme.status_warning,
+      messages.model_setup_hint.to_owned(),
+    )
+  } else if !state.can_submit() {
+    (
+      "○",
+      connection_label(state.connection(), messages),
+      theme.status_warning,
+      messages.connection_wait_hint.to_owned(),
+    )
+  } else if state.busy {
     (
       "◉",
       messages.running,
@@ -247,4 +278,14 @@ fn render_status_line(
     .style(Style::default().bg(theme.surface_raised)),
     area,
   );
+}
+
+fn connection_label(state: TuiConnectionState, messages: Messages) -> &'static str {
+  match state {
+    TuiConnectionState::Connecting => messages.connecting,
+    TuiConnectionState::Connected => messages.connected,
+    TuiConnectionState::Reconnecting => messages.reconnecting,
+    TuiConnectionState::Unavailable => messages.unavailable,
+    TuiConnectionState::Incompatible => messages.incompatible,
+  }
 }

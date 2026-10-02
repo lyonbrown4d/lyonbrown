@@ -22,6 +22,30 @@ fn command_error(detail: CommandErrorDetail) -> Option<RuntimeCommandError> {
   let code = CommandErrorCode::try_from(detail.code).ok()?;
   match code {
     CommandErrorCode::RuntimeStopped => Some(RuntimeCommandError::RuntimeStopped),
+    CommandErrorCode::ModelSetupRequired => Some(RuntimeCommandError::ModelSetupRequired),
+    CommandErrorCode::ModelDownloadUnavailable => {
+      Some(RuntimeCommandError::ModelDownloadUnavailable)
+    }
+    CommandErrorCode::InvalidModelId => match detail.context? {
+      Context::InvalidModelId(ids) => Some(RuntimeCommandError::InvalidModelId {
+        requested: ids.requested_model_id,
+        configured: ids.configured_model_id,
+      }),
+      _ => None,
+    },
+    CommandErrorCode::NoActiveModelDownload => Some(RuntimeCommandError::NoActiveModelDownload),
+    CommandErrorCode::ModelDownloadOperationMismatch => match detail.context? {
+      Context::ModelDownloadOperationMismatch(ids) => {
+        Some(RuntimeCommandError::ModelDownloadOperationMismatch {
+          expected: ids.expected_operation_id,
+          received: ids.received_operation_id,
+        })
+      }
+      _ => None,
+    },
+    CommandErrorCode::ModelDownloadCancellationTooLate => {
+      Some(RuntimeCommandError::ModelDownloadCancellationTooLate)
+    }
     CommandErrorCode::TurnAlreadyActive => Some(RuntimeCommandError::TurnAlreadyActive),
     CommandErrorCode::NoActiveTurn => Some(RuntimeCommandError::NoActiveTurn),
     CommandErrorCode::EmptyText => Some(RuntimeCommandError::EmptyText),
@@ -44,6 +68,8 @@ fn command_error(detail: CommandErrorDetail) -> Option<RuntimeCommandError> {
           UnsupportedCommand::ForceStop => AppUnsupportedCommand::ForceStop,
           UnsupportedCommand::RespondApproval => AppUnsupportedCommand::RespondApproval,
           UnsupportedCommand::SelectSessionModel => AppUnsupportedCommand::SelectSessionModel,
+          UnsupportedCommand::StartModelDownload => AppUnsupportedCommand::StartModelDownload,
+          UnsupportedCommand::CancelModelDownload => AppUnsupportedCommand::CancelModelDownload,
           UnsupportedCommand::Unspecified => return None,
         };
         Some(RuntimeCommandError::Unsupported(command))
@@ -56,6 +82,10 @@ fn command_error(detail: CommandErrorDetail) -> Option<RuntimeCommandError> {
 
 fn coarse_error(status: Status) -> AgentClientError {
   match status.code() {
+    Code::Unauthenticated => AgentClientError::protocol(
+      ProtocolErrorKind::AuthenticationFailed,
+      "authentication required",
+    ),
     Code::DeadlineExceeded => {
       AgentClientError::unavailable(AvailabilityKind::Timeout, status.message())
     }

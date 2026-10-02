@@ -7,10 +7,12 @@ use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use super::CommandRequest;
-use crate::{ConnectionState, RemoteAgentClient, RemoteClientOptions, RemoteState};
+use crate::{
+  AuthenticatedTargetResolver, ConnectionState, RemoteAgentClient, RemoteClientOptions, RemoteState,
+};
 
 pub(super) struct DriverContext {
-  pub endpoint: String,
+  pub resolver: Arc<dyn AuthenticatedTargetResolver>,
   pub client_instance_id: String,
   pub options: RemoteClientOptions,
   pub commands: mpsc::Receiver<CommandRequest>,
@@ -103,11 +105,7 @@ async fn connect(context: &DriverContext) -> Option<RemoteAgentClient> {
   loop {
     let result = tokio::select! {
       _ = context.cancellation.cancelled() => return None,
-      result = RemoteAgentClient::connect(
-        &context.endpoint,
-        &context.client_instance_id,
-        context.options.clone(),
-      ) => result,
+      result = connect_remote(context) => result,
     };
     match result {
       Ok(remote) => return Some(remote),
@@ -133,6 +131,15 @@ async fn connect(context: &DriverContext) -> Option<RemoteAgentClient> {
       }
     }
   }
+}
+
+async fn connect_remote(context: &DriverContext) -> Result<RemoteAgentClient, AgentClientError> {
+  RemoteAgentClient::connect_with_resolver(
+    Arc::clone(&context.resolver),
+    &context.client_instance_id,
+    context.options.clone(),
+  )
+  .await
 }
 
 fn publish_failed(context: &DriverContext, error: AgentClientError) {

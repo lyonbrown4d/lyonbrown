@@ -1,13 +1,15 @@
+mod support;
+
 use std::sync::Arc;
 
 use agent_app::{AgentCommand, RuntimeSnapshot};
 use agent_protocol::PROTOCOL_VERSION;
-use agent_protocol::v1::agent_service_server::AgentService;
-use agent_protocol::v1::{RequestMetadata, StartTurnRequest};
-use agentd::{AgentGrpcService, RuntimeHost, VersionedSnapshot};
+use agent_protocol::v1::{RequestMetadata, StartModelDownloadRequest, StartTurnRequest};
+use agentd::{RuntimeHost, VersionedSnapshot};
 use async_trait::async_trait;
 use tokio::sync::{Mutex, watch};
-use tonic::Request;
+
+use support::spawn_authenticated;
 
 #[derive(Clone)]
 struct RecordingHost {
@@ -41,8 +43,8 @@ impl RuntimeHost for RecordingHost {
   }
 }
 
-fn command(expected_server_instance_id: &str) -> Request<StartTurnRequest> {
-  Request::new(StartTurnRequest {
+fn command(expected_server_instance_id: &str) -> StartTurnRequest {
+  StartTurnRequest {
     metadata: Some(RequestMetadata {
       protocol_version: PROTOCOL_VERSION,
       client_instance_id: "epoch-test".into(),
@@ -50,20 +52,29 @@ fn command(expected_server_instance_id: &str) -> Request<StartTurnRequest> {
       expected_server_instance_id: expected_server_instance_id.into(),
     }),
     text: "do this once".into(),
-  })
+  }
 }
 
 #[tokio::test]
 async fn command_from_an_old_daemon_epoch_is_not_executed_by_the_new_daemon() {
   let old_host = RecordingHost::new();
-  let old_service = AgentGrpcService::new(Arc::new(old_host.clone()));
-  let old_epoch = old_service.server_instance_id().to_owned();
-  old_service.start_turn(command(&old_epoch)).await.unwrap();
+  let old_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let old_server = spawn_authenticated(old_listener, Arc::new(old_host.clone()));
+  let old_epoch = old_server.server_instance_id();
+  old_server
+    .raw_client()
+    .await
+    .start_turn(command(&old_epoch))
+    .await
+    .unwrap();
 
   let new_host = RecordingHost::new();
-  let new_service = AgentGrpcService::new(Arc::new(new_host.clone()));
-  assert_ne!(old_epoch, new_service.server_instance_id());
-  let error = new_service
+  let new_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let new_server = spawn_authenticated(new_listener, Arc::new(new_host.clone()));
+  assert_ne!(old_epoch, new_server.server_instance_id());
+  let error = new_server
+    .raw_client()
+    .await
     .start_turn(command(&old_epoch))
     .await
     .unwrap_err();
@@ -77,9 +88,40 @@ async fn command_from_an_old_daemon_epoch_is_not_executed_by_the_new_daemon() {
 #[tokio::test]
 async fn command_without_a_handshake_epoch_is_rejected() {
   let host = RecordingHost::new();
-  let service = AgentGrpcService::new(Arc::new(host.clone()));
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let server = spawn_authenticated(listener, Arc::new(host.clone()));
 
-  let error = service.start_turn(command("")).await.unwrap_err();
+  let error = server
+    .raw_client()
+    .await
+    .start_turn(command(""))
+    .await
+    .unwrap_err();
+
+  assert_eq!(error.code(), tonic::Code::FailedPrecondition);
+  assert!(host.commands.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn model_download_from_an_old_daemon_epoch_is_rejected() {
+  let host = RecordingHost::new();
+  let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+  let server = spawn_authenticated(listener, Arc::new(host.clone()));
+
+  let error = server
+    .raw_client()
+    .await
+    .start_model_download(StartModelDownloadRequest {
+      metadata: Some(RequestMetadata {
+        protocol_version: PROTOCOL_VERSION,
+        client_instance_id: "epoch-test".into(),
+        command_id: "download-command".into(),
+        expected_server_instance_id: "old-daemon".into(),
+      }),
+      model_id: "qwen3-1.7b-q4_k_m".into(),
+    })
+    .await
+    .unwrap_err();
 
   assert_eq!(error.code(), tonic::Code::FailedPrecondition);
   assert!(host.commands.lock().await.is_empty());
