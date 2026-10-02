@@ -66,7 +66,9 @@ Restart the application and recover the same working state
   surfaces are still incomplete.
 - TUI and GUI share remote projections, but the complete product interaction
   loop still needs end-to-end verification.
-- The TUI lacks session and model pickers, a command palette, activity details, and discoverable help.
+- The TUI now has a bilingual command palette and discoverable help over one
+  exact ten-command catalog. Real session/model pickers and activity details
+  remain incomplete.
 - The complete Theme/Language control palette and locale preference persistence
   remain M12 work even though direct TUI language switching is available.
 - The GUI now submits real remote `StartTurn` commands and subscribes to daemon
@@ -326,6 +328,10 @@ Sessions, Model Picker, Theme, Language, Inspector, and Help use temporary overl
 - Up/Down scroll conversation when the composer is idle; editing retains cursor priority and PageUp/PageDown scroll.
 - First slash commands: `/model`, `/theme`, `/language`, `/sessions`, `/new`, `/resume`, `/status`, `/queue`, `/help`, `/quit`.
 - Ctrl-P opens the command palette; `?` opens help when the composer is empty.
+- The current executable subset is `/language`, `/queue <text>`, `/help`, and
+  `/quit`. Commands without an implementation are visibly disabled; `/queue`
+  is also disabled in the palette because it requires composer text. Unknown
+  slash commands are rejected locally instead of becoming prompts.
 - Approval shows full action labels and shortcuts, with Deny once always focused by default.
 
 ### 6.3 Activity presentation
@@ -397,10 +403,15 @@ Acceptance: first run never downloads silently; valid offline cache starts; insu
 
 ### M12 — Productized TUI
 
-Next small node: session and model selectors, command palette, discoverable
-help, and activity details. The broader milestone still includes the complete
-Theme/Language palette and preference persistence plus the remaining items
-below.
+The command-palette/help slice is implemented: one bilingual ten-command
+catalog drives slash parsing, `Ctrl-P`, empty-composer `?`, and `/help`, with
+30×8, 52×12, and 90×20 coverage. Model Setup and Approval take priority over
+overlays; the first approval `Ctrl-C` attempts Deny once and cancellation, and
+the second force-stops and exits if the approval remains active.
+
+Next small node: real session and model selectors plus activity details. The
+broader milestone still includes the Theme picker/overlay and preference
+persistence; M12 as a whole is not complete.
 
 Deliver one primary conversation flow; overlays and command palette; session, model, theme, and language pickers; six built-in themes; English and Chinese localization; activity groups; live steering and queueing; inline approval; help; revised interrupt behavior; narrow layouts; and copyable details.
 

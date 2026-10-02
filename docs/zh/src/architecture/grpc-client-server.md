@@ -179,9 +179,10 @@ conversation 与 Composer 之间，Runtime 状态栏显示真实 phase/progress�
 conversation 中提供全局 `F2` 切换；`/language` 由 client 本地处理，不发送 daemon
 命令，也不改变 transcript/Session state。两端在 stale 状态下继续显示诊断信息，
 但在收到已接受 epoch 的 fresh Snapshot 前禁用模型设置操作；两端都不实现下载器。
-后续前端工作是 M12 的
-TUI 会话/模型选择器、命令面板、帮助与活动详情，以及 M13
-的完整 GUI transcript、流式输出、审批、取消与恢复闭环。
+TUI 现已使用同一份双语十命令目录驱动 slash 解析、`Ctrl-P` 命令面板和帮助；
+未实现项明确禁用，未知 slash 输入由本地拦截，模型设置/审批交互优先于浮层。
+后续前端工作包括 M12 的真实会话/模型选择器、活动检查器、主题浮层与偏好持久化，
+以及 M13 的完整 GUI transcript、流式输出、审批、取消与恢复闭环。M12 尚未完成。
 
 移动端与远程控制延后。未来可以扩展 transport 和认证体系，但不得复用本地
 discovery token 或在未建立远程身份、授权与加密边界前暴露当前 loopback 服务。

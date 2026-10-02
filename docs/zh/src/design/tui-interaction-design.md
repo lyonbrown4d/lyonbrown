@@ -60,6 +60,17 @@ Overlay 是临时上下文，不改变 Session，也不清空 Composer：
 - `/help`：命令和快捷键；
 - `Ctrl-O`：当前活动或审批详情。
 
+已落地的命令界面使用一份固定目录，顺序为：`/model`、`/theme`、`/language`、
+`/sessions`、`/new`、`/resume`、`/status`、`/queue`、`/help`、`/quit`。
+`Ctrl-P` 从对话界面打开可搜索的命令面板；只有输入框为空时，`?` 才打开帮助；
+`/help` 打开同一个帮助界面。`F2` 始终是全局语言切换，不需要先打开浮层。
+
+目前真正可执行的是 `/language`、`/queue <消息>`、`/help` 和 `/quit`。
+`/model`、`/theme`、`/sessions`、`/new`、`/resume`、`/status` 在真实界面落地前
+可见但明确标为禁用。`/queue` 需要消息参数，因此也在命令面板中禁用，但其 slash
+形式可用。未知 slash 输入会由客户端本地拦截并显示本地化提示，绝不会作为普通
+prompt 提交。
+
 在模型设置之外，Esc 只关闭最上层 overlay 或清除选择，不退出 TUI。模型设置是
 下文明确列出的例外：`Required`、`Failed` 或 `Cancelled` 时 `Esc` 退出；仅当
 `allowed_actions` 允许 `Cancel` 时，`Esc` 才取消活跃阶段。
@@ -152,7 +163,11 @@ Runtime 状态栏展示真实 phase 以及已知或未知进度。顶部栏可�
 3. Allow this tool for session；
 4. Deny remaining risky actions。
 
-关闭窗口、客户端断开、超时或无法渲染预览均视为拒绝。等待审批时按 `Ctrl-C` 等价于 Deny once 后取消 turn。
+关闭窗口、客户端断开、超时或无法渲染预览均视为拒绝。等待审批时第一次按
+`Ctrl-C` 会尝试 Deny once，随后无论拒绝回执是否失败都会尝试取消 turn；取消成功
+且审批仍在继续时，第二次按 `Ctrl-C` 会发送 Force stop 并退出客户端。模型设置与
+审批优先处理输入；一旦进入这些安全关键状态，已有的命令/帮助浮层会关闭，状态
+结束后也不会自行恢复。
 
 ### 3.3 模型、主题与语言控制面板
 
@@ -178,7 +193,7 @@ Runtime 状态栏展示真实 phase 以及已知或未知进度。顶部栏可�
 |---|---|---|---|---|
 | Ready | 提交新 turn | 排队为提交后的 follow-up | 清除选择/关闭 overlay | 清空输入；再次按下退出确认 |
 | Streaming / RunningTool | 立即引导 | 排队下一步 | 关闭 overlay | 取消 turn |
-| AwaitingApproval | 执行焦点动作 | 无操作 | Deny once | Deny once 并取消 |
+| AwaitingApproval | 执行焦点动作 | 无操作 | Deny once | 第一次 Deny once 并取消；第二次强制停止并退出 |
 | Overlay | 应用/进入 | 由 overlay 定义 | 关闭 overlay | 关闭 overlay；再次按下取消 turn |
 | Cancelling | 无操作 | 无操作 | 无操作 | 强制停止 |
 
@@ -255,6 +270,8 @@ focus.ring
 - `/language` 切换当前 locale；`/language en-US` 和 `/language zh-CN` 显式选择
   locale。这些都是 client 本地命令，不访问 daemon，也不改变 transcript 或
   Session state。参数无效时，以当前语言显示 `/language [en-US|zh-CN]` 用法。
+- 命令面板标题、搜索/空结果/禁用状态、帮助快捷键、命令标签和未知命令反馈均提供
+  中英文版本。模型设置、审批或浮层优先处理输入时，`F2` 仍然可用。
 - 选择结果持久化和完整控制面板入口仍属于 M12 工作。
 - Slash command、配置 key、模型 ID、Provider ID、命令、路径和快捷键保持稳定英文形式。
 - 标题、状态、帮助、风险说明、动作和空状态全部本地化。
@@ -271,6 +288,10 @@ focus.ring
 - 焦点不仅用颜色表示；选中行同时使用前导符和文本标签。
 - 支持终端原生选择/复制，避免强制 alternate screen 破坏 scrollback。
 - 动态输出保持稳定锚点，不让 Composer 随流式 token 跳动。
+
+已落地的命令面板与帮助在 30×8、52×12、90×20 三档尺寸下均有中英文渲染测试。
+前两档使用全部可用区域，宽屏使用居中的限宽浮层。这些测试确认了三档布局，但不
+表示尚未落地的活动检查器或选择器已经完成。
 
 ## 8. 实现边界
 

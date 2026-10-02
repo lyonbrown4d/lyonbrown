@@ -11,6 +11,7 @@ use super::{
   composer::{render_approval, render_composer},
   locale::Messages,
   model_setup::{ModelSetupRenderContext, render_model_setup},
+  overlay::render_overlay,
 };
 
 use chrome::{render_context_line, render_status_line};
@@ -145,19 +146,15 @@ fn render_surface(
     render_conversation(frame, rows[1], state, conversation_scroll, theme, messages)
   };
   if rows[2].height > 0 {
-    render_composer(
-      frame,
-      rows[2],
-      state,
-      approval.is_none() && state.can_submit(),
-      theme,
-      messages,
-    );
+    render_composer(frame, rows[2], state, approval.is_none(), theme, messages);
   }
   render_status_line(frame, rows[3], state, theme, messages);
   let approval_max_scroll = approval
     .map(|request| render_approval(frame, request, approval_scroll, theme, messages))
     .unwrap_or(0);
+  if approval.is_none() && state.model_setup().is_none() {
+    render_overlay(frame, state, theme, context.locale);
+  }
   RenderMetrics {
     approval_max_scroll,
     conversation_max_scroll,

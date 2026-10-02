@@ -60,6 +60,20 @@ An overlay is temporary context. It neither changes the Session nor clears the C
 - `/help`: commands and shortcuts;
 - `Ctrl-O`: current activity or approval details.
 
+The implemented command surface uses one exact catalog, in this order:
+`/model`, `/theme`, `/language`, `/sessions`, `/new`, `/resume`, `/status`,
+`/queue`, `/help`, and `/quit`. `Ctrl-P` opens its searchable palette from the
+conversation surface, `?` opens help only when the Composer is empty, and
+`/help` opens the same help surface. `F2` remains global and changes locale
+without opening an overlay.
+
+Today `/language`, `/queue <message>`, `/help`, and `/quit` are executable.
+`/model`, `/theme`, `/sessions`, `/new`, `/resume`, and `/status` are visible
+but explicitly disabled until their real surfaces exist. `/queue` is likewise
+disabled inside the palette because activation cannot provide its required
+message; its slash form remains available. Unknown slash input is intercepted
+locally with a localized hint and is never submitted as a prompt.
+
 Outside Model Setup, Escape closes only the top overlay or clears selection; it
 does not exit the TUI. Model Setup is the deliberate exception described below:
 `Esc` exits from `Required`, `Failed`, or `Cancelled`, and cancels an active
@@ -165,7 +179,13 @@ Actions have stable order and meaning:
 3. Allow this tool for session;
 4. Deny remaining risky actions.
 
-Window close, client disconnect, timeout, or an unrenderable preview all fail closed. During approval, `Ctrl-C` is Deny once followed by turn cancellation.
+Window close, client disconnect, timeout, or an unrenderable preview all fail
+closed. During approval, the first `Ctrl-C` attempts Deny once and then always
+attempts turn cancellation, even if the deny receipt fails. After cancellation
+succeeds, a second `Ctrl-C` sends Force stop and exits the client if the
+approval is still active. Model Setup and Approval consume input before
+palette/help handling; their arrival closes an existing overlay so it cannot
+reappear after the safety-critical state ends.
 
 ### 3.3 Model, theme, and language control palette
 
@@ -192,7 +212,7 @@ Theme and language are client preferences. A Session model pin is shared applica
 |---|---|---|---|---|
 | Ready | Submit a new turn | Queue a follow-up after submission | Clear selection/close overlay | Clear input; next press asks to exit |
 | Streaming / RunningTool | Steer now | Queue next | Close overlay | Cancel turn |
-| AwaitingApproval | Invoke focused action | No-op | Deny once | Deny once and cancel |
+| AwaitingApproval | Invoke focused action | No-op | Deny once | First: Deny once and cancel; second: Force stop and exit |
 | Overlay | Apply/enter | Overlay-specific | Close overlay | Close overlay; next press cancels turn |
 | Cancelling | No-op | No-op | No-op | Force-stop |
 
@@ -271,6 +291,9 @@ Values are ordered as `background / raised / active`, `primary / secondary / fai
   `/language zh-CN` select it explicitly. These are local client commands: they
   do not contact the daemon or alter transcript or Session state. An invalid
   argument displays the `/language [en-US|zh-CN]` usage in the current language.
+- Palette titles, search/empty/disabled states, help shortcuts, command labels,
+  and unknown-command feedback are available in both locales. `F2` also works
+  while Model Setup, Approval, or an overlay has input priority.
 - Persisting the selected locale and exposing it through the complete control
   palette remain M12 work.
 - Slash commands, config keys, model IDs, provider IDs, shell commands, paths, and shortcuts retain stable English forms.
@@ -288,6 +311,11 @@ Values are ordered as `background / raised / active`, `primary / secondary / fai
 - Focus is not color-only; selected rows include a leading marker and a text label.
 - Preserve terminal-native selection/copy and avoid forcing alternate-screen behavior that destroys scrollback.
 - Dynamic output keeps a stable anchor so streaming tokens do not move the Composer.
+
+The implemented palette and help render in English and Chinese at 30×8,
+52×12, and 90×20. The first two sizes use the available screen; the wide size
+uses a centered bounded overlay. These tests establish the three layout tiers,
+not completion of the still-missing Inspector or selector surfaces.
 
 ## 8. Implementation boundaries
 

@@ -5,34 +5,45 @@ use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 
 use super::{
+  UiIntent,
   terminal::TerminalSession,
   ui::{RenderMetrics, render_cockpit},
+  ui_intent,
 };
 
 pub use super::input::{edit_input, next_conversation_scroll};
-use commands::map_approval_decision;
 pub use commands::{
-  ComposerIntent, approval_decision, can_accept_input, composer_intent, control_c_key, quit_key,
+  ComposerIntent, approval_decision, approval_interrupt_key, can_accept_input, composer_intent,
+  control_c_key, quit_key,
 };
 use control::execute_control;
 pub use events::final_drain;
 pub use model_setup::{
   ModelSetupCommandGate, ModelSetupCompletion, ModelSetupExit, ModelSetupInput, model_setup_input,
 };
+pub use remote::sync_runtime_snapshot;
 
+mod approval_input;
 mod commands;
 mod control;
 mod dispatch;
 mod events;
 mod language;
+mod local_commands;
 mod model_setup;
 mod remote;
 mod session;
 
-pub use control::execute_control_for_server_with_timeout;
+pub use approval_input::{ApprovalInputOutcome, handle_approval_interrupt};
+pub use control::{
+  ApprovalInterruptOutcome, CommandAttempt, execute_approval_interrupt_for_server_with_timeout,
+  execute_control_for_server_with_timeout,
+};
 pub use dispatch::{CommandCompletion, CommandDispatcher, apply_command_completion};
 use dispatch::{dispatch, dispatch_model_setup};
-pub use language::{LanguageCommand, language_command, language_toggle_key};
+pub use language::{LanguageCommand, language_toggle_key};
+use local_commands::LocalCommandResult::{Exit, Handled, NotCommand, Queue};
+pub use local_commands::{LocalCommandResult, language_command};
 pub use session::{Runtime, run_client, run_native_client, shutdown};
 
 async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -> Result<()> {
@@ -40,7 +51,7 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
   let mut commands = CommandDispatcher::new();
   let mut setup_commands = ModelSetupCommandGate::default();
   loop {
-    remote::sync_runtime_snapshot(runtime);
+    sync_runtime_snapshot(runtime);
     if let Some(server_instance_id) = runtime.state.accepted_server_instance_id() {
       setup_commands.observe_server_epoch(server_instance_id);
     }
@@ -59,7 +70,9 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
     }
 
     let mut metrics = RenderMetrics::default();
+    let mut viewport_height = 0;
     terminal.terminal.draw(|frame| {
+      viewport_height = frame.area().height;
       metrics = render_cockpit(
         frame,
         &runtime.state,
@@ -119,6 +132,30 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
         }
         continue;
       }
+      match approval_input::handle(runtime, &mut commands, key, &mut cancel_requested).await? {
+        ApprovalInputOutcome::NotHandled => {}
+        ApprovalInputOutcome::Handled => continue,
+        ApprovalInputOutcome::Exit => return Ok(()),
+      }
+      if runtime.state.overlay().is_open() {
+        if let UiIntent::Activate(command) = runtime.state.apply_overlay_key(key, viewport_height)
+          && runtime.apply_command_id(command) == Exit
+        {
+          return Ok(());
+        }
+        continue;
+      }
+      match ui_intent(key, runtime.state.input().is_empty(), false) {
+        UiIntent::OpenPalette => {
+          runtime.state.open_palette();
+          continue;
+        }
+        UiIntent::OpenHelp => {
+          runtime.state.open_help();
+          continue;
+        }
+        _ => {}
+      }
       if control_c_key(key) {
         if runtime.state.is_busy() {
           if cancel_requested {
@@ -140,41 +177,6 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
       if quit_key(key) {
         return Ok(());
       }
-      if let Some(approval) = runtime.approval.as_ref() {
-        let request_id = approval.request_id;
-        match key.code {
-          KeyCode::Up => runtime.approval_scroll = runtime.approval_scroll.saturating_sub(1),
-          KeyCode::Down => {
-            runtime.approval_scroll = runtime
-              .approval_scroll
-              .saturating_add(1)
-              .min(runtime.approval_max_scroll)
-          }
-          KeyCode::PageUp => runtime.approval_scroll = runtime.approval_scroll.saturating_sub(5),
-          KeyCode::PageDown => {
-            runtime.approval_scroll = runtime
-              .approval_scroll
-              .saturating_add(5)
-              .min(runtime.approval_max_scroll)
-          }
-          KeyCode::Home => runtime.approval_scroll = 0,
-          KeyCode::End => runtime.approval_scroll = runtime.approval_max_scroll,
-          _ => {}
-        }
-        if let Some(decision) = approval_decision(key)
-          && runtime.state.can_submit()
-        {
-          dispatch(
-            runtime,
-            &mut commands,
-            AgentCommand::RespondApproval {
-              request_id,
-              decision: map_approval_decision(decision),
-            },
-          )?;
-        }
-        continue;
-      }
       let next_scroll = next_conversation_scroll(
         runtime.conversation_scroll,
         runtime.conversation_max_scroll,
@@ -185,36 +187,43 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
         continue;
       }
       let task_active = runtime.state.is_busy();
-      if !can_accept_input(
+      let daemon_input_enabled = can_accept_input(
         task_active,
         runtime.client.is_some() && runtime.state.can_submit(),
-      ) {
-        continue;
-      }
+      );
       match key.code {
         KeyCode::Enter => {
           let prompt = runtime.state.input.trim().to_owned();
           if !prompt.is_empty() {
-            runtime.state.input.clear();
-            runtime.state.input_cursor = 0;
-            if runtime.apply_language_command(language_command(&prompt)) {
-              continue;
-            }
-            if prompt == "/quit" {
-              return Ok(());
-            }
-            if let Some(queued) = prompt.strip_prefix("/queue ") {
-              let queued = queued.trim().to_owned();
-              if !queued.is_empty() {
+            match runtime.apply_slash_input(&prompt) {
+              Handled => {
+                runtime.state.input.clear();
+                runtime.state.input_cursor = 0;
+                continue;
+              }
+              Exit => return Ok(()),
+              Queue(queued) => {
+                if !daemon_input_enabled {
+                  runtime.set_daemon_required_notice();
+                  continue;
+                }
+                runtime.state.input.clear();
+                runtime.state.input_cursor = 0;
                 dispatch(
                   runtime,
                   &mut commands,
-                  AgentCommand::QueueFollowUp {
-                    text: queued.clone(),
-                  },
+                  AgentCommand::QueueFollowUp { text: queued },
                 )?;
+                continue;
               }
-              continue;
+              NotCommand if !daemon_input_enabled => {
+                runtime.set_daemon_required_notice();
+                continue;
+              }
+              NotCommand => {
+                runtime.state.input.clear();
+                runtime.state.input_cursor = 0;
+              }
             }
             match composer_intent(task_active, key.modifiers) {
               ComposerIntent::StartTurn => {

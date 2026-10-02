@@ -216,10 +216,13 @@ across setup, approval, and conversation, and handles `/language` locally
 without sending a daemon command or mutating transcript/Session state.
 Stale state remains visible for diagnosis in both clients, but setup actions
 are disabled until a fresh Snapshot for the accepted epoch arrives. Neither
-client implements a downloader. Remaining frontend work includes the M12 TUI
-session/model selectors, command palette, help, and activity details, plus the
-M13 complete GUI transcript, streaming, approval, cancellation, and resume
-loop.
+client implements a downloader. The TUI now has one bilingual, ten-command
+catalog shared by slash parsing, the `Ctrl-P` palette, and help. Unimplemented
+commands are disabled rather than simulated, unknown slash input is rejected
+locally, and Model Setup/Approval input takes priority over overlays. Remaining
+frontend work includes the M12 TUI session/model selectors, activity inspector,
+Theme overlay and preference persistence, plus the M13 complete GUI transcript,
+streaming, approval, cancellation, and resume loop. M12 is not complete.
 
 Mobile and remote control remain deferred. A future transport and authentication
 system must not reuse the local discovery token or expose this loopback service

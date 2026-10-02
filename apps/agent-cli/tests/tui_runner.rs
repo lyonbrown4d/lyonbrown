@@ -13,8 +13,9 @@ use tokio::sync::{broadcast, watch};
 use unicode_segmentation::UnicodeSegmentation;
 
 use agent_cli::tui::runner::{
-  ComposerIntent, Runtime, approval_decision, can_accept_input, composer_intent, control_c_key,
-  edit_input, final_drain, next_conversation_scroll, quit_key, shutdown,
+  ComposerIntent, Runtime, approval_decision, approval_interrupt_key, can_accept_input,
+  composer_intent, control_c_key, edit_input, final_drain, next_conversation_scroll, quit_key,
+  shutdown,
 };
 use agent_cli::tui::{Locale, TuiState};
 
@@ -193,6 +194,24 @@ fn approval_shortcuts_reject_command_modifiers_and_accept_plain_or_shifted_keys(
       approval_decision(KeyEvent::new(KeyCode::Char(character), modifiers)),
       None
     );
+  }
+}
+
+#[test]
+fn approval_interrupt_accepts_only_unmodified_control_c() {
+  assert!(approval_interrupt_key(KeyEvent::new(
+    KeyCode::Char('c'),
+    KeyModifiers::CONTROL
+  )));
+  for modifiers in [
+    KeyModifiers::NONE,
+    KeyModifiers::CONTROL | KeyModifiers::SHIFT,
+    KeyModifiers::ALT,
+  ] {
+    assert!(!approval_interrupt_key(KeyEvent::new(
+      KeyCode::Char('c'),
+      modifiers
+    )));
   }
 }
 

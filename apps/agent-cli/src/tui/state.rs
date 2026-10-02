@@ -2,9 +2,13 @@ use agent_app::{ModelSetupView, RuntimePhase, RuntimeSnapshot};
 use agent_core::StepId;
 use crossterm::event::KeyCode;
 
-use super::{connection::ConnectionProjection, input::edit_input, status_line_safe, terminal_safe};
+use super::{
+  OverlayState, connection::ConnectionProjection, input::edit_input, status_line_safe,
+  terminal_safe,
+};
 
 mod events;
+mod overlay;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Speaker {
@@ -39,6 +43,7 @@ pub struct TuiState {
   pub(crate) busy: bool,
   model_setup: Option<ModelSetupView>,
   queued_follow_up: Option<String>,
+  overlay: OverlayState,
 }
 
 impl TuiState {
@@ -89,6 +94,9 @@ impl TuiState {
   }
 
   pub fn sync_snapshot(&mut self, snapshot: &RuntimeSnapshot) {
+    if snapshot.phase == RuntimePhase::ModelSetupRequired && snapshot.model_setup.is_some() {
+      self.close_overlay();
+    }
     if !same_model_setup_state(self.model_setup.as_ref(), snapshot.model_setup.as_ref()) {
       self.command_error = None;
     }

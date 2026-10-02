@@ -59,7 +59,8 @@
 - 两端共用的模型设置操作项已实现；更完整的磁盘/资源说明和其余角色化模型管理
   界面仍需补齐。
 - TUI 与 GUI 已共享远端投影，但完整产品交互闭环仍需端到端验证。
-- TUI 缺少会话选择、模型选择、命令面板、活动详情和可发现的帮助体系。
+- TUI 已基于一份固定的十命令目录提供双语命令面板和可发现的帮助；真实的会话/
+  模型选择器与活动详情仍未完成。
 - 虽然 TUI 已可直接切换语言，但完整 Theme/Language 控制面板和 locale 偏好
   持久化仍属于 M12。
 - GUI 已能提交真实远程 `StartTurn` 并订阅 daemon 状态，但会话 transcript、
@@ -310,6 +311,9 @@ Sessions、Model Picker、Theme、Language、Inspector 和 Help 使用临时 ove
 - ↑/↓ 在 composer 空闲时滚动对话；编辑状态优先移动光标或使用 PageUp/PageDown 滚动。
 - `/model`、`/theme`、`/language`、`/sessions`、`/new`、`/resume`、`/status`、`/queue`、`/help`、`/quit` 是第一组 slash commands。
 - Ctrl-P 打开命令面板；`?` 在 composer 为空时打开帮助。
+- 当前可执行的子集是 `/language`、`/queue <text>`、`/help` 和 `/quit`。尚未实现的
+  命令会明确显示为禁用；`/queue` 需要输入消息，因此也在命令面板中禁用。未知的
+  slash command 会由客户端本地拦截，不会作为普通 prompt 发送。
 - 审批显示完整动作文本和快捷键，默认焦点固定为 Deny once。
 
 ### 6.3 活动呈现
@@ -384,9 +388,13 @@ session model pin、结构化 RoutingDecision 和旧配置迁移。TUI 与 GUI �
 
 ### M12 — TUI 产品化
 
-下一小节点：会话/模型选择器、命令面板、可发现的帮助和活动详情；完整里程碑仍包含
-完整 Theme/Language 控制面板、偏好持久化及下述
-其余内容。
+命令面板/帮助切片已经落地：同一份双语十命令目录驱动 slash 解析、`Ctrl-P`、
+composer 为空时的 `?` 和 `/help`，并覆盖 30×8、52×12、90×20 三档布局。模型设置
+与审批的安全交互优先于浮层；审批时第一次 `Ctrl-C` 会尝试 Deny once 并取消，
+若审批仍在继续，第二次会强制停止并退出。
+
+下一小节点是真实的会话/模型选择器与活动详情。完整里程碑仍包含主题选择浮层及偏好
+持久化；M12 整体尚未完成。
 
 交付：单一对话流、overlay/command palette、session/model/theme/language picker、六套内置主题、英中本地化、活动组、实时引导与排队、内联审批、帮助、中断新语义、窄屏适配和可复制详情。
 

@@ -31,4 +31,8 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
   otherwise uses `en-US`. `F2` switches language globally; `/language`,
   `/language en-US`, and `/language zh-CN` are local client commands and do not
   reach the daemon or modify transcript or Session state.
+- The TUI command/help slice is implemented in both locales: `Ctrl-P`,
+  empty-composer `?`, and `/help` use one exact ten-command catalog and clearly
+  disable unfinished entries. Session/model selectors, the activity inspector,
+  and the Theme overlay with preference persistence remain M12 work.
 - Cross-platform process sandboxing remains Phase 2 and is outside this MVP.

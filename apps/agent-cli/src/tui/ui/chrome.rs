@@ -61,21 +61,24 @@ pub(super) fn render_status_line(
       "○",
       connection_label(state.connection(), messages),
       theme.status_warning,
-      messages.connection_wait_hint.to_owned(),
+      messages.palette.offline_status_hint.to_owned(),
     )
   } else if state.busy {
     (
       "◉",
       messages.running,
       theme.status_warning,
-      format!("Ctrl-C {} · Ctrl-O {}", messages.cancel, messages.details),
+      format!(
+        "Ctrl-C {} · {}",
+        messages.cancel, messages.palette.ready_status_hint
+      ),
     )
   } else {
     (
       "●",
       messages.ready,
       theme.status_success,
-      format!("Ctrl-O {} · /help {}", messages.details, messages.commands),
+      messages.palette.ready_status_hint.to_owned(),
     )
   };
   frame.render_widget(

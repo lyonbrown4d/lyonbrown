@@ -32,6 +32,10 @@ pub fn control_c_key(key: KeyEvent) -> bool {
   key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL)
 }
 
+pub fn approval_interrupt_key(key: KeyEvent) -> bool {
+  key.code == KeyCode::Char('c') && key.modifiers == KeyModifiers::CONTROL
+}
+
 pub fn approval_decision(key: KeyEvent) -> Option<ApprovalDecision> {
   if matches!(key.code, KeyCode::Enter | KeyCode::Esc) && key.modifiers == KeyModifiers::NONE {
     return Some(ApprovalDecision::Deny);

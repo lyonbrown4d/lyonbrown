@@ -1,4 +1,7 @@
 mod detect;
+mod palette;
+
+pub(crate) use palette::{PaletteMessages, shortcut_line_count};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Locale {
@@ -32,6 +35,7 @@ impl Locale {
 
 #[derive(Clone, Copy)]
 pub(crate) struct Messages {
+  pub palette: PaletteMessages,
   pub activity: &'static str,
   pub following: &'static str,
   pub from_bottom: &'static str,
@@ -59,8 +63,6 @@ pub(crate) struct Messages {
   pub workspace: &'static str,
   pub auto: &'static str,
   pub local: &'static str,
-  pub details: &'static str,
-  pub commands: &'static str,
   pub cancel: &'static str,
   pub approval_required: &'static str,
   pub tool: &'static str,
@@ -112,6 +114,7 @@ pub(crate) struct ModelSetupMessages {
 }
 
 const EN_US: Messages = Messages {
+  palette: palette::EN_US,
   activity: "ACTIVITY",
   following: "following",
   from_bottom: "from bottom",
@@ -171,8 +174,6 @@ const EN_US: Messages = Messages {
   workspace: "workspace",
   auto: "Auto",
   local: "local",
-  details: "details",
-  commands: "commands",
   cancel: "cancel",
   approval_required: "APPROVAL REQUIRED",
   tool: "tool",
@@ -184,11 +185,12 @@ const EN_US: Messages = Messages {
   sandbox: "sandbox",
   secret_references: "secret references",
   none: "none",
-  approval_hint: "Enter/Esc deny · y allow · n deny · a allow session · d deny all remaining",
+  approval_hint: "y allow · n deny · Enter/Esc deny · Ctrl-C deny + cancel · a allow session · d deny all remaining",
   terminal_too_small: "Terminal too small · resize to at least 30×8",
 };
 
 const ZH_CN: Messages = Messages {
+  palette: palette::ZH_CN,
   activity: "活动",
   following: "跟随最新",
   from_bottom: "距底部",
@@ -248,8 +250,6 @@ const ZH_CN: Messages = Messages {
   workspace: "工作区",
   auto: "自动",
   local: "本地",
-  details: "详情",
-  commands: "命令",
   cancel: "取消",
   approval_required: "需要审批",
   tool: "工具",
@@ -261,6 +261,6 @@ const ZH_CN: Messages = Messages {
   sandbox: "沙箱",
   secret_references: "Secret 引用",
   none: "无",
-  approval_hint: "Enter/Esc 拒绝 · y 允许 · n 拒绝 · a 会话内允许 · d 拒绝后续全部",
+  approval_hint: "y 允许 · n 拒绝 · Enter/Esc 拒绝 · Ctrl-C 单次拒绝后取消 · a 会话内允许 · d 拒绝后续全部",
   terminal_too_small: "终端过小 · 请调整到至少 30×8",
 };

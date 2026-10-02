@@ -1,9 +1,11 @@
 mod approval;
+mod command_palette;
 mod composer;
 mod connection;
 mod input;
 mod locale;
 mod model_setup;
+mod overlay;
 pub mod runner;
 mod state;
 mod terminal;
@@ -13,6 +15,10 @@ mod ui;
 
 pub use approval::ApprovalRequest;
 pub(crate) use approval::approval_safe;
+pub use command_palette::{
+  CommandArgument, CommandArgumentKind, CommandId, CommandInvocation, CommandSpec, OverlayState,
+  SlashOutcome, UiIntent, command_by_id, command_catalog, slash_command, ui_intent,
+};
 pub use connection::TuiConnectionState;
 pub use connection::apply_remote_state;
 pub use locale::Locale;

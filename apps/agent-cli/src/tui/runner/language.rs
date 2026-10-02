@@ -12,24 +12,6 @@ pub enum LanguageCommand {
   Invalid,
 }
 
-pub fn language_command(input: &str) -> LanguageCommand {
-  let mut parts = input.split_whitespace();
-  if parts.next() != Some("/language") {
-    return LanguageCommand::NotLanguage;
-  }
-  let locale = match parts.next() {
-    None => return LanguageCommand::Toggle,
-    Some("en-US") => Locale::EnUs,
-    Some("zh-CN") => Locale::ZhCn,
-    Some(_) => return LanguageCommand::Invalid,
-  };
-  if parts.next().is_some() {
-    LanguageCommand::Invalid
-  } else {
-    LanguageCommand::Set(locale)
-  }
-}
-
 pub fn language_toggle_key(key: KeyEvent) -> bool {
   key.code == KeyCode::F(2) && key.modifiers == KeyModifiers::NONE
 }
@@ -50,14 +32,7 @@ pub(super) fn apply(runtime: &mut Runtime, command: LanguageCommand) -> bool {
     }
     LanguageCommand::Invalid => runtime
       .state
-      .set_client_local_notice(language_usage(runtime.locale)),
+      .set_client_local_notice(runtime.locale.messages().palette.language_usage),
   }
   true
-}
-
-fn language_usage(locale: Locale) -> &'static str {
-  match locale {
-    Locale::EnUs => "usage: /language [en-US|zh-CN]",
-    Locale::ZhCn => "用法：/language [en-US|zh-CN]",
-  }
 }
