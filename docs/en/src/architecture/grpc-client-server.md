@@ -42,10 +42,19 @@ one server-streaming RPC carries coalescible full runtime snapshots.
 | Server stream | latest full runtime snapshots with revisions |
 
 Every command contains a `command_id`, `client_instance_id`, and the
-`expected_server_instance_id` returned by the handshake. The daemon checks the
+`expected_server_instance_id` returned by the handshake. Before a command enters
+the native client queue, the caller binds it to the currently accepted
+`server_instance_id`; the wire request preserves that value as the expected
+epoch instead of consulting a later connection state. The daemon checks the
 server instance atomically before reserving an idempotency key or executing the
-command. A command executed by an old daemon cannot be replayed into a new
-instance merely because its response was lost.
+command. It returns a typed `EpochMismatch` detail on disagreement, which the
+client maps to `StaleEpoch`. An old-epoch command therefore fails closed and
+cannot cross into a replacement Runtime merely because its response was lost.
+
+A successful command receipt is accepted only when `accepted` is true and both
+its `protocol_version` and `command_id` match the request. A rejected or
+mismatched receipt is a protocol error, never evidence that the command was
+accepted.
 
 Every projected update contains a monotonically increasing `revision`. A client
 obtains a Snapshot before subscribing after its last applied revision. The v1
@@ -194,12 +203,23 @@ The protocol, authentication, scope handshake, secure discovery, two-lock
 design, launch coordinator, `agentd` composition, reconnecting shared client,
 and unified C/S entry points for TUI and GUI are implemented and covered by the
 workspace test suite. Explicit daemon-side background downloads, progress on
-the single Snapshot stream, and in-process epoch replacement are also
-implemented. TUI and GUI model-download controls are not wired yet. The next
-small milestone adds presentation and controls over the same Snapshot/RPCs;
-neither client will implement its own downloader. Remaining frontend work also
-includes the complete GUI session, streaming, approval, cancellation, and
-resume loop.
+the single Snapshot stream, in-process epoch replacement, and fail-closed
+command epoch fencing are also implemented.
+
+Both clients now expose the same model-setup loop over those Snapshot/RPCs:
+explicit start or retry, progress, cancellation where allowed, persistent
+failure details, and English/Simplified Chinese copy. The GUI places its setup
+card between the conversation and Composer, projects the actual phase and
+progress in the Runtime rail, and provides a top-bar English/Chinese switch.
+The TUI selects its startup locale from the system, offers a global `F2` switch
+across setup, approval, and conversation, and handles `/language` locally
+without sending a daemon command or mutating transcript/Session state.
+Stale state remains visible for diagnosis in both clients, but setup actions
+are disabled until a fresh Snapshot for the accepted epoch arrives. Neither
+client implements a downloader. Remaining frontend work includes the M12 TUI
+session/model selectors, command palette, help, and activity details, plus the
+M13 complete GUI transcript, streaming, approval, cancellation, and resume
+loop.
 
 Mobile and remote control remain deferred. A future transport and authentication
 system must not reuse the local discovery token or expose this loopback service

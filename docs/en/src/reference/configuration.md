@@ -82,7 +82,7 @@ enabled = true
 path = "./.agent/session.db"
 ```
 
-Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=false` and `LYONBROWN_STORAGE__PATH` are the environment equivalents. Event writes return success only after database commit. On resume, completed tool results are retained, while started calls without a recorded result are marked as having an unknown outcome and are not automatically replayed. In the TUI, the first Ctrl-C cancels the current turn and the second forces it to stop. Escape does not quit; use Ctrl-D or `/quit` for an explicit exit.
+Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=false` and `LYONBROWN_STORAGE__PATH` are the environment equivalents. Event writes return success only after database commit. On resume, completed tool results are retained, while started calls without a recorded result are marked as having an unknown outcome and are not automatically replayed. In the TUI, the first Ctrl-C cancels the current turn and the second forces it to stop. On the normal conversation surface, Escape does not quit; use Ctrl-D or `/quit` for an explicit exit. During Model Setup, Escape follows the interaction design: it exits from `Required`, `Failed`, or `Cancelled`, and cancels an active phase only when `Cancel` is allowed.
 
 ## Daemon-owned llama.cpp
 
@@ -118,8 +118,10 @@ the official `/no_think` control before rendering. When `model_path` is omitted,
 `agentd` checks the verified cache for the default
 `qwen3-1.7b-q4_k_m`. If it is absent, the Runtime enters
 `ModelSetupRequired`; opening a client does not start a download. The daemon
-provides explicit background Start/Cancel RPCs and publishes progress on the
-unified `RuntimeSnapshot` stream. TUI/GUI controls are the next small milestone.
+provides explicit background `StartModelDownload`/`CancelModelDownload` RPCs
+and publishes progress on the unified `RuntimeSnapshot` stream. TUI and GUI now
+expose the shared bilingual Download, Retry, Cancel, progress, and failure
+controls over those RPCs; neither client implements its own downloader.
 A missing configured `model_path` does not offer managed download. See
 [Local Models and Task Routing](local-models-routing.md).
 Native Windows builds require MSVC, the Windows SDK, CMake/Ninja, and an LLVM

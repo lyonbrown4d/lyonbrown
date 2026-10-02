@@ -1,3 +1,4 @@
+use agent_app::ApprovalDecision as AppApprovalDecision;
 use agent_tool::ApprovalDecision;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -47,5 +48,14 @@ pub fn approval_decision(key: KeyEvent) -> Option<ApprovalDecision> {
     'a' => Some(ApprovalDecision::AllowSession),
     'd' => Some(ApprovalDecision::DenyAll),
     _ => None,
+  }
+}
+
+pub(super) fn map_approval_decision(decision: ApprovalDecision) -> AppApprovalDecision {
+  match decision {
+    ApprovalDecision::Allow => AppApprovalDecision::AllowOnce,
+    ApprovalDecision::AllowSession => AppApprovalDecision::AllowForSession,
+    ApprovalDecision::Deny => AppApprovalDecision::DenyOnce,
+    ApprovalDecision::DenyAll => AppApprovalDecision::DenyRemaining,
   }
 }

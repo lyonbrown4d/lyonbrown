@@ -10,12 +10,32 @@ use tonic::{Code, Status};
 use uuid::Uuid;
 
 pub(super) fn status_error(status: Status) -> AgentClientError {
-  if let Ok(detail) = CommandErrorDetail::decode(status.details())
-    && let Some(error) = command_error(detail)
-  {
-    return AgentClientError::Command(error);
+  if let Ok(detail) = CommandErrorDetail::decode(status.details()) {
+    if let Some(error) = epoch_error(&detail) {
+      return error;
+    }
+    if let Some(error) = command_error(detail) {
+      return AgentClientError::Command(error);
+    }
   }
   coarse_error(status)
+}
+
+fn epoch_error(detail: &CommandErrorDetail) -> Option<AgentClientError> {
+  let code = CommandErrorCode::try_from(detail.code).ok()?;
+  if code != CommandErrorCode::EpochMismatch {
+    return None;
+  }
+  let Context::EpochMismatch(ids) = detail.context.as_ref()? else {
+    return None;
+  };
+  Some(AgentClientError::unavailable(
+    AvailabilityKind::StaleEpoch,
+    format!(
+      "agent daemon epoch changed (expected {}, connected {})",
+      ids.expected_server_instance_id, ids.actual_server_instance_id
+    ),
+  ))
 }
 
 fn command_error(detail: CommandErrorDetail) -> Option<RuntimeCommandError> {
@@ -76,6 +96,7 @@ fn command_error(detail: CommandErrorDetail) -> Option<RuntimeCommandError> {
       }
       _ => None,
     },
+    CommandErrorCode::EpochMismatch => None,
     CommandErrorCode::Unspecified => None,
   }
 }

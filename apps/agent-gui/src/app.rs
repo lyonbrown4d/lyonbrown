@@ -1,11 +1,15 @@
+mod model_setup;
+
 use agent_client::NativeAgentClient;
 use gpui::{Context, Entity, Render, Task, Window, div, prelude::*, px};
 
 use crate::{
   client_state::{RemoteStatePump, apply_remote_state},
   composer_input::{ComposerInput, SubmitRequested},
+  copy::Copy,
+  model_setup::present_model_setup_for_runtime,
   state::{CockpitState, RuntimeDetailsPlacement},
-  theme::{GRAPHITE, SIGNAL_CYAN, color},
+  theme::{GRAPHITE, HAIRLINE, PAPER, SIGNAL_CYAN, color},
   view,
 };
 
@@ -15,6 +19,7 @@ pub struct Cockpit {
   client: Option<NativeAgentClient>,
   remote_state_task: Option<Task<()>>,
   command_task: Option<Task<()>>,
+  model_setup_command_task: Option<Task<()>>,
   composer_input: Option<Entity<ComposerInput>>,
 }
 
@@ -25,6 +30,7 @@ impl Cockpit {
       client,
       remote_state_task: None,
       command_task: None,
+      model_setup_command_task: None,
       composer_input: None,
     }
   }
@@ -84,7 +90,11 @@ impl Cockpit {
       return;
     };
     let enabled = self.state.can_submit() && self.client.is_some();
-    input.update(cx, |input, cx| input.set_enabled(enabled, cx));
+    let locale = self.state.locale();
+    input.update(cx, |input, cx| {
+      input.set_enabled(enabled, cx);
+      input.set_locale(locale, cx);
+    });
   }
 
   fn submit_prompt(&mut self, cx: &mut Context<Self>) {
@@ -92,13 +102,15 @@ impl Cockpit {
       return;
     };
     let prompt = input.read(cx).text().to_owned();
-    let Some(command) = self.state.begin_submission(&prompt) else {
+    let Some(dispatch) = self.state.begin_submission(&prompt) else {
       return;
     };
+    let response =
+      client.dispatch_for_server(dispatch.expected_server_instance_id, dispatch.command);
     self.sync_composer(cx);
     cx.notify();
     self.command_task = Some(cx.spawn(async move |cockpit, cx| {
-      let result = client.dispatch(command).await;
+      let result = response.await;
       let _ = cockpit.update(cx, |cockpit, cx| {
         if result.is_ok() {
           input.update(cx, |input, cx| {
@@ -122,17 +134,41 @@ impl Render for Cockpit {
     let label = self.state.runtime_details_control_label();
     let connection = self.state.connection();
     let stale = self.state.is_stale();
+    let snapshot_fresh = self.state.has_fresh_snapshot();
     let can_submit = self.state.can_submit();
-    let model_setup_required = self.state.is_model_setup_required();
+    let runtime_phase = self.state.runtime_phase();
     let connection_error = self.state.last_connection_error();
     let command_error = self.state.last_command_error();
     let submitting = self.state.is_submitting();
+    let locale = self.state.locale();
+    let copy = Copy::new(locale);
+    let setup = self.state.model_setup().cloned();
+    let setup_presentation = present_model_setup_for_runtime(
+      runtime_phase,
+      setup.as_ref(),
+      locale,
+      self.state.has_fresh_snapshot() && self.client.is_some(),
+      self.state.model_setup_command_pending(),
+      self.state.model_setup_command_error(),
+    );
+    let setup_primary = setup_presentation
+      .as_ref()
+      .and_then(|presentation| presentation.primary.clone())
+      .map(|control| self.model_setup_control(control, cx));
+    let setup_cancel = setup_presentation
+      .as_ref()
+      .and_then(|presentation| presentation.cancel.clone())
+      .map(|control| self.model_setup_control(control, cx));
 
     let composer_input = self
       .composer_input
       .as_ref()
       .map(|input| input.clone().into_any_element())
-      .unwrap_or_else(|| div().child("Composer initializing…").into_any_element());
+      .unwrap_or_else(|| {
+        div()
+          .child(view::composer_initializing_text(locale))
+          .into_any_element()
+      });
 
     let submit_control = div()
       .id("composer-submit")
@@ -149,7 +185,11 @@ impl Render for Cockpit {
           .on_click(cx.listener(|this, _, _, cx| this.submit_prompt(cx)))
       })
       .when(!can_submit, |button| button.opacity(0.55))
-      .child(if submitting { "Sending…" } else { "Send ↵" })
+      .child(if submitting {
+        copy.text("Sending…", "发送中…")
+      } else {
+        copy.text("Send ↵", "发送 ↵")
+      })
       .into_any_element();
 
     let details_control = div()
@@ -169,19 +209,43 @@ impl Render for Cockpit {
       }))
       .into_any_element();
 
+    let locale_control = div()
+      .id("locale-toggle")
+      .px_2()
+      .py_1()
+      .rounded_sm()
+      .border_1()
+      .border_color(color(HAIRLINE))
+      .text_color(color(PAPER))
+      .cursor_pointer()
+      .active(|style| style.opacity(0.72))
+      .child(locale.switch_label())
+      .on_click(cx.listener(|this, _, _, cx| {
+        this.state.toggle_locale();
+        this.sync_composer(cx);
+        cx.notify();
+      }))
+      .into_any_element();
+
     view::cockpit(view::CockpitView {
       compact,
       details_placement,
       connection,
       stale,
+      snapshot_fresh,
       can_submit,
-      model_setup_required,
+      runtime_phase,
+      model_setup: setup_presentation,
+      model_setup_primary: setup_primary,
+      model_setup_cancel: setup_cancel,
+      locale,
       connection_error,
       submitting,
       command_error,
       composer_input,
       submit_control,
       details_control,
+      locale_control,
     })
   }
 }

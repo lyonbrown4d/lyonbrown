@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::RuntimeHost;
 use crate::replay::{Fingerprint, ReplayCache, ReplayDecision};
-use validation::{map_command_error, validate_metadata};
+use validation::{epoch_mismatch_status, map_command_error, validate_metadata};
 
 pub(crate) struct AgentGrpcService {
   pub(super) host: Arc<dyn RuntimeHost>,
@@ -65,10 +65,10 @@ impl AgentGrpcService {
   ) -> Result<Response<CommandResponse>, Status> {
     let metadata = validate_metadata(metadata)?;
     if metadata.expected_server_instance_id != self.server_instance_id {
-      return Err(Status::failed_precondition(format!(
-        "server instance changed: command expected {}, active instance is {}",
-        metadata.expected_server_instance_id, self.server_instance_id
-      )));
+      return Err(epoch_mismatch_status(
+        &metadata.expected_server_instance_id,
+        &self.server_instance_id,
+      ));
     }
     let key = (
       metadata.client_instance_id.clone(),

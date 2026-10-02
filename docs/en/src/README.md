@@ -23,7 +23,12 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 - llama.cpp is a default `agentd` capability. If its configured model is absent,
   the Runtime enters `ModelSetupRequired` without forcing a download. The daemon
   implements explicit background download, cancellation, progress, and epoch
-  activation; TUI/GUI controls are the next small milestone.
+  activation. TUI and GUI now share explicit bilingual setup controls, progress,
+  retry/cancel behavior, and fail-closed epoch fencing over the same gRPC state.
 - `agent` enters the Ratatui/Crossterm chat TUI by default; `agent .` is the
   explicit equivalent. Legacy chat/headless subcommands are not retained.
+- The TUI selects `zh-CN` for recognized Simplified Chinese system locales and
+  otherwise uses `en-US`. `F2` switches language globally; `/language`,
+  `/language en-US`, and `/language zh-CN` are local client commands and do not
+  reach the daemon or modify transcript or Session state.
 - Cross-platform process sandboxing remains Phase 2 and is outside this MVP.

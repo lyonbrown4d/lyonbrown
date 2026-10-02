@@ -60,19 +60,22 @@ An overlay is temporary context. It neither changes the Session nor clears the C
 - `/help`: commands and shortcuts;
 - `Ctrl-O`: current activity or approval details.
 
-Escape closes only the top overlay or clears selection; it does not exit the TUI.
+Outside Model Setup, Escape closes only the top overlay or clears selection; it
+does not exit the TUI. Model Setup is the deliberate exception described below:
+`Esc` exits from `Required`, `Failed`, or `Cancelled`, and cancels an active
+phase only when `Cancel` is allowed.
 
 ### 2.5 First-run model setup
 
-This subsection is the accepted design target for TUI model-download controls,
-not a claim that the surface below is implemented. Today, a missing model puts
-the daemon in `ModelSetupRequired`. Explicit background download, cancellation,
-and Snapshot progress RPCs are implemented in the daemon; the TUI controls
-below are not wired yet.
-
 Running `agent` enters the TUI before any model transfer begins. When the
-daemon-owned model is not cached, the target setup surface presents the
-recommended `qwen3-1.7b-q4_k_m`, its size, and two equally explicit outcomes:
+daemon-owned model is unavailable, the implemented setup surface presents its
+source, current phase, allowed action, failure details, model ID, estimated
+size, and operation ID where applicable. It covers `Required`,
+`WaitingForLock`, `Checking`, `Downloading`, `Verifying`, `Installing`,
+`Activating`, `Ready`, `Cancelled`, and `Failed` without inventing client-only
+phases.
+
+For a managed preset in `Required`, the user has two explicit outcomes:
 
 ```text
 Local model  qwen3-1.7b-q4_k_m
@@ -83,11 +86,45 @@ Recommended default · 1.03 GiB · download only after confirmation
 Enter/D  Download     Q/Esc  Exit without downloading
 ```
 
-Once implemented, confirmation starts a cancellable daemon task while the TUI
-remains responsive. The progress row shows transferred bytes, total bytes when
-known, and percentage. `Esc` or `C` cancels cooperatively and removes staging
-data. Verification is a separate visible phase; the Runtime never loads an
-unverified file. Opening either client never initiates a transfer implicitly.
+Confirmation starts a daemon task while the TUI remains responsive. Actions
+are derived only from Snapshot `allowed_actions`: `Enter`/`D` starts Download,
+`Enter`/`D`/`R` starts Retry after `Failed` or `Cancelled`, and `C`/`Esc`
+cancels a cancellable active phase using its current `operation_id`.
+`Installing` and `Activating` are visible but non-cancellable. `Q` exits from
+any setup phase; `Esc` exits from `Required`, `Cancelled`, and `Failed` rather
+than starting network traffic. A missing configured path never offers Download
+or Retry.
+
+Known totals render bytes, total bytes, percentage, and a width-aware progress
+bar. Unknown totals render an indeterminate marker and downloaded bytes. Narrow
+terminals progressively compact the same information instead of hiding setup.
+While a setup RPC is pending, duplicate actions are disabled. With no setup RPC
+pending, an exit-capable `Q` or `Esc` exits immediately. If Download, Retry, or
+Cancel is already pending, a permitted `Q`/`Esc` exit request waits for that
+existing command receipt instead of sending a second command; a failed command
+remains on screen instead of silently closing. Snapshot failures and command
+failures remain visible until the setup state advances.
+
+The setup surface is rendered in English or Simplified Chinese and uses the
+same semantic tokens across all six built-in themes. Model IDs, operation IDs,
+paths, and shortcuts are never translated. A stale Snapshot remains visible
+for diagnosis, but daemon actions such as Download, Retry, and Cancel are
+disabled until fresh state for the accepted server epoch arrives. Local `Q`
+exit and the global `F2` language toggle remain available. Exiting the client
+never cancels a download already accepted by the daemon; cancellation always
+requires the explicit control.
+Verification remains a separate visible phase, and the Runtime never loads an
+unverified file.
+
+### 2.6 Shared GUI model-setup surface
+
+The GUI consumes the same setup projection and commands. Its setup card sits
+between the conversation and Composer, while the Runtime rail shows the actual
+phase and known or unknown progress. The top bar switches all client copy
+between English and Simplified Chinese without translating identifiers. Stale
+setup state remains readable, but Download, Retry, and Cancel are disabled
+until a fresh Snapshot is accepted. The GUI also permits only one pending setup
+command and keeps failure details visible.
 
 ## 3. Core interactions
 
@@ -141,6 +178,11 @@ The control palette is a temporary overlay with keyboard-reachable Model, Theme,
 - themes preview immediately; `Enter` applies and remembers, while Escape restores the saved theme;
 - language changes redraw client copy immediately without rewriting transcript content;
 - current, saved, and previewed values remain distinguishable.
+
+The complete palette, preview, and preference-persistence behavior above remains
+part of M12. The implemented language slice already selects a startup locale
+from the system and provides the global `F2` toggle plus local `/language`
+commands; it does not yet claim the complete persisted Language overlay.
 
 Theme and language are client preferences. A Session model pin is shared application state. Provider credentials and model-install state belong to Runtime/configuration state. They must not share an untyped settings map.
 
@@ -220,7 +262,17 @@ Values are ordered as `background / raised / active`, `primary / secondary / fai
 
 ## 6. Localization rules
 
-- Initial locales: `en-US` and `zh-CN`; follow the system by default, with user preference taking precedence.
+- Initial locales are `en-US` and `zh-CN`. At startup, system tags such as
+  `zh-CN`, `zh_CN`, and `zh-Hans` select `zh-CN`; unknown or unavailable tags
+  fall back to `en-US`.
+- Unmodified `F2` switches client copy immediately from model setup, approval,
+  or the normal conversation surface.
+- `/language` toggles the current locale; `/language en-US` and
+  `/language zh-CN` select it explicitly. These are local client commands: they
+  do not contact the daemon or alter transcript or Session state. An invalid
+  argument displays the `/language [en-US|zh-CN]` usage in the current language.
+- Persisting the selected locale and exposing it through the complete control
+  palette remain M12 work.
 - Slash commands, config keys, model IDs, provider IDs, shell commands, paths, and shortcuts retain stable English forms.
 - Titles, statuses, help, risk explanations, actions, and empty states are localized.
 - Existing user/model transcript content remains in its original language; only client chrome is re-localized.

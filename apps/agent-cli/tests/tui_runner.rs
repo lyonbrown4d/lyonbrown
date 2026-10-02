@@ -12,11 +12,11 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::{broadcast, watch};
 use unicode_segmentation::UnicodeSegmentation;
 
-use agent_cli::tui::TuiState;
 use agent_cli::tui::runner::{
   ComposerIntent, Runtime, approval_decision, can_accept_input, composer_intent, control_c_key,
   edit_input, final_drain, next_conversation_scroll, quit_key, shutdown,
 };
+use agent_cli::tui::{Locale, TuiState};
 
 #[test]
 fn final_drain_consumes_events_queued_at_task_completion() {
@@ -220,6 +220,7 @@ async fn shutdown_detaches_without_cancelling_the_remote_runtime() {
     approval_max_scroll: 0,
     conversation_scroll: 0,
     conversation_max_scroll: 0,
+    locale: Locale::EnUs,
   };
 
   tokio::time::timeout(Duration::from_millis(25), shutdown(&mut runtime))
@@ -250,6 +251,14 @@ impl DetachedClient {
 impl AgentClient for DetachedClient {
   async fn execute(&self, _command: AgentCommand) -> Result<(), AgentClientError> {
     panic!("shutdown must not send a runtime command")
+  }
+
+  async fn execute_for_server(
+    &self,
+    _expected_server_instance_id: &str,
+    _command: AgentCommand,
+  ) -> Result<(), AgentClientError> {
+    panic!("shutdown must not send an epoch-bound runtime command")
   }
 
   fn snapshot(&self) -> RuntimeSnapshot {

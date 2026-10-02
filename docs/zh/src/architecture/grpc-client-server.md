@@ -39,8 +39,16 @@ Protocol Buffers 是协议真相源。命令与查询使用 unary RPC；可合�
 | Server stream | 带 revision 的最新 Runtime 完整快照 |
 
 每条命令包含 `command_id`、`client_instance_id` 和握手返回的
-`expected_server_instance_id`。daemon 在登记幂等键和执行命令之前原子校验
-server instance，防止旧 daemon 已执行但响应丢失后把同一命令重放到新实例。
+`expected_server_instance_id`。命令进入 native client 队列前，调用方会把它绑定
+到当前已接受的 `server_instance_id`；wire request 将该值保留为 expected epoch，
+而不是在稍后发送时重新读取连接状态。daemon 在登记幂等键和执行命令之前原子
+校验 server instance；不一致时返回类型化 `EpochMismatch` detail，client 将其
+映射为 `StaleEpoch`。因此旧 epoch 命令会 fail closed，不会因响应丢失而跨入
+replacement Runtime。
+
+成功 receipt 只有在 `accepted = true`，且 `protocol_version` 与 `command_id` 均
+与请求一致时才会被接受。拒绝或字段不匹配的 receipt 属于协议错误，不能被视为
+命令已接受。
 
 每次投影更新包含单调递增的 `revision`。客户端连接后先获取 Snapshot，再从
 已应用 revision 之后订阅。v1 stream 不是事件日志：慢客户端可能直接收到更
@@ -161,10 +169,19 @@ TooLate，因为此时原子落盘不能被中断。模型 ID、URL、摘要和�
 
 协议、认证、scope 握手、安全 discovery、双锁、launch coordinator、`agentd`
 composition、可重连共用 client 以及 TUI/GUI 统一 C/S 入口已经落地，并由
-workspace 测试覆盖。显式后台模型下载、单 Snapshot 进度流以及 in-process epoch
-切换也已落地。TUI 与 GUI 当前尚未接入模型下载 controls；下一小节点只为两端补
-上同一组 Snapshot/RPC 的呈现和操作，两端都不得自行下载。其余前端工作继续补足
-GUI 的完整会话、流式输出、审批、取消与恢复闭环。
+workspace 测试覆盖。显式后台模型下载、单 Snapshot 进度流、in-process epoch
+切换和 fail-closed 命令 epoch fencing 也已落地。
+
+两端现已在同一组 Snapshot/RPC 上提供完整模型设置闭环：显式开始或重试、进度、
+允许时取消、失败详情留屏，以及英文/简体中文文案。GUI 将设置卡片放在
+conversation 与 Composer 之间，Runtime 状态栏显示真实 phase/progress，顶部栏
+提供中英文切换。TUI 根据系统 locale 选择启动语言，并在 setup、approval 和
+conversation 中提供全局 `F2` 切换；`/language` 由 client 本地处理，不发送 daemon
+命令，也不改变 transcript/Session state。两端在 stale 状态下继续显示诊断信息，
+但在收到已接受 epoch 的 fresh Snapshot 前禁用模型设置操作；两端都不实现下载器。
+后续前端工作是 M12 的
+TUI 会话/模型选择器、命令面板、帮助与活动详情，以及 M13
+的完整 GUI transcript、流式输出、审批、取消与恢复闭环。
 
 移动端与远程控制延后。未来可以扩展 transport 和认证体系，但不得复用本地
 discovery token 或在未建立远程身份、授权与加密边界前暴露当前 loopback 服务。

@@ -7,15 +7,22 @@ use ratatui::{
 };
 
 use super::{
-  ApprovalRequest, Locale, Speaker, Theme, TuiConnectionState, TuiState,
+  ApprovalRequest, Locale, Speaker, Theme, TuiState,
   composer::{render_approval, render_composer},
   locale::Messages,
+  model_setup::{ModelSetupRenderContext, render_model_setup},
 };
+
+use chrome::{render_context_line, render_status_line};
+
+mod chrome;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RenderContext {
   pub theme: Theme,
   pub locale: Locale,
+  pub setup_command_pending: bool,
+  pub setup_exit_pending: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -27,7 +34,6 @@ pub(crate) struct RenderMetrics {
 pub fn render(frame: &mut Frame<'_>, state: &TuiState) {
   render_with_context(frame, state, RenderContext::default());
 }
-
 pub fn render_with_context(frame: &mut Frame<'_>, state: &TuiState, context: RenderContext) {
   let _ = render_surface(frame, state, None, 0, 0, context);
 }
@@ -67,6 +73,7 @@ pub(crate) fn render_cockpit(
   approval: Option<&ApprovalRequest>,
   approval_scroll: u16,
   conversation_scroll: u16,
+  context: RenderContext,
 ) -> RenderMetrics {
   render_surface(
     frame,
@@ -74,7 +81,7 @@ pub(crate) fn render_cockpit(
     approval,
     approval_scroll,
     conversation_scroll,
-    RenderContext::default(),
+    context,
   )
 }
 
@@ -105,7 +112,12 @@ fn render_surface(
     return RenderMetrics::default();
   }
 
-  let composer_height = area.height.saturating_sub(3).min(4);
+  let setup_active = state.model_setup().is_some();
+  let composer_height = if setup_active {
+    0
+  } else {
+    area.height.saturating_sub(3).min(4)
+  };
   let rows = Layout::vertical([
     Constraint::Length(1),
     Constraint::Min(1),
@@ -114,16 +126,34 @@ fn render_surface(
   ])
   .split(area);
   render_context_line(frame, rows[0], state, theme, messages);
-  let conversation_max_scroll =
-    render_conversation(frame, rows[1], state, conversation_scroll, theme, messages);
-  render_composer(
-    frame,
-    rows[2],
-    state,
-    approval.is_none() && state.can_submit(),
-    theme,
-    messages,
-  );
+  let conversation_max_scroll = if let Some(setup) = state.model_setup() {
+    render_model_setup(
+      frame,
+      rows[1],
+      setup,
+      ModelSetupRenderContext {
+        command_error: state.command_error(),
+        commands_enabled: state.can_issue_setup_commands() && !context.setup_command_pending,
+        command_pending: context.setup_command_pending,
+        exit_pending: context.setup_exit_pending,
+        theme,
+        messages,
+      },
+    );
+    0
+  } else {
+    render_conversation(frame, rows[1], state, conversation_scroll, theme, messages)
+  };
+  if rows[2].height > 0 {
+    render_composer(
+      frame,
+      rows[2],
+      state,
+      approval.is_none() && state.can_submit(),
+      theme,
+      messages,
+    );
+  }
   render_status_line(frame, rows[3], state, theme, messages);
   let approval_max_scroll = approval
     .map(|request| render_approval(frame, request, approval_scroll, theme, messages))
@@ -150,40 +180,6 @@ pub(super) fn panel(title: &str, theme: Theme, focused: bool) -> Block<'_> {
     .borders(Borders::ALL)
     .border_style(Style::default().fg(border))
     .style(Style::default().bg(theme.background).fg(theme.text_primary))
-}
-
-fn render_context_line(
-  frame: &mut Frame<'_>,
-  area: Rect,
-  state: &TuiState,
-  theme: Theme,
-  messages: Messages,
-) {
-  let context = format!(
-    " {} · {} · {} · {} · {} · {}{} ",
-    messages.workspace,
-    messages.auto,
-    messages.local,
-    state.model(),
-    connection_label(state.connection(), messages),
-    if state.is_snapshot_stale() {
-      messages.stale
-    } else {
-      messages.fresh
-    },
-    state
-      .connection_error()
-      .map(|error| format!(" · {error}"))
-      .unwrap_or_default()
-  );
-  frame.render_widget(
-    Paragraph::new(context).style(
-      Style::default()
-        .fg(theme.text_secondary)
-        .bg(theme.surface_raised),
-    ),
-    area,
-  );
 }
 
 fn render_conversation(
@@ -229,63 +225,4 @@ fn render_conversation(
   let scroll = max_scroll.saturating_sub(distance_from_bottom);
   frame.render_widget(paragraph.scroll((scroll, 0)), area);
   max_scroll
-}
-
-fn render_status_line(
-  frame: &mut Frame<'_>,
-  area: Rect,
-  state: &TuiState,
-  theme: Theme,
-  messages: Messages,
-) {
-  let (symbol, mode, color, actions) = if state.is_model_setup_required() {
-    (
-      "○",
-      messages.model_setup,
-      theme.status_warning,
-      messages.model_setup_hint.to_owned(),
-    )
-  } else if !state.can_submit() {
-    (
-      "○",
-      connection_label(state.connection(), messages),
-      theme.status_warning,
-      messages.connection_wait_hint.to_owned(),
-    )
-  } else if state.busy {
-    (
-      "◉",
-      messages.running,
-      theme.status_warning,
-      format!("Ctrl-C {} · Ctrl-O {}", messages.cancel, messages.details),
-    )
-  } else {
-    (
-      "●",
-      messages.ready,
-      theme.status_success,
-      format!("Ctrl-O {} · /help {}", messages.details, messages.commands),
-    )
-  };
-  frame.render_widget(
-    Paragraph::new(Line::from(vec![
-      Span::styled(format!(" {symbol} {mode} "), Style::default().fg(color)),
-      Span::styled(
-        format!("· {actions}"),
-        Style::default().fg(theme.text_faint),
-      ),
-    ]))
-    .style(Style::default().bg(theme.surface_raised)),
-    area,
-  );
-}
-
-fn connection_label(state: TuiConnectionState, messages: Messages) -> &'static str {
-  match state {
-    TuiConnectionState::Connecting => messages.connecting,
-    TuiConnectionState::Connected => messages.connected,
-    TuiConnectionState::Reconnecting => messages.reconnecting,
-    TuiConnectionState::Unavailable => messages.unavailable,
-    TuiConnectionState::Incompatible => messages.incompatible,
-  }
 }

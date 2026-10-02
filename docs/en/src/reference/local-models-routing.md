@@ -40,9 +40,13 @@ Daemon-side background download is implemented, but it starts only after an
 explicit unary `StartModelDownload` call. Startup and simply entering a UI
 never initiate network traffic. Cancellation uses unary
 `CancelModelDownload`; progress and results use the existing single versioned
-`RuntimeSnapshot` stream rather than a model-specific stream. TUI and GUI
-controls are not wired yet and form the next small milestone. Both clients will
-consume the same Snapshot/RPCs and neither will implement a downloader.
+`RuntimeSnapshot` stream rather than a model-specific stream. TUI and GUI now
+provide the same explicit Download, Retry, and Cancel controls over those
+Snapshot/RPCs; neither implements a downloader. Both surfaces support English
+and Simplified Chinese, remain usable while the daemon job runs, keep failures
+visible, and disable actions when their Snapshot is stale. The GUI setup card
+sits between the conversation and Composer, and its Runtime rail mirrors the
+actual phase and progress.
 
 The managed-model Snapshot carries its source, phase, allowed actions, byte
 progress, failure, and `operation_id`. Phases include `WaitingForLock`,

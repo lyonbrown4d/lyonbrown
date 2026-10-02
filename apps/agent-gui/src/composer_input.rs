@@ -9,6 +9,8 @@ use gpui::{
 
 use element::ComposerTextElement;
 
+use crate::copy::UiLocale;
+
 const MAX_PROMPT_CHARS: usize = 16_384;
 
 pub(crate) struct SubmitRequested;
@@ -21,6 +23,7 @@ pub(crate) struct ComposerInput {
   last_layout: Option<ShapedLine>,
   last_bounds: Option<Bounds<Pixels>>,
   enabled: bool,
+  locale: UiLocale,
 }
 
 impl ComposerInput {
@@ -33,12 +36,20 @@ impl ComposerInput {
       last_layout: None,
       last_bounds: None,
       enabled: false,
+      locale: UiLocale::default(),
     }
   }
 
   pub(crate) fn set_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
     if self.enabled != enabled {
       self.enabled = enabled;
+      cx.notify();
+    }
+  }
+
+  pub(crate) fn set_locale(&mut self, locale: UiLocale, cx: &mut Context<Self>) {
+    if self.locale != locale {
+      self.locale = locale;
       cx.notify();
     }
   }

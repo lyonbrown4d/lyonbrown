@@ -19,6 +19,10 @@ uuid.workspace = true
 
 [dev-dependencies]
 agent-local = { path = "../../crates/agent-local" }
+agent-protocol.workspace = true
+futures.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
 
 [lints]
 workspace = true

@@ -13,6 +13,7 @@ use async_trait::async_trait;
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
+use crate::epoch::{connected_server, ensure_expected_server};
 use crate::{
   AuthenticatedTarget, AuthenticatedTargetResolver, ConnectionState, RemoteClientOptions,
   RemoteState,
@@ -25,6 +26,7 @@ pub type NativeCommandFuture =
   Pin<Box<dyn Future<Output = Result<(), AgentClientError>> + Send + 'static>>;
 
 struct CommandRequest {
+  expected_server_instance_id: String,
   command: AgentCommand,
   response: oneshot::Sender<Result<(), AgentClientError>>,
 }
@@ -129,24 +131,38 @@ impl NativeAgentClient {
   }
 
   pub fn dispatch(&self, command: AgentCommand) -> NativeCommandFuture {
+    let expected_server_instance_id =
+      match connected_server(self.inner.remote_state.borrow().connection.clone()) {
+        Ok(server_instance_id) => server_instance_id,
+        Err(error) => return ready_result(Err(error)),
+      };
+    self.dispatch_for_server(expected_server_instance_id, command)
+  }
+
+  pub fn dispatch_for_server(
+    &self,
+    expected_server_instance_id: impl Into<String>,
+    command: AgentCommand,
+  ) -> NativeCommandFuture {
     if self.inner.cancellation.is_cancelled() {
       return ready_error(
         AvailabilityKind::ShuttingDown,
         "native client is shutting down",
       );
     }
-    match self.inner.remote_state.borrow().connection.clone() {
-      ConnectionState::Connected { .. } => {}
-      ConnectionState::Failed { error, .. } => return ready_result(Err(error)),
-      _ => {
-        return ready_error(
-          AvailabilityKind::Disconnected,
-          "agent daemon is not connected",
-        );
-      }
+    let expected_server_instance_id = expected_server_instance_id.into();
+    if let Err(error) = ensure_expected_server(
+      self.inner.remote_state.borrow().connection.clone(),
+      &expected_server_instance_id,
+    ) {
+      return ready_result(Err(error));
     }
     let (response, receiver) = oneshot::channel();
-    let request = CommandRequest { command, response };
+    let request = CommandRequest {
+      expected_server_instance_id,
+      command,
+      response,
+    };
     match self.inner.commands.try_send(request) {
       Ok(()) => Box::pin(async move {
         receiver.await.unwrap_or_else(|_| {
@@ -172,6 +188,16 @@ impl NativeAgentClient {
 impl AgentClientPort for NativeAgentClient {
   async fn execute(&self, command: AgentCommand) -> Result<(), AgentClientError> {
     self.dispatch(command).await
+  }
+
+  async fn execute_for_server(
+    &self,
+    expected_server_instance_id: &str,
+    command: AgentCommand,
+  ) -> Result<(), AgentClientError> {
+    self
+      .dispatch_for_server(expected_server_instance_id, command)
+      .await
   }
 
   fn snapshot(&self) -> RuntimeSnapshot {

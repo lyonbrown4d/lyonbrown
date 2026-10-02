@@ -42,16 +42,26 @@
   单一 `RuntimeSnapshot` 进度流；配置路径缺失时不会伪装成可下载 preset。
 - `agentd` 已使用 in-process epoch supervisor 激活安装后的模型；replacement 构建
   和新 endpoint 发布期间保留旧 control plane，失败时回滚到可重试状态。
+- TUI 与 GUI 已完成共享模型设置闭环：通过同一 Snapshot/RPC 契约显式下载或重试、
+  展示进度、取消、保留失败详情，并支持英文/简体中文呈现。
+- TUI 对已识别的简体中文系统 locale tag 选择 `zh-CN`，否则回退到 `en-US`；全局
+  `F2` 可从 setup、approval 或 conversation 切换 client 文案，本地 `/language`
+  命令不访问 daemon，也不改变 transcript/Session state。
+- client command 在入队前绑定已接受的 server epoch；类型化 `EpochMismatch`、
+  `StaleEpoch` 映射和严格 receipt 校验共同阻止旧 epoch 命令进入 replacement
+  Runtime。
 - Ollama、Anthropic 和 OpenAI 仍是可配置 Provider。
 - Scheduler 已有 Control / Worker / Frontier、Local / Remote、隐私过滤和有限回退。
 
 ### 2.2 主要缺口
 
 - `model.provider + model.model` 仍以单一主模型配置为中心，生产路径没有形成真正的角色化模型池。
-- daemon 后台下载与 epoch 切换已实现；TUI/GUI 尚未接入共用的确认、进度、取消
-  和失败重试 controls，磁盘与资源说明也仍需补齐。
+- 两端共用的模型设置操作项已实现；更完整的磁盘/资源说明和其余角色化模型管理
+  界面仍需补齐。
 - TUI 与 GUI 已共享远端投影，但完整产品交互闭环仍需端到端验证。
 - TUI 缺少会话选择、模型选择、命令面板、活动详情和可发现的帮助体系。
+- 虽然 TUI 已可直接切换语言，但完整 Theme/Language 控制面板和 locale 偏好
+  持久化仍属于 M12。
 - GUI 已能提交真实远程 `StartTurn` 并订阅 daemon 状态，但会话 transcript、
   流式输出、审批、取消与恢复闭环仍未完成。
 - 当前 Quality Gate 只处理模型错误和空答案，不能支撑成熟的质量升级策略。
@@ -361,14 +371,22 @@ M13 只实现完整垂直切片：
 
 ### M11 — 模型控制面
 
-状态：daemon 下载/取消、Snapshot 进度、完整性校验与 epoch 激活基础已经落地；
-TUI/GUI controls 尚未接入。
+状态：daemon 下载/取消、Snapshot 进度、完整性校验、epoch 激活，以及 TUI/GUI
+共用模型设置操作项均已落地；两端在该闭环中支持英文和简体中文。命令被 fence
+到已接受的 server epoch，且只有 receipt 校验通过才报告成功。这里完成的是共享
+setup slice，不代表 M11 的所有交付项均已完成。
 
-交付：补齐角色化配置、模型目录、doctor/install/status、两端下载 controls、硬件探测、session model pin、结构化 RoutingDecision 和旧配置迁移。TUI 与 GUI 必须只使用相同的 Snapshot/RPC，不实现第二套下载器。
+交付：补齐角色化配置、模型目录、doctor/install/status、更完整的硬件/资源说明、
+session model pin、结构化 RoutingDecision 和旧配置迁移。TUI 与 GUI 必须继续只
+使用相同的 Snapshot/RPC，不实现第二套下载器。
 
 验收：首次运行不会静默下载；离线已有缓存可启动；资源不足和远程回退被界面准确解释。
 
 ### M12 — TUI 产品化
+
+下一小节点：会话/模型选择器、命令面板、可发现的帮助和活动详情；完整里程碑仍包含
+完整 Theme/Language 控制面板、偏好持久化及下述
+其余内容。
 
 交付：单一对话流、overlay/command palette、session/model/theme/language picker、六套内置主题、英中本地化、活动组、实时引导与排队、内联审批、帮助、中断新语义、窄屏适配和可复制详情。
 
@@ -376,7 +394,9 @@ TUI/GUI controls 尚未接入。
 
 ### M13 — GUI Runtime 垂直切片
 
-交付：真实 Composition Root、会话/流式/审批/取消/恢复闭环、响应式三栏和 Model Setup。
+模型设置卡片、Runtime phase/progress 投影和顶部栏中英文切换已经落地。下一小
+节点是完整 GUI transcript、流式输出、审批、取消与恢复闭环，以及响应式三栏
+Runtime 界面。
 
 验收：使用 MockProvider 完成端到端桌面测试；Windows 手工 smoke；没有“preview only”或虚假运行状态。
 

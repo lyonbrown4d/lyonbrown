@@ -54,7 +54,7 @@ fn narrow_conversation_follows_newest_text_after_word_boundary_wraps() {
 
 #[test]
 fn manual_scroll_hides_newest_text_and_reports_position_in_wide_layout() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   for index in 0..24 {
     state.reduce(AgentEvent::ModelDelta {
       step_id: StepId::new(),
@@ -71,7 +71,7 @@ fn manual_scroll_hides_newest_text_and_reports_position_in_wide_layout() {
 
 #[test]
 fn narrow_layout_shows_idle_follow_state_and_scroll_keys() {
-  let output = scrolled_screen(&TuiState::default(), 0, 52, 12);
+  let output = scrolled_screen(&ready_state(), 0, 52, 12);
 
   assert!(output.contains("READY"));
   assert!(output.contains("following"));
@@ -81,7 +81,7 @@ fn narrow_layout_shows_idle_follow_state_and_scroll_keys() {
 
 #[test]
 fn running_composer_keeps_input_visible_and_explains_steer_and_queue() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   state.reduce(AgentEvent::ModelDelta {
     step_id: StepId::new(),
     delta: "working".into(),
@@ -110,7 +110,7 @@ fn supported_responsive_sizes_render_without_panicking_in_both_locales() {
 
 #[test]
 fn composer_cursor_uses_unicode_display_width() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   for character in "a界b".chars() {
     state.apply_input_key(KeyCode::Char(character));
   }
@@ -124,7 +124,7 @@ fn composer_cursor_uses_unicode_display_width() {
 
 #[test]
 fn composer_cursor_stays_on_grapheme_boundaries() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   for character in "e\u{301}👨‍👩‍👧‍👦".chars() {
     state.apply_input_key(KeyCode::Char(character));
   }
@@ -137,7 +137,7 @@ fn composer_cursor_stays_on_grapheme_boundaries() {
 
 #[test]
 fn composer_cursor_tracks_a_newly_joined_grapheme() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   for character in "👨👩".chars() {
     state.apply_input_key(KeyCode::Char(character));
   }
@@ -157,7 +157,7 @@ fn composer_cursor_tracks_a_newly_joined_grapheme() {
 
 #[test]
 fn composer_viewport_follows_long_and_multiline_input() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   for character in "hidden-prefix-界界界界\nmiddle\nsecond-line-with-visible-tail".chars() {
     state.apply_input_key(KeyCode::Char(character));
   }

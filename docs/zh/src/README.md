@@ -22,9 +22,13 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
   Runtime 兼容路径。
 - llama.cpp 是 `agentd` 的默认能力。配置的模型缺失时，Runtime 进入
   `ModelSetupRequired`，不会强制下载；daemon 已支持显式后台下载、取消、进度与
-  epoch 激活，TUI/GUI controls 属于下一小节点。
+  epoch 激活；TUI/GUI 现已通过同一 gRPC 状态提供双语显式设置操作项、进度、
+  重试/取消和 fail-closed epoch fencing。
 - `agent` 默认直接进入 Ratatui/Crossterm chat TUI，`agent .` 是对应的显式
   写法；不再保留旧的 chat/headless 子命令。
+- TUI 对已识别的简体中文系统 locale 使用 `zh-CN`，否则使用 `en-US`。`F2` 全局
+  切换语言；`/language`、`/language en-US` 和 `/language zh-CN` 都是 client 本地
+  命令，不发送到 daemon，也不改变 transcript 或 Session state。
 - 跨平台进程 sandbox 仍属于 Phase 2，尚未纳入本轮 MVP。
 
 里程碑的详细范围和验收口径以 MVP 实施计划为准。架构文档描述长期方向，不直接表示当前实现进度。

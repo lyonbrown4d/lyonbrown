@@ -1,5 +1,6 @@
 mod driver;
 mod error;
+mod receipt;
 mod types;
 
 use std::sync::Arc;
@@ -15,6 +16,7 @@ use tokio::sync::{Mutex, watch};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use crate::epoch::{connected_server, ensure_expected_server};
 use crate::{
   AgentClient, ApprovalDecision, AuthenticatedTarget, AuthenticatedTargetResolver, Command,
 };
@@ -143,18 +145,15 @@ impl RemoteAgentClient {
     self.inner.remote_snapshots.subscribe()
   }
 
-  async fn execute_remote(&self, command: AgentCommand) -> Result<(), AgentClientError> {
+  async fn execute_remote(
+    &self,
+    expected_server_instance_id: &str,
+    command: AgentCommand,
+  ) -> Result<(), AgentClientError> {
+    ensure_expected_server(self.connection_state(), expected_server_instance_id)?;
     let command = command_to_wire(command);
     let command_id = Uuid::new_v4().to_string();
-    let server_instance_id = match self.connection_state() {
-      ConnectionState::Connected { server_instance_id } => server_instance_id,
-      _ => {
-        return Err(AgentClientError::unavailable(
-          AvailabilityKind::Disconnected,
-          "agent daemon is not connected",
-        ));
-      }
-    };
+    let server_instance_id = expected_server_instance_id.to_owned();
     let attempts = self.inner.options.command_attempts.max(1);
     for attempt in 0..attempts {
       if self.inner.cancellation.is_cancelled() {
@@ -175,7 +174,10 @@ impl RemoteAgentClient {
       })
       .await;
       match result {
-        Ok(Ok(_)) => return Ok(()),
+        Ok(Ok(response)) => {
+          receipt::validate(&response, &command_id)?;
+          return Ok(());
+        }
         Ok(Err(status)) if is_retryable(&status) && attempt + 1 < attempts => {
           tokio::time::sleep(command_backoff(&self.inner.options, attempt)).await;
         }
@@ -201,7 +203,20 @@ impl RemoteAgentClient {
 #[async_trait]
 impl AgentClientPort for RemoteAgentClient {
   async fn execute(&self, command: AgentCommand) -> Result<(), AgentClientError> {
-    self.execute_remote(command).await
+    let expected_server_instance_id = connected_server(self.connection_state())?;
+    self
+      .execute_remote(&expected_server_instance_id, command)
+      .await
+  }
+
+  async fn execute_for_server(
+    &self,
+    expected_server_instance_id: &str,
+    command: AgentCommand,
+  ) -> Result<(), AgentClientError> {
+    self
+      .execute_remote(expected_server_instance_id, command)
+      .await
   }
 
   fn snapshot(&self) -> RuntimeSnapshot {

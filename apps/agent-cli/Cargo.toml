@@ -26,6 +26,7 @@ async-trait = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 unicode-segmentation = { workspace = true }
+sys-locale = { workspace = true }
 uuid = { workspace = true }
 
 [lints]

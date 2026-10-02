@@ -1,3 +1,4 @@
+use agent_app::{ModelSetupPhase, ModelSetupSource, ModelSetupView};
 use agent_client::{
   AgentClientError, AvailabilityKind, ConnectionState as RemoteConnectionState, ProtocolErrorKind,
   RemoteState, VersionedRemoteSnapshot,
@@ -29,6 +30,17 @@ fn connected(server_instance_id: &str, revision: u64) -> RemoteState {
 fn model_setup_snapshot_keeps_gui_connected_but_disables_submission() {
   let mut remote = connected("daemon-a", 1);
   remote.snapshot.as_mut().unwrap().snapshot.phase = agent_app::RuntimePhase::ModelSetupRequired;
+  let setup = ModelSetupView {
+    source: ModelSetupSource::ConfiguredPath,
+    phase: ModelSetupPhase::Required,
+    managed_model: None,
+    operation_id: None,
+    downloaded_bytes: 0,
+    total_bytes: None,
+    failure: None,
+    allowed_actions: vec![],
+  };
+  remote.snapshot.as_mut().unwrap().snapshot.model_setup = Some(setup.clone());
   let mut state = CockpitState::default();
 
   apply_remote_state(&mut state, &remote);
@@ -36,6 +48,7 @@ fn model_setup_snapshot_keeps_gui_connected_but_disables_submission() {
   assert_eq!(state.connection(), ConnectionState::Connected);
   assert!(!state.is_stale());
   assert!(!state.can_submit());
+  assert_eq!(state.model_setup(), Some(&setup));
 }
 
 #[test]
@@ -170,6 +183,31 @@ fn connected_without_a_matching_snapshot_never_enables_submission() {
   assert_eq!(state.revision(), Some(5));
   assert!(state.is_stale());
   assert!(!state.can_submit());
+}
+
+#[test]
+fn rejected_lower_revision_cannot_overwrite_runtime_or_setup_projection() {
+  let mut state = CockpitState::default();
+  apply_remote_state(&mut state, &connected("daemon-a", 5));
+  let mut lower = connected("daemon-a", 4);
+  let snapshot = &mut lower.snapshot.as_mut().unwrap().snapshot;
+  snapshot.phase = agent_app::RuntimePhase::ModelSetupRequired;
+  snapshot.model_setup = Some(ModelSetupView {
+    source: ModelSetupSource::ConfiguredPath,
+    phase: ModelSetupPhase::Required,
+    managed_model: None,
+    operation_id: None,
+    downloaded_bytes: 0,
+    total_bytes: None,
+    failure: None,
+    allowed_actions: vec![],
+  });
+
+  apply_remote_state(&mut state, &lower);
+
+  assert_eq!(state.revision(), Some(5));
+  assert_eq!(state.runtime_phase(), agent_app::RuntimePhase::Initializing);
+  assert_eq!(state.model_setup(), None);
 }
 
 #[test]

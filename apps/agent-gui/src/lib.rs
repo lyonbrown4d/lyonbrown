@@ -2,6 +2,8 @@ pub mod app;
 pub mod client_state;
 mod composer_input;
 pub mod composition;
+pub mod copy;
+pub mod model_setup;
 pub mod startup;
 pub mod state;
 pub mod theme;

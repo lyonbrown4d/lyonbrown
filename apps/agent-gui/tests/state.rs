@@ -171,10 +171,11 @@ fn fresh_connected_state_prepares_one_trimmed_start_turn() {
   state.apply_connection(ConnectionState::Connected, None);
   assert!(state.apply_snapshot_revision("daemon-a", 1));
 
-  let command = state.begin_submission("  explain this module  ").unwrap();
+  let dispatch = state.begin_submission("  explain this module  ").unwrap();
 
+  assert_eq!(dispatch.expected_server_instance_id, "daemon-a");
   assert_eq!(
-    command,
+    dispatch.command,
     AgentCommand::StartTurn {
       text: "explain this module".into(),
     }
@@ -227,4 +228,31 @@ fn successful_submission_clears_an_old_command_error() {
 
   assert_eq!(state.last_command_error(), None);
   assert!(state.can_submit());
+}
+
+#[test]
+fn blank_submission_error_is_retained_without_baking_in_a_locale() {
+  let mut state = CockpitState::default();
+  state.apply_connection(ConnectionState::Connected, None);
+  assert!(state.apply_snapshot_revision("daemon-a", 1));
+  assert!(state.begin_submission("task").is_some());
+
+  state.finish_submission(Some("\r\n\u{0000}"));
+
+  assert_eq!(state.last_command_error(), Some(""));
+  state.toggle_locale();
+  assert_eq!(state.last_command_error(), Some(""));
+}
+
+#[test]
+fn snapshot_freshness_is_independent_from_submission_eligibility() {
+  let mut state = CockpitState::default();
+  state.apply_connection(ConnectionState::Connected, None);
+  assert!(state.apply_snapshot_revision("daemon-a", 1));
+  assert!(state.has_fresh_snapshot());
+  assert!(state.can_submit());
+
+  assert!(state.begin_submission("task").is_some());
+  assert!(state.has_fresh_snapshot());
+  assert!(!state.can_submit());
 }

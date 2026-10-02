@@ -2,8 +2,8 @@ use agent_app::{ApprovalDecision, RuntimeCommandError, UnsupportedCommand};
 use agent_protocol::PROTOCOL_VERSION;
 use agent_protocol::v1::command_error_detail::Context;
 use agent_protocol::v1::{
-  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, InvalidModelIdDetail,
-  ModelDownloadOperationMismatchDetail, RequestMetadata,
+  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, EpochMismatchDetail,
+  InvalidModelIdDetail, ModelDownloadOperationMismatchDetail, RequestMetadata,
   UnsupportedCommand as WireUnsupportedCommand,
 };
 use prost::Message;
@@ -151,6 +151,21 @@ pub(super) fn map_command_error(error: RuntimeCommandError) -> Status {
   Status::with_details(
     status_code,
     error.to_string(),
+    detail.encode_to_vec().into(),
+  )
+}
+
+pub(super) fn epoch_mismatch_status(expected: &str, actual: &str) -> Status {
+  let detail = CommandErrorDetail {
+    code: CommandErrorCode::EpochMismatch as i32,
+    context: Some(Context::EpochMismatch(EpochMismatchDetail {
+      expected_server_instance_id: expected.to_owned(),
+      actual_server_instance_id: actual.to_owned(),
+    })),
+  };
+  Status::with_details(
+    Code::FailedPrecondition,
+    "server instance changed",
     detail.encode_to_vec().into(),
   )
 }

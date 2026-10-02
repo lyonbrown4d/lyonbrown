@@ -1,6 +1,12 @@
-use agent_app::{RuntimePhase, RuntimeSnapshot};
+use agent_app::{
+  ManagedModelView, ModelSetupAction, ModelSetupPhase, ModelSetupSource, ModelSetupView,
+  RuntimePhase, RuntimeSnapshot,
+};
 use agent_cli::tui::runner::can_accept_input;
-use agent_cli::tui::{Locale, RenderContext, TuiConnectionState, TuiState, render_with_context};
+use agent_cli::tui::{
+  Locale, RenderContext, TuiConnectionState, TuiState, apply_remote_state, render_with_context,
+};
+use agent_client::{ConnectionState, RemoteState, VersionedRemoteSnapshot};
 use ratatui::{Terminal, backend::TestBackend};
 
 #[test]
@@ -8,6 +14,22 @@ fn model_setup_snapshot_keeps_tui_connected_but_disables_submission() {
   let mut state = TuiState::default();
   state.sync_snapshot(&RuntimeSnapshot {
     phase: RuntimePhase::ModelSetupRequired,
+    model_setup: Some(ModelSetupView {
+      source: ModelSetupSource::ManagedPreset,
+      phase: ModelSetupPhase::Required,
+      managed_model: Some(ManagedModelView {
+        id: "test-model".into(),
+        expected_download_bytes: 1024,
+        max_bytes: 2048,
+        min_available_memory_bytes: 4096,
+        sha256: "abc123".into(),
+      }),
+      operation_id: None,
+      downloaded_bytes: 0,
+      total_bytes: None,
+      failure: None,
+      allowed_actions: vec![ModelSetupAction::Download],
+    }),
     ..RuntimeSnapshot::default()
   });
 
@@ -25,10 +47,7 @@ fn model_setup_snapshot_keeps_tui_connected_but_disables_submission() {
 #[test]
 fn reconnect_keeps_cached_snapshot_stale_until_a_fresh_projection_arrives() {
   let mut state = TuiState::default();
-  state.sync_snapshot(&RuntimeSnapshot {
-    phase: RuntimePhase::Ready,
-    ..RuntimeSnapshot::default()
-  });
+  apply_remote_state(&mut state, &connected_ready("daemon-a"));
   assert!(state.can_submit());
 
   state.apply_connection(
@@ -47,6 +66,22 @@ fn reconnect_keeps_cached_snapshot_stale_until_a_fresh_projection_arrives() {
   state.mark_snapshot_fresh();
   assert!(!state.is_snapshot_stale());
   assert!(state.can_submit());
+}
+
+fn connected_ready(server_instance_id: &str) -> RemoteState {
+  RemoteState {
+    connection: ConnectionState::Connected {
+      server_instance_id: server_instance_id.into(),
+    },
+    snapshot: Some(VersionedRemoteSnapshot {
+      server_instance_id: server_instance_id.into(),
+      revision: 1,
+      snapshot: RuntimeSnapshot {
+        phase: RuntimePhase::Ready,
+        ..RuntimeSnapshot::default()
+      },
+    }),
+  }
 }
 
 #[test]
@@ -80,6 +115,20 @@ fn reconnecting_status_is_visible_in_english_and_chinese() {
   let compact = chinese.replace(' ', "");
   assert!(compact.contains("重新连接中"), "{chinese}");
   assert!(compact.contains("状态已过期"), "{chinese}");
+}
+
+#[test]
+fn connection_errors_are_safe_for_a_single_status_line() {
+  let mut state = TuiState::default();
+  state.apply_connection(
+    TuiConnectionState::Reconnecting,
+    Some("\u{1b}[31moffline\u{1b}[0m\nretry\t\u{202e}spoof".into()),
+  );
+
+  assert_eq!(state.connection_error(), Some("offline retry �spoof"));
+  let rendered = render_text(&state, Locale::EnUs);
+  assert!(!rendered.contains('\u{1b}'));
+  assert!(!rendered.contains('\u{202e}'));
 }
 
 fn render_text(state: &TuiState, locale: Locale) -> String {

@@ -4,6 +4,7 @@ pub use agent_app::{AgentClientError, AvailabilityKind, ProtocolErrorKind};
 
 mod auth;
 mod command;
+mod epoch;
 mod native;
 mod remote;
 mod resolver;

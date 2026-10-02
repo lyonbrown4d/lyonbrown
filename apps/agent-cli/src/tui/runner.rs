@@ -1,99 +1,59 @@
-use std::sync::Arc;
 use std::time::Duration;
 
-use agent_app::{AgentClient, AgentCommand, ApprovalDecision as AppApprovalDecision};
-use agent_client::{NativeAgentClient, RemoteState};
-use agent_tool::ApprovalDecision;
+use agent_app::AgentCommand;
 use anyhow::{Context, Result};
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
-use tokio::sync::watch;
 
 use super::{
-  ApprovalRequest, TuiState, apply_remote_state,
   terminal::TerminalSession,
   ui::{RenderMetrics, render_cockpit},
 };
 
 pub use super::input::{edit_input, next_conversation_scroll};
+use commands::map_approval_decision;
 pub use commands::{
   ComposerIntent, approval_decision, can_accept_input, composer_intent, control_c_key, quit_key,
 };
+use control::execute_control;
 pub use events::final_drain;
+pub use model_setup::{
+  ModelSetupCommandGate, ModelSetupCompletion, ModelSetupExit, ModelSetupInput, model_setup_input,
+};
 
 mod commands;
 mod control;
 mod dispatch;
 mod events;
+mod language;
+mod model_setup;
 mod remote;
+mod session;
 
-pub use control::execute_control_with_timeout;
-pub use dispatch::CommandDispatcher;
-
-const CONTROL_COMMAND_TIMEOUT: Duration = Duration::from_secs(2);
-
-pub struct Runtime {
-  pub state: TuiState,
-  pub client: Option<Arc<dyn AgentClient>>,
-  pub snapshots: watch::Receiver<agent_app::RuntimeSnapshot>,
-  pub remote_state: Option<watch::Receiver<RemoteState>>,
-  pub approval: Option<ApprovalRequest>,
-  pub approval_scroll: u16,
-  pub approval_max_scroll: u16,
-  pub conversation_scroll: u16,
-  pub conversation_max_scroll: u16,
-}
-
-pub async fn run_client(client: Arc<dyn AgentClient>) -> Result<()> {
-  let snapshots = client.subscribe();
-  run_client_with_state(client, snapshots, None).await
-}
-
-pub async fn run_native_client(client: NativeAgentClient) -> Result<()> {
-  let remote_state = client.subscribe_remote_state();
-  let client: Arc<dyn AgentClient> = Arc::new(client);
-  let snapshots = client.subscribe();
-  run_client_with_state(client, snapshots, Some(remote_state)).await
-}
-
-async fn run_client_with_state(
-  client: Arc<dyn AgentClient>,
-  snapshots: watch::Receiver<agent_app::RuntimeSnapshot>,
-  remote_state: Option<watch::Receiver<RemoteState>>,
-) -> Result<()> {
-  let mut state = TuiState::default();
-  if let Some(remote_state) = remote_state.as_ref() {
-    apply_remote_state(&mut state, &remote_state.borrow());
-  }
-  let mut terminal = match TerminalSession::enter() {
-    Ok(terminal) => terminal,
-    Err(error) => return Err(error).context("failed to initialize terminal interface"),
-  };
-  let mut runtime = Runtime {
-    state,
-    client: Some(client),
-    snapshots,
-    remote_state,
-    approval: None,
-    approval_scroll: 0,
-    approval_max_scroll: 0,
-    conversation_scroll: 0,
-    conversation_max_scroll: 0,
-  };
-
-  let result = run_event_loop(&mut terminal, &mut runtime).await;
-  let close = shutdown(&mut runtime).await;
-  result?;
-  close
-}
+pub use control::execute_control_for_server_with_timeout;
+pub use dispatch::{CommandCompletion, CommandDispatcher, apply_command_completion};
+use dispatch::{dispatch, dispatch_model_setup};
+pub use language::{LanguageCommand, language_command, language_toggle_key};
+pub use session::{Runtime, run_client, run_native_client, shutdown};
 
 async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -> Result<()> {
   let mut cancel_requested = false;
   let mut commands = CommandDispatcher::new();
+  let mut setup_commands = ModelSetupCommandGate::default();
   loop {
-    for error in commands.drain_failures() {
-      runtime.state.record_client_failure(error);
-    }
     remote::sync_runtime_snapshot(runtime);
+    if let Some(server_instance_id) = runtime.state.accepted_server_instance_id() {
+      setup_commands.observe_server_epoch(server_instance_id);
+    }
+    if let Some(setup) = runtime.state.model_setup() {
+      setup_commands.observe_snapshot(setup);
+    }
+    for completion in commands.drain_completions() {
+      if apply_command_completion(&mut runtime.state, &mut setup_commands, completion)
+        == ModelSetupCompletion::Exit
+      {
+        return Ok(());
+      }
+    }
     if !runtime.state.is_busy() {
       cancel_requested = false;
     }
@@ -106,6 +66,7 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
         runtime.approval.as_ref(),
         runtime.approval_scroll,
         runtime.conversation_scroll,
+        runtime.render_context(setup_commands.is_pending(), setup_commands.is_closing()),
       );
     })?;
     runtime.approval_max_scroll = metrics.approval_max_scroll;
@@ -119,6 +80,43 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
       && let Event::Key(key) = event::read()?
     {
       if key.kind != KeyEventKind::Press {
+        continue;
+      }
+      if language_toggle_key(key) {
+        runtime.apply_language_command(LanguageCommand::Toggle);
+        continue;
+      }
+      if let Some(setup) = runtime.state.model_setup() {
+        let expected_server_instance_id = runtime
+          .state
+          .accepted_server_instance_id()
+          .map(str::to_owned);
+        let intent = setup_commands.input(setup, runtime.state.can_issue_setup_commands(), key);
+        match intent {
+          ModelSetupInput::Exit => {
+            if setup_commands.request_exit() == ModelSetupExit::ExitNow {
+              return Ok(());
+            }
+          }
+          ModelSetupInput::Dispatch(command) => {
+            let expected_server_instance_id = expected_server_instance_id
+              .context("model setup command requires an authoritative daemon epoch")?;
+            let token = setup_commands
+              .pending_token()
+              .expect("dispatch has a token");
+            if let Err(error) = dispatch_model_setup(
+              runtime,
+              &mut commands,
+              expected_server_instance_id,
+              command,
+              token,
+            ) {
+              setup_commands.complete(token, false);
+              return Err(error);
+            }
+          }
+          ModelSetupInput::Ignore => {}
+        }
         continue;
       }
       if control_c_key(key) {
@@ -199,6 +197,9 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
           if !prompt.is_empty() {
             runtime.state.input.clear();
             runtime.state.input_cursor = 0;
+            if runtime.apply_language_command(language_command(&prompt)) {
+              continue;
+            }
             if prompt == "/quit" {
               return Ok(());
             }
@@ -259,40 +260,4 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
       }
     }
   }
-}
-
-pub async fn shutdown(runtime: &mut Runtime) -> Result<()> {
-  runtime.client.take();
-  Ok(())
-}
-
-fn map_approval_decision(decision: ApprovalDecision) -> AppApprovalDecision {
-  match decision {
-    ApprovalDecision::Allow => AppApprovalDecision::AllowOnce,
-    ApprovalDecision::AllowSession => AppApprovalDecision::AllowForSession,
-    ApprovalDecision::Deny => AppApprovalDecision::DenyOnce,
-    ApprovalDecision::DenyAll => AppApprovalDecision::DenyRemaining,
-  }
-}
-
-fn dispatch(
-  runtime: &Runtime,
-  commands: &mut CommandDispatcher,
-  command: AgentCommand,
-) -> Result<()> {
-  let client = runtime
-    .client
-    .as_ref()
-    .context("application runtime is unavailable")?
-    .clone();
-  commands.dispatch(client, command);
-  Ok(())
-}
-
-async fn execute_control(runtime: &Runtime, command: AgentCommand) -> Result<()> {
-  let client = runtime
-    .client
-    .as_ref()
-    .context("application runtime is unavailable")?;
-  execute_control_with_timeout(client.as_ref(), command, CONTROL_COMMAND_TIMEOUT).await
 }

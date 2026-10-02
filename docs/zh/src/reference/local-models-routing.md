@@ -34,8 +34,11 @@ discovery 前退出。未配置路径时，默认 preset 是约 1.1 GB 的
 daemon 后台下载能力已经落地，但只能由 client 显式调用 unary
 `StartModelDownload` 开始；启动和仅仅进入界面绝不触发网络请求。取消使用 unary
 `CancelModelDownload`，下载进度与结果进入现有的单一版本化
-`RuntimeSnapshot` stream，不另建模型专用 stream。TUI/GUI 的 controls 尚未接入，
-是下一小节点；两端只消费同一组 Snapshot/RPC，不自行实现下载器。
+`RuntimeSnapshot` stream，不另建模型专用 stream。TUI/GUI 现已在同一组
+Snapshot/RPC 上提供显式 `Download`、`Retry` 和 `Cancel` 操作项，两端都不自行
+实现下载器。两端支持英文与简体中文，在 daemon 任务运行时保持可用，保留失败
+详情，并在 Snapshot 过期时禁用 daemon 操作。GUI 设置卡片位于 conversation 与
+Composer 之间，Runtime 状态栏同步显示真实 phase 和进度。
 
 托管模型的 Snapshot 带有 source、phase、allowed actions、字节进度、failure 与
 `operation_id`。phase 包括 `WaitingForLock`、`Checking`、`Downloading`、

@@ -4,9 +4,14 @@ use std::sync::Arc;
 
 use agent_app::{AgentCommand, RuntimeSnapshot};
 use agent_protocol::PROTOCOL_VERSION;
-use agent_protocol::v1::{RequestMetadata, StartModelDownloadRequest, StartTurnRequest};
+use agent_protocol::v1::command_error_detail::Context;
+use agent_protocol::v1::{
+  CommandErrorCode, CommandErrorDetail, EpochMismatchDetail, RequestMetadata,
+  StartModelDownloadRequest, StartTurnRequest,
+};
 use agentd::{RuntimeHost, VersionedSnapshot};
 use async_trait::async_trait;
+use prost::Message;
 use tokio::sync::{Mutex, watch};
 
 use support::spawn_authenticated;
@@ -80,7 +85,15 @@ async fn command_from_an_old_daemon_epoch_is_not_executed_by_the_new_daemon() {
     .unwrap_err();
 
   assert_eq!(error.code(), tonic::Code::FailedPrecondition);
-  assert!(error.message().contains("server instance changed"));
+  let detail = CommandErrorDetail::decode(error.details()).unwrap();
+  assert_eq!(detail.code, CommandErrorCode::EpochMismatch as i32);
+  assert_eq!(
+    detail.context,
+    Some(Context::EpochMismatch(EpochMismatchDetail {
+      expected_server_instance_id: old_epoch.clone(),
+      actual_server_instance_id: new_server.server_instance_id(),
+    }))
+  );
   assert_eq!(old_host.commands.lock().await.len(), 1);
   assert!(new_host.commands.lock().await.is_empty());
 }
@@ -99,6 +112,8 @@ async fn command_without_a_handshake_epoch_is_rejected() {
     .unwrap_err();
 
   assert_eq!(error.code(), tonic::Code::FailedPrecondition);
+  let detail = CommandErrorDetail::decode(error.details()).unwrap();
+  assert_eq!(detail.code, CommandErrorCode::EpochMismatch as i32);
   assert!(host.commands.lock().await.is_empty());
 }
 

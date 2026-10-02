@@ -9,6 +9,7 @@ use crate::{AgentCommand, RuntimeCommandError, RuntimeSnapshot};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AvailabilityKind {
   Disconnected,
+  StaleEpoch,
   Timeout,
   ShuttingDown,
 }
@@ -17,6 +18,7 @@ impl AvailabilityKind {
   pub const fn code(self) -> &'static str {
     match self {
       Self::Disconnected => "disconnected",
+      Self::StaleEpoch => "stale_epoch",
       Self::Timeout => "timeout",
       Self::ShuttingDown => "shutting_down",
     }
@@ -34,6 +36,7 @@ impl fmt::Display for AvailabilityKind {
 pub enum ProtocolErrorKind {
   AuthenticationFailed,
   IncompatibleVersion,
+  InvalidResponse,
   InvalidSnapshot,
   Unsupported,
 }
@@ -43,6 +46,7 @@ impl ProtocolErrorKind {
     match self {
       Self::AuthenticationFailed => "authentication_failed",
       Self::IncompatibleVersion => "incompatible_version",
+      Self::InvalidResponse => "invalid_response",
       Self::InvalidSnapshot => "invalid_snapshot",
       Self::Unsupported => "unsupported",
     }
@@ -92,6 +96,13 @@ impl AgentClientError {
 #[async_trait]
 pub trait AgentClient: Send + Sync {
   async fn execute(&self, command: AgentCommand) -> Result<(), AgentClientError>;
+  /// Executes only against the exact daemon epoch that produced the caller's snapshot.
+  /// Implementations must reject a mismatch locally and preserve the expected epoch on the wire.
+  async fn execute_for_server(
+    &self,
+    expected_server_instance_id: &str,
+    command: AgentCommand,
+  ) -> Result<(), AgentClientError>;
   fn snapshot(&self) -> RuntimeSnapshot;
   fn subscribe(&self) -> watch::Receiver<RuntimeSnapshot>;
 }

@@ -1,7 +1,7 @@
 use agent_app::{AgentClientError, ProtocolErrorKind};
 use agent_client::{ConnectionState, RemoteState};
 
-use super::TuiState;
+use super::{TuiState, locale::Messages, status_line_safe};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum TuiConnectionState {
@@ -13,10 +13,21 @@ pub enum TuiConnectionState {
   Incompatible,
 }
 
+pub(super) fn connection_label(state: TuiConnectionState, messages: Messages) -> &'static str {
+  match state {
+    TuiConnectionState::Connecting => messages.connecting,
+    TuiConnectionState::Connected => messages.connected,
+    TuiConnectionState::Reconnecting => messages.reconnecting,
+    TuiConnectionState::Unavailable => messages.unavailable,
+    TuiConnectionState::Incompatible => messages.incompatible,
+  }
+}
+
 #[derive(Debug, Default)]
 pub(super) struct ConnectionProjection {
   state: TuiConnectionState,
   snapshot_stale: bool,
+  accepted_server_instance_id: Option<String>,
   error: Option<String>,
 }
 
@@ -33,10 +44,21 @@ impl TuiState {
     self.connection.snapshot_stale
   }
 
+  pub fn accepted_server_instance_id(&self) -> Option<&str> {
+    self.connection.accepted_server_instance_id.as_deref()
+  }
+
   pub fn can_submit(&self) -> bool {
     self.connection.state == TuiConnectionState::Connected
       && !self.connection.snapshot_stale
-      && !self.model_setup_required
+      && self.connection.accepted_server_instance_id.is_some()
+      && !self.is_model_setup_required()
+  }
+
+  pub fn can_issue_setup_commands(&self) -> bool {
+    self.connection.state == TuiConnectionState::Connected
+      && !self.connection.snapshot_stale
+      && self.connection.accepted_server_instance_id.is_some()
   }
 
   pub fn apply_connection(&mut self, state: TuiConnectionState, error: Option<String>) {
@@ -47,7 +69,7 @@ impl TuiState {
     self.connection.error = if state == TuiConnectionState::Connected {
       None
     } else {
-      error
+      error.map(|message| status_line_safe(&message))
     };
   }
 
@@ -61,7 +83,27 @@ impl TuiState {
     self.connection.snapshot_stale = true;
   }
 
-  pub(crate) fn record_client_failure(&mut self, error: AgentClientError) {
+  fn accept_remote_snapshot(
+    &mut self,
+    server_instance_id: &str,
+    snapshot: &agent_app::RuntimeSnapshot,
+  ) {
+    let epoch_changed = self
+      .connection
+      .accepted_server_instance_id
+      .as_deref()
+      .is_some_and(|current| current != server_instance_id);
+    self.connection.accepted_server_instance_id = Some(server_instance_id.to_owned());
+    if epoch_changed {
+      self.reset_epoch_transients();
+      self.clear_command_error();
+    }
+    self.sync_snapshot(snapshot);
+    self.mark_snapshot_fresh();
+  }
+
+  #[doc(hidden)]
+  pub fn record_client_failure(&mut self, error: AgentClientError) {
     let connection = match &error {
       AgentClientError::Unavailable { .. } => Some(TuiConnectionState::Unavailable),
       AgentClientError::Protocol {
@@ -72,6 +114,7 @@ impl TuiState {
       AgentClientError::Command(_) => None,
     };
     let message = error.to_string();
+    self.set_command_error(status_line_safe(&message));
     if let Some(connection) = connection {
       self.apply_connection(connection, Some(message.clone()));
     }
@@ -88,8 +131,7 @@ pub fn apply_remote_state(state: &mut TuiState, remote: &RemoteState) {
       state.apply_connection(TuiConnectionState::Connected, None);
       match remote.snapshot.as_ref() {
         Some(snapshot) if snapshot.server_instance_id == *server_instance_id => {
-          state.sync_snapshot(&snapshot.snapshot);
-          state.mark_snapshot_fresh();
+          state.accept_remote_snapshot(server_instance_id, &snapshot.snapshot);
         }
         _ => state.invalidate_snapshot(),
       }

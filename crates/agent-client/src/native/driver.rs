@@ -84,7 +84,10 @@ async fn run_async(mut context: DriverContext) {
         Some(request) => {
           let response = tokio::select! {
             _ = context.cancellation.cancelled() => Err(shutdown_error()),
-            result = remote.execute(request.command) => result,
+            result = remote.execute_for_server(
+              &request.expected_server_instance_id,
+              request.command,
+            ) => result,
           };
           let cancelled = context.cancellation.is_cancelled();
           let _ = request.response.send(response);

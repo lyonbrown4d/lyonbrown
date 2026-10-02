@@ -1,7 +1,9 @@
+use agent_app::{RuntimePhase, RuntimeSnapshot};
 use agent_cli::tui::{
-  ApprovalRequest, Locale, RenderContext, TuiState, render, render_with_approval,
-  render_with_context, render_with_scroll,
+  ApprovalRequest, Locale, RenderContext, TuiState, apply_remote_state, render,
+  render_with_approval, render_with_context, render_with_scroll,
 };
+use agent_client::{ConnectionState, RemoteState, VersionedRemoteSnapshot};
 use agent_core::{
   AgentEvent, RiskLevel, SandboxStatus, SecretRef, SessionId, StepId, TokenUsage, ToolCallId,
   ToolInvocation, ToolPreview, ToolResult,
@@ -10,6 +12,27 @@ use chrono::Utc;
 use crossterm::event::KeyCode;
 use ratatui::{Terminal, backend::Backend, backend::TestBackend, layout::Position};
 use serde_json::json;
+
+fn ready_state() -> TuiState {
+  let mut state = TuiState::default();
+  apply_remote_state(
+    &mut state,
+    &RemoteState {
+      connection: ConnectionState::Connected {
+        server_instance_id: "render-daemon".into(),
+      },
+      snapshot: Some(VersionedRemoteSnapshot {
+        server_instance_id: "render-daemon".into(),
+        revision: 1,
+        snapshot: RuntimeSnapshot {
+          phase: RuntimePhase::Ready,
+          ..RuntimeSnapshot::default()
+        },
+      }),
+    },
+  );
+  state
+}
 
 fn screen(state: &TuiState, width: u16, height: u16) -> String {
   let backend = TestBackend::new(width, height);
@@ -140,7 +163,7 @@ fn terminal_control_sequences_are_never_kept_as_renderable_text() {
 
 #[test]
 fn wide_layout_uses_one_vertical_flow_without_runtime_rail() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   state.reduce(AgentEvent::ModelSelected {
     step_id: StepId::new(),
     provider: "local".into(),
@@ -168,7 +191,7 @@ fn narrow_layout_collapses_status_panel_but_keeps_composer() {
 
 #[test]
 fn locale_selection_translates_chrome_but_not_model_ids_or_keys() {
-  let mut state = TuiState::default();
+  let mut state = ready_state();
   state.reduce(AgentEvent::ModelSelected {
     step_id: StepId::new(),
     provider: "local-provider".into(),

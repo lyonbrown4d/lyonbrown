@@ -93,6 +93,7 @@ crossterm = "0.29"
 unicode-segmentation = "1.13.3"
 gpui = "=0.2.2"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
+sys-locale = "0.3.2"
 # fluxdi 1.2.2 requires `debug` with `thread-safe` because its public Error/Scope Debug impls are feature-gated.
 fluxdi = { version = "=1.2.2", default-features = false, features = ["debug", "thread-safe"] }
 

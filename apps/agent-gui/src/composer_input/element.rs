@@ -4,6 +4,7 @@ use gpui::{
 };
 
 use super::ComposerInput;
+use crate::copy::composer_placeholder;
 
 pub(super) struct ComposerTextElement {
   pub(super) input: Entity<ComposerInput>,
@@ -53,7 +54,7 @@ impl Element for ComposerTextElement {
   ) -> ShapedLine {
     let input = self.input.read(cx);
     let text: SharedString = if input.content.is_empty() {
-      "描述下一项任务 / Describe the next task…".into()
+      composer_placeholder(input.locale).into()
     } else {
       input.content.clone().into()
     };

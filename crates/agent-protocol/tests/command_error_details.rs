@@ -1,7 +1,7 @@
 use agent_protocol::v1::command_error_detail::Context;
 use agent_protocol::v1::{
-  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, InvalidModelIdDetail,
-  ModelDownloadOperationMismatchDetail, UnsupportedCommand,
+  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, EpochMismatchDetail,
+  InvalidModelIdDetail, ModelDownloadOperationMismatchDetail, UnsupportedCommand,
 };
 use prost::Message;
 
@@ -42,6 +42,13 @@ fn command_error_details_round_trip_every_context_shape() {
           received_operation_id: "stale".into(),
         },
       )),
+    },
+    CommandErrorDetail {
+      code: CommandErrorCode::EpochMismatch as i32,
+      context: Some(Context::EpochMismatch(EpochMismatchDetail {
+        expected_server_instance_id: "daemon-a".into(),
+        actual_server_instance_id: "daemon-b".into(),
+      })),
     },
   ];
 

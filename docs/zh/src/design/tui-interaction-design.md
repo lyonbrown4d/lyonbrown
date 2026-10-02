@@ -60,17 +60,19 @@ Overlay 是临时上下文，不改变 Session，也不清空 Composer：
 - `/help`：命令和快捷键；
 - `Ctrl-O`：当前活动或审批详情。
 
-Esc 只关闭最上层 overlay 或清除选择，不退出 TUI。
+在模型设置之外，Esc 只关闭最上层 overlay 或清除选择，不退出 TUI。模型设置是
+下文明确列出的例外：`Required`、`Failed` 或 `Cancelled` 时 `Esc` 退出；仅当
+`allowed_actions` 允许 `Cancel` 时，`Esc` 才取消活跃阶段。
 
 ### 2.5 首次模型设置
 
-本节是 TUI 模型下载 controls 的已接受设计目标，不表示下述界面已经实现。现在
-模型缺失时 daemon 进入 `ModelSetupRequired`；显式后台下载、取消和 Snapshot
-进度 RPC 已在 daemon 落地，下述 TUI controls 尚未接入。
-
 运行 `agent` 后先进入 TUI，任何模型传输都不会抢在界面之前开始。若 daemon
-持有的模型尚未缓存，目标设置界面展示推荐的 `qwen3-1.7b-q4_k_m`、体积和两个
-同等明确的去向：
+持有的模型不可用，已落地的设置界面会按实际情况展示来源、当前 phase、允许动作、
+失败详情、模型 ID、预估大小，以及适用时的 operation ID。界面覆盖 `Required`、
+`WaitingForLock`、`Checking`、`Downloading`、`Verifying`、`Installing`、
+`Activating`、`Ready`、`Cancelled` 和 `Failed`，不虚构 client-only phase。
+
+托管 preset 处于 `Required` 时，用户有两个同等明确的去向：
 
 ```text
 本地模型  qwen3-1.7b-q4_k_m
@@ -81,10 +83,35 @@ Esc 只关闭最上层 overlay 或清除选择，不退出 TUI。
 Enter/D  下载     Q/Esc  不下载并退出
 ```
 
-落地后，确认操作会启动可取消的 daemon 任务，TUI 始终保持响应。进度行显示
-已传输字节、可获知时的总字节数和百分比；`Esc` 或 `C` 会协作式取消并清理
-staging。SHA-256 校验是独立可见阶段，Runtime 绝不加载未校验文件。打开任一
-client 都不会隐式触发下载。
+确认后由 daemon 执行任务，TUI 始终保持响应。所有操作只来自 Snapshot 的
+`allowed_actions`：`Enter`/`D` 开始 Download；在 `Failed` 或 `Cancelled` 后，
+`Enter`/`D`/`R` 开始 Retry；可取消的活跃 phase 使用当前 `operation_id`，按
+`C`/`Esc` 取消。`Installing` 与 `Activating` 可见但不可取消。任一设置 phase
+都可按 `Q` 退出；`Required`、`Cancelled` 和 `Failed` 还可按 `Esc` 退出，且不会
+因此发起网络请求。显式配置路径缺失时绝不提供 Download 或 Retry。
+
+已知总量时展示已下载字节、总字节数、百分比和适应宽度的进度条；未知总量时展示
+不定进度标记和已下载字节。窄终端会逐级压缩同一信息，不隐藏设置状态。模型设置
+RPC 处于待处理状态期间禁用重复操作；没有模型设置 RPC 待处理时，可退出状态下的
+`Q` 或 `Esc` 会立即退出。若 `Download`、`Retry` 或 `Cancel` 已经处于待处理状态，
+允许的 `Q`/`Esc` 退出请求会等待这一既有命令的 receipt，不发送第二条命令；命令失败则
+留在当前界面而不是静默关闭。Snapshot 失败和命令失败都会留屏，
+直到设置状态前进。
+
+设置界面支持英文与简体中文，并在六套内置主题中使用同一组语义 token。模型 ID、
+operation ID、路径和快捷键不翻译。stale Snapshot 仍保留展示供诊断，但在收到已
+接受 server epoch 的 fresh state 前只禁用 `Download`、`Retry`、`Cancel` 等
+daemon 操作；本地 `Q` 退出和全局 `F2` 语言切换仍可用。退出 client 不会取消
+daemon 已经接受的下载；取消只能通过显式操作项发起。校验仍是独立可见 phase，
+Runtime 绝不加载未经校验的文件。
+
+### 2.6 GUI 共用模型设置界面
+
+GUI 消费同一套模型设置投影和命令。设置卡片位于 conversation 与 Composer 之间，
+Runtime 状态栏展示真实 phase 以及已知或未知进度。顶部栏可在英文与简体中文间
+切换全部 client 文案，但不翻译标识符。过期模型设置状态继续可读，`Download`、
+`Retry` 和 `Cancel` 则在 fresh Snapshot 被接受前禁用。GUI 同样只允许一个模型
+设置命令处于待处理状态，并保留失败详情。
 
 ## 3. 核心交互
 
@@ -138,6 +165,10 @@ client 都不会隐式触发下载。
 - 主题支持即时预览，`Enter` 应用并记住，Esc 恢复已保存主题；
 - 语言切换立即重绘客户端文案，不改变 transcript 原始内容；
 - 当前值、已保存值和正在预览的值必须可区分。
+
+上述完整控制面板、预览与偏好持久化仍属于 M12。当前已落地的语言切片会
+根据系统 locale 选择启动语言，并提供全局 `F2` 切换和本地 `/language` 命令；
+现在尚不宣称完整、可持久化的 Language overlay 已完成。
 
 主题和语言属于客户端偏好；Session 模型 pin 属于共享应用层状态；Provider 凭据和模型安装状态属于 Runtime/配置状态。三者不得使用同一个无类型 settings map。
 
@@ -217,7 +248,14 @@ focus.ring
 
 ## 6. 多语言规则
 
-- 首发 locale：`en-US`、`zh-CN`；默认跟随系统，用户选择优先。
+- 首发 locale 是 `en-US` 和 `zh-CN`。启动时，`zh-CN`、`zh_CN`、`zh-Hans` 等系统
+  tag 选择 `zh-CN`；未知或不可用的 tag 回退到 `en-US`。
+- 无 modifier 的 `F2` 可在模型设置、审批或普通 conversation 界面全局即时切换
+  client 文案。
+- `/language` 切换当前 locale；`/language en-US` 和 `/language zh-CN` 显式选择
+  locale。这些都是 client 本地命令，不访问 daemon，也不改变 transcript 或
+  Session state。参数无效时，以当前语言显示 `/language [en-US|zh-CN]` 用法。
+- 选择结果持久化和完整控制面板入口仍属于 M12 工作。
 - Slash command、配置 key、模型 ID、Provider ID、命令、路径和快捷键保持稳定英文形式。
 - 标题、状态、帮助、风险说明、动作和空状态全部本地化。
 - Transcript 中已产生的用户/模型内容保持原文；只重新本地化客户端 chrome。

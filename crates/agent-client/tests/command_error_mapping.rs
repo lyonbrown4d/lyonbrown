@@ -3,8 +3,9 @@ use agent_client::{AgentClientError, AvailabilityKind, ProtocolErrorKind};
 use agent_core::ToolCallId;
 use agent_protocol::v1::command_error_detail::Context;
 use agent_protocol::v1::{
-  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, InvalidModelIdDetail,
-  ModelDownloadOperationMismatchDetail, UnsupportedCommand as WireUnsupportedCommand,
+  ApprovalRequestMismatchDetail, CommandErrorCode, CommandErrorDetail, EpochMismatchDetail,
+  InvalidModelIdDetail, ModelDownloadOperationMismatchDetail,
+  UnsupportedCommand as WireUnsupportedCommand,
 };
 use prost::Message;
 use tonic::{Code, Status};
@@ -229,4 +230,26 @@ fn unauthenticated_status_has_a_stable_non_retryable_kind() {
     }
   );
   assert!(!mapped.to_string().contains(secret));
+}
+
+#[test]
+fn epoch_mismatch_detail_maps_without_parsing_status_message() {
+  let error = mapped(
+    Code::FailedPrecondition,
+    CommandErrorDetail {
+      code: CommandErrorCode::EpochMismatch as i32,
+      context: Some(Context::EpochMismatch(EpochMismatchDetail {
+        expected_server_instance_id: "daemon-a".into(),
+        actual_server_instance_id: "daemon-b".into(),
+      })),
+    },
+  );
+
+  assert_eq!(
+    error,
+    AgentClientError::Unavailable {
+      kind: AvailabilityKind::StaleEpoch,
+      message: "agent daemon epoch changed (expected daemon-a, connected daemon-b)".into(),
+    }
+  );
 }

@@ -1,4 +1,9 @@
-use agent_app::AgentCommand;
+use agent_app::{AgentCommand, ModelSetupView, RuntimePhase, RuntimeSnapshot};
+
+use crate::{
+  copy::{Copy, UiLocale},
+  model_setup::{ModelSetupCommandState, ModelSetupDispatch, ModelSetupIntent},
+};
 
 const MAX_COMMAND_ERROR_CHARS: usize = 512;
 
@@ -20,10 +25,12 @@ pub struct CockpitState {
   server_instance_id: Option<String>,
   revision: Option<u64>,
   stale: bool,
-  model_setup_required: bool,
+  runtime_phase: RuntimePhase,
+  model_setup: ModelSetupCommandState,
   last_connection_error: Option<String>,
   submitting: bool,
   last_command_error: Option<String>,
+  locale: UiLocale,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -31,6 +38,12 @@ pub enum RuntimeDetailsPlacement {
   Hidden,
   Conversation,
   RuntimeRail,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubmissionDispatch {
+  pub expected_server_instance_id: String,
+  pub command: AgentCommand,
 }
 
 impl RuntimeDetailsPlacement {
@@ -65,11 +78,13 @@ impl CockpitState {
   }
 
   pub fn can_submit(&self) -> bool {
-    self.connection == ConnectionState::Connected
-      && self.revision.is_some()
-      && !self.stale
-      && !self.model_setup_required
+    self.has_fresh_snapshot()
+      && self.runtime_phase != RuntimePhase::ModelSetupRequired
       && !self.submitting
+  }
+
+  pub fn has_fresh_snapshot(&self) -> bool {
+    self.connection == ConnectionState::Connected && self.revision.is_some() && !self.stale
   }
 
   pub fn is_submitting(&self) -> bool {
@@ -80,15 +95,19 @@ impl CockpitState {
     self.last_command_error.as_deref()
   }
 
-  pub fn begin_submission(&mut self, prompt: &str) -> Option<AgentCommand> {
+  pub fn begin_submission(&mut self, prompt: &str) -> Option<SubmissionDispatch> {
     let prompt = prompt.trim();
     if prompt.is_empty() || !self.can_submit() {
       return None;
     }
+    let expected_server_instance_id = self.server_instance_id.clone()?;
     self.submitting = true;
     self.last_command_error = None;
-    Some(AgentCommand::StartTurn {
-      text: prompt.to_owned(),
+    Some(SubmissionDispatch {
+      expected_server_instance_id,
+      command: AgentCommand::StartTurn {
+        text: prompt.to_owned(),
+      },
     })
   }
 
@@ -98,11 +117,43 @@ impl CockpitState {
   }
 
   pub fn is_model_setup_required(&self) -> bool {
-    self.model_setup_required
+    self.runtime_phase == RuntimePhase::ModelSetupRequired
   }
 
-  pub(crate) fn apply_runtime_phase(&mut self, phase: agent_app::RuntimePhase) {
-    self.model_setup_required = phase == agent_app::RuntimePhase::ModelSetupRequired;
+  pub fn runtime_phase(&self) -> RuntimePhase {
+    self.runtime_phase
+  }
+
+  pub fn model_setup(&self) -> Option<&ModelSetupView> {
+    self.model_setup.view()
+  }
+
+  pub fn apply_runtime_snapshot(&mut self, snapshot: &RuntimeSnapshot) {
+    self.runtime_phase = snapshot.phase;
+    self.model_setup.sync_view(snapshot.model_setup.clone());
+  }
+
+  pub fn begin_model_setup_command(
+    &mut self,
+    intent: ModelSetupIntent,
+  ) -> Option<ModelSetupDispatch> {
+    let expected_server_instance_id = self
+      .has_fresh_snapshot()
+      .then(|| self.server_instance_id.clone())
+      .flatten();
+    self.model_setup.begin(expected_server_instance_id, intent)
+  }
+
+  pub fn finish_model_setup_command(&mut self, token: u64, error: Option<&str>) -> bool {
+    self.model_setup.finish(token, error)
+  }
+
+  pub fn model_setup_command_pending(&self) -> bool {
+    self.model_setup.is_pending()
+  }
+
+  pub fn model_setup_command_error(&self) -> Option<&str> {
+    self.model_setup.error()
   }
 
   pub fn apply_connection(&mut self, connection: ConnectionState, error: Option<String>) {
@@ -136,6 +187,9 @@ impl CockpitState {
       return false;
     }
 
+    if !same_instance {
+      self.model_setup.reset_epoch();
+    }
     self.server_instance_id = Some(server_instance_id.to_owned());
     self.revision = Some(revision);
     self.stale = self.connection != ConnectionState::Connected;
@@ -151,15 +205,24 @@ impl CockpitState {
   }
 
   pub fn runtime_details_control_label(&self) -> &'static str {
+    let copy = Copy::new(self.locale);
     if self.runtime_details_expanded {
-      "Hide details"
+      copy.text("Hide details", "收起详情")
     } else {
-      "Show details"
+      copy.text("Show details", "显示详情")
     }
   }
 
   pub fn toggle_runtime_details(&mut self) {
     self.runtime_details_expanded = !self.runtime_details_expanded;
+  }
+
+  pub fn locale(&self) -> UiLocale {
+    self.locale
+  }
+
+  pub fn toggle_locale(&mut self) {
+    self.locale = self.locale.toggled();
   }
 }
 
@@ -176,9 +239,5 @@ fn sanitize_command_error(error: &str) -> String {
     .take(MAX_COMMAND_ERROR_CHARS)
     .collect();
   let sanitized = sanitized.trim();
-  if sanitized.is_empty() {
-    "runtime command failed".to_owned()
-  } else {
-    sanitized.to_owned()
-  }
+  sanitized.to_owned()
 }

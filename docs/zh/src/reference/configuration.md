@@ -79,7 +79,7 @@ enabled = true
 path = "./.agent/session.db"
 ```
 
-相对存储路径以工作区为基准；也可设置 `LYONBROWN_STORAGE__ENABLED=false` 或 `LYONBROWN_STORAGE__PATH`。事件写入在提交到数据库后才返回成功；中断时恢复会保留已完成的工具结果，并把执行中但未记录结果的调用标为结果未知，不会自动重放。TUI 运行时第一次 Ctrl-C 取消当前轮，第二次强制停止；Esc 不退出，使用 Ctrl-D 或 `/quit` 明确退出。
+相对存储路径以工作区为基准；也可设置 `LYONBROWN_STORAGE__ENABLED=false` 或 `LYONBROWN_STORAGE__PATH`。事件写入在提交到数据库后才返回成功；中断时恢复会保留已完成的工具结果，并把执行中但未记录结果的调用标为结果未知，不会自动重放。TUI 运行时第一次 Ctrl-C 取消当前轮，第二次强制停止。普通对话界面中的 Esc 不退出；使用 Ctrl-D 或 `/quit` 明确退出。模型设置阶段的 Esc 遵循交互设计：在 `Required`、`Failed` 或 `Cancelled` 时退出，仅当 `allowed_actions` 允许 `Cancel` 时才取消活跃阶段。
 
 ## 由 daemon 持有的 llama.cpp
 
@@ -112,9 +112,10 @@ seed = 0
 Qwen3 模板，provider 会在渲染前应用官方 `/no_think` 控制。省略
 `model_path` 时，`agentd` 会检查默认 `qwen3-1.7b-q4_k_m` 的已校验缓存；
 若缓存缺失，Runtime 进入 `ModelSetupRequired`，打开 client 不会触发下载。
-daemon 已提供显式后台 Start/Cancel RPC，并在统一的 `RuntimeSnapshot` stream
-发布进度；TUI/GUI controls 属于下一小节点。配置的 `model_path` 缺失时不提供
-托管下载。详见
+daemon 已提供显式后台 `StartModelDownload`/`CancelModelDownload` RPC，并在统一的
+`RuntimeSnapshot` stream 发布进度；TUI/GUI 现已在这些 RPC 上提供共享的双语
+`Download`、`Retry`、`Cancel`、进度与失败操作项，两端都不实现下载器。配置的
+`model_path` 缺失时不提供托管下载。详见
 [本地模型与任务路由](local-models-routing.md)。Windows 原生构建需要 MSVC、
 Windows SDK、CMake/Ninja 和可被绑定生成器发现的 LLVM `libclang`；必要时设置
 `LIBCLANG_PATH`。

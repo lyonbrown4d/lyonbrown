@@ -45,18 +45,30 @@ Restart the application and recover the same working state
 - An in-process `agentd` epoch supervisor activates installed models. It keeps
   the old control plane available while building the replacement and publishing
   its endpoint, and rolls back to a retryable state on failure.
+- TUI and GUI now complete the shared model-setup loop: explicit download or
+  retry, progress, cancellation, retained failures, and English/Simplified
+  Chinese presentation over the same Snapshot/RPC contract.
+- The TUI selects `zh-CN` for recognized Simplified Chinese system locale tags
+  and otherwise falls back to `en-US`. Global `F2` changes client copy from
+  setup, approval, or conversation; local `/language` commands never reach the
+  daemon or mutate transcript/Session state.
+- Client commands bind the accepted server epoch before queueing. Typed
+  `EpochMismatch`, `StaleEpoch` mapping, and strict receipt validation fence old
+  epoch commands from a replacement Runtime.
 - Ollama, Anthropic, and OpenAI remain configurable providers.
 - The Scheduler already models Control / Worker / Frontier, Local / Remote, privacy filtering, and bounded fallback.
 
 ### 2.2 Main gaps
 
 - `model.provider + model.model` still centers the production path on one primary model rather than a role-based model pool.
-- Daemon-side download and epoch replacement are implemented. TUI and GUI have
-  not yet wired the shared confirmation, progress, cancellation, and failure
-  retry controls, and disk/resource explanations remain incomplete.
+- The shared model-setup controls are implemented in both clients. Richer
+  disk/resource explanations and the remaining role-based model-management
+  surfaces are still incomplete.
 - TUI and GUI share remote projections, but the complete product interaction
   loop still needs end-to-end verification.
 - The TUI lacks session and model pickers, a command palette, activity details, and discoverable help.
+- The complete Theme/Language control palette and locale preference persistence
+  remain M12 work even though direct TUI language switching is available.
 - The GUI now submits real remote `StartTurn` commands and subscribes to daemon
   state, but the session transcript, streaming, approval, cancellation, and
   resume loop is not complete.
@@ -369,19 +381,26 @@ Acceptance: identical scripted event traces project to identical TUI/GUI state; 
 
 ### M11 — Model control plane
 
-Status: daemon download/cancel, Snapshot progress, integrity verification, and
-epoch activation foundations are implemented. TUI and GUI controls are not yet
-wired.
+Status: daemon download/cancel, Snapshot progress, integrity verification,
+epoch activation, and the shared TUI/GUI model-setup controls are implemented.
+Both clients support English and Simplified Chinese for this loop. Commands are
+fenced to the accepted server epoch and validate receipts before success is
+reported. This completes the shared setup slice, not every M11 deliverable.
 
 Deliver the remaining role-based configuration, model inventory,
-doctor/install/status commands, both clients' download controls, hardware
-probes, session pinning, structured RoutingDecision, and old-config migration.
-TUI and GUI must use the same Snapshot/RPCs and must not implement a second
+doctor/install/status commands, richer hardware/resource explanations, session
+pinning, structured RoutingDecision, and old-config migration. TUI and GUI must
+continue to use the same Snapshot/RPCs and must not implement a second
 downloader.
 
 Acceptance: first run never downloads silently; valid offline cache starts; insufficient resources and remote fallback are explained accurately.
 
 ### M12 — Productized TUI
+
+Next small node: session and model selectors, command palette, discoverable
+help, and activity details. The broader milestone still includes the complete
+Theme/Language palette and preference persistence plus the remaining items
+below.
 
 Deliver one primary conversation flow; overlays and command palette; session, model, theme, and language pickers; six built-in themes; English and Chinese localization; activity groups; live steering and queueing; inline approval; help; revised interrupt behavior; narrow layouts; and copyable details.
 
@@ -389,7 +408,10 @@ Acceptance: English and Chinese render tests cover 30×8, 52×12, and 90+ widths
 
 ### M13 — GUI Runtime vertical slice
 
-Deliver the real composition root, session/streaming/approval/cancel/resume loop, responsive three-column layout, and Model Setup.
+The model-setup card, Runtime phase/progress projection, and top-bar
+English/Chinese switch are implemented. The next small node is the complete GUI
+transcript, streaming, approval, cancellation, and resume loop, together with
+the responsive three-column Runtime surface.
 
 Acceptance: a MockProvider desktop end-to-end test and Windows manual smoke pass; no preview-only or fabricated runtime state remains.
 

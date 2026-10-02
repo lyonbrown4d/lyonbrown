@@ -41,8 +41,9 @@ pub fn apply_remote_state(state: &mut CockpitState, remote: &RemoteState) {
         .as_ref()
         .filter(|snapshot| snapshot.server_instance_id == *server_instance_id);
       if let Some(snapshot) = snapshot {
-        state.apply_snapshot_revision(&snapshot.server_instance_id, snapshot.revision);
-        state.apply_runtime_phase(snapshot.snapshot.phase);
+        if state.apply_snapshot_revision(&snapshot.server_instance_id, snapshot.revision) {
+          state.apply_runtime_snapshot(&snapshot.snapshot);
+        }
       } else {
         state.mark_snapshot_stale();
       }
@@ -64,9 +65,10 @@ pub fn apply_remote_state(state: &mut CockpitState, remote: &RemoteState) {
 }
 
 fn apply_cached_snapshot(state: &mut CockpitState, snapshot: Option<&VersionedRemoteSnapshot>) {
-  if let Some(snapshot) = snapshot {
-    state.apply_snapshot_revision(&snapshot.server_instance_id, snapshot.revision);
-    state.apply_runtime_phase(snapshot.snapshot.phase);
+  if let Some(snapshot) = snapshot
+    && state.apply_snapshot_revision(&snapshot.server_instance_id, snapshot.revision)
+  {
+    state.apply_runtime_snapshot(&snapshot.snapshot);
   }
 }
 

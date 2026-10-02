@@ -26,10 +26,17 @@ pub(super) fn render_composer(
   } else {
     (messages.ready, messages.ready_hint)
   };
-  let hint = state.queued_follow_up().map_or_else(
+  let default_hint = state.queued_follow_up().map_or_else(
     || hint.to_owned(),
     |queued| format!("{hint} · {}: {queued}", messages.queued_next),
   );
+  let local_notice = state.client_local_notice();
+  let hint = local_notice.unwrap_or(&default_hint);
+  let hint_color = if local_notice.is_some() {
+    theme.status_warning
+  } else {
+    theme.text_secondary
+  };
   let title = format!(" {mode} · {} ", messages.message);
   let block = panel(&title, theme, true);
   let inner = block.inner(area);
@@ -40,7 +47,7 @@ pub(super) fn render_composer(
 
   if state.input.is_empty() {
     frame.render_widget(
-      Paragraph::new(hint.as_str()).style(Style::default().fg(theme.text_secondary)),
+      Paragraph::new(hint).style(Style::default().fg(hint_color)),
       inner,
     );
     if interactive {
@@ -73,7 +80,7 @@ pub(super) fn render_composer(
   );
   if sections[1].height > 0 {
     frame.render_widget(
-      Paragraph::new(hint).style(Style::default().fg(theme.text_faint)),
+      Paragraph::new(hint).style(Style::default().fg(hint_color)),
       sections[1],
     );
   }
