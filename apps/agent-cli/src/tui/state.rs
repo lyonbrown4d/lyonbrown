@@ -1,14 +1,17 @@
 use agent_app::{ModelSetupView, RuntimePhase, RuntimeSnapshot};
-use agent_core::StepId;
+use agent_core::{SessionId, StepId};
 use crossterm::event::KeyCode;
 
 use super::{
-  OverlayState, connection::ConnectionProjection, input::edit_input, status_line_safe,
-  terminal_safe,
+  ActivityItem, OverlayState, activity, connection::ConnectionProjection, input::edit_input,
+  status_line_safe, terminal_safe,
 };
 
+mod activity_cache;
 mod events;
 mod overlay;
+
+use activity_cache::ActivityDetailCache;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Speaker {
@@ -44,6 +47,11 @@ pub struct TuiState {
   model_setup: Option<ModelSetupView>,
   queued_follow_up: Option<String>,
   overlay: OverlayState,
+  activities: Vec<ActivityItem>,
+  session_id: Option<SessionId>,
+  session_observed: bool,
+  activity_generation: u64,
+  activity_cache: ActivityDetailCache,
 }
 
 impl TuiState {
@@ -94,6 +102,12 @@ impl TuiState {
   }
 
   pub fn sync_snapshot(&mut self, snapshot: &RuntimeSnapshot) {
+    let session_changed = self.session_observed && self.session_id != snapshot.session_id;
+    if session_changed {
+      self.reset_activity_inspector();
+    }
+    self.session_id = snapshot.session_id;
+    self.session_observed = true;
     if snapshot.phase == RuntimePhase::ModelSetupRequired && snapshot.model_setup.is_some() {
       self.close_overlay();
     }
@@ -128,6 +142,10 @@ impl TuiState {
     self.status = phase_status(snapshot.phase).into();
     self.runtime_phase = snapshot.phase;
     self.model_setup = snapshot.model_setup.clone();
+    self.activity_generation = self.activity_generation.wrapping_add(1);
+    self.activity_cache.clear();
+    self.activities = activity::project(snapshot);
+    self.reconcile_activity_selection();
     self.busy = matches!(
       snapshot.phase,
       RuntimePhase::Preparing
@@ -197,6 +215,11 @@ impl TuiState {
     self.usage = (0, 0, 0);
     self.pulse.clear();
     self.streaming_step = None;
+    self.session_id = None;
+    self.session_observed = false;
+    self.activity_generation = self.activity_generation.wrapping_add(1);
+    self.activity_cache.clear();
+    self.reset_activity_inspector();
   }
 
   pub(crate) fn model(&self) -> &str {
@@ -205,6 +228,10 @@ impl TuiState {
     } else {
       &self.model
     }
+  }
+
+  pub fn activities(&self) -> &[ActivityItem] {
+    &self.activities
   }
 }
 

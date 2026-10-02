@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::Locale;
+use super::{ActivityInspectorState, Locale};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CommandId {
@@ -99,6 +99,7 @@ pub enum OverlayState {
   Help {
     scroll: u16,
   },
+  Activity(ActivityInspectorState),
 }
 
 impl OverlayState {
@@ -112,6 +113,7 @@ pub enum UiIntent {
   None,
   OpenPalette,
   OpenHelp,
+  ToggleActivity,
   CloseOverlay,
   Activate(CommandId),
 }
@@ -122,6 +124,9 @@ pub fn ui_intent(key: KeyEvent, composer_empty: bool, overlay_open: bool) -> UiI
       || (key.code == KeyCode::Char('c') && key.modifiers == KeyModifiers::CONTROL))
   {
     return UiIntent::CloseOverlay;
+  }
+  if key.code == KeyCode::Char('o') && key.modifiers == KeyModifiers::CONTROL {
+    return UiIntent::ToggleActivity;
   }
   if key.code == KeyCode::Char('p') && key.modifiers == KeyModifiers::CONTROL {
     return UiIntent::OpenPalette;

@@ -1,3 +1,7 @@
+mod activity;
+mod activity_detail;
+mod activity_json;
+mod activity_overlay;
 mod approval;
 mod command_palette;
 mod composer;
@@ -13,14 +17,14 @@ mod text_safety;
 mod theme;
 mod ui;
 
+pub use activity::{ActivityFocus, ActivityInspectorState, ActivityItem, ActivityTarget};
 pub use approval::ApprovalRequest;
 pub(crate) use approval::approval_safe;
 pub use command_palette::{
   CommandArgument, CommandArgumentKind, CommandId, CommandInvocation, CommandSpec, OverlayState,
   SlashOutcome, UiIntent, command_by_id, command_catalog, slash_command, ui_intent,
 };
-pub use connection::TuiConnectionState;
-pub use connection::apply_remote_state;
+pub use connection::{RemoteProjection, TuiConnectionState, apply_remote_state};
 pub use locale::Locale;
 #[doc(hidden)]
 pub use model_setup::format_model_setup_progress;

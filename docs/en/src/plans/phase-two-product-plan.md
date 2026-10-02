@@ -67,8 +67,9 @@ Restart the application and recover the same working state
 - TUI and GUI share remote projections, but the complete product interaction
   loop still needs end-to-end verification.
 - The TUI now has a bilingual command palette and discoverable help over one
-  exact ten-command catalog. Real session/model pickers and activity details
-  remain incomplete.
+  exact ten-command catalog. Its bilingual, snapshot-backed, read-only Activity
+  Inspector is also implemented. Real session/model pickers remain incomplete,
+  and the Inspector is not yet a complete timestamped event trace.
 - The complete Theme/Language control palette and locale preference persistence
   remain M12 work even though direct TUI language switching is available.
 - The GUI now submits real remote `StartTurn` commands and subscribes to daemon
@@ -409,9 +410,21 @@ catalog drives slash parsing, `Ctrl-P`, empty-composer `?`, and `/help`, with
 overlays; the first approval `Ctrl-C` attempts Deny once and cancellation, and
 the second force-stops and exits if the approval remains active.
 
-Next small node: real session and model selectors plus activity details. The
-broader milestone still includes the Theme picker/overlay and preference
-persistence; M12 as a whole is not complete.
+The Activity Inspector MVP is also implemented. `Ctrl-O` opens a read-only
+projection of accepted Snapshot activity with stable turn/step selection,
+follow-latest and pinned-target behavior, explicit fresh/stale-cached state, and
+Session/daemon-epoch cleanup. English and Chinese layouts use side-by-side panes
+at 90×20, stacked panes at 52×12, and one pane at 30×8. Available details include
+route/fallback/context/usage evidence, tool arguments/results/duration, outcomes,
+and relevant IDs. Revision/epoch gates prevent rejected remote state from
+partially updating the view, while caching and bounded field/JSON/collection/
+line/character budgets keep rendering work and output finite.
+
+This is not a complete event trace: timestamps, strict event history, historical
+`ToolPreview`/capabilities, and complete diagnostics remain absent. Clipboard
+copy is not implemented. The next small node is the real model/session selector
+work; the broader milestone still includes the Theme picker/overlay and
+preference persistence. M12 as a whole is not complete.
 
 Deliver one primary conversation flow; overlays and command palette; session, model, theme, and language pickers; six built-in themes; English and Chinese localization; activity groups; live steering and queueing; inline approval; help; revised interrupt behavior; narrow layouts; and copyable details.
 

@@ -181,8 +181,17 @@ conversation 中提供全局 `F2` 切换；`/language` 由 client 本地处理�
 但在收到已接受 epoch 的 fresh Snapshot 前禁用模型设置操作；两端都不实现下载器。
 TUI 现已使用同一份双语十命令目录驱动 slash 解析、`Ctrl-P` 命令面板和帮助；
 未实现项明确禁用，未知 slash 输入由本地拦截，模型设置/审批交互优先于浮层。
-后续前端工作包括 M12 的真实会话/模型选择器、活动检查器、主题浮层与偏好持久化，
-以及 M13 的完整 GUI transcript、流式输出、审批、取消与恢复闭环。M12 尚未完成。
+已接受的 Snapshot 现在也会投影为只读 TUI 活动检查器。`Ctrl-O` 打开以稳定
+turn/step ID 定位的详情；已接受的新 revision 更新投影与缓存，而重复 revision 或
+epoch 不匹配的 Snapshot 不能改变它。断线时保留最后一次已接受的证据并标为 stale
+缓存；Session 或 daemon epoch 改变时关闭检查器并清除旧选择。详情生成带缓存，并对
+字段、集合、JSON、行数和总字符数设置预算上限。
+
+这个 MVP 以中英文展示路由与 fallback 原因、上下文与 token 用量、工具参数/结果/
+耗时、outcome 和相关 ID。它不是完整 event trace：尚无时间戳、严格事件历史、历史
+`ToolPreview`/capabilities 或完整 diagnostics；剪贴板复制也未实现。后续前端工作包括
+M12 的真实会话/模型选择器、主题浮层与偏好持久化，以及 M13 的完整 GUI transcript、
+流式输出、审批、取消与恢复闭环。M12 尚未完成。
 
 移动端与远程控制延后。未来可以扩展 transport 和认证体系，但不得复用本地
 discovery token 或在未建立远程身份、授权与加密边界前暴露当前 loopback 服务。

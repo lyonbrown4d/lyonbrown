@@ -30,6 +30,7 @@ pub struct RenderContext {
 pub(crate) struct RenderMetrics {
   pub approval_max_scroll: u16,
   pub conversation_max_scroll: u16,
+  pub activity_detail_max_scroll: u16,
 }
 
 pub fn render(frame: &mut Frame<'_>, state: &TuiState) {
@@ -152,12 +153,15 @@ fn render_surface(
   let approval_max_scroll = approval
     .map(|request| render_approval(frame, request, approval_scroll, theme, messages))
     .unwrap_or(0);
-  if approval.is_none() && state.model_setup().is_none() {
-    render_overlay(frame, state, theme, context.locale);
-  }
+  let activity_detail_max_scroll = if approval.is_none() && state.model_setup().is_none() {
+    render_overlay(frame, state, theme, context.locale)
+  } else {
+    0
+  };
   RenderMetrics {
     approval_max_scroll,
     conversation_max_scroll,
+    activity_detail_max_scroll,
   }
 }
 

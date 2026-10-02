@@ -219,10 +219,23 @@ are disabled until a fresh Snapshot for the accepted epoch arrives. Neither
 client implements a downloader. The TUI now has one bilingual, ten-command
 catalog shared by slash parsing, the `Ctrl-P` palette, and help. Unimplemented
 commands are disabled rather than simulated, unknown slash input is rejected
-locally, and Model Setup/Approval input takes priority over overlays. Remaining
-frontend work includes the M12 TUI session/model selectors, activity inspector,
-Theme overlay and preference persistence, plus the M13 complete GUI transcript,
-streaming, approval, cancellation, and resume loop. M12 is not complete.
+locally, and Model Setup/Approval input takes priority over overlays. Accepted
+snapshots now also feed a read-only TUI Activity Inspector. `Ctrl-O`
+opens details keyed by stable turn/step IDs; accepted revisions update its
+projection and cache, while repeated revisions and epoch-mismatched snapshots
+cannot mutate it. A disconnect marks the last accepted evidence as stale cached
+instead of erasing it, and a Session or daemon-epoch change closes and clears
+the old selection. Detail generation is cached and bounded by field, collection,
+JSON, line, and total-character budgets.
+
+This MVP exposes route and fallback reasons, context and token usage, tool
+arguments/results/duration, outcomes, and relevant IDs in English and Chinese.
+It is not a complete event trace: timestamps, strict event history, historical
+`ToolPreview`/capabilities, and complete diagnostics are not present. Clipboard
+copy is also not implemented. Remaining frontend work includes the M12 TUI
+session/model selectors, Theme overlay and preference persistence, plus the M13
+complete GUI transcript, streaming, approval, cancellation, and resume loop.
+M12 is not complete.
 
 Mobile and remote control remain deferred. A future transport and authentication
 system must not reuse the local discovery token or expose this loopback service

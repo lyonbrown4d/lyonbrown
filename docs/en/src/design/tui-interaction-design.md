@@ -140,6 +140,51 @@ setup state remains readable, but Download, Retry, and Cancel are disabled
 until a fresh Snapshot is accepted. The GUI also permits only one pending setup
 command and keeps failure details visible.
 
+### 2.7 Snapshot-backed Activity Inspector
+
+The implemented TUI Inspector is a read-only view of activity already present
+in the last accepted `RuntimeSnapshot`; it neither issues a daemon command nor
+reconstructs events that the Snapshot does not contain. Exact `Ctrl-O` opens or
+closes it from the conversation surface and replaces another ordinary overlay.
+Model Setup and Approval retain higher input priority and close the Inspector
+when they arrive.
+
+The list preserves snapshot order and addresses every row by stable
+`turn_id + step_id` rather than by its display index. It initially follows the
+latest step. Moving to an older row pins that target across accepted Snapshot
+updates; selecting the latest row resumes follow mode. If a pinned target
+disappears, selection safely falls back to the latest row and resets detail
+scroll. A Session or daemon-epoch change closes the Inspector and clears the old
+selection, so cached details cannot cross those boundaries.
+
+The detail pane exposes only available Snapshot evidence: route and fallback
+reasons, phase, turn/step IDs, context counts, token usage including cache reads,
+assistant output, tool arguments and state, approval identity when present,
+tool result/output/error/duration and invocation IDs, and step outcome. Dynamic
+text and JSON are terminal-sanitized. Per-field, JSON depth/item/character,
+collection, line-count, and total-character budgets truncate hostile or very
+large payloads. Formatted detail is cached by projection generation, selected
+target, and locale; repeated rendering does not repeatedly serialize it.
+
+The title always identifies the projection as `FRESH` or `STALE CACHED` (with a
+localized equivalent). A disconnect keeps the last accepted evidence readable.
+Only a matching daemon epoch and a newer accepted revision can change the remote
+projection; repeated revisions or epoch-mismatched snapshots cannot partially
+update conversation, approval, or Inspector state.
+
+The responsive modes are intentional and bilingual:
+
+- `90×20` and larger uses side-by-side list and detail panes;
+- `52×12` uses vertically stacked panes;
+- `30×8` shows one pane at a time, with Enter/Right/Tab entering detail and
+  Left/Shift-Tab returning to the list.
+
+List and detail scrolling support arrows, Page Up/Down, and bounded selection;
+detail additionally supports Home/End. This MVP is not a complete event trace.
+It has no event timestamps, strict event history, historical `ToolPreview` or
+capability records, or complete diagnostics. Clipboard copy is not implemented;
+terminal-native selection remains the available copy path.
+
 ## 3. Core interactions
 
 ### 3.1 Live steering and queueing
@@ -312,10 +357,11 @@ Values are ordered as `background / raised / active`, `primary / secondary / fai
 - Preserve terminal-native selection/copy and avoid forcing alternate-screen behavior that destroys scrollback.
 - Dynamic output keeps a stable anchor so streaming tokens do not move the Composer.
 
-The implemented palette and help render in English and Chinese at 30×8,
-52×12, and 90×20. The first two sizes use the available screen; the wide size
-uses a centered bounded overlay. These tests establish the three layout tiers,
-not completion of the still-missing Inspector or selector surfaces.
+The implemented palette, help, and Activity Inspector render in English and
+Chinese at 30×8, 52×12, and 90×20. Palette/help use the available screen at the
+first two sizes and a centered bounded overlay when wide; the Inspector uses
+single-pane, stacked, and side-by-side layouts respectively. These tests do not
+imply completion of the still-missing selector surfaces.
 
 ## 8. Implementation boundaries
 

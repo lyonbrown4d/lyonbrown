@@ -5,9 +5,7 @@ use agent_client::{NativeAgentClient, RemoteState};
 use anyhow::{Context, Result};
 use tokio::sync::watch;
 
-use super::super::{
-  ApprovalRequest, Locale, RenderContext, TuiState, apply_remote_state, terminal::TerminalSession,
-};
+use super::super::{ApprovalRequest, Locale, RenderContext, TuiState, terminal::TerminalSession};
 use super::language::{self, LanguageCommand};
 
 pub struct Runtime {
@@ -63,10 +61,7 @@ async fn run_client_with_state(
   snapshots: watch::Receiver<agent_app::RuntimeSnapshot>,
   remote_state: Option<watch::Receiver<RemoteState>>,
 ) -> Result<()> {
-  let mut state = TuiState::default();
-  if let Some(remote_state) = remote_state.as_ref() {
-    apply_remote_state(&mut state, &remote_state.borrow());
-  }
+  let state = TuiState::default();
   let mut terminal = match TerminalSession::enter() {
     Ok(terminal) => terminal,
     Err(error) => return Err(error).context("failed to initialize terminal interface"),

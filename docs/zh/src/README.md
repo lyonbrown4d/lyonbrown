@@ -30,8 +30,10 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
   切换语言；`/language`、`/language en-US` 和 `/language zh-CN` 都是 client 本地
   命令，不发送到 daemon，也不改变 transcript 或 Session state。
 - TUI 命令/帮助切片已提供中英文版本：`Ctrl-P`、输入框为空时的 `?` 与 `/help`
-  共用一份固定的十命令目录，并明确禁用未完成项。真实的会话/模型选择器、活动
-  检查器，以及带偏好持久化的主题浮层仍属于 M12。
+  共用一份固定的十命令目录，并明确禁用未完成项。双语只读活动检查器也已基于
+  已接受的 Runtime Snapshot 落地：`Ctrl-O` 打开稳定的 turn/step 详情，保留并标记
+  stale 缓存证据，并适配 30×8、52×12、90×20 三档终端。真实的会话/模型选择器和
+  带偏好持久化的主题浮层仍属于 M12。
 - 跨平台进程 sandbox 仍属于 Phase 2，尚未纳入本轮 MVP。
 
 里程碑的详细范围和验收口径以 MVP 实施计划为准。架构文档描述长期方向，不直接表示当前实现进度。

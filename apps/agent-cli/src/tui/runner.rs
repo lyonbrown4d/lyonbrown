@@ -70,8 +70,10 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
     }
 
     let mut metrics = RenderMetrics::default();
+    let mut viewport_width = 0;
     let mut viewport_height = 0;
     terminal.terminal.draw(|frame| {
+      viewport_width = frame.area().width;
       viewport_height = frame.area().height;
       metrics = render_cockpit(
         frame,
@@ -88,6 +90,9 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
     runtime.conversation_scroll = runtime
       .conversation_scroll
       .min(metrics.conversation_max_scroll);
+    runtime
+      .state
+      .clamp_activity_detail_scroll(metrics.activity_detail_max_scroll);
 
     if event::poll(Duration::from_millis(25))?
       && let Event::Key(key) = event::read()?
@@ -138,7 +143,10 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
         ApprovalInputOutcome::Exit => return Ok(()),
       }
       if runtime.state.overlay().is_open() {
-        if let UiIntent::Activate(command) = runtime.state.apply_overlay_key(key, viewport_height)
+        if let UiIntent::Activate(command) =
+          runtime
+            .state
+            .apply_overlay_key_with_viewport(key, viewport_width, viewport_height)
           && runtime.apply_command_id(command) == Exit
         {
           return Ok(());
@@ -152,6 +160,10 @@ async fn run_event_loop(terminal: &mut TerminalSession, runtime: &mut Runtime) -
         }
         UiIntent::OpenHelp => {
           runtime.state.open_help();
+          continue;
+        }
+        UiIntent::ToggleActivity => {
+          runtime.state.open_activity();
           continue;
         }
         _ => {}

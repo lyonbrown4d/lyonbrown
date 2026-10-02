@@ -1,6 +1,8 @@
+mod activity;
 mod detect;
 mod palette;
 
+pub(crate) use activity::ActivityMessages;
 pub(crate) use palette::{PaletteMessages, shortcut_line_count};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +38,7 @@ impl Locale {
 #[derive(Clone, Copy)]
 pub(crate) struct Messages {
   pub palette: PaletteMessages,
+  pub inspector: ActivityMessages,
   pub activity: &'static str,
   pub following: &'static str,
   pub from_bottom: &'static str,
@@ -115,6 +118,7 @@ pub(crate) struct ModelSetupMessages {
 
 const EN_US: Messages = Messages {
   palette: palette::EN_US,
+  inspector: activity::EN_US,
   activity: "ACTIVITY",
   following: "following",
   from_bottom: "from bottom",
@@ -191,6 +195,7 @@ const EN_US: Messages = Messages {
 
 const ZH_CN: Messages = Messages {
   palette: palette::ZH_CN,
+  inspector: activity::ZH_CN,
   activity: "活动",
   following: "跟随最新",
   from_bottom: "距底部",

@@ -8,6 +8,7 @@ use ratatui::{
 
 use super::{
   CommandId, Locale, OverlayState, Theme, TuiState,
+  activity_overlay::render_activity,
   command_palette::{CommandSpec, command_catalog, matching_commands},
   locale::{PaletteMessages, shortcut_line_count},
   ui::panel,
@@ -18,14 +19,19 @@ pub(super) fn render_overlay(
   state: &TuiState,
   theme: Theme,
   locale: Locale,
-) {
+) -> u16 {
   let messages = locale.messages().palette;
   match state.overlay() {
-    OverlayState::Closed => {}
+    OverlayState::Closed => 0,
     OverlayState::Palette { query, selected } => {
-      render_palette(frame, query, *selected, theme, messages)
+      render_palette(frame, query, *selected, theme, messages);
+      0
     }
-    OverlayState::Help { scroll } => render_help(frame, *scroll, theme, messages),
+    OverlayState::Help { scroll } => {
+      render_help(frame, *scroll, theme, messages);
+      0
+    }
+    OverlayState::Activity(inspector) => render_activity(frame, state, inspector, theme, locale),
   }
 }
 

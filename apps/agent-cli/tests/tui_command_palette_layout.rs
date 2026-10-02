@@ -116,7 +116,7 @@ fn palette_empty_search_has_an_explicit_bilingual_state() {
 }
 
 #[test]
-fn disconnected_status_advertises_local_help_without_unimplemented_inspector() {
+fn disconnected_status_advertises_local_help_and_cached_inspector() {
   for locale in [Locale::EnUs, Locale::ZhCn] {
     let mut state = ready_state();
     state.apply_connection(TuiConnectionState::Unavailable, Some("offline".into()));
@@ -126,7 +126,7 @@ fn disconnected_status_advertises_local_help_without_unimplemented_inspector() {
     assert!(output.contains("Ctrl-P"), "{output}");
     assert!(output.contains("/language"), "{output}");
     assert!(output.contains("/quit"), "{output}");
-    assert!(!output.contains("Ctrl-O"), "{output}");
+    assert!(output.contains("Ctrl-O"), "{output}");
   }
 }
 
