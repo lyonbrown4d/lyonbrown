@@ -1,4 +1,5 @@
 import { domainError } from "./errors.js";
+import { assertWellFormedString } from "./unicode.js";
 
 declare const sessionIdBrand: unique symbol;
 declare const turnIdBrand: unique symbol;
@@ -31,6 +32,7 @@ function validateIdentifier(value: unknown, field: string): string {
       reason: "empty",
     });
   }
+  assertWellFormedString(value, field);
   if (Buffer.byteLength(value, "utf8") > MAX_IDENTIFIER_BYTES) {
     throw domainError("invalid_argument", `${field} exceeds the UTF-8 byte limit`, {
       field,

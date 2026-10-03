@@ -30,6 +30,13 @@ describe("opaque identifiers", () => {
       details: { field: "clientInstanceId", reason: "too_large", limitBytes: 128 },
     });
   });
+
+  it("rejects ill-formed Unicode instead of normalizing an isolated surrogate", () => {
+    expect(captureError(() => asSessionId("session-\uD800"))).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "sessionId", reason: "ill_formed_unicode" },
+    });
+  });
 });
 
 describe("bounded text", () => {
@@ -47,5 +54,12 @@ describe("bounded text", () => {
       MAX_TEXT_BYTES / 2,
     );
     expect(() => validateText(`😀${"a".repeat(MAX_TEXT_BYTES - 3)}`, "prompt")).toThrow();
+  });
+
+  it("rejects ill-formed Unicode text", () => {
+    expect(captureError(() => validateText("prompt-\uD800", "prompt"))).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "prompt", reason: "ill_formed_unicode" },
+    });
   });
 });

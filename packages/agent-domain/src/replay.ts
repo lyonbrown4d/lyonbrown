@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
+import { types as nodeTypes } from "node:util";
 
 import { domainError } from "./errors.js";
 import { assertIdentifier, type ClientInstanceId, type CommandId } from "./identifiers.js";
+import { isWellFormedString } from "./unicode.js";
 
 declare const replayKeyBrand: unique symbol;
 declare const commandFingerprintBrand: unique symbol;
@@ -10,6 +12,7 @@ export type ReplayKey = string & { readonly [replayKeyBrand]: true };
 export type CommandFingerprint = string & { readonly [commandFingerprintBrand]: true };
 
 const DANGEROUS_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+const BUFFER_PROTOTYPE = Reflect.getPrototypeOf(Buffer.alloc(0));
 
 function frame(tag: string, value: string): string {
   return `${tag}${String(Buffer.byteLength(value, "utf8"))}:${value}`;
@@ -35,26 +38,90 @@ function encodeNumber(value: number): string {
 }
 
 function encodeArray(value: readonly unknown[], ancestors: WeakSet<object>): string {
+  if (Object.getPrototypeOf(value) !== Array.prototype) {
+    return reject("unsupported_array");
+  }
   const ownKeys = Reflect.ownKeys(value);
   if (ownKeys.some((key) => typeof key === "symbol")) {
     return reject("symbol_key");
   }
-  const expectedKeys = new Set(["length", ...value.map((_entry, index) => String(index))]);
-  if (ownKeys.some((key) => typeof key === "string" && !expectedKeys.has(key))) {
-    return reject("array_extra_property");
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, "length");
+  if (
+    lengthDescriptor === undefined ||
+    !("value" in lengthDescriptor) ||
+    typeof lengthDescriptor.value !== "number" ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    lengthDescriptor.value < 0
+  ) {
+    return reject("invalid_array_length");
+  }
+  const length = lengthDescriptor.value;
+  const indexKeys = new Set<string>();
+  for (const key of ownKeys as string[]) {
+    if (key === "length") continue;
+    if (!/^(?:0|[1-9]\d*)$/u.test(key)) {
+      return reject("array_extra_property", { key });
+    }
+    const index = Number(key);
+    if (!Number.isSafeInteger(index) || index < 0 || index >= length || String(index) !== key) {
+      return reject("array_extra_property", { key });
+    }
+    indexKeys.add(key);
+  }
+  if (indexKeys.size !== length) {
+    return reject("sparse_array");
   }
   const entries: string[] = [];
-  for (let index = 0; index < value.length; index += 1) {
+  for (let index = 0; index < length; index += 1) {
     const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (descriptor === undefined) {
       return reject("sparse_array");
     }
-    if (!("value" in descriptor)) {
-      return reject("accessor_property");
+    if (!("value" in descriptor) || !descriptor.enumerable) {
+      return reject("accessor_property", { key: String(index) });
     }
     entries.push(encodeValue(descriptor.value, ancestors));
   }
-  return `a${String(value.length)}[${entries.join("")}]`;
+  return `a${String(length)}[${entries.join("")}]`;
+}
+
+function encodeByteArray(value: Uint8Array): string {
+  const expectedPrototype = Buffer.isBuffer(value) ? BUFFER_PROTOTYPE : Uint8Array.prototype;
+  if (Reflect.getPrototypeOf(value) !== expectedPrototype) {
+    return reject("unsupported_byte_array");
+  }
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.some((key) => typeof key === "symbol")) {
+    return reject("symbol_key");
+  }
+  const keys = ownKeys as string[];
+  const keySet = new Set(keys);
+  for (const key of keys) {
+    if (!/^(?:0|[1-9]\d*)$/u.test(key)) {
+      return reject("byte_array_extra_property", { key });
+    }
+  }
+  const bytes: string[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = String(index);
+    if (!keySet.has(key)) {
+      return reject("sparse_byte_array", { key });
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (
+      descriptor === undefined ||
+      !("value" in descriptor) ||
+      !descriptor.enumerable ||
+      typeof descriptor.value !== "number" ||
+      !Number.isInteger(descriptor.value) ||
+      descriptor.value < 0 ||
+      descriptor.value > 255
+    ) {
+      return reject("invalid_byte_property", { key });
+    }
+    bytes.push(descriptor.value.toString(16).padStart(2, "0"));
+  }
+  return `y${String(keys.length)}:${bytes.join("")}`;
 }
 
 function encodeObject(value: object, ancestors: WeakSet<object>): string {
@@ -72,6 +139,9 @@ function encodeObject(value: object, ancestors: WeakSet<object>): string {
     if (DANGEROUS_KEYS.has(key)) {
       return reject("dangerous_key", { key });
     }
+    if (!isWellFormedString(key)) {
+      return reject("ill_formed_unicode", { key });
+    }
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable) {
       return reject("accessor_property", { key });
@@ -84,17 +154,18 @@ function encodeObject(value: object, ancestors: WeakSet<object>): string {
 function encodeValue(value: unknown, ancestors: WeakSet<object>): string {
   if (value === null) return "n";
   if (typeof value === "boolean") return value ? "b1" : "b0";
-  if (typeof value === "string") return frame("s", value);
+  if (typeof value === "string") {
+    return isWellFormedString(value) ? frame("s", value) : reject("ill_formed_unicode");
+  }
   if (typeof value === "number") return encodeNumber(value);
   if (typeof value === "bigint") return frame("i", value.toString(10));
   if (typeof value !== "object") return reject(`unsupported_${typeof value}`);
+  if (nodeTypes.isProxy(value)) return reject("proxy_value");
   if (ancestors.has(value)) return reject("cyclic_value");
 
   ancestors.add(value);
   try {
-    if (value instanceof Uint8Array) {
-      return `y${String(value.byteLength)}:${Buffer.from(value).toString("hex")}`;
-    }
+    if (nodeTypes.isUint8Array(value)) return encodeByteArray(value);
     return Array.isArray(value) ? encodeArray(value, ancestors) : encodeObject(value, ancestors);
   } finally {
     ancestors.delete(value);
