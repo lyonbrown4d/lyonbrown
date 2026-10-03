@@ -30,14 +30,14 @@ async function descriptorSets(): Promise<readonly [Buffer, Buffer]> {
   }
 }
 
-function whitespaceNormalizedBytes(path: string): Buffer {
-  return Buffer.from(readFileSync(path, "utf8").replaceAll(/\s+/gu, " ").trim(), "utf8");
+function newlineNormalizedBytes(path: string): Buffer {
+  return Buffer.from(readFileSync(path, "utf8").replaceAll("\r\n", "\n"), "utf8");
 }
 
 describe("Rust protocol parity", () => {
-  it.each(protoFiles)("keeps %s byte-equivalent after whitespace normalization", (file) => {
-    const rust = whitespaceNormalizedBytes(join(rustProtoRoot, "agent", "v1", file));
-    const node = whitespaceNormalizedBytes(join(nodeProtoRoot, "agent", "v1", file));
+  it.each(protoFiles)("keeps %s byte-equivalent after newline normalization", (file) => {
+    const rust = newlineNormalizedBytes(join(rustProtoRoot, "agent", "v1", file));
+    const node = newlineNormalizedBytes(join(nodeProtoRoot, "agent", "v1", file));
 
     expect(node).toEqual(rust);
   });

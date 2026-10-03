@@ -12,7 +12,9 @@ message RequestMetadata {
   string expected_server_instance_id = 4;
 }
 
-message HealthRequest { RequestMetadata metadata = 1; }
+message HealthRequest {
+  RequestMetadata metadata = 1;
+}
 
 enum HealthStatus {
   HEALTH_STATUS_UNSPECIFIED = 0;
@@ -54,8 +56,12 @@ message QueueFollowUpRequest {
   string text = 2;
 }
 
-message CancelTurnRequest { RequestMetadata metadata = 1; }
-message ForceStopRequest { RequestMetadata metadata = 1; }
+message CancelTurnRequest {
+  RequestMetadata metadata = 1;
+}
+message ForceStopRequest {
+  RequestMetadata metadata = 1;
+}
 
 enum ApprovalDecision {
   APPROVAL_DECISION_UNSPECIFIED = 0;
@@ -153,7 +159,9 @@ message CommandErrorDetail {
   }
 }
 
-message GetSnapshotRequest { RequestMetadata metadata = 1; }
+message GetSnapshotRequest {
+  RequestMetadata metadata = 1;
+}
 
 message SubscribeEventsRequest {
   RequestMetadata metadata = 1;
