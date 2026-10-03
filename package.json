@@ -1,0 +1,45 @@
+{
+  "name": "lyonbrown",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.4",
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "pnpm": "10.33.4"
+  },
+  "scripts": {
+    "preflight": "tsx scripts/preflight.ts",
+    "lint": "tsx scripts/workspace-task.ts lint",
+    "typecheck": "tsx scripts/workspace-task.ts typecheck",
+    "test": "tsx scripts/workspace-task.ts test",
+    "build": "tsx scripts/workspace-task.ts build",
+    "ci-gate": "tsx scripts/ci-gate.ts",
+    "format": "prettier --write \"scripts/**/*.ts\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md \"apps/docs/.vitepress/**/*.mts\" apps/docs/package.json apps/docs/tsconfig.json apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
+    "format:check": "prettier --check \"scripts/**/*.ts\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md \"apps/docs/.vitepress/**/*.mts\" apps/docs/package.json apps/docs/tsconfig.json apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
+    "scripts:verify": "vitest run scripts/tests",
+    "audit": "pnpm audit --audit-level high --ignore-unfixable --registry=https://registry.npmjs.org"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "24.10.1",
+    "eslint": "9.39.1",
+    "globals": "16.5.0",
+    "prettier": "3.6.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.3",
+    "vitest": "3.2.6",
+    "zx": "8.8.5"
+  },
+  "pnpm": {
+    "overrides": {
+      "vite": "6.4.3"
+    },
+    "auditConfig": {
+      "ignoreCves": [
+        "CVE-2026-93687"
+      ]
+    }
+  }
+}

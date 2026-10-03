@@ -10,6 +10,7 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
 - [本地 gRPC C/S 架构](architecture/grpc-client-server.md)：`agentd`、TUI/GUI client、认证、发现与作用域边界。
 - [FluxDI 组合根](architecture/composition-root.md)：应用装配边界、依赖图验证与替换策略。
 - [TUI 视觉与交互设计基线](design/tui-interaction-design.md)：单一对话流、中英文界面、六套内置主题、实时引导、内联审批和控制面板。
+- [Node.js / TypeScript + Pi 迁移计划](plans/node-typescript-pi-migration.md)：目标架构、行为对等阶段、完成定义与切换风险。
 - [第一阶段 MVP 实施计划](plans/mvp-implementation-plan.md)：M0–M9 的交付内容、验收标准、风险与验证命令。
 - [第二阶段产品与交互实施计划](plans/phase-two-product-plan.md)：模型控制面、TUI/GUI 与跨端交互契约。
 - [配置参考](reference/configuration.md)：分层配置、远程模型、MCP、会话存储与 TUI。

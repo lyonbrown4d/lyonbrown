@@ -477,8 +477,7 @@ async fn user_message_to_tool_call_to_answer() {
 cargo fmt --all -- --check
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-mdbook build docs/zh
-mdbook build docs/en
+pnpm --filter @lyonbrown/docs build
 ```
 
 Ollama 与远程 Provider 的 live smoke 需要对应服务、模型或 API key；离线验收不依赖它们。所有 `.rs` 文件还须满足 `AGENTS.md` 的 300 行上限。

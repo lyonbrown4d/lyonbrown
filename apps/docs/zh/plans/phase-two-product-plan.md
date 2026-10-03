@@ -451,8 +451,7 @@ Runtime 界面。
 cargo fmt --all
 cargo test --workspace
 cargo clippy --workspace --all-targets
-mdbook build docs/zh
-mdbook build docs/en
+pnpm --filter @lyonbrown/docs build
 ```
 
 另外要求：

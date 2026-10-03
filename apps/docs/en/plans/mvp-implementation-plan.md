@@ -434,8 +434,7 @@ This test proves §37's core claim offline: **user message → model → tool ca
 cargo fmt --all -- --check
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
-mdbook build docs/zh
-mdbook build docs/en
+pnpm --filter @lyonbrown/docs build
 ```
 
 Ollama and remote-provider live smoke tests require the corresponding service, model, or API key; offline acceptance does not. Every `.rs` file must also meet the 300-line limit in `AGENTS.md`.

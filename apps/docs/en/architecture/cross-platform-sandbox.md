@@ -10,7 +10,7 @@ The threat model covers filesystem access outside the workspace, inherited crede
 
 `agent-sandbox` accepts a platform-independent `SandboxPolicy`:
 
-```rust,ignore
+```rust
 pub struct SandboxPolicy {
     pub filesystem: Vec<MountRule>, // workspace RO/RW; everything else hidden
     pub network: NetworkPolicy,     // Deny, Loopback, Allowlisted

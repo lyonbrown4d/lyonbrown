@@ -10,7 +10,7 @@ Sandbox 是 Tool Runtime 与操作系统之间的独立执行层，不属于 pro
 
 `agent-sandbox` 只接受与平台无关的 `SandboxPolicy`：
 
-```rust,ignore
+```rust
 pub struct SandboxPolicy {
     pub filesystem: Vec<MountRule>, // workspace RO/RW；其他路径默认不可见
     pub network: NetworkPolicy,     // Deny、Loopback、Allowlisted

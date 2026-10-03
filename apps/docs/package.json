@@ -1,0 +1,23 @@
+{
+  "name": "@lyonbrown/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "pnpm": "10.33.4"
+  },
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview",
+    "lint": "prettier --check .vitepress package.json tsconfig.json index.md en/plans/node-typescript-pi-migration.md zh/plans/node-typescript-pi-migration.md",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitepress build --outDir .vitepress/test-dist"
+  },
+  "devDependencies": {
+    "prettier": "3.6.2",
+    "typescript": "5.9.3",
+    "vitepress": "1.6.4"
+  }
+}

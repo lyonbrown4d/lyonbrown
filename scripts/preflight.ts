@@ -1,0 +1,33 @@
+import { $, usePowerShell } from "zx";
+
+import {
+  NODE_VERSION,
+  PACKAGE_MANAGER,
+  assertNodeVersion,
+  assertPnpmVersion,
+  inspectRepository,
+} from "./preflight-lib.js";
+import { configureZxPlatform } from "./zx-platform.js";
+
+configureZxPlatform(process.platform, usePowerShell);
+
+async function main(): Promise<void> {
+  assertNodeVersion(process.version);
+  const pnpmVersion = (await $({ quiet: true })`pnpm --version`).stdout.trim();
+  assertPnpmVersion(pnpmVersion);
+
+  const failures = await inspectRepository(process.cwd());
+  if (failures.length > 0) {
+    throw new Error(`Preflight failed:\n- ${failures.join("\n- ")}`);
+  }
+
+  console.log(`Preflight passed: Node ${process.version} (minimum ${NODE_VERSION})`);
+  console.log(`Preflight passed: ${PACKAGE_MANAGER}`);
+}
+
+try {
+  await main();
+} catch (error: unknown) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+}

@@ -2,3 +2,9 @@
 .worktrees/
 .idea/
 *.iml
+node_modules/
+dist/
+coverage/
+**/.vitepress/cache/
+**/.vitepress/dist/
+**/.vitepress/test-dist/

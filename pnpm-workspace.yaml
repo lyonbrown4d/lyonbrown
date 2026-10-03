@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+minimumReleaseAge: 1440
+
+onlyBuiltDependencies:
+  - esbuild
