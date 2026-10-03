@@ -7,12 +7,15 @@ export {
   getDaemonMutationAvailability,
   getInputPriority,
   getModelSetupCancellation,
+  getSendableApprovalDenyIntent,
+  getSendableModelDownloadIntent,
 } from "./selectors.js";
 export { THEME_IDS } from "./types.js";
 export type {
   ActivityItemDto,
   ActivitySelection,
   ActiveModelSetupPhase,
+  ApprovalDenyIntent,
   ApprovalDisposition,
   ApprovalRequestDto,
   ApprovalState,

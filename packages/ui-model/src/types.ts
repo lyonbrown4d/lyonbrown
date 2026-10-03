@@ -57,6 +57,7 @@ export interface RemoteState {
 export interface ModelDownloadIntent {
   readonly operationId: string;
   readonly modelId: string;
+  readonly serverInstanceId: string;
 }
 
 export interface ApprovalRequestDto {
@@ -75,6 +76,7 @@ export type ApprovalStatus =
 export interface ApprovalState {
   readonly request: ApprovalRequestDto;
   readonly status: ApprovalStatus;
+  readonly serverInstanceId: string;
 }
 
 export interface ActivitySelection {
@@ -129,13 +131,21 @@ export type UiModelAction =
       readonly operationId: string;
       readonly modelId: string;
     }
-  | { readonly type: "modelDownloadIntentAcknowledged"; readonly operationId: string }
+  | {
+      readonly type: "modelDownloadIntentAcknowledged";
+      readonly operationId: string;
+      readonly serverInstanceId: string;
+    }
   | { readonly type: "approvalRequested"; readonly request: ApprovalRequestDto }
   | { readonly type: "approvalDenied" }
   | { readonly type: "approvalTimedOut" }
   | { readonly type: "approvalErrored" }
   | { readonly type: "approvalFailed" }
-  | { readonly type: "approvalResolved"; readonly requestId: string }
+  | {
+      readonly type: "approvalResolved";
+      readonly requestId: string;
+      readonly serverInstanceId: string;
+    }
   | { readonly type: "activitySelected"; readonly selection: ActivitySelection | null }
   | { readonly type: "followLatestChanged"; readonly value: boolean }
   | { readonly type: "narrowViewModeChanged"; readonly mode: NarrowViewMode }
@@ -166,11 +176,22 @@ export type ModelSetupCancellation =
 
 export type ApprovalDisposition =
   | { readonly kind: "none" }
-  | { readonly kind: "decision-required"; readonly requestId: string }
+  | {
+      readonly kind: "decision-required";
+      readonly requestId: string;
+      readonly serverInstanceId: string;
+    }
   | {
       readonly kind: "deny-intent";
       readonly requestId: string;
       readonly reason: "user" | "timeout" | "error" | "failure" | "disconnected";
+      readonly serverInstanceId: string;
     };
+
+export interface ApprovalDenyIntent {
+  readonly requestId: string;
+  readonly reason: "user" | "timeout" | "error" | "failure" | "disconnected";
+  readonly serverInstanceId: string;
+}
 
 export type InputPriority = "approval" | "model-setup" | "composer";

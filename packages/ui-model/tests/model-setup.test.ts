@@ -5,6 +5,7 @@ import {
   getChatSubmitAvailability,
   getDaemonMutationAvailability,
   getModelSetupCancellation,
+  getSendableModelDownloadIntent,
   reduceUiModel,
   type ModelSetupPhase,
   type ModelSetupState,
@@ -81,17 +82,37 @@ describe("model setup", () => {
     });
   });
 
-  test("never creates a download intent while opening or connecting", () => {
+  test("creates a download intent only from a fresh current daemon epoch", () => {
     let state = createInitialUiModelState();
     state = reduceUiModel(state, { type: "clientOpened" });
+    state = reduceUiModel(state, {
+      type: "modelDownloadRequested",
+      operationId: "too-early",
+      modelId: "qwen3-1.7b-q4_k_m",
+    });
     state = reduceUiModel(state, { type: "connectRequested" });
     state = reduceUiModel(state, {
       type: "handshakeSucceeded",
       serverInstanceId: "epoch-a",
     });
+    state = reduceUiModel(state, {
+      type: "modelDownloadRequested",
+      operationId: "still-synchronizing",
+      modelId: "qwen3-1.7b-q4_k_m",
+    });
 
     expect(state.modelDownloadIntent).toBeNull();
 
+    state = reduceUiModel(state, {
+      type: "snapshotReceived",
+      snapshot: {
+        serverInstanceId: "epoch-a",
+        revision: 1n,
+        sessionId: "session-a",
+        modelSetup: { operationId: null, phase: "Required" },
+        activities: [],
+      },
+    });
     state = reduceUiModel(state, {
       type: "modelDownloadRequested",
       operationId: "explicit-operation",
@@ -100,7 +121,120 @@ describe("model setup", () => {
     expect(state.modelDownloadIntent).toEqual({
       operationId: "explicit-operation",
       modelId: "qwen3-1.7b-q4_k_m",
+      serverInstanceId: "epoch-a",
     });
+    expect(getSendableModelDownloadIntent(state)).toBe(state.modelDownloadIntent);
+  });
+
+  test("clears a pending download intent when a different daemon epoch is established", () => {
+    let state = withModelPhase("Required");
+    state = reduceUiModel(state, {
+      type: "modelDownloadRequested",
+      operationId: "operation-a",
+      modelId: "qwen3-1.7b-q4_k_m",
+    });
+    state = reduceUiModel(state, { type: "connectionLost", reason: "transport-closed" });
+
+    expect(state.modelDownloadIntent?.serverInstanceId).toBe("epoch-a");
+    expect(getSendableModelDownloadIntent(state)).toBeNull();
+
+    state = reduceUiModel(state, {
+      type: "handshakeSucceeded",
+      serverInstanceId: "epoch-b",
+    });
+    state = reduceUiModel(state, {
+      type: "snapshotReceived",
+      snapshot: {
+        serverInstanceId: "epoch-b",
+        revision: 1n,
+        sessionId: "session-b",
+        modelSetup: { operationId: null, phase: "Required" },
+        activities: [],
+      },
+    });
+
+    expect(state.modelDownloadIntent).toBeNull();
+    expect(getSendableModelDownloadIntent(state)).toBeNull();
+  });
+
+  test("makes a fenced download intent sendable again after same-epoch resynchronization", () => {
+    let state = withModelPhase("Required");
+    state = reduceUiModel(state, {
+      type: "modelDownloadRequested",
+      operationId: "operation-a",
+      modelId: "qwen3-1.7b-q4_k_m",
+    });
+    state = reduceUiModel(state, { type: "connectionLost", reason: "transport-closed" });
+    state = reduceUiModel(state, {
+      type: "handshakeSucceeded",
+      serverInstanceId: "epoch-a",
+    });
+
+    expect(getSendableModelDownloadIntent(state)).toBeNull();
+
+    state = reduceUiModel(state, {
+      type: "snapshotReceived",
+      snapshot: {
+        serverInstanceId: "epoch-a",
+        revision: 1n,
+        sessionId: "session-a",
+        modelSetup: { operationId: null, phase: "Required" },
+        activities: [],
+      },
+    });
+    expect(getSendableModelDownloadIntent(state)).toEqual({
+      operationId: "operation-a",
+      modelId: "qwen3-1.7b-q4_k_m",
+      serverInstanceId: "epoch-a",
+    });
+  });
+
+  test("acknowledges a download intent only with its bound daemon epoch and operation", () => {
+    let state = withModelPhase("Required");
+    state = reduceUiModel(state, {
+      type: "modelDownloadRequested",
+      operationId: "operation-a",
+      modelId: "qwen3-1.7b-q4_k_m",
+    });
+
+    const unchanged = reduceUiModel(state, {
+      type: "modelDownloadIntentAcknowledged",
+      operationId: "operation-a",
+      serverInstanceId: "epoch-b",
+    });
+    expect(unchanged).toBe(state);
+
+    const intent = state.modelDownloadIntent;
+    if (intent === null) {
+      throw new Error("expected the model download intent to remain pending");
+    }
+    expect(
+      getSendableModelDownloadIntent({
+        ...state,
+        modelDownloadIntent: {
+          ...intent,
+          serverInstanceId: "epoch-b",
+        },
+      }),
+    ).toBeNull();
+    const mismatchedEpochState = {
+      ...state,
+      modelDownloadIntent: { ...intent, serverInstanceId: "epoch-b" },
+    };
+    expect(
+      reduceUiModel(mismatchedEpochState, {
+        type: "modelDownloadIntentAcknowledged",
+        operationId: "operation-a",
+        serverInstanceId: "epoch-b",
+      }),
+    ).toBe(mismatchedEpochState);
+
+    state = reduceUiModel(state, {
+      type: "modelDownloadIntentAcknowledged",
+      operationId: "operation-a",
+      serverInstanceId: "epoch-a",
+    });
+    expect(state.modelDownloadIntent).toBeNull();
   });
 
   test.each<ModelSetupPhase>([

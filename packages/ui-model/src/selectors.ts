@@ -1,11 +1,14 @@
 import type {
+  ApprovalDenyIntent,
   ApprovalDisposition,
   ChatSubmitAvailability,
   ConnectionFreshness,
   InputPriority,
+  ModelDownloadIntent,
   ModelSetupCancellation,
   UiModelState,
 } from "./types.js";
+import { getFreshCurrentServerInstanceId } from "./epoch.js";
 
 export function getConnectionFreshness(state: UiModelState): ConnectionFreshness {
   switch (state.remote.connection) {
@@ -83,20 +86,44 @@ export function getApprovalDisposition(state: UiModelState): ApprovalDisposition
   }
 
   const requestId = state.approval.request.requestId;
+  const { serverInstanceId } = state.approval;
   switch (state.approval.status) {
     case "pending":
-      return { kind: "decision-required", requestId };
+      return { kind: "decision-required", requestId, serverInstanceId };
     case "denying":
-      return { kind: "deny-intent", requestId, reason: "user" };
+      return { kind: "deny-intent", requestId, reason: "user", serverInstanceId };
     case "timed-out":
-      return { kind: "deny-intent", requestId, reason: "timeout" };
+      return { kind: "deny-intent", requestId, reason: "timeout", serverInstanceId };
     case "errored":
-      return { kind: "deny-intent", requestId, reason: "error" };
+      return { kind: "deny-intent", requestId, reason: "error", serverInstanceId };
     case "failed":
-      return { kind: "deny-intent", requestId, reason: "failure" };
+      return { kind: "deny-intent", requestId, reason: "failure", serverInstanceId };
     case "disconnected":
-      return { kind: "deny-intent", requestId, reason: "disconnected" };
+      return { kind: "deny-intent", requestId, reason: "disconnected", serverInstanceId };
   }
+}
+
+export function getSendableApprovalDenyIntent(state: UiModelState): ApprovalDenyIntent | null {
+  const disposition = getApprovalDisposition(state);
+  const currentServerInstanceId = getFreshCurrentServerInstanceId(state);
+  if (
+    disposition.kind !== "deny-intent" ||
+    currentServerInstanceId === null ||
+    disposition.serverInstanceId !== currentServerInstanceId
+  ) {
+    return null;
+  }
+  return {
+    requestId: disposition.requestId,
+    reason: disposition.reason,
+    serverInstanceId: disposition.serverInstanceId,
+  };
+}
+
+export function getSendableModelDownloadIntent(state: UiModelState): ModelDownloadIntent | null {
+  const intent = state.modelDownloadIntent;
+  const currentServerInstanceId = getFreshCurrentServerInstanceId(state);
+  return intent !== null && intent.serverInstanceId === currentServerInstanceId ? intent : null;
 }
 
 export function getInputPriority(state: UiModelState): InputPriority {

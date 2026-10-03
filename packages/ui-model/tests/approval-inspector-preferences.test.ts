@@ -7,6 +7,7 @@ import {
   createInitialUiModelState,
   getApprovalDisposition,
   getInputPriority,
+  getSendableApprovalDenyIntent,
   reduceUiModel,
   type RemoteSnapshot,
   type UiModelState,
@@ -32,6 +33,21 @@ function readyState(): UiModelState {
 }
 
 describe("approval fail-closed behavior", () => {
+  test("ignores approval requests until a fresh daemon epoch is available", () => {
+    let state = createInitialUiModelState();
+    state = reduceUiModel(state, {
+      type: "handshakeSucceeded",
+      serverInstanceId: "epoch-a",
+    });
+    const unchanged = reduceUiModel(state, {
+      type: "approvalRequested",
+      request: { requestId: "too-early", summary: "Run command" },
+    });
+
+    expect(unchanged).toBe(state);
+    expect(unchanged.approval).toBeNull();
+  });
+
   test.each([
     ["approvalTimedOut", "timeout"],
     ["approvalErrored", "error"],
@@ -52,6 +68,7 @@ describe("approval fail-closed behavior", () => {
       kind: "deny-intent",
       requestId: "approval-a",
       reason,
+      serverInstanceId: "epoch-a",
     });
   });
 
@@ -66,6 +83,7 @@ describe("approval fail-closed behavior", () => {
     expect(getApprovalDisposition(state)).toEqual({
       kind: "decision-required",
       requestId: "approval-a",
+      serverInstanceId: "epoch-a",
     });
   });
 
@@ -94,7 +112,109 @@ describe("approval fail-closed behavior", () => {
       kind: "deny-intent",
       requestId: "approval-a",
       reason: "user",
+      serverInstanceId: "epoch-a",
     });
+  });
+
+  test("fences a disconnect denial until the same daemon epoch is fresh again", () => {
+    let state = readyState();
+    state = reduceUiModel(state, {
+      type: "approvalRequested",
+      request: { requestId: "approval-a", summary: "Run command" },
+    });
+    state = reduceUiModel(state, { type: "connectionLost", reason: "transport-closed" });
+
+    expect(getSendableApprovalDenyIntent(state)).toBeNull();
+
+    state = reduceUiModel(state, {
+      type: "handshakeSucceeded",
+      serverInstanceId: "epoch-a",
+    });
+    state = reduceUiModel(state, {
+      type: "snapshotReceived",
+      snapshot: snapshot("epoch-a", "session-a", 1n),
+    });
+
+    expect(getSendableApprovalDenyIntent(state)).toEqual({
+      requestId: "approval-a",
+      reason: "disconnected",
+      serverInstanceId: "epoch-a",
+    });
+  });
+
+  test("clears an approval intent before a different daemon epoch becomes fresh", () => {
+    let state = readyState();
+    state = reduceUiModel(state, {
+      type: "approvalRequested",
+      request: { requestId: "approval-a", summary: "Run command" },
+    });
+    state = reduceUiModel(state, { type: "approvalDenied" });
+    state = reduceUiModel(state, { type: "connectionLost", reason: "transport-closed" });
+    state = reduceUiModel(state, {
+      type: "handshakeSucceeded",
+      serverInstanceId: "epoch-b",
+    });
+    state = reduceUiModel(state, {
+      type: "snapshotReceived",
+      snapshot: snapshot("epoch-b", "session-b", 1n),
+    });
+
+    expect(getApprovalDisposition(state)).toEqual({ kind: "none" });
+    expect(getSendableApprovalDenyIntent(state)).toBeNull();
+  });
+
+  test("resolves an approval only when request and daemon epoch both match", () => {
+    let state = readyState();
+    state = reduceUiModel(state, {
+      type: "approvalRequested",
+      request: { requestId: "approval-a", summary: "Run command" },
+    });
+
+    const mismatched = reduceUiModel(state, {
+      type: "approvalResolved",
+      requestId: "approval-a",
+      serverInstanceId: "epoch-b",
+    });
+    expect(mismatched).toBe(state);
+
+    state = reduceUiModel(state, {
+      type: "approvalResolved",
+      requestId: "approval-a",
+      serverInstanceId: "epoch-a",
+    });
+    expect(state.approval).toBeNull();
+  });
+
+  test("does not expose a denial whose bound epoch differs from the fresh daemon", () => {
+    let state = readyState();
+    state = reduceUiModel(state, {
+      type: "approvalRequested",
+      request: { requestId: "approval-a", summary: "Run command" },
+    });
+    state = reduceUiModel(state, { type: "approvalDenied" });
+
+    expect(
+      getSendableApprovalDenyIntent({
+        ...state,
+        approval:
+          state.approval === null ? null : { ...state.approval, serverInstanceId: "epoch-b" },
+      }),
+    ).toBeNull();
+
+    if (state.approval === null) {
+      throw new Error("expected a pending denial");
+    }
+    const mismatchedEpochState = {
+      ...state,
+      approval: { ...state.approval, serverInstanceId: "epoch-b" },
+    };
+    expect(
+      reduceUiModel(mismatchedEpochState, {
+        type: "approvalResolved",
+        requestId: "approval-a",
+        serverInstanceId: "epoch-b",
+      }),
+    ).toBe(mismatchedEpochState);
   });
 });
 
@@ -153,4 +273,16 @@ test("defaults to English, hearth teal, and the six documented theme IDs", () =>
     "graphite-coral",
   ]);
   expect(state.preferences).toEqual({ locale: "en-US", themeId: "hearth-teal" });
+});
+
+test("updates locale and theme preferences without changing remote identifiers", () => {
+  let state = readyState();
+  const remote = state.remote;
+  state = reduceUiModel(state, { type: "localeChanged", locale: "zh-CN" });
+  state = reduceUiModel(state, { type: "themeChanged", themeId: "carbon-mint" });
+
+  expect(state.preferences).toEqual({ locale: "zh-CN", themeId: "carbon-mint" });
+  expect(state.remote).toBe(remote);
+  expect(state.remote.serverInstanceId).toBe("epoch-a");
+  expect(state.remote.snapshot?.sessionId).toBe("session-a");
 });

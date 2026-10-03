@@ -1,4 +1,5 @@
 import type { ApprovalState, UiModelAction, UiModelState } from "./types.js";
+import { getFreshCurrentServerInstanceId } from "./epoch.js";
 
 function failClosedApproval(
   approval: ApprovalState | null,
@@ -114,28 +115,42 @@ export function reduceUiModel(state: UiModelState, action: UiModelAction): UiMod
           snapshotFresh: false,
           unavailableReason: null,
         },
-        approval: epochChanged
-          ? failClosedApproval(state.approval, "disconnected")
-          : state.approval,
+        modelDownloadIntent: epochChanged ? null : state.modelDownloadIntent,
+        approval: epochChanged ? null : state.approval,
         inspector: epochChanged ? { ...state.inspector, selection: null } : state.inspector,
       };
     }
     case "snapshotReceived":
       return acceptSnapshot(state, action);
-    case "modelDownloadRequested":
+    case "modelDownloadRequested": {
+      const serverInstanceId = getFreshCurrentServerInstanceId(state);
+      if (serverInstanceId === null) {
+        return state;
+      }
       return {
         ...state,
         modelDownloadIntent: {
           operationId: action.operationId,
           modelId: action.modelId,
+          serverInstanceId,
         },
       };
+    }
     case "modelDownloadIntentAcknowledged":
-      return state.modelDownloadIntent?.operationId === action.operationId
+      return state.modelDownloadIntent?.operationId === action.operationId &&
+        state.modelDownloadIntent.serverInstanceId === action.serverInstanceId &&
+        state.remote.serverInstanceId === action.serverInstanceId
         ? { ...state, modelDownloadIntent: null }
         : state;
-    case "approvalRequested":
-      return { ...state, approval: { request: action.request, status: "pending" } };
+    case "approvalRequested": {
+      const serverInstanceId = getFreshCurrentServerInstanceId(state);
+      return serverInstanceId === null
+        ? state
+        : {
+            ...state,
+            approval: { request: action.request, serverInstanceId, status: "pending" },
+          };
+    }
     case "approvalDenied":
       return state.approval === null
         ? state
@@ -147,7 +162,9 @@ export function reduceUiModel(state: UiModelState, action: UiModelAction): UiMod
     case "approvalFailed":
       return { ...state, approval: failClosedApproval(state.approval, "failed") };
     case "approvalResolved":
-      return state.approval?.request.requestId === action.requestId
+      return state.approval?.request.requestId === action.requestId &&
+        state.approval.serverInstanceId === action.serverInstanceId &&
+        state.remote.serverInstanceId === action.serverInstanceId
         ? { ...state, approval: null }
         : state;
     case "activitySelected":
