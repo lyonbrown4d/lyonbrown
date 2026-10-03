@@ -9,6 +9,9 @@ const BUDGET_KEYS: readonly (keyof KernelResourceBudget)[] = [
   "maxOutputBytes",
   "maxToolResultBytes",
   "maxValueDepth",
+  "maxValueStringBytes",
+  "maxCollectionEntries",
+  "maxValueNodes",
   "toolTimeoutMs",
 ];
 

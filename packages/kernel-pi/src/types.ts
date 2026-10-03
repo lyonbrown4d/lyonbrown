@@ -129,6 +129,9 @@ export interface KernelResourceBudget {
   readonly maxOutputBytes: number;
   readonly maxToolResultBytes: number;
   readonly maxValueDepth: number;
+  readonly maxValueStringBytes: number;
+  readonly maxCollectionEntries: number;
+  readonly maxValueNodes: number;
   readonly toolTimeoutMs: number;
 }
 
@@ -161,6 +164,13 @@ export type KernelEvent =
     }
   | {
       readonly type: "tool_failed";
+      readonly callId: string;
+      readonly toolName: string;
+      readonly code: string;
+      readonly message: string;
+    }
+  | {
+      readonly type: "tool_outcome_unknown";
       readonly callId: string;
       readonly toolName: string;
       readonly code: string;

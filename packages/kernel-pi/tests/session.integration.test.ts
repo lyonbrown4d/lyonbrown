@@ -16,6 +16,9 @@ const budget = {
   maxOutputBytes: 16_384,
   maxToolResultBytes: 4_096,
   maxValueDepth: 8,
+  maxValueStringBytes: 4_096,
+  maxCollectionEntries: 128,
+  maxValueNodes: 512,
   toolTimeoutMs: 1_000,
 };
 
@@ -213,4 +216,67 @@ describe("Pi kernel integration", () => {
     await cancelled;
     expect(cancelModel.requests[0]?.signal.aborted).toBe(true);
   });
+
+  test("fences tool continuation at maxTurns before invoking the adapter again", async () => {
+    const model = new ScriptedModel([
+      [
+        { type: "tool_call", callId: "call-a", name: "alpha", arguments: { value: "a" } },
+        { type: "done", reason: "tool_use" },
+      ],
+      textResponse("must not run"),
+    ]);
+    const tool: KernelToolDefinition = {
+      name: "alpha",
+      label: "Alpha",
+      description: "One effect",
+      inputSchema: {
+        type: "object",
+        properties: { value: { type: "string" } },
+        required: ["value"],
+        additionalProperties: false,
+      },
+      permissions: ["test.execute"],
+      risk: "low",
+      execute: () => Promise.resolve({ content: "ok" }),
+    };
+    const { events, options } = createDependencies(model, [tool]);
+    options.budget = { ...budget, maxTurns: 1 };
+
+    await expect(createPiKernelSession(options).startTurn("run")).rejects.toMatchObject({
+      code: "TURN_BUDGET_EXCEEDED",
+    });
+
+    expect(model.requests).toHaveLength(1);
+    expect(events.filter((event) => event.type === "turn_started")).toHaveLength(1);
+    expect(events.filter((event) => event.type === "turn_completed")).toHaveLength(1);
+    expect(events.filter((event) => event.type === "usage")).toHaveLength(1);
+  });
+
+  test.each(["steer", "followUp"] as const)(
+    "fences queued %s input at maxTurns without another adapter call",
+    async (mode) => {
+      let release: (() => void) | undefined;
+      const first = async function* (): AsyncIterable<KernelModelStreamEvent> {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        yield* textResponse("first");
+      };
+      const model = new ScriptedModel([first, textResponse("must not run")]);
+      const { events, options } = createDependencies(model);
+      options.budget = { ...budget, maxTurns: 1 };
+      const session = createPiKernelSession(options);
+      const run = session.startTurn("start");
+      await vi.waitFor(() => {
+        expect(model.requests).toHaveLength(1);
+      });
+      session[mode]("queued");
+      release?.();
+
+      await expect(run).rejects.toMatchObject({ code: "TURN_BUDGET_EXCEEDED" });
+      expect(model.requests).toHaveLength(1);
+      expect(events.filter((event) => event.type === "turn_completed")).toHaveLength(1);
+      expect(events.filter((event) => event.type === "usage")).toHaveLength(1);
+    },
+  );
 });

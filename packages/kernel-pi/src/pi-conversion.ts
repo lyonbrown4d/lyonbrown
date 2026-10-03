@@ -1,7 +1,7 @@
 import type { Api, Message, Model, Usage } from "@earendil-works/pi-ai";
 
 import { KernelRuntimeError } from "./errors.js";
-import { sanitizeJson, sanitizeText } from "./sanitization.js";
+import { sanitizeJson, sanitizeText, type SanitizationLimits } from "./sanitization.js";
 import type { KernelModelAdapter, KernelModelMessage } from "./types.js";
 
 export function createPiModel(adapter: KernelModelAdapter): Model<Api> {
@@ -51,7 +51,7 @@ export function toPiUsage(usage: {
   };
 }
 
-export function toKernelMessage(message: Message, maximumDepth: number): KernelModelMessage {
+export function toKernelMessage(message: Message, limits: SanitizationLimits): KernelModelMessage {
   if (message.role === "system" || message.role === "user") {
     return { role: message.role, content: contentText(message.content) };
   }
@@ -67,9 +67,7 @@ export function toKernelMessage(message: Message, maximumDepth: number): KernelM
         .map((call) => ({
           callId: sanitizeText(call.id),
           name: sanitizeText(call.name),
-          arguments: sanitizeJson(call.arguments, maximumDepth) as Readonly<
-            Record<string, unknown>
-          >,
+          arguments: sanitizeJson(call.arguments, limits) as Readonly<Record<string, unknown>>,
         })),
     };
   }

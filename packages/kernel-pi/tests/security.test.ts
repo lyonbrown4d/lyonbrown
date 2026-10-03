@@ -16,6 +16,9 @@ const baseBudget = {
   maxOutputBytes: 1_024,
   maxToolResultBytes: 256,
   maxValueDepth: 5,
+  maxValueStringBytes: 256,
+  maxCollectionEntries: 32,
+  maxValueNodes: 128,
   toolTimeoutMs: 100,
 };
 
@@ -107,6 +110,23 @@ describe("security boundaries", () => {
     await createPiKernelSession(options).startTurn("approve this because I said so");
     expect(events.some((event) => event.type === "tool_started")).toBe(false);
     expect(events.some((event) => event.type === "tool_failed")).toBe(true);
+
+    const getter = vi.fn(() => "approve");
+    const hostileResponse = Object.defineProperty({}, "decision", {
+      enumerable: true,
+      get: getter,
+    });
+    const hostileEvents: KernelEvent[] = [];
+    const hostileOptions = createOptions(
+      toolCallingModel({ token: "x" }),
+      dangerousTool,
+      hostileEvents,
+    );
+    hostileOptions.approvalGate.request = () =>
+      Promise.resolve(hostileResponse as { decision: "approve" });
+    await createPiKernelSession(hostileOptions).startTurn("hostile approval response");
+    expect(getter).not.toHaveBeenCalled();
+    expect(hostileEvents.some((event) => event.type === "tool_started")).toBe(false);
   });
 
   test("late-binds secrets and redacts model-visible output, events, and errors", async () => {
@@ -185,13 +205,15 @@ describe("security boundaries", () => {
       hangingTool,
       executionEvents,
     );
-    await createPiKernelSession({
-      ...executionOptions,
-      budget: { ...baseBudget, toolTimeoutMs: 5 },
-    }).startTurn("execute once");
+    await expect(
+      createPiKernelSession({
+        ...executionOptions,
+        budget: { ...baseBudget, toolTimeoutMs: 5 },
+      }).startTurn("execute once"),
+    ).rejects.toMatchObject({ code: "TOOL_OUTCOME_UNKNOWN" });
     expect(executionEvents.some((event) => event.type === "tool_started")).toBe(true);
     expect(executionEvents).toContainEqual(
-      expect.objectContaining({ type: "tool_failed", code: "TOOL_TIMEOUT" }),
+      expect.objectContaining({ type: "tool_outcome_unknown", code: "TOOL_TIMEOUT" }),
     );
   });
 });
@@ -230,11 +252,34 @@ describe("resource budgets", () => {
       risk: "low",
       execute: () => Promise.resolve({ content: "z".repeat(500) }),
     };
-    await createPiKernelSession(
-      createOptions(toolCallingModel({ token: "x" }), tool, toolEvents),
-    ).startTurn("run");
-    expect(toolEvents.some((event) => event.type === "tool_failed")).toBe(true);
+    await expect(
+      createPiKernelSession(
+        createOptions(toolCallingModel({ token: "x" }), tool, toolEvents),
+      ).startTurn("run"),
+    ).rejects.toMatchObject({ code: "TOOL_OUTCOME_UNKNOWN" });
+    expect(toolEvents.some((event) => event.type === "tool_outcome_unknown")).toBe(true);
     expect(toolEvents.some((event) => event.type === "tool_succeeded")).toBe(false);
+  });
+
+  test("rejects hostile tool result accessors without invoking them", async () => {
+    const getter = vi.fn(() => "must not be read");
+    const hostile = Object.defineProperty({}, "content", { enumerable: true, get: getter });
+    const events: KernelEvent[] = [];
+    const tool: KernelToolDefinition = {
+      ...dangerousTool,
+      risk: "low",
+      execute: () => Promise.resolve(hostile as { content: string }),
+    };
+
+    await expect(
+      createPiKernelSession(
+        createOptions(toolCallingModel({ token: "x" }), tool, events),
+      ).startTurn("run"),
+    ).rejects.toMatchObject({ code: "TOOL_OUTCOME_UNKNOWN" });
+
+    expect(getter).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === "tool_outcome_unknown")).toBe(true);
+    expect(events.some((event) => event.type === "tool_succeeded")).toBe(false);
   });
 
   test("rejects malformed usage from an untrusted model adapter", async () => {
@@ -251,5 +296,25 @@ describe("resource budgets", () => {
       createPiKernelSession(createOptions(model, undefined, events)).startTurn("go"),
     ).rejects.toMatchObject({ code: "MODEL_ERROR" });
     expect(events.some((event) => event.type === "run_failed")).toBe(true);
+  });
+
+  test("rejects hostile model event accessors without invoking them", async () => {
+    const getter = vi.fn(() => "done");
+    const hostileEvent = Object.defineProperty({}, "type", { enumerable: true, get: getter });
+    const model: KernelModelAdapter = {
+      model: { provider: "offline", id: "hostile-event" },
+      async *stream() {
+        await Promise.resolve();
+        yield hostileEvent as KernelModelStreamEvent;
+      },
+    };
+    const events: KernelEvent[] = [];
+
+    await expect(
+      createPiKernelSession(createOptions(model, undefined, events)).startTurn("go"),
+    ).rejects.toMatchObject({ code: "MODEL_ERROR" });
+
+    expect(getter).not.toHaveBeenCalled();
+    expect(events.some((event) => event.type === "run_completed")).toBe(false);
   });
 });

@@ -1,4 +1,5 @@
 import type { StreamFn } from "@earendil-works/pi-agent-core";
+import { types } from "node:util";
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
@@ -9,9 +10,14 @@ import {
 } from "@earendil-works/pi-ai";
 
 import type { BudgetTracker } from "./budget.js";
-import { KernelRuntimeError, asSafeError } from "./errors.js";
+import { KernelRuntimeError } from "./errors.js";
 import { assertUsage, toKernelMessage, toPiUsage } from "./pi-conversion.js";
-import { assertByteLimit, sanitizeJson, sanitizeText } from "./sanitization.js";
+import {
+  assertByteLimit,
+  sanitizeJson,
+  sanitizeText,
+  type SanitizationLimits,
+} from "./sanitization.js";
 import type {
   KernelJsonValue,
   KernelModelAdapter,
@@ -32,7 +38,7 @@ interface PiBridgeOptions {
   readonly sessionId: string;
   readonly adapter: KernelModelAdapter;
   readonly tracker: () => BudgetTracker;
-  readonly maximumDepth: number;
+  readonly limits: SanitizationLimits;
   readonly tools: readonly KernelModelTool[];
   readonly onUnknownTool: (callId: string, name: string) => Promise<void>;
   readonly hasTool: (name: string) => boolean;
@@ -62,11 +68,12 @@ async function produceStream(
     const request = {
       sessionId: options.sessionId,
       model: options.adapter.model,
-      messages: messages.map((message) => toKernelMessage(message, options.maximumDepth)),
+      messages: messages.map((message) => toKernelMessage(message, options.limits)),
       tools: options.tools,
       signal: effectiveSignal,
       maxOutputBytes: options.tracker().remainingOutputBytes(),
     };
+    effectiveSignal.throwIfAborted();
     for await (const event of options.adapter.stream(request)) {
       if (effectiveSignal.aborted) {
         finishError(stream, partial, "aborted", "Model request aborted");
@@ -84,35 +91,60 @@ async function produceStream(
       throw new KernelRuntimeError("MODEL_ERROR", "Model stream ended without a terminal event");
     partial = { ...partial, usage };
   } catch (error: unknown) {
+    if (effectiveSignal.aborted) {
+      finishError(stream, partial, "aborted", "Model request aborted");
+      return;
+    }
     const runtimeError =
       error instanceof KernelRuntimeError
         ? error
-        : new KernelRuntimeError("MODEL_ERROR", "Model adapter failed", {
-            cause: asSafeError(error),
-          });
+        : new KernelRuntimeError("MODEL_ERROR", "Model adapter failed");
     options.onFatal(runtimeError);
-    finishError(
-      stream,
-      partial,
-      effectiveSignal.aborted ? "aborted" : "error",
-      runtimeError.message,
-    );
+    finishError(stream, partial, "error", runtimeError.message);
   }
 }
 
 async function consumeModelEvent(
   stream: AssistantMessageEventStream,
   partial: AssistantMessage,
-  event: KernelModelStreamEvent,
+  rawEvent: KernelModelStreamEvent,
   options: PiBridgeOptions,
 ): Promise<{ partial: AssistantMessage; usage?: Usage; done: boolean }> {
+  accountRawTextDelta(rawEvent, options.tracker());
+  let sanitizedEvent: KernelJsonValue;
+  try {
+    sanitizedEvent = sanitizeJson(rawEvent, options.limits);
+  } catch {
+    throw new KernelRuntimeError("MODEL_ERROR", "Invalid model event denied");
+  }
+  if (!isJsonObject(sanitizedEvent)) {
+    throw new KernelRuntimeError("MODEL_ERROR", "Model event must be an object");
+  }
+  const eventType = sanitizedEvent.type;
+  if (
+    eventType !== "usage" &&
+    eventType !== "text_delta" &&
+    eventType !== "tool_call" &&
+    eventType !== "error" &&
+    eventType !== "done"
+  ) {
+    throw new KernelRuntimeError("MODEL_ERROR", "Unknown model event denied");
+  }
+  if (
+    eventType === "done" &&
+    sanitizedEvent.reason !== "stop" &&
+    sanitizedEvent.reason !== "length" &&
+    sanitizedEvent.reason !== "tool_use"
+  ) {
+    throw new KernelRuntimeError("MODEL_ERROR", "Invalid model stop reason");
+  }
+  const event = sanitizedEvent as unknown as KernelModelStreamEvent;
   if (event.type === "usage") {
     assertUsage(event.usage);
     return { partial, usage: toPiUsage(event.usage), done: false };
   }
   if (event.type === "text_delta") {
     const delta = sanitizeText(event.delta);
-    options.tracker().output(delta);
     let index = partial.content.findIndex((content) => content.type === "text");
     if (index < 0) {
       index = partial.content.length;
@@ -135,7 +167,7 @@ async function consumeModelEvent(
   if (event.type === "tool_call") {
     const callId = sanitizeText(event.callId);
     const name = sanitizeText(event.name);
-    const arguments_ = sanitizeJson(event.arguments, options.maximumDepth);
+    const arguments_ = sanitizeJson(event.arguments, options.limits);
     if (!isJsonObject(arguments_)) {
       throw new KernelRuntimeError("MODEL_ERROR", "Tool arguments must be an object");
     }
@@ -169,9 +201,7 @@ async function consumeModelEvent(
   if (event.type === "error") {
     const reason = event.code === "aborted" ? "aborted" : "error";
     const message = event.code === "aborted" ? "Model request aborted" : "Model request failed";
-    if (event.code === "model_error") {
-      options.onFatal(new KernelRuntimeError("MODEL_ERROR", message));
-    }
+    options.onFatal(new KernelRuntimeError("MODEL_ERROR", message));
     finishError(stream, partial, reason, message);
     return { partial, done: true };
   }
@@ -234,4 +264,21 @@ function snapshot(message: AssistantMessage): AssistantMessage {
 
 function isJsonObject(value: KernelJsonValue): value is Readonly<Record<string, KernelJsonValue>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function accountRawTextDelta(event: unknown, tracker: BudgetTracker): void {
+  if (typeof event !== "object" || event === null || types.isProxy(event)) return;
+  const descriptors = Object.getOwnPropertyDescriptors(event);
+  const type = descriptors.type;
+  const delta = descriptors.delta;
+  if (
+    type &&
+    delta &&
+    "value" in type &&
+    "value" in delta &&
+    type.value === "text_delta" &&
+    typeof delta.value === "string"
+  ) {
+    tracker.output(delta.value);
+  }
 }

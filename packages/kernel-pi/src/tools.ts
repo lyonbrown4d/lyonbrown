@@ -4,15 +4,26 @@ import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 import type { BudgetTracker } from "./budget.js";
-import { KernelRuntimeError, asSafeError } from "./errors.js";
-import type { SecretRedactor } from "./sanitization.js";
+import { KernelRuntimeError, safeErrorMessage } from "./errors.js";
 import {
   assertByteLimit,
-  isSecretReference,
+  limitsFromBudget,
   redactSecretReferences,
   sanitizeJson,
   sanitizeText,
+  type SanitizationLimits,
+  type SecretRedactor,
 } from "./sanitization.js";
+import {
+  abortCode,
+  createDeadlineSignal,
+  hasAborted,
+  isJsonObject,
+  isKnownRisk,
+  raceAbort,
+  replaceSecretRefsForValidation,
+  resolveSecrets,
+} from "./tool-support.js";
 import type {
   KernelEvent,
   KernelJsonValue,
@@ -23,20 +34,24 @@ import type {
 type EmitEvent = (event: KernelEvent) => Promise<void>;
 
 export class ToolExecutor {
+  readonly #limits: SanitizationLimits;
+
   constructor(
     private readonly options: PiKernelSessionOptions,
     private readonly tracker: () => BudgetTracker,
     private readonly redactor: SecretRedactor,
     private readonly emit: EmitEvent,
-  ) {}
+    private readonly markFatal: (error: KernelRuntimeError) => void,
+  ) {
+    this.#limits = limitsFromBudget(options.budget);
+  }
 
   createAgentTool(tool: KernelToolDefinition): AgentTool {
     return {
       name: tool.name,
       label: tool.label,
       description: tool.description,
-      // Pi validates before execute; keep that layer structural so Lyonbrown can
-      // validate symbolic SecretRef values against the real schema itself.
+      // Pi only validates structure; Lyonbrown validates symbolic SecretRefs.
       parameters: { type: "object", additionalProperties: true } as TSchema,
       executionMode: "sequential",
       replay: "never",
@@ -63,40 +78,95 @@ export class ToolExecutor {
   ): Promise<AgentToolResult> {
     const safeCallId = sanitizeText(callId);
     const safeToolName = sanitizeText(tool.name);
+    const signal = createDeadlineSignal(parentSignal, this.options.budget.toolTimeoutMs);
+    let symbolic: Readonly<Record<string, KernelJsonValue>>;
+    let persistingIntent = false;
     try {
       this.tracker().step();
-      this.assertPolicy(tool, arguments_);
-      const preview = redactSecretReferences(arguments_, this.options.budget.maxValueDepth);
-      const signal = createDeadlineSignal(parentSignal, this.options.budget.toolTimeoutMs);
+      symbolic = this.assertPolicy(tool, arguments_);
+      const preview = redactSecretReferences(symbolic, this.#limits);
       await this.requestApprovalIfNeeded(tool, safeCallId, preview, signal);
+      signal.throwIfAborted();
+      persistingIntent = true;
       await this.emit({
         type: "tool_started",
         callId: safeCallId,
         toolName: safeToolName,
         argumentsPreview: preview,
       });
+    } catch (error: unknown) {
+      if (persistingIntent) throw error;
+      const safe = this.toSafePreExecutionError(error);
+      await this.emitFailure(safeCallId, safeToolName, safe);
+      throw safe;
+    }
 
-      const resolved = await resolveSecrets(
-        arguments_,
-        this.options.budget.maxValueDepth,
-        signal,
-        this.options.secretResolver.resolve.bind(this.options.secretResolver),
-        this.redactor,
-      );
-      const result = await raceAbort(
-        tool.execute({ callId: safeCallId, arguments: resolved, signal }),
-        signal,
-      );
-      const content = this.redactor.text(result.content);
-      const details =
-        result.details === undefined
-          ? undefined
-          : this.redactor.json(result.details, this.options.budget.maxValueDepth);
-      assertByteLimit(
-        JSON.stringify({ content, details }),
-        this.options.budget.maxToolResultBytes,
-        "TOOL_RESULT_BUDGET_EXCEEDED",
-      );
+    try {
+      if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
+      let resolved: Readonly<Record<string, unknown>>;
+      try {
+        resolved = await resolveSecrets(
+          symbolic,
+          signal,
+          this.options.secretResolver.resolve.bind(this.options.secretResolver),
+          this.redactor,
+          this.options.budget.maxValueStringBytes,
+        );
+      } catch (error: unknown) {
+        if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
+        const safe = this.toSafeToolError(error);
+        await this.emitFailure(safeCallId, safeToolName, safe);
+        throw safe;
+      }
+      signal.throwIfAborted();
+
+      let execution: Promise<Awaited<ReturnType<KernelToolDefinition["execute"]>>>;
+      try {
+        // This check must happen before evaluating the effectful expression.
+        signal.throwIfAborted();
+        execution = tool.execute({ callId: safeCallId, arguments: resolved, signal });
+      } catch (error: unknown) {
+        if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
+        const safe = this.toSafeToolError(error);
+        await this.emitFailure(safeCallId, safeToolName, safe);
+        throw safe;
+      }
+
+      let result: Awaited<ReturnType<KernelToolDefinition["execute"]>>;
+      try {
+        result = await raceAbort(execution, signal);
+      } catch (error: unknown) {
+        if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
+        const safe = this.toSafeToolError(error);
+        await this.emitFailure(safeCallId, safeToolName, safe);
+        throw safe;
+      }
+      if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
+
+      let content: string;
+      let details: KernelJsonValue | undefined;
+      try {
+        const normalizedResult = this.redactor.json(result, this.#limits);
+        if (!isJsonObject(normalizedResult) || typeof normalizedResult.content !== "string") {
+          throw new KernelRuntimeError("UNTRUSTED_VALUE_INVALID", "Tool result shape is invalid");
+        }
+        content = normalizedResult.content;
+        details = normalizedResult.details;
+        assertByteLimit(
+          JSON.stringify({ content, details }),
+          this.options.budget.maxToolResultBytes,
+          "TOOL_RESULT_BUDGET_EXCEEDED",
+        );
+      } catch (error: unknown) {
+        return await this.failUnknown(
+          safeCallId,
+          safeToolName,
+          signal,
+          error instanceof KernelRuntimeError ? error.code : "TOOL_RESULT_INVALID",
+        );
+      }
+      if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
+
       await this.emit({
         type: "tool_succeeded",
         callId: safeCallId,
@@ -109,22 +179,17 @@ export class ToolExecutor {
         details: details as JsonValue | undefined,
       };
     } catch (error: unknown) {
-      const safe = this.toSafeToolError(error);
-      await this.emit({
-        type: "tool_failed",
-        callId: safeCallId,
-        toolName: safeToolName,
-        code: safe.code,
-        message: safe.message,
-      });
-      throw safe;
+      if (error instanceof KernelRuntimeError && error.code === "TOOL_OUTCOME_UNKNOWN") {
+        this.markFatal(error);
+      }
+      throw error;
     }
   }
 
   private assertPolicy(
     tool: KernelToolDefinition,
     arguments_: Readonly<Record<string, unknown>>,
-  ): void {
+  ): Readonly<Record<string, KernelJsonValue>> {
     if (!isKnownRisk(tool.risk)) {
       throw new KernelRuntimeError("TOOL_DENIED", "Tool has no recognized risk classification");
     }
@@ -133,7 +198,10 @@ export class ToolExecutor {
     ) {
       throw new KernelRuntimeError("TOOL_DENIED", "Required tool permission is not granted");
     }
-    const sanitized = sanitizeJson(arguments_, this.options.budget.maxValueDepth);
+    const sanitized = sanitizeJson(arguments_, this.#limits);
+    if (!isJsonObject(sanitized)) {
+      throw new KernelRuntimeError("TOOL_ARGUMENTS_INVALID", "Tool arguments must be an object");
+    }
     if (!Value.Check(tool.inputSchema as TSchema, replaceSecretRefsForValidation(sanitized))) {
       throw new KernelRuntimeError(
         "TOOL_ARGUMENTS_INVALID",
@@ -145,6 +213,7 @@ export class ToolExecutor {
       this.options.budget.maxInputBytes,
       "INPUT_BUDGET_EXCEEDED",
     );
+    return sanitized;
   }
 
   private async requestApprovalIfNeeded(
@@ -155,122 +224,73 @@ export class ToolExecutor {
   ): Promise<void> {
     if (tool.risk === "low") return;
     try {
-      const response = await raceAbort(
-        this.options.approvalGate.request({
-          sessionId: this.options.sessionId,
-          callId,
-          toolName: sanitizeText(tool.name),
-          risk: tool.risk,
-          permissions: tool.permissions.map(sanitizeText),
-          argumentsPreview: preview,
-          signal,
-        }),
+      signal.throwIfAborted();
+      const pending = this.options.approvalGate.request({
+        sessionId: this.options.sessionId,
+        callId,
+        toolName: sanitizeText(tool.name),
+        risk: tool.risk,
+        permissions: tool.permissions.map(sanitizeText),
+        argumentsPreview: preview,
         signal,
-      );
-      if (response.decision !== "approve") {
+      });
+      const response = await raceAbort(pending, signal);
+      signal.throwIfAborted();
+      const normalizedResponse = sanitizeJson(response, this.#limits);
+      if (!isJsonObject(normalizedResponse) || normalizedResponse.decision !== "approve") {
         throw new KernelRuntimeError("TOOL_DENIED", "Tool approval denied");
       }
-    } catch (error: unknown) {
-      if (error instanceof KernelRuntimeError) throw error;
-      throw new KernelRuntimeError("TOOL_DENIED", "Tool approval unavailable", { cause: error });
+    } catch {
+      throw new KernelRuntimeError("TOOL_DENIED", "Tool approval unavailable");
     }
+  }
+
+  private async emitFailure(
+    callId: string,
+    toolName: string,
+    error: KernelRuntimeError,
+  ): Promise<void> {
+    await this.emit({
+      type: "tool_failed",
+      callId,
+      toolName,
+      code: error.code,
+      message: error.message,
+    });
+  }
+
+  private async failUnknown(
+    callId: string,
+    toolName: string,
+    signal: AbortSignal,
+    code = abortCode(signal),
+  ): Promise<never> {
+    const fatal = new KernelRuntimeError(
+      "TOOL_OUTCOME_UNKNOWN",
+      "Tool outcome cannot be confirmed after durable intent",
+    );
+    await this.emit({
+      type: "tool_outcome_unknown",
+      callId,
+      toolName,
+      code,
+      message: fatal.message,
+    });
+    this.markFatal(fatal);
+    throw fatal;
+  }
+
+  private toSafePreExecutionError(error: unknown): KernelRuntimeError {
+    if (error instanceof KernelRuntimeError) {
+      return new KernelRuntimeError(error.code, this.redactor.summary(error.message));
+    }
+    return new KernelRuntimeError("TOOL_DENIED", "Tool authorization unavailable");
   }
 
   private toSafeToolError(error: unknown): KernelRuntimeError {
     if (error instanceof KernelRuntimeError) {
-      return new KernelRuntimeError(error.code, this.redactor.text(error.message));
+      return new KernelRuntimeError(error.code, this.redactor.summary(error.message));
     }
-    const source = asSafeError(error);
-    const timedOut = source.name === "TimeoutError" || source.name === "AbortError";
-    return new KernelRuntimeError(
-      timedOut ? "TOOL_TIMEOUT" : "MODEL_ERROR",
-      timedOut ? "Tool execution timed out or was cancelled" : this.redactor.text(source.message),
-    );
+    return new KernelRuntimeError("MODEL_ERROR", this.redactor.summary(safeErrorMessage(error)));
   }
-}
-
-function replaceSecretRefsForValidation(value: KernelJsonValue): KernelJsonValue {
-  if (isSecretReference(value)) return "[SECRET]";
-  if (Array.isArray(value)) {
-    const entries = value as readonly KernelJsonValue[];
-    return entries.map(replaceSecretRefsForValidation);
-  }
-  if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, replaceSecretRefsForValidation(entry)]),
-    );
-  }
-  return value;
-}
-
-function isKnownRisk(risk: unknown): risk is KernelToolDefinition["risk"] {
-  return risk === "low" || risk === "medium" || risk === "high";
-}
-
-function createDeadlineSignal(parent: AbortSignal | undefined, timeoutMs: number): AbortSignal {
-  const timeout = AbortSignal.timeout(timeoutMs);
-  return parent ? AbortSignal.any([parent, timeout]) : timeout;
-}
-
-async function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) throw signal.reason;
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
-      reject(signal.reason instanceof Error ? signal.reason : new Error("Operation aborted"));
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(resolve, reject).finally(() => {
-      signal.removeEventListener("abort", onAbort);
-    });
-  });
-}
-
-async function resolveSecrets(
-  value: unknown,
-  maximumDepth: number,
-  signal: AbortSignal,
-  resolve: (reference: string, signal: AbortSignal) => Promise<string>,
-  redactor: SecretRedactor,
-  depth = 0,
-): Promise<Readonly<Record<string, unknown>>> {
-  const resolved = await resolveValue(value, maximumDepth, signal, resolve, redactor, depth);
-  if (typeof resolved !== "object" || resolved === null || Array.isArray(resolved)) {
-    throw new KernelRuntimeError("TOOL_ARGUMENTS_INVALID", "Tool arguments must be an object");
-  }
-  return resolved as Readonly<Record<string, unknown>>;
-}
-
-async function resolveValue(
-  value: unknown,
-  maximumDepth: number,
-  signal: AbortSignal,
-  resolve: (reference: string, signal: AbortSignal) => Promise<string>,
-  redactor: SecretRedactor,
-  depth: number,
-): Promise<unknown> {
-  if (depth > maximumDepth) {
-    throw new KernelRuntimeError(
-      "UNTRUSTED_VALUE_INVALID",
-      "Value exceeds the allowed nesting depth",
-    );
-  }
-  if (isSecretReference(value)) {
-    const secret = await raceAbort(resolve(value.reference, signal), signal);
-    redactor.add(secret);
-    return secret;
-  }
-  if (Array.isArray(value)) {
-    const output: unknown[] = [];
-    for (const entry of value)
-      output.push(await resolveValue(entry, maximumDepth, signal, resolve, redactor, depth + 1));
-    return output;
-  }
-  if (typeof value === "object" && value !== null) {
-    const output = Object.create(null) as Record<string, unknown>;
-    for (const [key, entry] of Object.entries(value)) {
-      output[key] = await resolveValue(entry, maximumDepth, signal, resolve, redactor, depth + 1);
-    }
-    return output;
-  }
-  return value;
 }
