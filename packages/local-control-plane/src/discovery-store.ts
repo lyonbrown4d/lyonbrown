@@ -12,6 +12,7 @@ import {
 } from "./platform-security.js";
 
 const DISCOVERY_FILE = "agentd.json";
+const DISCOVERY_CONSTRUCTION_TOKEN = Object.freeze({});
 
 export interface DiscoveryClient {
   publish(descriptor: DiscoveryDescriptor): Promise<void>;
@@ -20,7 +21,10 @@ export interface DiscoveryClient {
 }
 
 class AnchoredDiscoveryStore implements DiscoveryClient {
-  public constructor(directory: SecureDirectoryHandle) {
+  public constructor(constructionToken: object, directory: SecureDirectoryHandle) {
+    if (constructionToken !== DISCOVERY_CONSTRUCTION_TOKEN) {
+      throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation: "read_descriptor" });
+    }
     DISCOVERY_HANDLES.set(this, directory);
   }
 
@@ -63,7 +67,7 @@ function resolveDiscoveryHandle(
 }
 
 export function createDiscoveryClient(directory: SecureDirectoryHandle): DiscoveryClient {
-  return new AnchoredDiscoveryStore(directory);
+  return new AnchoredDiscoveryStore(DISCOVERY_CONSTRUCTION_TOKEN, directory);
 }
 
 function invokePlatformResult<T>(result: PlatformResult<T>): T {

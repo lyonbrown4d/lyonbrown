@@ -42,6 +42,9 @@ output.
 Opaque providers, run directories, and discovery clients keep native adapters
 and handles only in module-owned `WeakMap` state. Reflection, JSON, inspection,
 and structured cloning expose no native capability or raw operation method.
+Internal constructors require an unexported identity token before they touch a
+handle or register WeakMap state, so `prototype.constructor` cannot mint a
+capability around attacker-controlled handles.
 
 The production Node-API adapter is not implemented yet and is an explicit
 agentd completion gate. Its Windows implementation must:

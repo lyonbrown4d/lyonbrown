@@ -9,11 +9,20 @@ import {
   type NativeControlPlaneProvider,
   type SecureRunDirectory,
 } from "../src/index.js";
-import type { PlatformSecurityContract } from "../src/native-adapter.js";
+import type { PlatformSecurityContract, SecureDirectoryHandle } from "../src/native-adapter.js";
 import { FakePlatformSecurity } from "./test-support.js";
 
 const RUN_PATH = "/private/agent/scope";
 const SCOPE = "a".repeat(64);
+type RuntimeConstructor = new (...arguments_: readonly unknown[]) => unknown;
+
+function getRuntimeConstructor(value: object): RuntimeConstructor {
+  const prototype: unknown = Object.getPrototypeOf(value);
+  if (typeof prototype !== "object" || prototype === null) throw new Error("missing prototype");
+  const constructor: unknown = Reflect.get(prototype, "constructor");
+  if (typeof constructor !== "function") throw new Error("missing constructor");
+  return constructor as RuntimeConstructor;
+}
 
 describe("native platform security boundary", () => {
   it("makes the Windows and POSIX security guarantees explicit", () => {
@@ -138,6 +147,39 @@ describe("native platform security boundary", () => {
       /nativeHandle|readPrivateFile|atomicReplacePrivateFile|tryAcquireKernelLock/u,
     );
     await lease?.release();
+  });
+
+  it("authenticates opaque constructors before touching an attacker handle", async () => {
+    const security = new FakePlatformSecurity();
+    const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
+    let fakeCalls = 0;
+    const attackerHandle: SecureDirectoryHandle = {
+      readPrivateFile: () => {
+        fakeCalls += 1;
+        return Promise.resolve({ ok: true, value: null });
+      },
+      atomicReplacePrivateFile: () => {
+        fakeCalls += 1;
+        return Promise.resolve({ ok: true, value: undefined });
+      },
+      tryAcquireKernelLock: () => {
+        fakeCalls += 1;
+        return Promise.resolve({ ok: true, value: null });
+      },
+      close: () => {
+        fakeCalls += 1;
+        return Promise.resolve({ ok: true, value: undefined });
+      },
+    };
+    const directoryConstructor = getRuntimeConstructor(directory);
+    const discoveryConstructor = getRuntimeConstructor(directory.discovery);
+
+    for (const constructor of [directoryConstructor, discoveryConstructor]) {
+      expect(() => new constructor()).toThrow();
+      expect(() => new constructor({}, attackerHandle)).toThrow();
+      expect(() => new constructor(attackerHandle)).toThrow();
+    }
+    expect(fakeCalls).toBe(0);
   });
 
   it("requires unique same-directory temporaries and cleanup for atomic publication", async () => {

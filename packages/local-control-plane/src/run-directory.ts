@@ -8,6 +8,7 @@ import {
 } from "./platform-security.js";
 
 declare const secureRunDirectoryBrand: unique symbol;
+const RUN_DIRECTORY_CONSTRUCTION_TOKEN = Object.freeze({});
 
 export interface SecureRunDirectory {
   readonly [secureRunDirectoryBrand]: "SecureRunDirectory";
@@ -21,7 +22,10 @@ class OpaqueSecureRunDirectory implements SecureRunDirectory {
   declare public readonly [secureRunDirectoryBrand]: "SecureRunDirectory";
   public readonly discovery: DiscoveryClient;
 
-  public constructor(handle: SecureDirectoryHandle) {
+  public constructor(constructionToken: object, handle: SecureDirectoryHandle) {
+    if (constructionToken !== RUN_DIRECTORY_CONSTRUCTION_TOKEN) {
+      throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation: "open_run_directory" });
+    }
     this.discovery = createDiscoveryClient(handle);
     RUN_DIRECTORY_HANDLES.set(this, handle);
   }
@@ -50,5 +54,5 @@ export async function openSecureRunDirectory(
   const handle = await invokePlatform("open_run_directory", () =>
     security.openSecureRunDirectory(path),
   );
-  return new OpaqueSecureRunDirectory(handle);
+  return new OpaqueSecureRunDirectory(RUN_DIRECTORY_CONSTRUCTION_TOKEN, handle);
 }
