@@ -29,6 +29,12 @@ export type WorkspaceIdentity =
       readonly fileId: bigint;
     };
 
+export interface ResolvedWorkspaceIdentity {
+  /** Absolute, well-formed native canonical path for the opened directory. */
+  readonly canonicalPath: string;
+  readonly identity: WorkspaceIdentity;
+}
+
 export interface KernelFileLock {
   release(): Promise<PlatformResult<void>>;
 }
@@ -67,7 +73,7 @@ export type PlatformSecurityContract =
 /** Native boundary: implementations must anchor all operations to verified handles. */
 export interface PlatformControlPlaneSecurity {
   readonly contract: PlatformSecurityContract;
-  workspaceIdentity(path: string): Promise<PlatformResult<WorkspaceIdentity>>;
+  workspaceIdentity(path: string): Promise<PlatformResult<ResolvedWorkspaceIdentity>>;
   openSecureRunDirectory(path: string): Promise<PlatformResult<SecureDirectoryHandle>>;
 }
 

@@ -64,15 +64,30 @@ describe("Rust workspace identity parity", () => {
 
   it("is stable across rename, case, and separator spellings supplied by the provider", async () => {
     const security = new FakePlatformSecurity();
+    const canonicalPath = "C:\\Canonical\\Agent";
     for (const path of ["C:\\Work\\Agent", "c:/work/agent", "C:\\Renamed\\Agent"])
-      security.setIdentity(path, INODE_IDENTITY);
+      security.setIdentity(path, INODE_IDENTITY, canonicalPath);
     const scopes = await Promise.all(
       ["C:\\Work\\Agent", "c:/work/agent", "C:\\Renamed\\Agent"].map((path) =>
         deriveScope(path, "config-v1", security, "win32"),
       ),
     );
     expect(new Set(scopes.map(({ scopeId }) => scopeId))).toHaveLength(1);
+    expect(new Set(scopes.map(({ canonicalWorkspace }) => canonicalWorkspace))).toEqual(
+      new Set([canonicalPath]),
+    );
   });
+
+  it.each(["relative", "bad\0path", "C:\\bad\ud800"])(
+    "rejects invalid native canonical path %j",
+    async (canonicalPath) => {
+      const security = new FakePlatformSecurity();
+      security.setIdentity("C:\\Alias", INODE_IDENTITY, canonicalPath);
+      await expect(deriveScope("C:\\Alias", "config", security, "win32")).rejects.toMatchObject({
+        code: "PLATFORM_SECURITY_FAILURE",
+      });
+    },
+  );
 
   it("changes scope when the effective config fingerprint changes", async () => {
     const security = new FakePlatformSecurity();

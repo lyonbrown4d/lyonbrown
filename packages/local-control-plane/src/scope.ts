@@ -88,6 +88,17 @@ function absoluteForPlatform(path: string, platform: NodeJS.Platform): boolean {
   return platform === "win32" ? win32.isAbsolute(path) : isAbsolute(path);
 }
 
+function validateCanonicalPath(path: string, platform: NodeJS.Platform): void {
+  try {
+    validateText(path, "INVALID_WORKSPACE_PATH");
+  } catch {
+    throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation: "workspace_identity" });
+  }
+  if (!absoluteForPlatform(path, platform)) {
+    throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation: "workspace_identity" });
+  }
+}
+
 export async function deriveScope(
   workspace: string,
   effectiveConfigFingerprint: string,
@@ -109,12 +120,13 @@ export async function deriveScope(
   }
 
   if (!security) throw controlPlaneError("NATIVE_SECURITY_PROVIDER_REQUIRED");
-  const identity = await invokePlatform("workspace_identity", () =>
+  const resolved = await invokePlatform("workspace_identity", () =>
     security.workspaceIdentity(workspace),
   );
+  validateCanonicalPath(resolved.canonicalPath, platform);
   const scopeId = deriveScopeFromIdentity(
-    encodeWorkspaceIdentity(identity),
+    encodeWorkspaceIdentity(resolved.identity),
     effectiveConfigFingerprint,
   );
-  return Object.freeze({ canonicalWorkspace: workspace, scopeId });
+  return Object.freeze({ canonicalWorkspace: resolved.canonicalPath, scopeId });
 }

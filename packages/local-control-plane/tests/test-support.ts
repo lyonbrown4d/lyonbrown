@@ -3,6 +3,7 @@ import type {
   KernelFileLock,
   PlatformControlPlaneSecurity,
   PlatformResult,
+  ResolvedWorkspaceIdentity,
   SecureDirectoryHandle,
   WorkspaceIdentity,
 } from "../src/platform-security.js";
@@ -24,7 +25,7 @@ export class FakePlatformSecurity implements PlatformControlPlaneSecurity {
     workspaceIdentity: "rust-dev-ino",
     kernelLock: "rust-compatible-file-lock",
   } as const;
-  readonly identities = new Map<string, WorkspaceIdentity>();
+  readonly identities = new Map<string, ResolvedWorkspaceIdentity>();
   readonly directories = new Map<string, DirectoryState>();
   readonly operations: string[] = [];
   readonly temporaryNames: string[] = [];
@@ -32,17 +33,17 @@ export class FakePlatformSecurity implements PlatformControlPlaneSecurity {
   nextFailure: PlatformResult<never> | undefined;
   handleException: "atomic" | "close" | "lock" | "read" | "release" | undefined;
 
-  setIdentity(path: string, identity: WorkspaceIdentity): void {
-    this.identities.set(path, identity);
+  setIdentity(path: string, identity: WorkspaceIdentity, canonicalPath = path): void {
+    this.identities.set(path, { canonicalPath, identity });
   }
 
   replaceDirectoryPath(path: string): void {
     this.directories.set(path, { files: new Map(), locks: new Map() });
   }
 
-  workspaceIdentity(path: string): Promise<PlatformResult<WorkspaceIdentity>> {
+  workspaceIdentity(path: string): Promise<PlatformResult<ResolvedWorkspaceIdentity>> {
     this.operations.push(`identity:${path}`);
-    const failed = this.consumeFailure<WorkspaceIdentity>();
+    const failed = this.consumeFailure<ResolvedWorkspaceIdentity>();
     if (failed) return Promise.resolve(failed);
     const identity = this.identities.get(path);
     return Promise.resolve(identity ? ok(identity) : { ok: false, code: "not_found" });

@@ -5,8 +5,9 @@ package is independent of Pi, gRPC-generated types, SQLite, and all UI code.
 
 ## Responsibilities
 
-- encode Rust-compatible filesystem identities and derive a stable scope ID
-  from that identity plus the effective runtime configuration fingerprint;
+- resolve an absolute native canonical workspace path together with its
+  Rust-compatible filesystem identity, then derive a stable scope ID from that
+  identity plus the effective runtime configuration fingerprint;
 - create and strictly parse the versioned discovery descriptor shared with the
   Rust behavior oracle;
 - generate a new 32-byte bearer token and UUID server epoch for every endpoint;

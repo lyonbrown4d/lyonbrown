@@ -69,7 +69,6 @@ export class SecureRunDirectory implements SecureDirectoryHandle {
       return { ok: false, code: "io" };
     }
   }
-
 }
 
 export async function openSecureRunDirectory(
