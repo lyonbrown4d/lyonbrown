@@ -1,8 +1,5 @@
-import {
-  invokePlatform,
-  type KernelFileLock,
-  type SecureDirectoryHandle,
-} from "./platform-security.js";
+import { invokePlatform, type KernelFileLock } from "./platform-security.js";
+import { resolveRunDirectoryHandle, type SecureRunDirectory } from "./run-directory.js";
 
 export interface DaemonLease {
   readonly kind: "startup" | "lifetime";
@@ -10,22 +7,20 @@ export interface DaemonLease {
 }
 
 async function acquireLease(
-  runDirectory: SecureDirectoryHandle,
+  runDirectory: SecureRunDirectory,
   kind: DaemonLease["kind"],
 ): Promise<DaemonLease | null> {
   const fileName = kind === "startup" ? "agentd.start.lock" : "agentd.lock";
-  const lock = await invokePlatform("kernel_lock", () =>
-    runDirectory.tryAcquireKernelLock(fileName),
-  );
+  const handle = resolveRunDirectoryHandle(runDirectory);
+  const lock = await invokePlatform("kernel_lock", () => handle.tryAcquireKernelLock(fileName));
   if (lock === null) return null;
 
-  let released = false;
+  let releasePromise: Promise<void> | undefined;
   return Object.freeze({
     kind,
-    async release(): Promise<void> {
-      if (released) return;
-      released = true;
-      await releaseKernelLock(lock);
+    release(): Promise<void> {
+      releasePromise ??= releaseKernelLock(lock);
+      return releasePromise;
     },
   });
 }
@@ -34,14 +29,12 @@ async function releaseKernelLock(lock: KernelFileLock): Promise<void> {
   await invokePlatform("release_lock", () => lock.release());
 }
 
-export function acquireStartupLock(
-  runDirectory: SecureDirectoryHandle,
-): Promise<DaemonLease | null> {
+export function acquireStartupLock(runDirectory: SecureRunDirectory): Promise<DaemonLease | null> {
   return acquireLease(runDirectory, "startup");
 }
 
 export function acquireLifecycleLock(
-  runDirectory: SecureDirectoryHandle,
+  runDirectory: SecureRunDirectory,
 ): Promise<DaemonLease | null> {
   return acquireLease(runDirectory, "lifetime");
 }

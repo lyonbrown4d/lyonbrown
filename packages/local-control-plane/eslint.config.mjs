@@ -2,7 +2,7 @@ import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const typeScriptFiles = ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"];
+const typeScriptFiles = ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.ts", "vitest.config.ts"];
 
 export default tseslint.config(
   { ignores: ["dist/**", "coverage/**"] },

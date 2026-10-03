@@ -77,6 +77,30 @@ export interface PlatformControlPlaneSecurity {
   openSecureRunDirectory(path: string): Promise<PlatformResult<SecureDirectoryHandle>>;
 }
 
+declare const nativeProviderBrand: unique symbol;
+
+export interface NativeControlPlaneProvider {
+  readonly [nativeProviderBrand]: "NativeControlPlaneProvider";
+}
+
+const NATIVE_PROVIDERS = new WeakMap<NativeControlPlaneProvider, PlatformControlPlaneSecurity>();
+
+export function createNativeControlPlaneProvider(
+  adapter: PlatformControlPlaneSecurity,
+): NativeControlPlaneProvider {
+  const provider = Object.freeze({}) as NativeControlPlaneProvider;
+  NATIVE_PROVIDERS.set(provider, adapter);
+  return provider;
+}
+
+export function resolveNativeControlPlaneProvider(
+  provider: NativeControlPlaneProvider,
+): PlatformControlPlaneSecurity {
+  const adapter = NATIVE_PROVIDERS.get(provider);
+  if (!adapter) throw controlPlaneError("NATIVE_SECURITY_PROVIDER_REQUIRED");
+  return adapter;
+}
+
 export function unwrapPlatformResult<T>(
   result: PlatformResult<T>,
   operation: ControlPlaneOperation,

@@ -32,6 +32,13 @@ The package intentionally ships no path-based Node filesystem fallback and no
 `NATIVE_SECURITY_PROVIDER_REQUIRED`. Test fakes live only under `tests/` and
 are not exported by the package.
 
+Native adapter authors use the controlled
+`@lyonbrown/local-control-plane/native-adapter` entry to implement the contract
+and create an opaque provider. The root entry does not export secure handles,
+constructors, result unwrappers, or parity helpers. Each build removes `dist`
+before TypeScript emits so deleted source cannot survive as stale package
+output.
+
 The production Node-API adapter is not implemented yet and is an explicit
 agentd completion gate. Its Windows implementation must:
 
@@ -62,7 +69,9 @@ readiness is established. `agentd.lock` is held for the complete daemon
 lifetime. They are ordinary files locked by the kernel, with ownership bound to
 the returned native lock handle. There is no timestamp/PID stale heuristic and
 no process-kill behavior. Releasing an old handle must never release a newer
-owner's lock.
+owner's lock. Every lease caches its first release promise. Concurrent and
+later callers await that exact promise; a rejection stays cached and is never
+converted into false success or an unsafe second native release attempt.
 
 ## Verification
 

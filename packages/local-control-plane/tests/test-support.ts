@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { createNativeControlPlaneProvider } from "../src/native-adapter.js";
 import type {
   KernelFileLock,
   PlatformControlPlaneSecurity,
@@ -18,6 +19,7 @@ function ok<T>(value: T): PlatformResult<T> {
 }
 
 export class FakePlatformSecurity implements PlatformControlPlaneSecurity {
+  readonly provider = createNativeControlPlaneProvider(this);
   readonly contract = {
     platform: "posix",
     directoryOpen: "dirfd-openat-O_NOFOLLOW",
@@ -39,6 +41,15 @@ export class FakePlatformSecurity implements PlatformControlPlaneSecurity {
 
   replaceDirectoryPath(path: string): void {
     this.directories.set(path, { files: new Map(), locks: new Map() });
+  }
+
+  writeRawDescriptor(path: string, bytes: Uint8Array): void {
+    let state = this.directories.get(path);
+    if (!state) {
+      state = { files: new Map(), locks: new Map() };
+      this.directories.set(path, state);
+    }
+    state.files.set("agentd.json", Uint8Array.from(bytes));
   }
 
   workspaceIdentity(path: string): Promise<PlatformResult<ResolvedWorkspaceIdentity>> {
@@ -100,6 +111,7 @@ export class FakePlatformSecurity implements PlatformControlPlaneSecurity {
         state.locks.set(name, owner);
         const lock: KernelFileLock = Object.freeze({
           release: () => {
+            this.operations.push("release");
             if (this.handleException === "release") throw new Error("native release secret");
             if (state.locks.get(name) === owner) state.locks.delete(name);
             return Promise.resolve(ok(undefined));

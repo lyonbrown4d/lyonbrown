@@ -5,8 +5,10 @@ import {
   acquireStartupLock,
   createDiscoveryDescriptor,
   openSecureRunDirectory,
-  type PlatformSecurityContract,
+  type NativeControlPlaneProvider,
+  type SecureRunDirectory,
 } from "../src/index.js";
+import type { PlatformSecurityContract } from "../src/native-adapter.js";
 import { FakePlatformSecurity } from "./test-support.js";
 
 const RUN_PATH = "/private/agent/scope";
@@ -39,10 +41,19 @@ describe("native platform security boundary", () => {
     });
   });
 
+  it("rejects forged provider and run-directory capabilities", async () => {
+    await expect(
+      openSecureRunDirectory(RUN_PATH, {} as NativeControlPlaneProvider),
+    ).rejects.toMatchObject({ code: "NATIVE_SECURITY_PROVIDER_REQUIRED" });
+    await expect(acquireStartupLock({} as SecureRunDirectory)).rejects.toMatchObject({
+      code: "PLATFORM_SECURITY_FAILURE",
+    });
+  });
+
   it("maps provider failures without exposing dependency causes", async () => {
     const security = new FakePlatformSecurity();
     security.nextFailure = { ok: false, code: "reparse_point" };
-    const error = await openSecureRunDirectory(RUN_PATH, security).catch(
+    const error = await openSecureRunDirectory(RUN_PATH, security.provider).catch(
       (caught: unknown) => caught,
     );
     expect(error).toBeInstanceOf(ControlPlaneError);
@@ -56,7 +67,7 @@ describe("native platform security boundary", () => {
     security.openSecureRunDirectory = () => {
       throw new Error("secret native path and token");
     };
-    const error = await openSecureRunDirectory(RUN_PATH, security).catch(
+    const error = await openSecureRunDirectory(RUN_PATH, security.provider).catch(
       (caught: unknown) => caught,
     );
     expect(error).toMatchObject({
@@ -68,8 +79,9 @@ describe("native platform security boundary", () => {
 
   it("keeps discovery anchored when the parent path is swapped", async () => {
     const security = new FakePlatformSecurity();
-    const directory = await openSecureRunDirectory(RUN_PATH, security);
+    const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
     const store = directory.discovery;
+    expect(store.fileName()).toBe("agentd.json");
     const descriptor = createDiscoveryDescriptor({
       endpoint: "127.0.0.1:4321",
       pid: 42,
@@ -79,7 +91,7 @@ describe("native platform security boundary", () => {
     await store.publish(descriptor);
     expect((await store.read()).serverInstanceId).toBe(descriptor.serverInstanceId);
 
-    const replacement = (await openSecureRunDirectory(RUN_PATH, security)).discovery;
+    const replacement = (await openSecureRunDirectory(RUN_PATH, security.provider)).discovery;
     await expect(replacement.read()).rejects.toMatchObject({
       code: "DESCRIPTOR_NOT_FOUND",
     });
@@ -87,7 +99,7 @@ describe("native platform security boundary", () => {
 
   it("requires unique same-directory temporaries and cleanup for atomic publication", async () => {
     const security = new FakePlatformSecurity();
-    const directory = await openSecureRunDirectory(RUN_PATH, security);
+    const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
     const descriptor = createDiscoveryDescriptor({
       endpoint: "[::1]:4321",
       pid: 42,
@@ -101,8 +113,8 @@ describe("native platform security boundary", () => {
 
   it("uses separate kernel startup and lifetime locks", async () => {
     const security = new FakePlatformSecurity();
-    const firstHandle = await openSecureRunDirectory(RUN_PATH, security);
-    const secondHandle = await openSecureRunDirectory(RUN_PATH, security);
+    const firstHandle = await openSecureRunDirectory(RUN_PATH, security.provider);
+    const secondHandle = await openSecureRunDirectory(RUN_PATH, security.provider);
     const startup = await acquireStartupLock(firstHandle);
     expect(startup).not.toBeNull();
     expect(await acquireStartupLock(secondHandle)).toBeNull();
@@ -116,7 +128,7 @@ describe("native platform security boundary", () => {
   it("elects exactly one concurrent first-start winner", async () => {
     const security = new FakePlatformSecurity();
     const handles = await Promise.all(
-      Array.from({ length: 16 }, () => openSecureRunDirectory(RUN_PATH, security)),
+      Array.from({ length: 16 }, () => openSecureRunDirectory(RUN_PATH, security.provider)),
     );
     const contenders = await Promise.all(handles.map((handle) => acquireStartupLock(handle)));
     const winners = contenders.filter((lease) => lease !== null);
@@ -126,7 +138,7 @@ describe("native platform security boundary", () => {
 
   it("does not let an old owner release a newer kernel lock", async () => {
     const security = new FakePlatformSecurity();
-    const handle = await openSecureRunDirectory(RUN_PATH, security);
+    const handle = await openSecureRunDirectory(RUN_PATH, security.provider);
     const oldOwner = await acquireLifecycleLock(handle);
     await oldOwner?.release();
     const newOwner = await acquireLifecycleLock(handle);
@@ -137,20 +149,36 @@ describe("native platform security boundary", () => {
 
   it("redacts native lock release exceptions", async () => {
     const security = new FakePlatformSecurity();
-    const directory = await openSecureRunDirectory(RUN_PATH, security);
+    const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
     const lease = await acquireLifecycleLock(directory);
     security.handleException = "release";
-    await expect(lease?.release()).rejects.toMatchObject({
+    const first = lease?.release();
+    const second = lease?.release();
+    expect(first).toBe(second);
+    await expect(first).rejects.toMatchObject({
       code: "PLATFORM_SECURITY_FAILURE",
       details: { operation: "release_lock" },
     });
+    await expect(second).rejects.toMatchObject({ code: "PLATFORM_SECURITY_FAILURE" });
+    expect(lease?.release()).toBe(first);
+    expect(security.operations.filter((operation) => operation === "release")).toHaveLength(1);
+  });
+
+  it("shares one native release promise across concurrent successful callers", async () => {
+    const security = new FakePlatformSecurity();
+    const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
+    const lease = await acquireLifecycleLock(directory);
+    const first = lease?.release();
+    const second = lease?.release();
+    expect(first).toBe(second);
+    await Promise.all([first, second]);
+    expect(security.operations.filter((operation) => operation === "release")).toHaveLength(1);
   });
 
   it("maps oversize secure reads before parsing", async () => {
     const security = new FakePlatformSecurity();
-    const directory = await openSecureRunDirectory(RUN_PATH, security);
-    const write = await directory.atomicReplacePrivateFile("agentd.json", new Uint8Array(5000));
-    expect(write.ok).toBe(true);
+    const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
+    security.writeRawDescriptor(RUN_PATH, new Uint8Array(5000));
     await expect(directory.discovery.read()).rejects.toMatchObject({
       code: "DESCRIPTOR_TOO_LARGE",
     });
@@ -160,7 +188,7 @@ describe("native platform security boundary", () => {
     "redacts native %s exceptions behind the secure handle",
     async (operation) => {
       const security = new FakePlatformSecurity();
-      const directory = await openSecureRunDirectory(RUN_PATH, security);
+      const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
       security.handleException = operation;
       const action =
         operation === "atomic"
@@ -176,9 +204,12 @@ describe("native platform security boundary", () => {
 
   it("closes through the native handle without leaking close failures", async () => {
     const security = new FakePlatformSecurity();
-    const directory = await openSecureRunDirectory(RUN_PATH, security);
-    expect(await directory.close()).toEqual({ ok: true, value: undefined });
+    const directory = await openSecureRunDirectory(RUN_PATH, security.provider);
+    await expect(directory.close()).resolves.toBeUndefined();
     security.handleException = "close";
-    expect(await directory.close()).toEqual({ ok: false, code: "io" });
+    await expect(directory.close()).rejects.toMatchObject({
+      code: "PLATFORM_SECURITY_FAILURE",
+      details: { operation: "close_directory" },
+    });
   });
 });

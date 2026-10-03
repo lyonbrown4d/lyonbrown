@@ -3,7 +3,8 @@ import { isAbsolute, win32 } from "node:path";
 import { controlPlaneError } from "./errors.js";
 import {
   invokePlatform,
-  type PlatformControlPlaneSecurity,
+  resolveNativeControlPlaneProvider,
+  type NativeControlPlaneProvider,
   type WorkspaceIdentity,
 } from "./platform-security.js";
 import { isWellFormedText } from "./well-formed.js";
@@ -102,7 +103,7 @@ function validateCanonicalPath(path: string, platform: NodeJS.Platform): void {
 export async function deriveScope(
   workspace: string,
   effectiveConfigFingerprint: string,
-  security?: PlatformControlPlaneSecurity,
+  provider?: NativeControlPlaneProvider,
   platform: NodeJS.Platform = process.platform,
 ): Promise<ScopeIdentity> {
   validateText(workspace, "INVALID_WORKSPACE_PATH");
@@ -119,7 +120,8 @@ export async function deriveScope(
     throw controlPlaneError("INVALID_CONFIG_FINGERPRINT");
   }
 
-  if (!security) throw controlPlaneError("NATIVE_SECURITY_PROVIDER_REQUIRED");
+  if (!provider) throw controlPlaneError("NATIVE_SECURITY_PROVIDER_REQUIRED");
+  const security = resolveNativeControlPlaneProvider(provider);
   const resolved = await invokePlatform("workspace_identity", () =>
     security.workspaceIdentity(workspace),
   );

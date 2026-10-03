@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { deriveScope, deriveScopeFromIdentity, encodeWorkspaceIdentity } from "../src/index.js";
+import { deriveScope } from "../src/index.js";
+import { deriveScopeFromIdentity, encodeWorkspaceIdentity } from "../src/scope.js";
 import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.js";
 
 interface IdentityVector {
@@ -69,7 +70,7 @@ describe("Rust workspace identity parity", () => {
       security.setIdentity(path, INODE_IDENTITY, canonicalPath);
     const scopes = await Promise.all(
       ["C:\\Work\\Agent", "c:/work/agent", "C:\\Renamed\\Agent"].map((path) =>
-        deriveScope(path, "config-v1", security, "win32"),
+        deriveScope(path, "config-v1", security.provider, "win32"),
       ),
     );
     expect(new Set(scopes.map(({ scopeId }) => scopeId))).toHaveLength(1);
@@ -83,7 +84,9 @@ describe("Rust workspace identity parity", () => {
     async (canonicalPath) => {
       const security = new FakePlatformSecurity();
       security.setIdentity("C:\\Alias", INODE_IDENTITY, canonicalPath);
-      await expect(deriveScope("C:\\Alias", "config", security, "win32")).rejects.toMatchObject({
+      await expect(
+        deriveScope("C:\\Alias", "config", security.provider, "win32"),
+      ).rejects.toMatchObject({
         code: "PLATFORM_SECURITY_FAILURE",
       });
     },
@@ -92,8 +95,8 @@ describe("Rust workspace identity parity", () => {
   it("changes scope when the effective config fingerprint changes", async () => {
     const security = new FakePlatformSecurity();
     security.setIdentity("/workspace", INODE_IDENTITY);
-    const first = await deriveScope("/workspace", "config-a", security, "linux");
-    const second = await deriveScope("/workspace", "config-b", security, "linux");
+    const first = await deriveScope("/workspace", "config-a", security.provider, "linux");
+    const second = await deriveScope("/workspace", "config-b", security.provider, "linux");
     expect(first.scopeId).not.toBe(second.scopeId);
   });
 
@@ -114,9 +117,9 @@ describe("Rust workspace identity parity", () => {
     "rejects invalid workspace %j before invoking the provider",
     async (workspace) => {
       const security = new FakePlatformSecurity();
-      await expect(deriveScope(workspace, "config", security, "linux")).rejects.toBeInstanceOf(
-        Error,
-      );
+      await expect(
+        deriveScope(workspace, "config", security.provider, "linux"),
+      ).rejects.toBeInstanceOf(Error);
       expect(security.operations).toEqual([]);
     },
   );
@@ -124,7 +127,9 @@ describe("Rust workspace identity parity", () => {
   it.each(["", "  ", "bad\0config", "bad\ud800"])("rejects invalid config %j", async (config) => {
     const security = new FakePlatformSecurity();
     security.setIdentity("/workspace", INODE_IDENTITY);
-    await expect(deriveScope("/workspace", config, security, "linux")).rejects.toMatchObject({
+    await expect(
+      deriveScope("/workspace", config, security.provider, "linux"),
+    ).rejects.toMatchObject({
       code: "INVALID_CONFIG_FINGERPRINT",
     });
   });
