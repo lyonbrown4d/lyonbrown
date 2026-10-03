@@ -2,7 +2,7 @@ import eslint from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const typeScriptFiles = ["scripts/**/*.ts", "apps/docs/.vitepress/**/*.mts"];
+const typeScriptFiles = ["scripts/**/*.ts", "apps/docs/.vitepress/**/*.mts", "packages/**/*.ts"];
 
 export default tseslint.config(
   {

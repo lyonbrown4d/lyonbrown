@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package lyonbrown.agent.v1;
+
+import "agent/v1/commands.proto";
+import "agent/v1/snapshot.proto";
+
+service AgentService {
+  rpc Health(HealthRequest) returns (HealthResponse);
+  rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
+  rpc StartTurn(StartTurnRequest) returns (CommandResponse);
+  rpc SteerCurrentTurn(SteerCurrentTurnRequest) returns (CommandResponse);
+  rpc QueueFollowUp(QueueFollowUpRequest) returns (CommandResponse);
+  rpc CancelTurn(CancelTurnRequest) returns (CommandResponse);
+  rpc ForceStop(ForceStopRequest) returns (CommandResponse);
+  rpc RespondApproval(RespondApprovalRequest) returns (CommandResponse);
+  rpc SelectSessionModel(SelectSessionModelRequest) returns (CommandResponse);
+  rpc StartModelDownload(StartModelDownloadRequest) returns (CommandResponse);
+  rpc CancelModelDownload(CancelModelDownloadRequest) returns (CommandResponse);
+  rpc GetSnapshot(GetSnapshotRequest) returns (RuntimeSnapshot);
+  rpc SubscribeEvents(SubscribeEventsRequest) returns (stream RuntimeEvent);
+}
