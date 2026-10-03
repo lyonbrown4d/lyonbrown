@@ -14,5 +14,9 @@ cap-std = { workspace = true }
 [target.'cfg(any(unix, windows))'.dependencies]
 file-id = "0.2.3"
 
+[dev-dependencies]
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+
 [lints]
 workspace = true

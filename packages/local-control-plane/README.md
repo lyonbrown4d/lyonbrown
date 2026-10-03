@@ -5,17 +5,17 @@ package is independent of Pi, gRPC-generated types, SQLite, and all UI code.
 
 ## Responsibilities
 
-- derive a stable scope ID from an existing canonical workspace and the
-  effective runtime configuration fingerprint;
+- encode Rust-compatible filesystem identities and derive a stable scope ID
+  from that identity plus the effective runtime configuration fingerprint;
 - create and strictly parse the versioned discovery descriptor shared with the
   Rust behavior oracle;
 - generate a new 32-byte bearer token and UUID server epoch for every endpoint;
-- publish discovery through a random same-directory temporary file and atomic
-  rename, with a 4 KiB read/write limit;
-- reject symbolic links, junctions, unexpected fields, duplicate JSON keys,
-  ambiguous endpoints, and non-owner-only storage;
-- provide separate startup and daemon-lifetime leases through
-  `proper-lockfile`;
+- delegate descriptor reads, random same-directory temporary publication,
+  cleanup, and atomic replacement to an anchored native directory handle;
+- reject unexpected fields, duplicate JSON keys, ambiguous endpoints, and
+  descriptors above 4 KiB;
+- delegate distinct startup and daemon-lifetime leases to OS kernel file
+  locks compatible with the Rust oracle;
 - bind commands to immutable discovery epochs and fence them both when queued
   and when executed.
 
@@ -23,42 +23,45 @@ The descriptor wire fields remain `schema_version`, `transport`, `address`,
 `pid`, `server_instance_id`, `token`, and `scope_fingerprint`. Public TypeScript
 objects use camel case and do not expose gRPC types.
 
-## Windows ACL integration is mandatory
+## Native security integration is a release gate
 
-Node's `chmod(0o600)` is not a Windows DACL boundary. On Windows,
-`openSecureRunDirectory` therefore fails with `WINDOWS_ACL_REQUIRED` unless
-`agentd` injects a `WindowsAclProtector`. There is deliberately no permissive
-fallback.
+The package intentionally ships no path-based Node filesystem fallback and no
+`proper-lockfile` fallback. `agentd` must inject a
+`PlatformControlPlaneSecurity`; otherwise every platform fails closed with
+`NATIVE_SECURITY_PROVIDER_REQUIRED`. Test fakes live only under `tests/` and
+are not exported by the package.
 
-The production adapter still needs to be implemented in the `agentd`
-composition root as a native Node-API Windows adapter. It must:
+The production Node-API adapter is not implemented yet and is an explicit
+agentd completion gate. Its Windows implementation must:
 
 1. create protected, current-user-only DACLs with inheritance disabled;
-2. verify owner and DACL on directories and files;
+2. verify current-user owner and DACL identity on directories and files;
 3. open paths with `FILE_FLAG_OPEN_REPARSE_POINT` and reject every reparse
    point;
-4. convert the supplied Node file descriptor with `_get_osfhandle` and verify
-   the already-open descriptor handle, rather than reopening an attacker-
-   replaceable path;
-5. keep descriptor, temporary file, and lock artifacts inside the protected run
-   directory.
+4. obtain the same high-resolution volume/file ID as Rust's `file-id` crate;
+5. retain an anchored directory handle for every relative read, temporary file,
+   atomic replacement, and lock operation.
 
-Until that adapter is provided, production Windows composition must stop. It
-must not shell out to `icacls`, accept a wide ACL, or pass tokens through
-arguments, environment variables, logs, or errors.
+Its POSIX implementation must retain a verified `dirfd`, traverse and open via
+`openat` with `O_NOFOLLOW`, verify owner and mode on the opened object, publish
+with same-directory `renameat`, and use `flock`/`fcntl` kernel locks compatible
+with Rust `std::fs::File::try_lock`. Bigint `dev`/`ino` may be used only on a
+platform proven by parity tests to match Rust. Windows Node `stat` values are
+not accepted as substitutes for volume/file ID. Scope framing targets the same
+64-bit Rust builds as the shipped daemon, so `usize` lengths are encoded as
+eight-byte little-endian values.
+
+Neither adapter may shell out, re-resolve an anchored parent path, weaken
+owner-only permissions, or expose tokens/native causes through logs or errors.
 
 ## Lease semantics
 
 `agentd.start.lock` elects one first-start client and is released once daemon
 readiness is established. `agentd.lock` is held for the complete daemon
-lifetime. `proper-lockfile` uses atomic directory creation, heartbeat updates,
-and a minimum five-second stale threshold. Recovery never calls a process-kill
-API and therefore cannot kill a live PID. All participants must use the same
-stale/update configuration; manual lock-directory deletion is unsupported and
-can compromise exclusivity, as documented by `proper-lockfile`. Its default
-compromise handler is intentionally retained so heartbeat or ownership loss
-fails closed immediately instead of letting a daemon continue without its
-lease.
+lifetime. They are ordinary files locked by the kernel, with ownership bound to
+the returned native lock handle. There is no timestamp/PID stale heuristic and
+no process-kill behavior. Releasing an old handle must never release a newer
+owner's lock.
 
 ## Verification
 

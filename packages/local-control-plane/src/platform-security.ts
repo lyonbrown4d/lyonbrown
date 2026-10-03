@@ -1,0 +1,92 @@
+import { ControlPlaneError, controlPlaneError, type ControlPlaneOperation } from "./errors.js";
+
+export type PlatformFailureCode =
+  | "access_denied"
+  | "insecure_acl"
+  | "insecure_mode"
+  | "io"
+  | "not_directory"
+  | "not_found"
+  | "oversize"
+  | "reparse_point"
+  | "wrong_owner"
+  | "wrong_type";
+
+export type PlatformResult<T> =
+  | { readonly ok: true; readonly value: T }
+  | { readonly ok: false; readonly code: PlatformFailureCode };
+
+export type WorkspaceIdentity =
+  | { readonly kind: "inode"; readonly deviceId: bigint; readonly inodeNumber: bigint }
+  | {
+      readonly kind: "windows-low-res";
+      readonly volumeSerialNumber: bigint;
+      readonly fileIndex: bigint;
+    }
+  | {
+      readonly kind: "windows-high-res";
+      readonly volumeSerialNumber: bigint;
+      readonly fileId: bigint;
+    };
+
+export interface KernelFileLock {
+  release(): Promise<PlatformResult<void>>;
+}
+
+export interface SecureDirectoryHandle {
+  /** Reads an opened, owner-verified regular file without following links. */
+  readPrivateFile(
+    name: "agentd.json",
+    maximumBytes: number,
+  ): Promise<PlatformResult<Uint8Array | null>>;
+  /** Uses a random same-directory temporary, fsync, atomic replace, and cleanup. */
+  atomicReplacePrivateFile(name: "agentd.json", bytes: Uint8Array): Promise<PlatformResult<void>>;
+  /** Acquires an owner-bound OS kernel lock on an ordinary relative file. */
+  tryAcquireKernelLock(
+    name: "agentd.start.lock" | "agentd.lock",
+  ): Promise<PlatformResult<KernelFileLock | null>>;
+  close(): Promise<PlatformResult<void>>;
+}
+
+export type PlatformSecurityContract =
+  | {
+      readonly platform: "windows";
+      readonly directoryOpen: "FILE_FLAG_OPEN_REPARSE_POINT";
+      readonly ownerProtection: "current-user-only-dacl";
+      readonly workspaceIdentity: "rust-file-id";
+      readonly kernelLock: "rust-compatible-file-lock";
+    }
+  | {
+      readonly platform: "posix";
+      readonly directoryOpen: "dirfd-openat-O_NOFOLLOW";
+      readonly ownerProtection: "current-uid-owner-mode";
+      readonly workspaceIdentity: "rust-dev-ino";
+      readonly kernelLock: "rust-compatible-file-lock";
+    };
+
+/** Native boundary: implementations must anchor all operations to verified handles. */
+export interface PlatformControlPlaneSecurity {
+  readonly contract: PlatformSecurityContract;
+  workspaceIdentity(path: string): Promise<PlatformResult<WorkspaceIdentity>>;
+  openSecureRunDirectory(path: string): Promise<PlatformResult<SecureDirectoryHandle>>;
+}
+
+export function unwrapPlatformResult<T>(
+  result: PlatformResult<T>,
+  operation: ControlPlaneOperation,
+): T {
+  if (!result.ok) throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation });
+  return result.value;
+}
+
+export async function invokePlatform<T>(
+  operation: ControlPlaneOperation,
+  invoke: () => Promise<PlatformResult<T>>,
+): Promise<T> {
+  try {
+    return unwrapPlatformResult(await invoke(), operation);
+  } catch (error) {
+    if (error instanceof ControlPlaneError) throw error;
+    throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation });
+  }
+}

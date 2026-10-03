@@ -1,0 +1,57 @@
+[
+  {
+    "name": "inode-before-rename",
+    "identity": {
+      "kind": "inode",
+      "device_id": "0x0102030405060708",
+      "inode_number": "0x1112131415161718"
+    },
+    "identity_hex": "776f726b73706163652d66696c652d69642d7631000101020304050607081112131415161718",
+    "config_fingerprint": "config-v1",
+    "scope_id": "79df268c65204a2607a7334254c5e69c4eba3425e1fb9557ba74e8e777abcc37"
+  },
+  {
+    "name": "inode-after-case-separator-rename",
+    "identity": {
+      "kind": "inode",
+      "device_id": "0x0102030405060708",
+      "inode_number": "0x1112131415161718"
+    },
+    "identity_hex": "776f726b73706163652d66696c652d69642d7631000101020304050607081112131415161718",
+    "config_fingerprint": "config-v1",
+    "scope_id": "79df268c65204a2607a7334254c5e69c4eba3425e1fb9557ba74e8e777abcc37"
+  },
+  {
+    "name": "inode-config-change",
+    "identity": {
+      "kind": "inode",
+      "device_id": "0x0102030405060708",
+      "inode_number": "0x1112131415161718"
+    },
+    "identity_hex": "776f726b73706163652d66696c652d69642d7631000101020304050607081112131415161718",
+    "config_fingerprint": "config-v2",
+    "scope_id": "de2d2c65fef482280b19530837cdf174db02c12d7dfd52916150b6cae7c9f5cd"
+  },
+  {
+    "name": "windows-low-res",
+    "identity": {
+      "kind": "windows-low-res",
+      "volume_serial_number": "0xa1b2c3d4",
+      "file_index": "0x0102030405060708"
+    },
+    "identity_hex": "776f726b73706163652d66696c652d69642d76310002a1b2c3d40102030405060708",
+    "config_fingerprint": "config-v1",
+    "scope_id": "04b1db84b7e555b141d4337d36911347412f1739c9615f89aef3254e34d1dab7"
+  },
+  {
+    "name": "windows-high-res",
+    "identity": {
+      "kind": "windows-high-res",
+      "volume_serial_number": "0x0102030405060708",
+      "file_id": "0x01020304050607081112131415161718"
+    },
+    "identity_hex": "776f726b73706163652d66696c652d69642d76310003010203040506070801020304050607081112131415161718",
+    "config_fingerprint": "config-v1",
+    "scope_id": "1598f38b9a9dd33b57592061df2acc55d226ee15645832a04c33ce80dc3bdf85"
+  }
+]
