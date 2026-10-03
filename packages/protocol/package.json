@@ -17,9 +17,11 @@
   "scripts": {
     "generate": "tsx scripts/generate.ts",
     "generate:check": "tsx scripts/check-generated.ts",
-    "lint": "eslint src/**/*.ts tests/**/*.ts scripts/**/*.ts",
+    "format": "prettier --write src/auth.ts src/boundary.ts src/index.ts \"scripts/**/*.ts\" \"tests/**/*.ts\" package.json \"tsconfig*.json\" vitest.config.ts README.md buf.yaml buf.gen.yaml && tsx scripts/proto-format.ts write",
+    "format:check": "prettier --check src/auth.ts src/boundary.ts src/index.ts \"scripts/**/*.ts\" \"tests/**/*.ts\" package.json \"tsconfig*.json\" vitest.config.ts README.md buf.yaml buf.gen.yaml && tsx scripts/proto-format.ts check",
+    "lint": "pnpm format:check && tsx scripts/proto-lint.ts && eslint src/**/*.ts tests/**/*.ts scripts/**/*.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "pnpm generate:check && vitest run",
+    "test": "pnpm generate:check && vitest run --coverage",
     "build": "pnpm generate:check && tsc -p tsconfig.build.json"
   },
   "dependencies": {
@@ -27,8 +29,10 @@
     "@grpc/grpc-js": "1.14.5"
   },
   "devDependencies": {
-    "grpc-tools": "1.13.1",
+    "@bufbuild/buf": "1.73.0",
+    "@vitest/coverage-v8": "4.1.11",
     "protobufjs": "8.8.0",
-    "ts-proto": "2.12.4"
+    "ts-proto": "2.12.4",
+    "zx": "8.8.5"
   }
 }

@@ -15,8 +15,8 @@
     "test": "tsx scripts/workspace-task.ts test",
     "build": "tsx scripts/workspace-task.ts build",
     "ci-gate": "tsx scripts/ci-gate.ts",
-    "format": "prettier --no-error-on-unmatched-pattern --write \"scripts/**/*.ts\" \"apps/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{ts,mts,mjs,json}\" \"tools/**/*.{ts,mts,mjs,json}\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\" apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
-    "format:check": "prettier --no-error-on-unmatched-pattern --check \"scripts/**/*.ts\" \"apps/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{ts,mts,mjs,json}\" \"tools/**/*.{ts,mts,mjs,json}\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\" apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
+    "format": "prettier --no-error-on-unmatched-pattern --write \"scripts/**/*.ts\" \"apps/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{md,yaml,yml}\" \"tools/**/*.{ts,mts,mjs,json}\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\" apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
+    "format:check": "prettier --no-error-on-unmatched-pattern --check \"scripts/**/*.ts\" \"apps/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{md,yaml,yml}\" \"tools/**/*.{ts,mts,mjs,json}\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\" apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
     "scripts:verify": "vitest run scripts/tests",
     "audit": "pnpm audit --registry=https://registry.npmjs.org"
   },

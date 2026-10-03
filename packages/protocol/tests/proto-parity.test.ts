@@ -1,6 +1,5 @@
-import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,52 +7,45 @@ import { fileURLToPath } from "node:url";
 import { Root } from "protobufjs";
 import { describe, expect, it } from "vitest";
 
+import { buildDescriptorSet } from "../scripts/generation.js";
+
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repositoryRoot = resolve(packageRoot, "../..");
 const nodeProtoRoot = join(packageRoot, "proto");
 const rustProtoRoot = join(repositoryRoot, "crates", "agent-protocol", "proto");
 const protoFiles = ["agent.proto", "commands.proto", "snapshot.proto"] as const;
 
-function normalizedBytes(path: string): Buffer {
-  return Buffer.from(readFileSync(path, "utf8").replaceAll("\r\n", "\n"), "utf8");
-}
-
-function descriptorSet(protoRoot: string): Buffer {
-  const directory = mkdtempSync(join(tmpdir(), "lyonbrown-proto-"));
-  const output = join(directory, "agent.pb");
-  const require = createRequire(import.meta.url);
-  const protocScript = require.resolve("grpc-tools/bin/protoc.js");
-
+async function descriptorSets(): Promise<readonly [Buffer, Buffer]> {
+  const directory = await mkdtemp(join(tmpdir(), "lyonbrown-proto-"));
+  const nodeOutput = join(directory, "node.pb");
+  const rustOutput = join(directory, "rust.pb");
   try {
-    const result = spawnSync(
-      process.execPath,
-      [
-        protocScript,
-        `--proto_path=${protoRoot}`,
-        `--descriptor_set_out=${output}`,
-        "--include_imports",
-        "agent/v1/agent.proto",
-      ],
-      { encoding: "utf8" },
-    );
-
-    expect(result.status, result.stderr).toBe(0);
-    return readFileSync(output);
+    await Promise.all([
+      buildDescriptorSet(nodeProtoRoot, nodeOutput),
+      buildDescriptorSet(rustProtoRoot, rustOutput),
+    ]);
+    return await Promise.all([readFile(nodeOutput), readFile(rustOutput)]);
   } finally {
-    rmSync(directory, { force: true, recursive: true });
+    await rm(directory, { force: true, recursive: true });
   }
 }
 
+function whitespaceNormalizedBytes(path: string): Buffer {
+  return Buffer.from(readFileSync(path, "utf8").replaceAll(/\s+/gu, " ").trim(), "utf8");
+}
+
 describe("Rust protocol parity", () => {
-  it.each(protoFiles)("keeps %s byte-equivalent after newline normalization", (file) => {
-    const rust = normalizedBytes(join(rustProtoRoot, "agent", "v1", file));
-    const node = normalizedBytes(join(nodeProtoRoot, "agent", "v1", file));
+  it.each(protoFiles)("keeps %s byte-equivalent after whitespace normalization", (file) => {
+    const rust = whitespaceNormalizedBytes(join(rustProtoRoot, "agent", "v1", file));
+    const node = whitespaceNormalizedBytes(join(nodeProtoRoot, "agent", "v1", file));
 
     expect(node).toEqual(rust);
   });
 
-  it("produces the same protobuf descriptor set as the Rust oracle", () => {
-    expect(descriptorSet(nodeProtoRoot)).toEqual(descriptorSet(rustProtoRoot));
+  it("produces the same protobuf descriptor set as the Rust oracle", async () => {
+    const [nodeDescriptor, rustDescriptor] = await descriptorSets();
+
+    expect(nodeDescriptor).toEqual(rustDescriptor);
   });
 });
 

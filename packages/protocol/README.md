@@ -17,9 +17,20 @@ removed with the Rust implementation.
 
 ## Generation
 
-`pnpm generate` uses the repository-pinned `grpc-tools` protoc and `ts-proto`.
-Generated code is committed. `pnpm generate:check` regenerates into a temporary
-directory and rejects stale output; it is part of both `test` and `build`.
+`pnpm generate` uses the exact, lockfile-pinned `@bufbuild/buf` binary and the
+local exact `ts-proto` plugin declared in `buf.gen.yaml`. No remote plugin or
+postinstall download participates in generation: the Buf postinstall is
+disabled and the platform package is resolved directly from pnpm's integrity-
+checked optional dependencies. Generated code is committed. `pnpm
+generate:check` regenerates into a system temporary directory and rejects stale
+output; it is part of both `test` and `build`.
+
+`pnpm format:check` asks the same locked Buf binary to write formatted output to
+a system temporary directory, then compares bytes with Node. The write command
+copies that verified output into the source tree. This avoids Buf's Windows
+dependency on an external `diff` program when either `--diff` or `--write`
+encounters a changed file, including machine-specific Git for Windows
+installations. Temporary directories are removed on success and failure.
 
 The generated `uint64` representation is `bigint`, and oneofs are discriminated
 unions. Consumers must use generated DTOs only at the transport boundary and

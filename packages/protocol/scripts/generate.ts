@@ -1,3 +1,3 @@
-import { generate, generatedDirectory } from "./generation.js";
+import { generate, generatedOutputBase } from "./generation.js";
 
-generate(generatedDirectory);
+await generate(generatedOutputBase);

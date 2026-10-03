@@ -10,8 +10,22 @@ export type BearerAuthorizationResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly code: "MISSING" | "MALFORMED" | "UNAUTHORIZED" };
 
-function decodeCanonicalToken(token: string): Buffer | undefined {
-  if (token.length !== TOKEN_LENGTH || !BASE64_URL_NO_PADDING.test(token)) {
+export type InvalidBearerTokenCode = "INVALID_BEARER_TOKEN" | "INVALID_EXPECTED_TOKEN";
+
+export class InvalidBearerTokenError extends Error {
+  public override readonly name = "InvalidBearerTokenError";
+
+  public constructor(public readonly code: InvalidBearerTokenCode) {
+    super("bearer token must be canonical unpadded base64url encoding of 32 bytes");
+  }
+}
+
+function decodeCanonicalToken(token: unknown): Buffer | undefined {
+  if (
+    typeof token !== "string" ||
+    token.length !== TOKEN_LENGTH ||
+    !BASE64_URL_NO_PADDING.test(token)
+  ) {
     return undefined;
   }
   const decoded = Buffer.from(token, "base64url");
@@ -21,26 +35,34 @@ function decodeCanonicalToken(token: string): Buffer | undefined {
   return decoded;
 }
 
-function requireCanonicalToken(token: string): Buffer {
-  const decoded = decodeCanonicalToken(token);
-  if (decoded === undefined) {
-    throw new TypeError("bearer token must be canonical unpadded base64url encoding of 32 bytes");
-  }
-  return decoded;
+interface CanonicalToken {
+  readonly decoded: Buffer;
+  readonly encoded: string;
 }
 
-export function bearerAuthorization(token: string): string {
-  requireCanonicalToken(token);
-  return `Bearer ${token}`;
+function requireCanonicalToken(token: unknown, code: InvalidBearerTokenCode): CanonicalToken {
+  const decoded = decodeCanonicalToken(token);
+  if (decoded === undefined || typeof token !== "string") {
+    throw new InvalidBearerTokenError(code);
+  }
+  return { decoded, encoded: token };
+}
+
+export function bearerAuthorization(token: unknown): string {
+  const canonical = requireCanonicalToken(token, "INVALID_BEARER_TOKEN");
+  return `Bearer ${canonical.encoded}`;
 }
 
 export function authorizeBearer(
-  authorization: string | undefined,
-  expectedToken: string,
+  authorization: unknown,
+  expectedToken: unknown,
 ): BearerAuthorizationResult {
-  const expected = requireCanonicalToken(expectedToken);
+  const expected = requireCanonicalToken(expectedToken, "INVALID_EXPECTED_TOKEN");
   if (authorization === undefined) {
     return { ok: false, code: "MISSING" };
+  }
+  if (typeof authorization !== "string") {
+    return { ok: false, code: "MALFORMED" };
   }
 
   const separator = authorization.indexOf(" ");
@@ -57,5 +79,7 @@ export function authorizeBearer(
   if (candidate === undefined) {
     return { ok: false, code: "MALFORMED" };
   }
-  return timingSafeEqual(expected, candidate) ? { ok: true } : { ok: false, code: "UNAUTHORIZED" };
+  return timingSafeEqual(expected.decoded, candidate)
+    ? { ok: true }
+    : { ok: false, code: "UNAUTHORIZED" };
 }

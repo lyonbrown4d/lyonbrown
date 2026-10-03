@@ -1,0 +1,19 @@
+version: v2
+clean: true
+plugins:
+  - local:
+      - node
+      - ./node_modules/ts-proto/protoc-gen-ts_proto
+    out: generated
+    opt:
+      - env=node
+      - exportCommonSymbols=false
+      - forceLong=bigint
+      - importSuffix=.js
+      - oneof=unions
+      - outputJsonMethods=false
+      - outputServices=grpc-js
+      - outputTypeRegistry=true
+      - useExactTypes=true
+inputs:
+  - directory: proto

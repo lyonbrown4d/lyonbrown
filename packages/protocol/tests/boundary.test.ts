@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   AUTHORIZATION_METADATA_KEY,
   GRPC_CHANNEL_OPTIONS,
+  InvalidBearerTokenError,
   MAX_GRPC_MESSAGE_BYTES,
   MAX_STRING_ID_BYTES,
   MAX_TEXT_BYTES,
@@ -38,12 +39,43 @@ describe("protocol constants", () => {
 describe("transport boundary validation", () => {
   it("counts string ID limits in UTF-8 bytes", () => {
     expect(validateStringId("界".repeat(42))).toEqual({ ok: true, bytes: 126 });
+    expect(validateStringId(`${"界".repeat(42)}ab`)).toEqual({ ok: true, bytes: 128 });
     expect(validateStringId("界".repeat(43))).toEqual({
       ok: false,
       code: "STRING_ID_TOO_LARGE",
       bytes: 129,
       limit: 128,
     });
+  });
+
+  it.each([
+    ["Buffer", Buffer.from("id")],
+    ["boxed string", Object("id")],
+    ["proxy", new Proxy(Object("id") as object, {})],
+  ])("rejects a %s without coercion", (_label, value) => {
+    expect(validateStringId(value)).toEqual({
+      ok: false,
+      code: "STRING_REQUIRED",
+    });
+    expect(validateText(value)).toEqual({
+      ok: false,
+      code: "STRING_REQUIRED",
+    });
+  });
+
+  it("rejects isolated UTF-16 surrogates with a stable code", () => {
+    expect(validateStringId("\ud800")).toEqual({
+      ok: false,
+      code: "STRING_NOT_WELL_FORMED",
+    });
+    expect(validateText("\udfff")).toEqual({
+      ok: false,
+      code: "STRING_NOT_WELL_FORMED",
+    });
+  });
+
+  it("accepts a well-formed UTF-16 surrogate pair", () => {
+    expect(validateStringId("🚀")).toEqual({ ok: true, bytes: 4 });
   });
 
   it("rejects an empty string ID with a machine-readable code", () => {
@@ -83,6 +115,8 @@ describe("bearer authentication", () => {
 
   it("returns stable codes for missing, malformed, and unauthorized values", () => {
     expect(authorizeBearer(undefined, token)).toEqual({ ok: false, code: "MISSING" });
+    expect(authorizeBearer(Buffer.from(token), token)).toEqual({ ok: false, code: "MALFORMED" });
+    expect(authorizeBearer(token, token)).toEqual({ ok: false, code: "MALFORMED" });
     expect(authorizeBearer("Basic abc", token)).toEqual({ ok: false, code: "MALFORMED" });
     expect(authorizeBearer(`Bearer ${otherToken}`, token)).toEqual({
       ok: false,
@@ -91,7 +125,7 @@ describe("bearer authentication", () => {
   });
 
   it("rejects metadata injection and non-canonical tokens", () => {
-    expect(() => bearerAuthorization(`${token}\r\nattack`)).toThrow();
+    expect(() => bearerAuthorization(`${token}\r\nattack`)).toThrow(InvalidBearerTokenError);
     expect(authorizeBearer(`Bearer ${token} extra`, token)).toEqual({
       ok: false,
       code: "MALFORMED",
@@ -100,5 +134,15 @@ describe("bearer authentication", () => {
       ok: false,
       code: "MALFORMED",
     });
+  });
+
+  it("fails closed with a typed error when the expected token is invalid", () => {
+    try {
+      authorizeBearer(`Bearer ${token}`, "not-a-token");
+      expect.fail("invalid expected token must throw");
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(InvalidBearerTokenError);
+      expect(error).toMatchObject({ code: "INVALID_EXPECTED_TOKEN" });
+    }
   });
 });

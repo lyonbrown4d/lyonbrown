@@ -7,4 +7,6 @@ minimumReleaseAge: 1440
 
 onlyBuiltDependencies:
   - esbuild
-  - grpc-tools
+
+ignoredBuiltDependencies:
+  - "@bufbuild/buf"
