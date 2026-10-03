@@ -6,17 +6,24 @@ import {
   assertNodeVersion,
   assertPnpmVersion,
   inspectRepository,
+  type PnpmRunner,
 } from "./preflight-lib.js";
 import { configureZxPlatform } from "./zx-platform.js";
 
 configureZxPlatform(process.platform, usePowerShell);
+
+const LOCKFILE_CHECK_TIMEOUT_MS = 60_000;
+
+const runPnpm: PnpmRunner = async (cwd, args) => {
+  await $({ cwd, quiet: true, timeout: LOCKFILE_CHECK_TIMEOUT_MS })`pnpm ${args}`;
+};
 
 async function main(): Promise<void> {
   assertNodeVersion(process.version);
   const pnpmVersion = (await $({ quiet: true })`pnpm --version`).stdout.trim();
   assertPnpmVersion(pnpmVersion);
 
-  const failures = await inspectRepository(process.cwd());
+  const failures = await inspectRepository(process.cwd(), runPnpm);
   if (failures.length > 0) {
     throw new Error(`Preflight failed:\n- ${failures.join("\n- ")}`);
   }

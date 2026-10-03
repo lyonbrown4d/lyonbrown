@@ -4,6 +4,14 @@ import { join } from "node:path";
 export const NODE_VERSION = "24.15.0";
 export const PNPM_VERSION = "10.33.4";
 export const PACKAGE_MANAGER = `pnpm@${PNPM_VERSION}`;
+export const FROZEN_LOCKFILE_ARGS = [
+  "install",
+  "--lockfile-only",
+  "--frozen-lockfile",
+  "--ignore-scripts",
+] as const;
+
+export type PnpmRunner = (cwd: string, args: readonly string[]) => Promise<void>;
 
 export const REQUIRED_FILES = [
   "package.json",
@@ -86,7 +94,15 @@ function equalValues(left: readonly string[], right: readonly string[]): boolean
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-export async function inspectRepository(root: string): Promise<string[]> {
+export async function validateFrozenLockfile(root: string, runPnpm: PnpmRunner): Promise<void> {
+  const lockfile = await readFile(join(root, "pnpm-lock.yaml"), "utf8");
+  if (lockfile.trim() === "") {
+    throw new Error("pnpm-lock.yaml is empty");
+  }
+  await runPnpm(root, FROZEN_LOCKFILE_ARGS);
+}
+
+export async function inspectRepository(root: string, runPnpm: PnpmRunner): Promise<string[]> {
   const failures: string[] = [];
   await Promise.all(
     REQUIRED_FILES.map(async (relativePath) => {
@@ -126,6 +142,12 @@ export async function inspectRepository(root: string): Promise<string[]> {
     }
   } catch (error: unknown) {
     failures.push(`Unable to validate pnpm-workspace.yaml: ${String(error)}`);
+  }
+
+  try {
+    await validateFrozenLockfile(root, runPnpm);
+  } catch (error: unknown) {
+    failures.push(`Frozen lockfile validation failed: ${String(error)}`);
   }
 
   return failures.sort();

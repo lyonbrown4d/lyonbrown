@@ -18,7 +18,7 @@ The non-negotiable invariants are:
 ### Applications
 
 - `apps/agentd`: long-lived local daemon and composition root; hosts gRPC, the kernel, Pi adapters, EventStore, tool execution, model setup, and local control-plane services.
-- `apps/agent`: terminal client built with Pi TUI (`@mariozechner/pi-tui`) and Lyonbrown UI models; it communicates with `agentd` over gRPC.
+- `apps/agent`: terminal client built with Pi TUI (`@earendil-works/pi-tui`) and Lyonbrown UI models; it communicates with `agentd` over gRPC.
 - `apps/desktop`: Electron + React desktop client; it uses the same client and UI-model contracts as the TUI and does not host the runtime.
 - `apps/docs`: bilingual VitePress documentation.
 
@@ -37,9 +37,9 @@ The non-negotiable invariants are:
 
 ### Technology mapping
 
-- Pi Agent Core (`@mariozechner/pi-agent-core`) executes agent loops behind a kernel adapter.
-- Pi AI (`@mariozechner/pi-ai`) provides model-provider integration behind Lyonbrown model ports.
-- Pi TUI (`@mariozechner/pi-tui`) supplies terminal rendering primitives for `apps/agent`.
+- Pi Agent Core (`@earendil-works/pi-agent-core`) executes agent loops behind a kernel adapter.
+- Pi AI (`@earendil-works/pi-ai`) provides model-provider integration behind Lyonbrown model ports.
+- Pi TUI (`@earendil-works/pi-tui`) supplies terminal rendering primitives for `apps/agent`.
 - `node-llama-cpp` supplies the default local inference adapter.
 - `@grpc/grpc-js` and generated protobuf bindings preserve the daemon/client boundary.
 - Electron + React implement the desktop shell and UI while consuming `packages/client` and `packages/ui-model`.

@@ -1,8 +1,9 @@
 # Local-First 通用 Agent Runtime — workspace 根
-# M0..M9 MVP 与增量工作区索引；范围与验收见 docs/zh/src/plans/mvp-implementation-plan.md。
+# M0..M9 MVP 与增量工作区索引；范围与验收见 apps/docs/zh/plans/mvp-implementation-plan.md。
 
 [workspace]
 resolver = "2"
+exclude = ["apps/docs"]
 members = [
     "crates/*",
     "providers/*",
@@ -21,7 +22,7 @@ unsafe_code = "forbid"
 all = "warn"
 
 [workspace.dependencies]
-# --- 内部 crate（严格 DAG：见 docs/zh/src/plans/mvp-implementation-plan.md §1）---
+# --- 内部 crate（严格 DAG：见 apps/docs/zh/plans/mvp-implementation-plan.md §1）---
 agent-core = { path = "crates/agent-core" }
 agent-app = { path = "crates/agent-app" }
 agent-client = { path = "crates/agent-client" }

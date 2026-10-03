@@ -18,7 +18,7 @@ Lyonbrown 将从当前 Rust 实现迁移到 Node.js 24 LTS、pnpm、ESM 与 stri
 ### 应用
 
 - `apps/agentd`：常驻本地 daemon 与组合根，承载 gRPC、kernel、Pi 适配器、EventStore、工具执行、模型设置和本地控制面。
-- `apps/agent`：基于 Pi TUI（`@mariozechner/pi-tui`）和 Lyonbrown UI model 的终端 client，通过 gRPC 与 `agentd` 通信。
+- `apps/agent`：基于 Pi TUI（`@earendil-works/pi-tui`）和 Lyonbrown UI model 的终端 client，通过 gRPC 与 `agentd` 通信。
 - `apps/desktop`：Electron + React 桌面 client，与 TUI 共用 client 和 UI-model 契约，不承载 runtime。
 - `apps/docs`：双语 VitePress 文档站。
 
@@ -37,9 +37,9 @@ Lyonbrown 将从当前 Rust 实现迁移到 Node.js 24 LTS、pnpm、ESM 与 stri
 
 ### 技术映射
 
-- Pi Agent Core（`@mariozechner/pi-agent-core`）通过 kernel 适配器执行 agent loop。
-- Pi AI（`@mariozechner/pi-ai`）通过 Lyonbrown model port 提供模型供应商集成。
-- Pi TUI（`@mariozechner/pi-tui`）为 `apps/agent` 提供终端渲染原语。
+- Pi Agent Core（`@earendil-works/pi-agent-core`）通过 kernel 适配器执行 agent loop。
+- Pi AI（`@earendil-works/pi-ai`）通过 Lyonbrown model port 提供模型供应商集成。
+- Pi TUI（`@earendil-works/pi-tui`）为 `apps/agent` 提供终端渲染原语。
 - `node-llama-cpp` 提供默认本地推理适配器。
 - `@grpc/grpc-js` 与生成的 protobuf binding 保持 daemon/client 边界。
 - Electron + React 实现桌面 shell 和 UI，并消费 `packages/client` 与 `packages/ui-model`。
