@@ -4,7 +4,7 @@ import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 import type { BudgetTracker } from "./budget.js";
-import { KernelRuntimeError } from "./errors.js";
+import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.js";
 import type { SecretRedactor } from "./redaction.js";
 import {
   assertByteLimit,
@@ -23,6 +23,7 @@ import {
   raceAbort,
   replaceSecretRefsForValidation,
   resolveSecrets,
+  toExternalToolError,
   toSafePreExecutionError,
   toSafeToolError,
 } from "./tool-support.js";
@@ -133,9 +134,9 @@ export class ToolExecutor {
         // This check must happen before evaluating the effectful expression.
         signal.throwIfAborted();
         execution = tool.execute({ callId: safeCallId, arguments: resolved, signal });
-      } catch (error: unknown) {
+      } catch {
         if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
-        const safe = toSafeToolError(error, this.redactor);
+        const safe = toExternalToolError();
         await this.emitFailure(safeCallId, safeToolName, safe);
         throw safe;
       }
@@ -143,9 +144,9 @@ export class ToolExecutor {
       let result: Awaited<ReturnType<KernelToolDefinition["execute"]>>;
       try {
         result = await raceAbort(execution, signal);
-      } catch (error: unknown) {
+      } catch {
         if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
-        const safe = toSafeToolError(error, this.redactor);
+        const safe = toExternalToolError();
         await this.emitFailure(safeCallId, safeToolName, safe);
         throw safe;
       }
@@ -156,7 +157,7 @@ export class ToolExecutor {
       try {
         const normalizedResult = this.redactor.json(result, this.#resultLimits);
         if (!isJsonObject(normalizedResult) || typeof normalizedResult.content !== "string") {
-          throw new KernelRuntimeError("UNTRUSTED_VALUE_INVALID", "Tool result shape is invalid");
+          throw kernelError("UNTRUSTED_VALUE_INVALID", "Tool result shape is invalid");
         }
         content = normalizedResult.content;
         details = normalizedResult.details;
@@ -170,7 +171,7 @@ export class ToolExecutor {
           safeCallId,
           safeToolName,
           signal,
-          error instanceof KernelRuntimeError ? error.code : "TOOL_RESULT_INVALID",
+          copyInternalKernelError(error)?.code ?? "TOOL_RESULT_INVALID",
         );
       }
       if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
@@ -187,8 +188,9 @@ export class ToolExecutor {
         details: details as JsonValue | undefined,
       };
     } catch (error: unknown) {
-      if (error instanceof KernelRuntimeError && error.code === "TOOL_OUTCOME_UNKNOWN") {
-        this.markFatal(error);
+      const internal = copyInternalKernelError(error);
+      if (internal?.code === "TOOL_OUTCOME_UNKNOWN") {
+        this.markFatal(internal);
       }
       throw error;
     }
@@ -199,19 +201,24 @@ export class ToolExecutor {
     arguments_: Readonly<Record<string, unknown>>,
   ): Readonly<Record<string, KernelJsonValue>> {
     if (!isKnownRisk(tool.risk)) {
-      throw new KernelRuntimeError("TOOL_DENIED", "Tool has no recognized risk classification");
+      throw kernelError("TOOL_DENIED", "Tool has no recognized risk classification");
     }
     if (
       !tool.permissions.every((permission) => this.options.toolRegistry.hasPermission(permission))
     ) {
-      throw new KernelRuntimeError("TOOL_DENIED", "Required tool permission is not granted");
+      throw kernelError("TOOL_DENIED", "Required tool permission is not granted");
     }
     const sanitized = sanitizeJson(arguments_, this.#limits);
     if (!isJsonObject(sanitized)) {
-      throw new KernelRuntimeError("TOOL_ARGUMENTS_INVALID", "Tool arguments must be an object");
+      throw kernelError("TOOL_ARGUMENTS_INVALID", "Tool arguments must be an object");
     }
-    if (!Value.Check(tool.inputSchema as TSchema, replaceSecretRefsForValidation(sanitized))) {
-      throw new KernelRuntimeError(
+    if (
+      !Value.Check(
+        tool.inputSchema as TSchema,
+        replaceSecretRefsForValidation(sanitized, this.options.budget.maxCollectionEntries),
+      )
+    ) {
+      throw kernelError(
         "TOOL_ARGUMENTS_INVALID",
         "Tool arguments do not match the declared schema",
       );
@@ -246,10 +253,10 @@ export class ToolExecutor {
       signal.throwIfAborted();
       const normalizedResponse = sanitizeJson(response, this.#limits);
       if (!isJsonObject(normalizedResponse) || normalizedResponse.decision !== "approve") {
-        throw new KernelRuntimeError("TOOL_DENIED", "Tool approval denied");
+        throw kernelError("TOOL_DENIED", "Tool approval denied");
       }
     } catch {
-      throw new KernelRuntimeError("TOOL_DENIED", "Tool approval unavailable");
+      throw kernelError("TOOL_DENIED", "Tool approval unavailable");
     }
   }
 
@@ -273,7 +280,7 @@ export class ToolExecutor {
     signal: AbortSignal,
     code = abortCode(signal),
   ): Promise<never> {
-    const fatal = new KernelRuntimeError(
+    const fatal = kernelError(
       "TOOL_OUTCOME_UNKNOWN",
       "Tool outcome cannot be confirmed after durable intent",
     );

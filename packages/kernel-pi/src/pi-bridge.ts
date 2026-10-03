@@ -1,5 +1,4 @@
 import type { StreamFn } from "@earendil-works/pi-agent-core";
-import { types } from "node:util";
 import {
   createAssistantMessageEventStream,
   type AssistantMessage,
@@ -10,7 +9,8 @@ import {
 } from "@earendil-works/pi-ai";
 
 import type { BudgetTracker } from "./budget.js";
-import { KernelRuntimeError } from "./errors.js";
+import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.js";
+import { inspectRawModelEvent } from "./model-event-inspection.js";
 import { assertUsage, toKernelMessage, toPiUsage } from "./pi-conversion.js";
 import {
   assertByteLimit,
@@ -21,6 +21,8 @@ import {
 import type {
   KernelJsonValue,
   KernelModelAdapter,
+  KernelModelDescriptor,
+  KernelModelRequest,
   KernelModelStreamEvent,
   KernelModelTool,
 } from "./types.js";
@@ -37,6 +39,7 @@ const ZERO_USAGE: Usage = {
 interface PiBridgeOptions {
   readonly sessionId: string;
   readonly adapter: KernelModelAdapter;
+  readonly model: KernelModelDescriptor;
   readonly tracker: () => BudgetTracker;
   readonly limits: SanitizationLimits;
   readonly outputLimits: SanitizationLimits;
@@ -68,14 +71,14 @@ async function produceStream(
     stream.push({ type: "start", partial: snapshot(partial) });
     const request = {
       sessionId: options.sessionId,
-      model: options.adapter.model,
+      model: options.model,
       messages: messages.map((message) => toKernelMessage(message, options.limits)),
       tools: options.tools,
       signal: effectiveSignal,
       maxOutputBytes: options.tracker().remainingOutputBytes(),
     };
     effectiveSignal.throwIfAborted();
-    for await (const event of options.adapter.stream(request)) {
+    for await (const event of safeAdapterStream(options.adapter, request)) {
       if (effectiveSignal.aborted) {
         finishError(stream, partial, "aborted", "Model request aborted");
         return;
@@ -88,8 +91,7 @@ async function produceStream(
         break;
       }
     }
-    if (!done)
-      throw new KernelRuntimeError("MODEL_ERROR", "Model stream ended without a terminal event");
+    if (!done) throw kernelError("MODEL_ERROR", "Model stream ended without a terminal event");
     partial = { ...partial, usage };
   } catch (error: unknown) {
     if (effectiveSignal.aborted) {
@@ -97,11 +99,20 @@ async function produceStream(
       return;
     }
     const runtimeError =
-      error instanceof KernelRuntimeError
-        ? error
-        : new KernelRuntimeError("MODEL_ERROR", "Model adapter failed");
+      copyInternalKernelError(error) ?? kernelError("INTERNAL", "Kernel runtime failed");
     options.onFatal(runtimeError);
     finishError(stream, partial, "error", runtimeError.message);
+  }
+}
+
+async function* safeAdapterStream(
+  adapter: KernelModelAdapter,
+  request: KernelModelRequest,
+): AsyncIterable<KernelModelStreamEvent> {
+  try {
+    yield* adapter.stream(request);
+  } catch {
+    throw kernelError("MODEL_ERROR", "Model adapter failed");
   }
 }
 
@@ -111,7 +122,7 @@ async function consumeModelEvent(
   rawEvent: KernelModelStreamEvent,
   options: PiBridgeOptions,
 ): Promise<{ partial: AssistantMessage; usage?: Usage; done: boolean }> {
-  const rawEventType = inspectRawEvent(rawEvent, options.tracker());
+  const rawEventType = inspectRawModelEvent(rawEvent, options.tracker());
   let sanitizedEvent: KernelJsonValue;
   try {
     sanitizedEvent = sanitizeJson(
@@ -119,16 +130,17 @@ async function consumeModelEvent(
       rawEventType === "text_delta" ? options.outputLimits : options.limits,
     );
   } catch (error: unknown) {
+    const internal = copyInternalKernelError(error);
     if (
-      error instanceof KernelRuntimeError &&
-      (error.code === "INPUT_BUDGET_EXCEEDED" || error.code === "OUTPUT_BUDGET_EXCEEDED")
+      internal &&
+      (internal.code === "INPUT_BUDGET_EXCEEDED" || internal.code === "OUTPUT_BUDGET_EXCEEDED")
     ) {
-      throw error;
+      throw internal;
     }
-    throw new KernelRuntimeError("MODEL_ERROR", "Invalid model event denied");
+    throw kernelError("MODEL_ERROR", "Invalid model event denied");
   }
   if (!isJsonObject(sanitizedEvent)) {
-    throw new KernelRuntimeError("MODEL_ERROR", "Model event must be an object");
+    throw kernelError("MODEL_ERROR", "Model event must be an object");
   }
   const eventType = sanitizedEvent.type;
   if (
@@ -138,7 +150,7 @@ async function consumeModelEvent(
     eventType !== "error" &&
     eventType !== "done"
   ) {
-    throw new KernelRuntimeError("MODEL_ERROR", "Unknown model event denied");
+    throw kernelError("MODEL_ERROR", "Unknown model event denied");
   }
   if (
     eventType === "done" &&
@@ -146,7 +158,7 @@ async function consumeModelEvent(
     sanitizedEvent.reason !== "length" &&
     sanitizedEvent.reason !== "tool_use"
   ) {
-    throw new KernelRuntimeError("MODEL_ERROR", "Invalid model stop reason");
+    throw kernelError("MODEL_ERROR", "Invalid model stop reason");
   }
   const event = sanitizedEvent as unknown as KernelModelStreamEvent;
   if (event.type === "usage") {
@@ -162,8 +174,7 @@ async function consumeModelEvent(
       stream.push({ type: "text_start", contentIndex: index, partial: snapshot(partial) });
     }
     const block = partial.content[index];
-    if (block?.type !== "text")
-      throw new KernelRuntimeError("MODEL_ERROR", "Invalid text stream state");
+    if (block?.type !== "text") throw kernelError("MODEL_ERROR", "Invalid text stream state");
     const updated = { ...block, text: block.text + delta };
     partial = {
       ...partial,
@@ -179,7 +190,7 @@ async function consumeModelEvent(
     const name = sanitizeText(event.name);
     const arguments_ = sanitizeJson(event.arguments, options.limits);
     if (!isJsonObject(arguments_)) {
-      throw new KernelRuntimeError("MODEL_ERROR", "Tool arguments must be an object");
+      throw kernelError("MODEL_ERROR", "Tool arguments must be an object");
     }
     assertByteLimit(
       JSON.stringify(arguments_),
@@ -211,7 +222,7 @@ async function consumeModelEvent(
   if (event.type === "error") {
     const reason = event.code === "aborted" ? "aborted" : "error";
     const message = event.code === "aborted" ? "Model request aborted" : "Model request failed";
-    options.onFatal(new KernelRuntimeError("MODEL_ERROR", message));
+    options.onFatal(kernelError("MODEL_ERROR", message));
     finishError(stream, partial, reason, message);
     return { partial, done: true };
   }
@@ -260,8 +271,8 @@ function createMessage(
     role: "assistant",
     content: [],
     api: "lyonbrown-kernel-adapter",
-    provider: options.adapter.model.provider,
-    model: options.adapter.model.id,
+    provider: options.model.provider,
+    model: options.model.id,
     usage: ZERO_USAGE,
     stopReason,
     timestamp: Date.now(),
@@ -274,22 +285,4 @@ function snapshot(message: AssistantMessage): AssistantMessage {
 
 function isJsonObject(value: KernelJsonValue): value is Readonly<Record<string, KernelJsonValue>> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
-}
-
-function inspectRawEvent(event: unknown, tracker: BudgetTracker): unknown {
-  if (typeof event !== "object" || event === null || types.isProxy(event)) return undefined;
-  const descriptors = Object.getOwnPropertyDescriptors(event);
-  const type = descriptors.type;
-  const delta = descriptors.delta;
-  if (
-    type &&
-    delta &&
-    "value" in type &&
-    "value" in delta &&
-    type.value === "text_delta" &&
-    typeof delta.value === "string"
-  ) {
-    tracker.output(delta.value);
-  }
-  return type && "value" in type ? type.value : undefined;
 }

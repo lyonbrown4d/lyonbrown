@@ -1,3 +1,5 @@
+import { types } from "node:util";
+
 export type KernelErrorCode =
   | "INPUT_BUDGET_EXCEEDED"
   | "OUTPUT_BUDGET_EXCEEDED"
@@ -11,7 +13,27 @@ export type KernelErrorCode =
   | "UNTRUSTED_VALUE_INVALID"
   | "SESSION_BUSY"
   | "EVENT_SINK_UNAVAILABLE"
-  | "MODEL_ERROR";
+  | "MODEL_ERROR"
+  | "INTERNAL";
+
+const ERROR_CODES = new Set<KernelErrorCode>([
+  "INPUT_BUDGET_EXCEEDED",
+  "OUTPUT_BUDGET_EXCEEDED",
+  "TURN_BUDGET_EXCEEDED",
+  "STEP_BUDGET_EXCEEDED",
+  "TOOL_RESULT_BUDGET_EXCEEDED",
+  "TOOL_TIMEOUT",
+  "TOOL_OUTCOME_UNKNOWN",
+  "TOOL_DENIED",
+  "TOOL_ARGUMENTS_INVALID",
+  "UNTRUSTED_VALUE_INVALID",
+  "SESSION_BUSY",
+  "EVENT_SINK_UNAVAILABLE",
+  "MODEL_ERROR",
+  "INTERNAL",
+]);
+const INTERNAL_ERRORS = new WeakSet<KernelRuntimeError>();
+const MAX_ERROR_MESSAGE_BYTES = 4_096;
 
 export class KernelRuntimeError extends Error {
   readonly code: KernelErrorCode;
@@ -23,20 +45,42 @@ export class KernelRuntimeError extends Error {
   }
 }
 
-export function asSafeError(error: unknown): Error {
-  return error instanceof Error ? error : new Error("Unknown runtime error");
+export function kernelError(code: KernelErrorCode, message: string): KernelRuntimeError {
+  const safe =
+    ERROR_CODES.has(code) && Buffer.byteLength(message, "utf8") <= MAX_ERROR_MESSAGE_BYTES
+      ? new KernelRuntimeError(code, message)
+      : new KernelRuntimeError("INTERNAL", "Kernel runtime failed");
+  INTERNAL_ERRORS.add(safe);
+  return Object.freeze(safe);
 }
 
-export function safeErrorMessage(error: unknown): string {
-  if (typeof error !== "object" || error === null || types.isProxy(error)) {
-    return "Unknown runtime error";
+export function copyInternalKernelError(error: unknown): KernelRuntimeError | undefined {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    types.isProxy(error) ||
+    !INTERNAL_ERRORS.has(error as KernelRuntimeError) ||
+    !Object.isFrozen(error)
+  ) {
+    return undefined;
   }
-  const descriptor = Object.getOwnPropertyDescriptor(error, "message");
-  if (!descriptor || !("value" in descriptor) || typeof descriptor.value !== "string") {
-    return "Unknown runtime error";
+  const code = Object.getOwnPropertyDescriptor(error, "code");
+  const message = Object.getOwnPropertyDescriptor(error, "message");
+  if (
+    !code ||
+    !("value" in code) ||
+    typeof code.value !== "string" ||
+    !ERROR_CODES.has(code.value as KernelErrorCode) ||
+    !message ||
+    !("value" in message) ||
+    typeof message.value !== "string" ||
+    Buffer.byteLength(message.value, "utf8") > MAX_ERROR_MESSAGE_BYTES
+  ) {
+    return undefined;
   }
-  return Buffer.byteLength(descriptor.value, "utf8") <= 4_096
-    ? descriptor.value
-    : "Runtime error message exceeded resource budget";
+  return kernelError(code.value as KernelErrorCode, message.value);
 }
-import { types } from "node:util";
+
+export function toPublicKernelError(error: unknown): KernelRuntimeError {
+  return copyInternalKernelError(error) ?? kernelError("INTERNAL", "Kernel runtime failed");
+}

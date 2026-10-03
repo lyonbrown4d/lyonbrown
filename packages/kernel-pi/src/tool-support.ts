@@ -1,6 +1,5 @@
-import { types } from "node:util";
-
-import { KernelRuntimeError, safeErrorMessage, type KernelErrorCode } from "./errors.js";
+import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.js";
+import { inspectOwnDataProperties } from "./inspection.js";
 import type { SecretRedactor } from "./redaction.js";
 import {
   assertByteLimit,
@@ -11,13 +10,26 @@ import {
 } from "./sanitization.js";
 import type { KernelJsonValue, KernelToolDefinition } from "./types.js";
 
-export function replaceSecretRefsForValidation(value: KernelJsonValue): KernelJsonValue {
+export function replaceSecretRefsForValidation(
+  value: KernelJsonValue,
+  maximumKeys: number,
+): KernelJsonValue {
   if (isSecretReference(value)) return "[SECRET]";
-  if (Array.isArray(value)) return value.map(replaceSecretRefsForValidation);
+  if (Array.isArray(value)) {
+    const entries = value as readonly KernelJsonValue[];
+    return entries.map((entry) => replaceSecretRefsForValidation(entry, maximumKeys));
+  }
   if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, replaceSecretRefsForValidation(entry)]),
-    );
+    const output = Object.create(null) as Record<string, KernelJsonValue>;
+    for (const property of inspectOwnDataProperties(value, maximumKeys, inspectionError)) {
+      if (property.enumerable) {
+        output[property.key] = replaceSecretRefsForValidation(
+          property.value as KernelJsonValue,
+          maximumKeys,
+        );
+      }
+    }
+    return output;
   }
   return value;
 }
@@ -58,7 +70,7 @@ export async function resolveSecrets(
   const resolved = await resolveValue(value, signal, resolve, redactor, limits, state);
   signal.throwIfAborted();
   if (!isJsonObject(resolved)) {
-    throw new KernelRuntimeError("TOOL_ARGUMENTS_INVALID", "Tool arguments must be an object");
+    throw kernelError("TOOL_ARGUMENTS_INVALID", "Tool arguments must be an object");
   }
   assertByteLimit(JSON.stringify(resolved), limits.maxTotalBytes, limits.totalBytesErrorCode);
   return resolved;
@@ -83,7 +95,7 @@ async function resolveValue(
       secret = await raceAbort(resolve(value.reference, signal), signal);
     } catch (error: unknown) {
       if (signal.aborted) throw error;
-      throw new KernelRuntimeError("TOOL_ARGUMENTS_INVALID", "Secret resolution failed");
+      throw kernelError("TOOL_ARGUMENTS_INVALID", "Secret resolution failed");
     }
     signal.throwIfAborted();
     assertByteLimit(secret, limits.maxStringBytes, "INPUT_BUDGET_EXCEEDED");
@@ -101,14 +113,25 @@ async function resolveValue(
     return output;
   }
   if (value !== null && typeof value === "object") {
-    const entries = Object.entries(value);
+    const entries = inspectOwnDataProperties(
+      value,
+      limits.maxCollectionEntries,
+      inspectionError,
+    ).filter((property) => property.enumerable);
     addResolvedBytes(state, limits, 2 + Math.max(0, entries.length - 1));
-    for (const [key] of entries) {
-      addResolvedBytes(state, limits, jsonStringBudgetBytes(key) + 1);
+    for (const property of entries) {
+      addResolvedBytes(state, limits, jsonStringBudgetBytes(property.key) + 1);
     }
     const output = Object.create(null) as Record<string, KernelJsonValue>;
-    for (const [key, entry] of entries) {
-      output[key] = await resolveValue(entry, signal, resolve, redactor, limits, state);
+    for (const property of entries) {
+      output[property.key] = await resolveValue(
+        property.value as KernelJsonValue,
+        signal,
+        resolve,
+        redactor,
+        limits,
+        state,
+      );
     }
     return output;
   }
@@ -125,7 +148,7 @@ function primitiveBudgetBytes(value: string | number | boolean | null): number {
 
 function addResolvedBytes(state: ResolutionState, limits: SanitizationLimits, bytes: number): void {
   if (bytes > limits.maxTotalBytes - state.totalBytes) {
-    throw new KernelRuntimeError(
+    throw kernelError(
       limits.totalBytesErrorCode,
       `Resolved arguments exceed the ${String(limits.maxTotalBytes)}-byte resource budget`,
     );
@@ -151,61 +174,22 @@ export function toSafePreExecutionError(
   error: unknown,
   redactor: SecretRedactor,
 ): KernelRuntimeError {
-  const fields = safeKernelErrorFields(error);
-  if (fields) return new KernelRuntimeError(fields.code, redactor.summary(fields.message));
-  return new KernelRuntimeError("TOOL_DENIED", "Tool authorization unavailable");
+  const internal = copyInternalKernelError(error);
+  if (internal) return kernelError(internal.code, redactor.summary(internal.message));
+  return kernelError("TOOL_DENIED", "Tool authorization unavailable");
 }
 
 export function toSafeToolError(error: unknown, redactor: SecretRedactor): KernelRuntimeError {
-  const fields = safeKernelErrorFields(error);
-  if (fields) return new KernelRuntimeError(fields.code, redactor.summary(fields.message));
-  const message = safeErrorMessage(error);
-  return new KernelRuntimeError(
-    "MODEL_ERROR",
-    message === "Unknown runtime error" ? "Tool execution failed" : redactor.summary(message),
-  );
+  const internal = copyInternalKernelError(error);
+  return internal
+    ? kernelError(internal.code, redactor.summary(internal.message))
+    : toExternalToolError();
 }
 
-const KERNEL_ERROR_CODES = new Set<KernelErrorCode>([
-  "INPUT_BUDGET_EXCEEDED",
-  "OUTPUT_BUDGET_EXCEEDED",
-  "TURN_BUDGET_EXCEEDED",
-  "STEP_BUDGET_EXCEEDED",
-  "TOOL_RESULT_BUDGET_EXCEEDED",
-  "TOOL_TIMEOUT",
-  "TOOL_OUTCOME_UNKNOWN",
-  "TOOL_DENIED",
-  "TOOL_ARGUMENTS_INVALID",
-  "UNTRUSTED_VALUE_INVALID",
-  "SESSION_BUSY",
-  "EVENT_SINK_UNAVAILABLE",
-  "MODEL_ERROR",
-]);
+export function toExternalToolError(): KernelRuntimeError {
+  return kernelError("MODEL_ERROR", "Tool execution failed");
+}
 
-function safeKernelErrorFields(
-  error: unknown,
-): { readonly code: KernelErrorCode; readonly message: string } | undefined {
-  if (
-    typeof error !== "object" ||
-    error === null ||
-    types.isProxy(error) ||
-    !(error instanceof KernelRuntimeError)
-  ) {
-    return undefined;
-  }
-  const code = Object.getOwnPropertyDescriptor(error, "code");
-  const message = Object.getOwnPropertyDescriptor(error, "message");
-  if (
-    !code ||
-    !("value" in code) ||
-    typeof code.value !== "string" ||
-    !KERNEL_ERROR_CODES.has(code.value as KernelErrorCode) ||
-    !message ||
-    !("value" in message) ||
-    typeof message.value !== "string" ||
-    utf8Bytes(message.value) > 4_096
-  ) {
-    return undefined;
-  }
-  return { code: code.value as KernelErrorCode, message: message.value };
+function inspectionError(): Error {
+  return kernelError("UNTRUSTED_VALUE_INVALID", "Bounded object inspection failed");
 }

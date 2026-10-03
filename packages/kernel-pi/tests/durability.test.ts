@@ -195,7 +195,7 @@ describe("durable tool outcomes", () => {
     expect(events.some((event) => event.type === "tool_succeeded")).toBe(false);
   });
 
-  test("records a cooperative explicit failure as failed rather than outcome unknown", async () => {
+  test("records a cooperative external failure without exposing its message", async () => {
     const events: KernelEvent[] = [];
     const tool = createTool(() => Promise.reject(new Error("explicit failure")));
 
@@ -207,7 +207,7 @@ describe("durable tool outcomes", () => {
     ).startTurn("run");
 
     expect(events).toContainEqual(
-      expect.objectContaining({ type: "tool_failed", message: "explicit failure" }),
+      expect.objectContaining({ type: "tool_failed", message: "Tool execution failed" }),
     );
     expect(events.some((event) => event.type === "tool_outcome_unknown")).toBe(false);
     expect(events.some((event) => event.type === "run_completed")).toBe(true);

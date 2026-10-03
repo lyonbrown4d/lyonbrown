@@ -1,6 +1,7 @@
 import { types } from "node:util";
 
-import { KernelRuntimeError } from "./errors.js";
+import { kernelError } from "./errors.js";
+import { inspectOwnDataProperties, type InspectionFailure } from "./inspection.js";
 import {
   assertByteLimit,
   limitsFromBudget,
@@ -18,7 +19,20 @@ export function normalizeTools(
     throw new TypeError("Tool registry must return a non-Proxy array");
   }
   if (tools.length > options.budget.maxCollectionEntries) {
-    throw new KernelRuntimeError("INPUT_BUDGET_EXCEEDED", "Tool registry exceeds resource budget");
+    throw kernelError("INPUT_BUDGET_EXCEEDED", "Tool registry exceeds resource budget");
+  }
+  const toolProperties = inspectOwnDataProperties(
+    tools,
+    options.budget.maxCollectionEntries + 1,
+    registryInspectionError,
+  );
+  const toolsByKey = new Map(toolProperties.map((property) => [property.key, property.value]));
+  if (
+    toolProperties.some(
+      (property) => property.key !== "length" && !/^(0|[1-9]\d*)$/u.test(property.key),
+    )
+  ) {
+    throw new TypeError("Tool registry array contains unsupported properties");
   }
   const schemaLimits = {
     ...limitsFromBudget(options.budget),
@@ -27,11 +41,11 @@ export function normalizeTools(
   const names = new Set<string>();
   const normalized: KernelToolDefinition[] = [];
   for (let index = 0; index < tools.length; index += 1) {
-    const descriptor = Object.getOwnPropertyDescriptor(tools, String(index));
-    if (!descriptor || !("value" in descriptor)) {
+    const tool = toolsByKey.get(String(index));
+    if (tool === undefined) {
       throw new TypeError("Tool registry array accessors and holes are not accepted");
     }
-    normalized.push(normalizeTool(descriptor.value, options, schemaLimits, names));
+    normalized.push(normalizeTool(tool, options, schemaLimits, names));
   }
   return normalized;
 }
@@ -50,10 +64,7 @@ function normalizeTool(
     throw new TypeError("Tool permissions must be a non-Proxy string array");
   }
   if (fields.permissions.length > options.budget.maxCollectionEntries) {
-    throw new KernelRuntimeError(
-      "INPUT_BUDGET_EXCEEDED",
-      "Tool permissions exceed resource budget",
-    );
+    throw kernelError("INPUT_BUDGET_EXCEEDED", "Tool permissions exceed resource budget");
   }
   const permissionsValue = sanitizeJson(fields.permissions, schemaLimits);
   if (!Array.isArray(permissionsValue) || !permissionsValue.every(isString)) {
@@ -98,17 +109,13 @@ function toolFields(value: unknown): ToolFields {
   if (prototype !== Object.prototype && prototype !== null) {
     throw new TypeError("Tool definition must be a plain object");
   }
-  if (Object.getOwnPropertySymbols(value).length > 0) {
-    throw new TypeError("Tool definition symbol keys are not accepted");
-  }
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  if (Object.values(descriptors).some((descriptor) => "get" in descriptor || "set" in descriptor)) {
-    throw new TypeError("Tool definition accessors are not accepted");
-  }
-  const name = dataValue(descriptors, "name");
-  const label = dataValue(descriptors, "label");
-  const description = dataValue(descriptors, "description");
-  const execute = dataValue(descriptors, "execute");
+  const properties = inspectOwnDataProperties(value, 7, toolInspectionError);
+  const fields = new Map(properties.map((property) => [property.key, property.value]));
+  if (fields.size !== 7) throw new TypeError("Tool definition fields are incomplete");
+  const name = dataValue(fields, "name");
+  const label = dataValue(fields, "label");
+  const description = dataValue(fields, "description");
+  const execute = dataValue(fields, "execute");
   if (typeof name !== "string" || typeof label !== "string" || typeof description !== "string") {
     throw new TypeError("Tool text metadata must be strings");
   }
@@ -119,21 +126,39 @@ function toolFields(value: unknown): ToolFields {
     name,
     label,
     description,
-    inputSchema: dataValue(descriptors, "inputSchema"),
-    permissions: dataValue(descriptors, "permissions"),
-    risk: dataValue(descriptors, "risk"),
+    inputSchema: dataValue(fields, "inputSchema"),
+    permissions: dataValue(fields, "permissions"),
+    risk: dataValue(fields, "risk"),
     execute: execute as KernelToolDefinition["execute"],
   };
 }
 
-function dataValue(
-  descriptors: Readonly<Record<string, PropertyDescriptor>>,
-  key: string,
-): unknown {
-  const descriptor = descriptors[key];
-  if (!descriptor || !("value" in descriptor)) throw new TypeError(`Tool ${key} is missing`);
-  return descriptor.value;
+function dataValue(fields: ReadonlyMap<string, unknown>, key: string): unknown {
+  if (!fields.has(key)) throw new TypeError(`Tool ${key} is missing`);
+  return fields.get(key);
 }
+
+function toolInspectionError(failure: InspectionFailure): Error {
+  return new TypeError(TOOL_INSPECTION_MESSAGES[failure]);
+}
+
+function registryInspectionError(failure: InspectionFailure): Error {
+  return new TypeError(REGISTRY_INSPECTION_MESSAGES[failure]);
+}
+
+const TOOL_INSPECTION_MESSAGES: Readonly<Record<InspectionFailure, string>> = {
+  proxy: "Tool definition Proxy values are not accepted",
+  too_many_keys: "Tool definition has too many fields",
+  symbol_key: "Tool definition symbol keys are not accepted",
+  accessor: "Tool definition accessors are not accepted",
+};
+
+const REGISTRY_INSPECTION_MESSAGES: Readonly<Record<InspectionFailure, string>> = {
+  proxy: "Tool registry Proxy values are not accepted",
+  too_many_keys: "Tool registry exceeds resource budget",
+  symbol_key: "Tool registry symbol keys are not accepted",
+  accessor: "Tool registry accessors are not accepted",
+};
 
 function sanitizeIdentity(value: string, maximumBytes: number, label: string): string {
   const sanitized = sanitizeBoundedText(value, maximumBytes);

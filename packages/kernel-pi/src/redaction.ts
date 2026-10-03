@@ -1,4 +1,5 @@
-import { KernelRuntimeError } from "./errors.js";
+import { kernelError } from "./errors.js";
+import { inspectOwnDataProperties } from "./inspection.js";
 import {
   boundedSummary,
   sanitizeJson,
@@ -14,7 +15,7 @@ export class SecretRedactor {
   add(secret: string): void {
     const normalized = sanitizeText(secret);
     if (secret.length === 0 || normalized.length === 0) {
-      throw new KernelRuntimeError(
+      throw kernelError(
         "UNTRUSTED_VALUE_INVALID",
         "Secret value cannot be empty after normalization",
       );
@@ -36,7 +37,11 @@ export class SecretRedactor {
   }
 
   json(value: unknown, limits: SanitizationLimits): KernelJsonValue {
-    const redacted = redactJson(sanitizeJson(value, limits), (text) => this.text(text));
+    const redacted = redactJson(
+      sanitizeJson(value, limits),
+      (text) => this.text(text),
+      limits.maxCollectionEntries,
+    );
     return sanitizeJson(redacted, limits);
   }
 }
@@ -45,20 +50,28 @@ function compareSecrets(left: string, right: string): number {
   return utf8Bytes(right) - utf8Bytes(left) || right.length - left.length;
 }
 
-function redactJson(value: KernelJsonValue, redact: (value: string) => string): KernelJsonValue {
+function redactJson(
+  value: KernelJsonValue,
+  redact: (value: string) => string,
+  maximumKeys: number,
+): KernelJsonValue {
   if (typeof value === "string") return redact(value);
   if (Array.isArray(value)) {
     const entries = value as readonly KernelJsonValue[];
-    return entries.map((entry) => redactJson(entry, redact));
+    return entries.map((entry) => redactJson(entry, redact, maximumKeys));
   }
   if (value !== null && typeof value === "object") {
     const output = Object.create(null) as Record<string, KernelJsonValue>;
-    for (const [key, entry] of Object.entries(value)) {
-      const redactedKey = redact(key);
+    const properties = inspectOwnDataProperties(value, maximumKeys, () =>
+      kernelError("UNTRUSTED_VALUE_INVALID", "Redaction input inspection failed"),
+    );
+    for (const property of properties) {
+      if (!property.enumerable) continue;
+      const redactedKey = redact(property.key);
       if (Object.hasOwn(output, redactedKey)) {
-        throw new KernelRuntimeError("UNTRUSTED_VALUE_INVALID", "Redacted object keys collide");
+        throw kernelError("UNTRUSTED_VALUE_INVALID", "Redacted object keys collide");
       }
-      output[redactedKey] = redactJson(entry, redact);
+      output[redactedKey] = redactJson(property.value as KernelJsonValue, redact, maximumKeys);
     }
     return output;
   }

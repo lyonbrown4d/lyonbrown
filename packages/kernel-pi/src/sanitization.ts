@@ -1,7 +1,11 @@
 import { stripVTControlCharacters, types } from "node:util";
 
-import { KernelRuntimeError, type KernelErrorCode } from "./errors.js";
+import { kernelError, type KernelErrorCode, type KernelRuntimeError } from "./errors.js";
+import { inspectOwnDataProperties, type InspectionFailure } from "./inspection.js";
+import { isSecretReference } from "./secret-reference.js";
 import type { KernelJsonValue, KernelResourceBudget } from "./types.js";
+
+export { isSecretReference } from "./secret-reference.js";
 
 // eslint-disable-next-line no-control-regex -- the sanitizer intentionally removes C0/C1 controls
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu;
@@ -75,7 +79,7 @@ export function utf8Bytes(value: string): number {
 
 export function assertByteLimit(value: string, maximum: number, code: KernelErrorCode): void {
   if (utf8Bytes(value) > maximum) {
-    throw new KernelRuntimeError(code, `Value exceeds the ${String(maximum)}-byte resource budget`);
+    throw kernelError(code, `Value exceeds the ${String(maximum)}-byte resource budget`);
   }
 }
 
@@ -144,20 +148,22 @@ function sanitizeArray(
     throw invalidValue("Array exceeds the allowed collection width");
   }
   addTotalBytes(state, limits, 2 + Math.max(0, value.length - 1));
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  assertNoAccessors(descriptors);
+  const properties = inspectOwnDataProperties(value, limits.maxCollectionEntries + 1, (failure) =>
+    inspectionError("Array", failure),
+  );
+  const byKey = new Map(properties.map((property) => [property.key, property]));
   const output: KernelJsonValue[] = [];
   for (let index = 0; index < value.length; index += 1) {
-    const descriptor = descriptors[String(index)];
-    if (!descriptor || !("value" in descriptor)) {
+    const property = byKey.get(String(index));
+    if (!property) {
       throw invalidValue("Sparse arrays are not accepted");
     }
-    output.push(sanitizeValue(descriptor.value, limits, state, depth + 1));
+    output.push(sanitizeValue(property.value, limits, state, depth + 1));
   }
-  const extraKeys = Object.keys(descriptors).filter(
-    (key) => key !== "length" && !/^(0|[1-9]\d*)$/u.test(key),
+  const hasExtraKey = properties.some(
+    (property) => property.key !== "length" && !/^(0|[1-9]\d*)$/u.test(property.key),
   );
-  if (extraKeys.length > 0 || Object.getOwnPropertySymbols(value).length > 0) {
+  if (hasExtraKey) {
     throw invalidValue("Array contains unsupported properties");
   }
   return output;
@@ -173,47 +179,45 @@ function sanitizeObject(
   if (prototype !== Object.prototype && prototype !== null) {
     throw invalidValue("Only plain JSON objects are accepted");
   }
-  if (Object.getOwnPropertySymbols(value).length > 0) {
-    throw invalidValue("Symbol keys are not accepted");
-  }
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  assertNoAccessors(descriptors);
-  const entries = Object.entries(descriptors).filter(([, descriptor]) => descriptor.enumerable);
-  if (entries.length > limits.maxCollectionEntries) {
-    throw invalidValue("Object exceeds the allowed collection width");
-  }
+  const properties = inspectOwnDataProperties(value, limits.maxCollectionEntries, (failure) =>
+    inspectionError("Object", failure),
+  );
+  const entries = properties.filter((property) => property.enumerable);
   addTotalBytes(state, limits, 2 + Math.max(0, entries.length - 1));
-  for (const [rawKey] of entries) {
-    addTotalBytes(state, limits, jsonStringBudgetBytes(rawKey) + 1);
+  for (const property of entries) {
+    addTotalBytes(state, limits, jsonStringBudgetBytes(property.key) + 1);
   }
   const output = Object.create(null) as Record<string, KernelJsonValue>;
-  for (const [rawKey, descriptor] of entries) {
+  for (const property of entries) {
+    const rawKey = property.key;
     if (DANGEROUS_KEYS.has(rawKey)) throw invalidValue("Dangerous object key rejected");
-    if (!("value" in descriptor)) throw invalidValue("Object accessors are not accepted");
     if (utf8Bytes(rawKey) > limits.maxStringBytes) {
       throw invalidValue("Object key exceeds the allowed string byte budget");
     }
     const key = sanitizeText(rawKey);
     if (DANGEROUS_KEYS.has(key)) throw invalidValue("Dangerous object key rejected");
     if (Object.hasOwn(output, key)) throw invalidValue("Sanitized object keys collide");
-    output[key] = sanitizeValue(descriptor.value, limits, state, depth + 1);
+    output[key] = sanitizeValue(property.value, limits, state, depth + 1);
   }
   return output;
 }
 
-function assertNoAccessors(descriptors: Readonly<Record<string, PropertyDescriptor>>): void {
-  if (Object.values(descriptors).some((descriptor) => "get" in descriptor || "set" in descriptor)) {
-    throw invalidValue("Object accessors are not accepted");
+function inspectionError(label: "Array" | "Object", failure: InspectionFailure): Error {
+  if (failure === "proxy") return invalidValue("Proxy values are not accepted");
+  if (failure === "too_many_keys") {
+    return invalidValue(`${label} exceeds the allowed collection width`);
   }
+  if (failure === "symbol_key") return invalidValue("Symbol keys are not accepted");
+  return invalidValue(`${label} accessors are not accepted`);
 }
 
 function invalidValue(message: string): KernelRuntimeError {
-  return new KernelRuntimeError("UNTRUSTED_VALUE_INVALID", message);
+  return kernelError("UNTRUSTED_VALUE_INVALID", message);
 }
 
 function addTotalBytes(state: TraversalState, limits: SanitizationLimits, bytes: number): void {
   if (bytes > limits.maxTotalBytes - state.totalBytes) {
-    throw new KernelRuntimeError(
+    throw kernelError(
       limits.totalBytesErrorCode,
       `Value exceeds the ${String(limits.maxTotalBytes)}-byte aggregate resource budget`,
     );
@@ -246,39 +250,29 @@ export function redactSecretReferences(
   value: unknown,
   limits: SanitizationLimits,
 ): KernelJsonValue {
-  return replaceSecretReferences(sanitizeJson(value, limits));
+  return replaceSecretReferences(sanitizeJson(value, limits), limits.maxCollectionEntries);
 }
 
-function replaceSecretReferences(value: KernelJsonValue): KernelJsonValue {
+function replaceSecretReferences(value: KernelJsonValue, maximumKeys: number): KernelJsonValue {
   if (isSecretReference(value)) return "[REDACTED]";
   if (Array.isArray(value)) {
     const entries = value as readonly KernelJsonValue[];
-    return entries.map(replaceSecretReferences);
+    return entries.map((entry) => replaceSecretReferences(entry, maximumKeys));
   }
   if (value !== null && typeof value === "object") {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [key, replaceSecretReferences(entry)]),
+    const output = Object.create(null) as Record<string, KernelJsonValue>;
+    const properties = inspectOwnDataProperties(value, maximumKeys, (failure) =>
+      inspectionError("Object", failure),
     );
+    for (const property of properties) {
+      if (property.enumerable) {
+        output[property.key] = replaceSecretReferences(
+          property.value as KernelJsonValue,
+          maximumKeys,
+        );
+      }
+    }
+    return output;
   }
   return value;
-}
-
-export function isSecretReference(
-  value: unknown,
-): value is { kind: "secretRef"; reference: string } {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-  if (types.isProxy(value) || Object.getOwnPropertySymbols(value).length > 0) return false;
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  const keys = Object.keys(descriptors);
-  if (keys.length !== 2 || !keys.includes("kind") || !keys.includes("reference")) return false;
-  const kind = descriptors.kind;
-  const reference = descriptors.reference;
-  return (
-    kind !== undefined &&
-    reference !== undefined &&
-    "value" in kind &&
-    "value" in reference &&
-    kind.value === "secretRef" &&
-    typeof reference.value === "string"
-  );
 }

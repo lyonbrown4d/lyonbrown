@@ -32,6 +32,14 @@ JSON traversal also accounts aggregate UTF-8 bytes plus container/key structure 
 normalized value. Model/tool arguments use `maxInputBytes`; tool results use `maxToolResultBytes`. A final
 serialized-size assertion is retained only as a defensive consistency check for JSON escaping.
 
+Object inspection is bounded before descriptor lookup: proxies, symbols, accessors, and over-wide objects are
+rejected without invoking getters. Model stream events use an exact per-event field allowlist, so unexpected
+fields cannot smuggle data across the adapter boundary.
+
+Errors thrown by model, tool, approval, secret, and persistence integrations are untrusted values. Their
+properties are never inspected for public diagnostics. Only frozen errors created by the kernel's private
+factory retain a typed code and bounded message; every other value maps to a fixed, non-sensitive error.
+
 Tool access is default-deny:
 
 1. The tool must exist in the injected registry.

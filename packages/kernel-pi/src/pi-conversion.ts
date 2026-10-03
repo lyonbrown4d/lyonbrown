@@ -1,15 +1,49 @@
 import type { Api, Message, Model, Usage } from "@earendil-works/pi-ai";
+import { types } from "node:util";
 
-import { KernelRuntimeError } from "./errors.js";
+import { kernelError } from "./errors.js";
+import { inspectOwnDataProperties } from "./inspection.js";
 import { sanitizeJson, sanitizeText, type SanitizationLimits } from "./sanitization.js";
-import type { KernelModelAdapter, KernelModelMessage } from "./types.js";
+import type { KernelModelAdapter, KernelModelDescriptor, KernelModelMessage } from "./types.js";
 
-export function createPiModel(adapter: KernelModelAdapter): Model<Api> {
+export function normalizeModelDescriptor(
+  adapter: KernelModelAdapter,
+  maximumBytes: number,
+): KernelModelDescriptor {
+  try {
+    const candidate: unknown = adapter;
+    if (typeof candidate !== "object" || candidate === null || types.isProxy(candidate)) {
+      throw new TypeError("Invalid model adapter");
+    }
+    const modelProperty = Object.getOwnPropertyDescriptor(candidate, "model");
+    if (!modelProperty || !("value" in modelProperty)) {
+      throw new TypeError("Invalid model descriptor");
+    }
+    const rawModel: unknown = modelProperty.value;
+    if (typeof rawModel !== "object" || rawModel === null || Array.isArray(rawModel)) {
+      throw new TypeError("Invalid model descriptor");
+    }
+    const properties = inspectOwnDataProperties(rawModel, 2, () =>
+      kernelError("MODEL_ERROR", "Model adapter failed"),
+    );
+    const fields = new Map(properties.map((property) => [property.key, property.value]));
+    if (fields.size !== 2 || !fields.has("provider") || !fields.has("id")) {
+      throw new TypeError("Invalid model descriptor");
+    }
+    const provider = safeModelIdentity(fields.get("provider"), maximumBytes);
+    const id = safeModelIdentity(fields.get("id"), maximumBytes);
+    return Object.freeze({ provider, id });
+  } catch {
+    throw kernelError("MODEL_ERROR", "Model adapter failed");
+  }
+}
+
+export function createPiModel(descriptor: KernelModelDescriptor): Model<Api> {
   return {
-    id: adapter.model.id,
-    name: adapter.model.id,
+    id: descriptor.id,
+    name: descriptor.id,
     api: "lyonbrown-kernel-adapter",
-    provider: adapter.model.provider,
+    provider: descriptor.provider,
     baseUrl: "kernel://model-adapter",
     reasoning: false,
     input: ["text"],
@@ -17,6 +51,16 @@ export function createPiModel(adapter: KernelModelAdapter): Model<Api> {
     contextWindow: 1_000_000,
     maxTokens: 1_000_000,
   };
+}
+
+function safeModelIdentity(value: unknown, maximumBytes: number): string {
+  if (typeof value !== "string" || value.length === 0)
+    throw new TypeError("Invalid model identity");
+  const sanitized = sanitizeText(value);
+  if (sanitized !== value || Buffer.byteLength(value, "utf8") > maximumBytes) {
+    throw new TypeError("Invalid model identity");
+  }
+  return value;
 }
 
 export function assertUsage(usage: {
@@ -32,7 +76,7 @@ export function assertUsage(usage: {
     !Number.isSafeInteger(usage.totalTokens) ||
     usage.totalTokens < usage.inputTokens + usage.outputTokens
   ) {
-    throw new KernelRuntimeError("MODEL_ERROR", "Model usage is invalid");
+    throw kernelError("MODEL_ERROR", "Model usage is invalid");
   }
 }
 

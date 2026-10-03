@@ -1,4 +1,4 @@
-import { KernelRuntimeError } from "./errors.js";
+import { kernelError } from "./errors.js";
 import { assertByteLimit } from "./sanitization.js";
 import type { KernelResourceBudget } from "./types.js";
 
@@ -38,7 +38,7 @@ export class BudgetTracker {
   turn(): number {
     this.#turns += 1;
     if (this.#turns > this.limits.maxTurns) {
-      throw new KernelRuntimeError("TURN_BUDGET_EXCEEDED", "Maximum model turns exceeded");
+      throw kernelError("TURN_BUDGET_EXCEEDED", "Maximum model turns exceeded");
     }
     return this.#turns;
   }
@@ -46,14 +46,14 @@ export class BudgetTracker {
   step(): void {
     this.#steps += 1;
     if (this.#steps > this.limits.maxSteps) {
-      throw new KernelRuntimeError("STEP_BUDGET_EXCEEDED", "Maximum tool steps exceeded");
+      throw kernelError("STEP_BUDGET_EXCEEDED", "Maximum tool steps exceeded");
     }
   }
 
   output(value: string): void {
     this.#outputBytes += Buffer.byteLength(value, "utf8");
     if (this.#outputBytes > this.limits.maxOutputBytes) {
-      throw new KernelRuntimeError("OUTPUT_BUDGET_EXCEEDED", "Maximum model output bytes exceeded");
+      throw kernelError("OUTPUT_BUDGET_EXCEEDED", "Maximum model output bytes exceeded");
     }
   }
 

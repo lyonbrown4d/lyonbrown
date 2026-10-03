@@ -231,8 +231,9 @@ describe("security boundaries", () => {
     const failure = failureEvents.find((event) => event.type === "tool_failed");
     expect(failure).toMatchObject({
       type: "tool_failed",
-      message: "[REDACTED] [REDACTED] [REDACTED] [REDACTED]",
+      message: "Tool execution failed",
     });
+    expect(JSON.stringify(failureEvents)).not.toContain("secret-long");
   });
 
   test("rejects malformed schema arguments before durable intent", async () => {

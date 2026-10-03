@@ -2,9 +2,9 @@ import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 
 import { BudgetTracker, validateBudget } from "./budget.js";
-import { KernelRuntimeError } from "./errors.js";
+import { kernelError, toPublicKernelError, type KernelRuntimeError } from "./errors.js";
 import { createPiStreamFunction } from "./pi-bridge.js";
-import { createPiModel } from "./pi-conversion.js";
+import { createPiModel, normalizeModelDescriptor } from "./pi-conversion.js";
 import { SecretRedactor } from "./redaction.js";
 import { limitsFromBudget, sanitizeBoundedText, sanitizeText } from "./sanitization.js";
 import { normalizeTools } from "./tool-normalization.js";
@@ -13,6 +13,7 @@ import type {
   KernelEvent,
   KernelEventListener,
   KernelSession,
+  KernelToolDefinition,
   PiKernelSessionOptions,
 } from "./types.js";
 
@@ -36,7 +37,8 @@ export class PiKernelSession implements KernelSession {
       "OUTPUT_BUDGET_EXCEEDED",
     );
     const systemPrompt = sanitizeBoundedText(options.systemPrompt, options.budget.maxInputBytes);
-    const registeredTools = normalizeTools(options.toolRegistry.list(), options);
+    const modelDescriptor = normalizeModelDescriptor(options.model, options.budget.maxInputBytes);
+    const registeredTools = normalizeTools(listRegisteredTools(options), options);
     const toolByName = new Map(registeredTools.map((tool) => [tool.name, tool]));
     this.#tracker = new BudgetTracker(options.budget);
     const redactor = new SecretRedactor();
@@ -51,12 +53,13 @@ export class PiKernelSession implements KernelSession {
     this.#agent = new Agent({
       initialState: {
         systemPrompt,
-        model: createPiModel(options.model),
+        model: createPiModel(modelDescriptor),
         tools,
       },
       streamFn: createPiStreamFunction({
         sessionId: options.sessionId,
         adapter: options.model,
+        model: modelDescriptor,
         tracker: () => this.#tracker,
         limits,
         outputLimits,
@@ -80,7 +83,7 @@ export class PiKernelSession implements KernelSession {
   async startTurn(input: string, options?: { readonly signal?: AbortSignal }): Promise<void> {
     options?.signal?.throwIfAborted();
     if (this.#sinkFatal) throw this.#sinkFatal;
-    if (this.#running) throw new KernelRuntimeError("SESSION_BUSY", "A turn is already active");
+    if (this.#running) throw kernelError("SESSION_BUSY", "A turn is already active");
     this.#tracker = new BudgetTracker(this.options.budget);
     this.#fatalError = undefined;
     this.#activeTools.clear();
@@ -148,7 +151,7 @@ export class PiKernelSession implements KernelSession {
       await this.options.eventSink.append(event);
     } catch {
       const outcomeUnknown = "callId" in event && this.#activeTools.has(event.callId);
-      const fatal = new KernelRuntimeError(
+      const fatal = kernelError(
         outcomeUnknown ? "TOOL_OUTCOME_UNKNOWN" : "EVENT_SINK_UNAVAILABLE",
         outcomeUnknown
           ? "Tool outcome durability cannot be confirmed"
@@ -240,11 +243,17 @@ export function createPiKernelSession(options: PiKernelSessionOptions): KernelSe
 }
 
 function toPublicError(error: unknown): KernelRuntimeError {
-  return error instanceof KernelRuntimeError
-    ? new KernelRuntimeError(error.code, error.message)
-    : new KernelRuntimeError("MODEL_ERROR", "Kernel runtime failed");
+  return toPublicKernelError(error);
 }
 
 function isSignalAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted ?? false;
+}
+
+function listRegisteredTools(options: PiKernelSessionOptions): readonly KernelToolDefinition[] {
+  try {
+    return options.toolRegistry.list();
+  } catch {
+    throw kernelError("INTERNAL", "Kernel runtime failed");
+  }
 }

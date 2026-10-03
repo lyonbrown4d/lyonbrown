@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
 import { BudgetTracker, validateBudget } from "../src/budget.js";
-import { KernelRuntimeError, asSafeError, safeErrorMessage } from "../src/errors.js";
+import { KernelRuntimeError } from "../src/errors.js";
 import {
   createPiKernelSession,
   type KernelModelAdapter,
@@ -183,17 +183,7 @@ describe("resource accounting", () => {
     }).toThrow("resource budget");
   });
 
-  test("normalizes unknown thrown values without leaking them", () => {
-    const source = new Error("known");
-    expect(asSafeError(source)).toBe(source);
-    expect(asSafeError({ secret: "unknown" }).message).toBe("Unknown runtime error");
-    const getter = vi.fn(() => "raw-secret");
-    const hostile = Object.defineProperty({}, "message", { get: getter });
-    expect(safeErrorMessage(hostile)).toBe("Unknown runtime error");
-    expect(getter).not.toHaveBeenCalled();
-    expect(safeErrorMessage(new Error("x".repeat(5_000)))).toBe(
-      "Runtime error message exceeded resource budget",
-    );
+  test("keeps public runtime errors cause-free", () => {
     const runtimeError = new KernelRuntimeError("MODEL_ERROR", "safe");
     expect(runtimeError).toMatchObject({
       name: "KernelRuntimeError",

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import { SecretRedactor } from "../src/redaction.js";
-import { sanitizeJson } from "../src/sanitization.js";
+import { boundedSummary, sanitizeJson, utf8Bytes } from "../src/sanitization.js";
 
 const limits = {
   maxDepth: 3,
@@ -50,6 +50,12 @@ describe("normalized secret redaction", () => {
 });
 
 describe("aggregate sanitization budget", () => {
+  test("truncates bounded diagnostics without splitting the byte budget", () => {
+    const summary = boundedSummary("😀".repeat(100), 17);
+    expect(summary.endsWith("…")).toBe(true);
+    expect(utf8Bytes(summary)).toBeLessThanOrEqual(17);
+  });
+
   test("rejects keys that become dangerous after normalization", () => {
     expect(() => sanitizeJson({ "constr\u0001uctor": true }, limits)).toThrow(
       "Dangerous object key",
