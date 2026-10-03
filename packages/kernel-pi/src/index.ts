@@ -1,0 +1,28 @@
+export { KernelRuntimeError, type KernelErrorCode } from "./errors.js";
+export { createPiKernelSession, PiKernelSession } from "./session.js";
+export type {
+  KernelApprovalGate,
+  KernelApprovalRequest,
+  KernelEvent,
+  KernelEventListener,
+  KernelEventSink,
+  KernelJsonPrimitive,
+  KernelJsonValue,
+  KernelModelAdapter,
+  KernelModelDescriptor,
+  KernelModelMessage,
+  KernelModelRequest,
+  KernelModelStreamEvent,
+  KernelModelTool,
+  KernelResourceBudget,
+  KernelSecretRef,
+  KernelSecretResolver,
+  KernelSession,
+  KernelToolDefinition,
+  KernelToolExecutionContext,
+  KernelToolRegistry,
+  KernelToolResult,
+  KernelToolRisk,
+  KernelUsage,
+  PiKernelSessionOptions,
+} from "./types.js";
