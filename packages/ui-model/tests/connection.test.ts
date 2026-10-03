@@ -3,8 +3,8 @@ import { describe, expect, test } from "vitest";
 import {
   createInitialUiModelState,
   getChatSubmitAvailability,
+  getConnectionFreshness,
   getDaemonMutationAvailability,
-  getMutationAvailability,
   reduceUiModel,
   type RemoteSnapshot,
   type UiModelState,
@@ -68,7 +68,7 @@ describe("connection projection", () => {
 
     expect(synchronizing.remote.connection).toBe("synchronizing");
     expect(synchronizing.remote.snapshotFresh).toBe(false);
-    expect(getMutationAvailability(synchronizing)).toEqual({
+    expect(getConnectionFreshness(synchronizing)).toEqual({
       enabled: false,
       reason: "synchronizing",
     });
@@ -80,7 +80,24 @@ describe("connection projection", () => {
     expect(ready.remote.connection).toBe("ready");
     expect(ready.remote.snapshotFresh).toBe(true);
     expect(ready.remote.snapshot?.revision).toBe(1n);
-    expect(getMutationAvailability(ready)).toEqual({ enabled: true });
+    expect(getConnectionFreshness(ready)).toEqual({ enabled: true });
+  });
+
+  test("accepts an equal revision as freshness confirmation after reconnecting to the same epoch", () => {
+    const previous = readyState(9n);
+    const synchronizing = reduceUiModel(previous, {
+      type: "handshakeSucceeded",
+      serverInstanceId: "epoch-a",
+    });
+    const confirmed = reduceUiModel(synchronizing, {
+      type: "snapshotReceived",
+      snapshot: snapshot("epoch-a", 9n, "conflicting-session-at-same-revision"),
+    });
+
+    expect(confirmed.remote.connection).toBe("ready");
+    expect(confirmed.remote.snapshotFresh).toBe(true);
+    expect(confirmed.remote.snapshot?.revision).toBe(9n);
+    expect(confirmed.remote.snapshot?.sessionId).toBe("session-a");
   });
 
   test("retains a readable snapshot on disconnect and disables every mutation", () => {
@@ -93,7 +110,7 @@ describe("connection projection", () => {
     expect(stale.remote.connection).toBe("stale");
     expect(stale.remote.snapshot).toBe(ready.remote.snapshot);
     expect(stale.remote.snapshotFresh).toBe(false);
-    expect(getMutationAvailability(stale)).toEqual({
+    expect(getConnectionFreshness(stale)).toEqual({
       enabled: false,
       reason: "stale-snapshot",
     });
@@ -128,5 +145,32 @@ describe("connection projection", () => {
       enabled: false,
       reason: "unavailable",
     });
+  });
+
+  test.each([
+    ["connecting", (state: UiModelState) => reduceUiModel(state, { type: "connectRequested" })],
+    [
+      "stale",
+      (state: UiModelState) =>
+        reduceUiModel(state, { type: "connectionLost", reason: "transport-closed" }),
+    ],
+    [
+      "unavailable",
+      (state: UiModelState) =>
+        reduceUiModel(state, { type: "connectionUnavailable", reason: "daemon-unavailable" }),
+    ],
+    [
+      "client-disconnected",
+      (state: UiModelState) => reduceUiModel(state, { type: "clientDisconnected" }),
+    ],
+  ] as const)("does not let a late snapshot revive %s state", (_name, transition) => {
+    const inactive = transition(readyState());
+    const late = reduceUiModel(inactive, {
+      type: "snapshotReceived",
+      snapshot: snapshot("epoch-a", 99n, "late-session"),
+    });
+
+    expect(late).toBe(inactive);
+    expect(late.remote.snapshotFresh).toBe(false);
   });
 });

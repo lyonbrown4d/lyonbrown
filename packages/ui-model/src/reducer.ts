@@ -7,18 +7,37 @@ function failClosedApproval(
   return approval === null ? null : { ...approval, status };
 }
 
-function acceptSnapshot(state: UiModelState, action: UiModelAction & { type: "snapshotReceived" }) {
+function acceptSnapshot(
+  state: UiModelState,
+  action: UiModelAction & { type: "snapshotReceived" },
+): UiModelState {
   const { snapshot } = action;
+  if (state.remote.connection !== "synchronizing" && state.remote.connection !== "ready") {
+    return state;
+  }
   if (snapshot.serverInstanceId !== state.remote.serverInstanceId) {
     return state;
   }
 
   const previous = state.remote.snapshot;
-  if (
-    previous?.serverInstanceId === snapshot.serverInstanceId &&
-    snapshot.revision <= previous.revision
-  ) {
-    return state;
+  if (previous?.serverInstanceId === snapshot.serverInstanceId) {
+    if (snapshot.revision < previous.revision) {
+      return state;
+    }
+    if (snapshot.revision === previous.revision) {
+      if (state.remote.connection === "ready") {
+        return state;
+      }
+      return {
+        ...state,
+        remote: {
+          ...state.remote,
+          connection: "ready",
+          snapshotFresh: true,
+          unavailableReason: null,
+        },
+      };
+    }
   }
 
   const sessionChanged = previous !== null && previous.sessionId !== snapshot.sessionId;

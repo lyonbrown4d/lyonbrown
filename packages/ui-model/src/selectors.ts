@@ -1,12 +1,13 @@
 import type {
   ApprovalDisposition,
+  ChatSubmitAvailability,
+  ConnectionFreshness,
   InputPriority,
   ModelSetupCancellation,
-  MutationAvailability,
   UiModelState,
 } from "./types.js";
 
-export function getMutationAvailability(state: UiModelState): MutationAvailability {
+export function getConnectionFreshness(state: UiModelState): ConnectionFreshness {
   switch (state.remote.connection) {
     case "disconnected":
       return { enabled: false, reason: "disconnected" };
@@ -31,20 +32,33 @@ export function getMutationAvailability(state: UiModelState): MutationAvailabili
   ) {
     return { enabled: false, reason: "wrong-epoch" };
   }
-
-  const modelSetup = state.remote.snapshot.modelSetup;
-  if (modelSetup !== null && modelSetup.phase !== "Ready") {
-    return { enabled: false, reason: "model-setup-required" };
-  }
   return { enabled: true };
 }
 
-export const getDaemonMutationAvailability = getMutationAvailability;
-export const getChatSubmitAvailability = getMutationAvailability;
+export function getDaemonMutationAvailability(state: UiModelState): ConnectionFreshness {
+  return getConnectionFreshness(state);
+}
+
+export function getChatSubmitAvailability(state: UiModelState): ChatSubmitAvailability {
+  const freshness = getConnectionFreshness(state);
+  if (!freshness.enabled) {
+    return freshness;
+  }
+
+  const modelSetup = state.remote.snapshot?.modelSetup;
+  return modelSetup !== null && modelSetup !== undefined && modelSetup.phase !== "Ready"
+    ? { enabled: false, reason: "model-setup-required" }
+    : { enabled: true };
+}
 
 export function getModelSetupCancellation(state: UiModelState): ModelSetupCancellation {
   const modelSetup = state.remote.snapshot?.modelSetup;
-  if (modelSetup === null || modelSetup === undefined) {
+  if (
+    modelSetup === null ||
+    modelSetup === undefined ||
+    modelSetup.phase === "Required" ||
+    modelSetup.phase === "Ready"
+  ) {
     return { allowed: false, reason: "no-operation" };
   }
 
@@ -57,7 +71,6 @@ export function getModelSetupCancellation(state: UiModelState): ModelSetupCancel
     case "Installing":
     case "Activating":
       return { allowed: false, reason: "too-late" };
-    case "Ready":
     case "Cancelled":
     case "Failed":
       return { allowed: false, reason: "terminal" };

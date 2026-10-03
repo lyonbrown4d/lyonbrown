@@ -2,12 +2,21 @@ import { describe, expect, test } from "vitest";
 
 import {
   createInitialUiModelState,
+  getChatSubmitAvailability,
+  getDaemonMutationAvailability,
   getModelSetupCancellation,
-  getMutationAvailability,
   reduceUiModel,
   type ModelSetupPhase,
+  type ModelSetupState,
   type UiModelState,
 } from "../src/index.js";
+
+function setupFor(phase: ModelSetupPhase): ModelSetupState {
+  if (phase === "Required" || phase === "Ready") {
+    return { operationId: null, phase };
+  }
+  return { operationId: "operation-a", phase };
+}
 
 function withModelPhase(phase: ModelSetupPhase): UiModelState {
   let state = createInitialUiModelState();
@@ -21,7 +30,7 @@ function withModelPhase(phase: ModelSetupPhase): UiModelState {
       serverInstanceId: "epoch-a",
       revision: 1n,
       sessionId: "session-a",
-      modelSetup: { operationId: "operation-a", phase },
+      modelSetup: setupFor(phase),
       activities: [],
     },
   });
@@ -38,6 +47,13 @@ describe("model setup", () => {
     },
   );
 
+  test("reports no operation while setup is required", () => {
+    expect(getModelSetupCancellation(withModelPhase("Required"))).toEqual({
+      allowed: false,
+      reason: "no-operation",
+    });
+  });
+
   test.each<ModelSetupPhase>(["Installing", "Activating"])(
     "reports cancellation as too late during %s",
     (phase) => {
@@ -48,7 +64,7 @@ describe("model setup", () => {
     },
   );
 
-  test.each<ModelSetupPhase>(["Ready", "Cancelled", "Failed"])(
+  test.each<ModelSetupPhase>(["Cancelled", "Failed"])(
     "does not cancel the terminal phase %s",
     (phase) => {
       expect(getModelSetupCancellation(withModelPhase(phase))).toEqual({
@@ -57,6 +73,13 @@ describe("model setup", () => {
       });
     },
   );
+
+  test("reports no operation once setup is ready", () => {
+    expect(getModelSetupCancellation(withModelPhase("Ready"))).toEqual({
+      allowed: false,
+      reason: "no-operation",
+    });
+  });
 
   test("never creates a download intent while opening or connecting", () => {
     let state = createInitialUiModelState();
@@ -80,11 +103,28 @@ describe("model setup", () => {
     });
   });
 
-  test("disables chat while model setup is required", () => {
-    expect(getMutationAvailability(withModelPhase("Downloading"))).toEqual({
+  test.each<ModelSetupPhase>([
+    "Required",
+    "WaitingForLock",
+    "Checking",
+    "Downloading",
+    "Verifying",
+    "Installing",
+    "Activating",
+    "Cancelled",
+    "Failed",
+  ])("disables chat but preserves daemon controls during %s", (phase) => {
+    const state = withModelPhase(phase);
+    expect(getDaemonMutationAvailability(state)).toEqual({ enabled: true });
+    expect(getChatSubmitAvailability(state)).toEqual({
       enabled: false,
       reason: "model-setup-required",
     });
-    expect(getMutationAvailability(withModelPhase("Ready"))).toEqual({ enabled: true });
+  });
+
+  test("enables chat and daemon controls when setup is ready", () => {
+    const state = withModelPhase("Ready");
+    expect(getDaemonMutationAvailability(state)).toEqual({ enabled: true });
+    expect(getChatSubmitAvailability(state)).toEqual({ enabled: true });
   });
 });

@@ -7,6 +7,7 @@ export type ConnectionState =
   | "unavailable";
 
 export type ModelSetupPhase =
+  | "Required"
   | "WaitingForLock"
   | "Checking"
   | "Downloading"
@@ -17,10 +18,19 @@ export type ModelSetupPhase =
   | "Cancelled"
   | "Failed";
 
-export interface ModelSetupState {
-  readonly operationId: string;
-  readonly phase: ModelSetupPhase;
-}
+export type ActiveModelSetupPhase =
+  | "WaitingForLock"
+  | "Checking"
+  | "Downloading"
+  | "Verifying"
+  | "Installing"
+  | "Activating";
+
+export type ModelSetupState =
+  | { readonly phase: "Required"; readonly operationId: null }
+  | { readonly phase: ActiveModelSetupPhase; readonly operationId: string }
+  | { readonly phase: "Ready"; readonly operationId: null }
+  | { readonly phase: "Cancelled" | "Failed"; readonly operationId: string };
 
 export interface ActivityItemDto {
   readonly turnId: string;
@@ -132,18 +142,23 @@ export type UiModelAction =
   | { readonly type: "localeChanged"; readonly locale: Locale }
   | { readonly type: "themeChanged"; readonly themeId: ThemeId };
 
-export type MutationDisableReason =
+export type ConnectionFreshnessDisableReason =
   | "disconnected"
   | "connecting"
   | "synchronizing"
   | "stale-snapshot"
   | "unavailable"
-  | "wrong-epoch"
-  | "model-setup-required";
+  | "wrong-epoch";
 
-export type MutationAvailability =
+export type ConnectionFreshness =
   | { readonly enabled: true }
-  | { readonly enabled: false; readonly reason: MutationDisableReason };
+  | { readonly enabled: false; readonly reason: ConnectionFreshnessDisableReason };
+
+export type ChatSubmitDisableReason = ConnectionFreshnessDisableReason | "model-setup-required";
+
+export type ChatSubmitAvailability =
+  | { readonly enabled: true }
+  | { readonly enabled: false; readonly reason: ChatSubmitDisableReason };
 
 export type ModelSetupCancellation =
   | { readonly allowed: true; readonly operationId: string }
