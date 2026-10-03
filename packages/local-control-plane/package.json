@@ -1,0 +1,36 @@
+{
+  "name": "@lyonbrown/local-control-plane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{json,ts,mjs,md}\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{json,ts,mjs,md}\"",
+    "lint": "pnpm format:check && eslint --config eslint.config.mjs src tests vitest.config.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "pnpm": "10.33.4"
+  },
+  "dependencies": {
+    "proper-lockfile": "4.1.2",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@types/proper-lockfile": "4.1.4",
+    "@vitest/coverage-v8": "4.1.11"
+  }
+}
