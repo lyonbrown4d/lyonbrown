@@ -1,7 +1,29 @@
-.gitattributes text eol=lf
-*.json text eol=lf
-*.mjs text eol=lf
-*.mts text eol=lf
-*.ts text eol=lf
-*.yaml text eol=lf
-*.yml text eol=lf
+* text=auto eol=lf
+
+*.avif -text -eol
+*.bmp -text -eol
+*.dll -text -eol
+*.dylib -text -eol
+*.exe -text -eol
+*.gif -text -eol
+*.gguf -text -eol
+*.gz -text -eol
+*.ico -text -eol
+*.jpeg -text -eol
+*.jpg -text -eol
+*.otf -text -eol
+*.pdf -text -eol
+*.png -text -eol
+*.so -text -eol
+*.tar -text -eol
+*.ttf -text -eol
+*.wasm -text -eol
+*.webp -text -eol
+*.woff -text -eol
+*.woff2 -text -eol
+*.xz -text -eol
+*.zip -text -eol
+*.7z -text -eol
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
