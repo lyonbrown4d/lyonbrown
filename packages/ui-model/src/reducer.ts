@@ -1,0 +1,145 @@
+import type { ApprovalState, UiModelAction, UiModelState } from "./types.js";
+
+function failClosedApproval(
+  approval: ApprovalState | null,
+  status: "disconnected" | "errored" | "failed" | "timed-out",
+): ApprovalState | null {
+  return approval === null ? null : { ...approval, status };
+}
+
+function acceptSnapshot(state: UiModelState, action: UiModelAction & { type: "snapshotReceived" }) {
+  const { snapshot } = action;
+  if (snapshot.serverInstanceId !== state.remote.serverInstanceId) {
+    return state;
+  }
+
+  const previous = state.remote.snapshot;
+  if (
+    previous?.serverInstanceId === snapshot.serverInstanceId &&
+    snapshot.revision <= previous.revision
+  ) {
+    return state;
+  }
+
+  const sessionChanged = previous !== null && previous.sessionId !== snapshot.sessionId;
+  const epochChanged = previous !== null && previous.serverInstanceId !== snapshot.serverInstanceId;
+
+  return {
+    ...state,
+    remote: {
+      connection: "ready" as const,
+      serverInstanceId: state.remote.serverInstanceId,
+      snapshot,
+      snapshotFresh: true,
+      unavailableReason: null,
+    },
+    inspector:
+      sessionChanged || epochChanged ? { ...state.inspector, selection: null } : state.inspector,
+  };
+}
+
+export function reduceUiModel(state: UiModelState, action: UiModelAction): UiModelState {
+  switch (action.type) {
+    case "clientOpened":
+      return state;
+    case "connectRequested":
+      return {
+        ...state,
+        remote: {
+          ...state.remote,
+          connection: "connecting",
+          snapshotFresh: false,
+          unavailableReason: null,
+        },
+      };
+    case "clientDisconnected":
+      return {
+        ...state,
+        remote: {
+          ...state.remote,
+          connection: state.remote.snapshot === null ? "disconnected" : "stale",
+          snapshotFresh: false,
+        },
+        approval: failClosedApproval(state.approval, "disconnected"),
+      };
+    case "connectionLost":
+      return {
+        ...state,
+        remote: {
+          ...state.remote,
+          connection: state.remote.snapshot === null ? "disconnected" : "stale",
+          snapshotFresh: false,
+          unavailableReason: action.reason,
+        },
+        approval: failClosedApproval(state.approval, "disconnected"),
+      };
+    case "connectionUnavailable":
+      return {
+        ...state,
+        remote: {
+          ...state.remote,
+          connection: "unavailable",
+          snapshotFresh: false,
+          unavailableReason: action.reason,
+        },
+        approval: failClosedApproval(state.approval, "disconnected"),
+      };
+    case "handshakeSucceeded": {
+      const epochChanged = state.remote.serverInstanceId !== action.serverInstanceId;
+      return {
+        ...state,
+        remote: {
+          ...state.remote,
+          connection: "synchronizing",
+          serverInstanceId: action.serverInstanceId,
+          snapshotFresh: false,
+          unavailableReason: null,
+        },
+        approval: epochChanged
+          ? failClosedApproval(state.approval, "disconnected")
+          : state.approval,
+        inspector: epochChanged ? { ...state.inspector, selection: null } : state.inspector,
+      };
+    }
+    case "snapshotReceived":
+      return acceptSnapshot(state, action);
+    case "modelDownloadRequested":
+      return {
+        ...state,
+        modelDownloadIntent: {
+          operationId: action.operationId,
+          modelId: action.modelId,
+        },
+      };
+    case "modelDownloadIntentAcknowledged":
+      return state.modelDownloadIntent?.operationId === action.operationId
+        ? { ...state, modelDownloadIntent: null }
+        : state;
+    case "approvalRequested":
+      return { ...state, approval: { request: action.request, status: "pending" } };
+    case "approvalDenied":
+      return state.approval === null
+        ? state
+        : { ...state, approval: { ...state.approval, status: "denying" } };
+    case "approvalTimedOut":
+      return { ...state, approval: failClosedApproval(state.approval, "timed-out") };
+    case "approvalErrored":
+      return { ...state, approval: failClosedApproval(state.approval, "errored") };
+    case "approvalFailed":
+      return { ...state, approval: failClosedApproval(state.approval, "failed") };
+    case "approvalResolved":
+      return state.approval?.request.requestId === action.requestId
+        ? { ...state, approval: null }
+        : state;
+    case "activitySelected":
+      return { ...state, inspector: { ...state.inspector, selection: action.selection } };
+    case "followLatestChanged":
+      return { ...state, inspector: { ...state.inspector, followLatest: action.value } };
+    case "narrowViewModeChanged":
+      return { ...state, inspector: { ...state.inspector, narrowViewMode: action.mode } };
+    case "localeChanged":
+      return { ...state, preferences: { ...state.preferences, locale: action.locale } };
+    case "themeChanged":
+      return { ...state, preferences: { ...state.preferences, themeId: action.themeId } };
+  }
+}
