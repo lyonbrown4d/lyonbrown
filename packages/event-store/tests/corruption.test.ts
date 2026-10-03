@@ -15,8 +15,9 @@ import {
 import { prepareDatabasePath } from "../src/path-security.js";
 
 const allow: PathSecurityVerifier = {
-  verifyDataDirectory: () => undefined,
-  verifyDatabaseFile: () => undefined,
+  verifyRequestedDataDirectory: () => undefined,
+  verifyDataDirectory: (_requested, canonical) => canonical,
+  verifyDatabaseFile: (_requested, _canonical, databasePath) => databasePath,
 };
 const directories: string[] = [];
 
@@ -64,7 +65,7 @@ describe("corrupt and hostile persistence", () => {
     const dataDirectory = directory();
     const databasePath = join(dataDirectory, "lyonbrown.sqlite3");
     const database = new Database(databasePath);
-    database.pragma("user_version = 2");
+    database.pragma("user_version = 3");
     database.close();
 
     expect(() => openEventStore({ dataDirectory, pathVerifier: allow })).toThrow(
@@ -76,19 +77,30 @@ describe("corrupt and hostile persistence", () => {
     const dataDirectory = directory();
     const seen: string[] = [];
     const verifier: PathSecurityVerifier = {
-      verifyDataDirectory: (path) => seen.push(`dir:${path}`),
-      verifyDatabaseFile: (path) => seen.push(`db:${path}`),
+      verifyRequestedDataDirectory: (path) => {
+        seen.push(`requested:${path}`);
+      },
+      verifyDataDirectory: (_requested, path) => {
+        seen.push(`dir:${path}`);
+        return path;
+      },
+      verifyDatabaseFile: (_requested, _canonical, path) => {
+        seen.push(`db:${path}`);
+        return path;
+      },
     };
     const store = openEventStore({ dataDirectory, pathVerifier: verifier });
     store.close();
-    expect(seen.filter((entry) => entry.startsWith("dir:"))).toHaveLength(1);
+    expect(seen.filter((entry) => entry.startsWith("requested:"))).toHaveLength(2);
+    expect(seen.filter((entry) => entry.startsWith("dir:"))).toHaveLength(2);
     expect(seen.filter((entry) => entry.startsWith("db:"))).toHaveLength(2);
 
     expect(() =>
       prepareDatabasePath(dataDirectory, {
-        verifyDataDirectory: () => {
+        verifyRequestedDataDirectory: () => {
           throw new PathSecurityError("blocked reparse point");
         },
+        verifyDataDirectory: (_requested, canonical) => canonical,
         verifyDatabaseFile: () => undefined,
       }),
     ).toThrow(PathSecurityError);

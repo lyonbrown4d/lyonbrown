@@ -30,9 +30,6 @@ export function validateAppend(
   if (events.length === 0 || events.length > MAX_BATCH_EVENTS) {
     throw new RangeError(`append requires 1-${String(MAX_BATCH_EVENTS)} events`);
   }
-  if (expectedRevision + BigInt(events.length) > MAX_SQLITE_INTEGER) {
-    throw new RangeError("revision would overflow SQLite's signed 64-bit integer range");
-  }
   const ids = new Set<string>();
   for (const event of events) {
     assertIdentifier(event.eventId, "eventId");
@@ -41,9 +38,18 @@ export function validateAppend(
       throw new EventAlreadyExistsError(event.eventId);
     }
     ids.add(event.eventId);
-    if (event.occurredAt !== undefined && !Number.isFinite(Date.parse(event.occurredAt))) {
-      throw new TypeError("occurredAt must be an ISO-compatible timestamp");
+    if (event.occurredAt !== undefined && !isCanonicalIsoTimestamp(event.occurredAt)) {
+      throw new TypeError("occurredAt must be a canonical ISO timestamp");
     }
+  }
+}
+
+export function isCanonicalIsoTimestamp(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    return new Date(value).toISOString() === value;
+  } catch {
+    return false;
   }
 }
 

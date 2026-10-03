@@ -39,3 +39,23 @@ export class EventAlreadyExistsError extends EventStoreError {
     super(`Event ${JSON.stringify(eventId)} already exists`, options);
   }
 }
+
+export class RevisionExhaustedError extends EventStoreError {
+  public constructor(
+    public readonly sessionId: string,
+    public readonly currentRevision: bigint,
+  ) {
+    super(
+      `Session ${JSON.stringify(sessionId)} exhausted the signed 64-bit revision range at ${currentRevision.toString()}`,
+    );
+  }
+}
+
+export class StorageBusyError extends EventStoreError {
+  public constructor(
+    public readonly busyTimeoutMs: number,
+    options?: ErrorOptions,
+  ) {
+    super(`SQLite remained busy for ${String(busyTimeoutMs)} ms`, options);
+  }
+}

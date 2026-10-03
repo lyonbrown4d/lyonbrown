@@ -10,11 +10,6 @@ import {
 describe("event-store input budgets", () => {
   it.each([
     ["negative revision", -1n, [{ eventId: "event", type: "Type", payload: {} }]],
-    [
-      "revision overflow",
-      9_223_372_036_854_775_807n,
-      [{ eventId: "event", type: "Type", payload: {} }],
-    ],
     ["empty batch", 0n, []],
     [
       "oversized batch",

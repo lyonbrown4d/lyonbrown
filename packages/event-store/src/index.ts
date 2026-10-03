@@ -7,6 +7,8 @@ export {
   PathSecurityError,
   PayloadValidationError,
   RevisionConflictError,
+  RevisionExhaustedError,
+  StorageBusyError,
 } from "./errors.js";
 export {
   MAX_EVENT_PAYLOAD_BYTES,

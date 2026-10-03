@@ -1,17 +1,22 @@
-import Database from "better-sqlite3";
-import { Kysely, SqliteDialect } from "kysely";
 import { isAbsolute } from "node:path";
 
-import { decodeEventPayload, encodeEventPayload } from "./codec.js";
+import Database from "better-sqlite3";
+import { Kysely, SqliteDialect } from "kysely";
+
+import { appendEvents } from "./append.js";
 import {
   CorruptEventStoreError,
-  EventAlreadyExistsError,
   EventStoreClosedError,
   InvalidStoreOptionsError,
-  RevisionConflictError,
 } from "./errors.js";
-import { defaultPathVerifier, prepareDatabasePath } from "./path-security.js";
-import { migrate, SCHEMA_VERSION, type EventRow, type EventStoreDatabase } from "./schema.js";
+import {
+  validateEventRows,
+  validateSessionIntegrity,
+  type RuntimeEventRow,
+  type SessionIntegrityRow,
+} from "./integrity.js";
+import { defaultPathVerifier, prepareDatabasePath, reverifyDatabasePath } from "./path-security.js";
+import { migrate, SCHEMA_VERSION, type EventStoreDatabase } from "./schema.js";
 import type {
   EventStore,
   EventToAppend,
@@ -22,52 +27,25 @@ import type {
   StoredEvent,
   StoreDiagnostics,
 } from "./types.js";
-import {
-  MAX_BATCH_PAYLOAD_BYTES,
-  validateAppend,
-  validateList,
-  validateLoad,
-} from "./validation.js";
+import { validateList, validateLoad } from "./validation.js";
 
-interface RevisionRow {
-  readonly current_revision: bigint;
-}
-
-function isUniqueConstraint(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof error.code === "string" &&
-    error.code.startsWith("SQLITE_CONSTRAINT_UNIQUE")
-  );
-}
-
-function mapStoredEvent(row: EventRow): StoredEvent {
-  try {
-    return {
-      eventId: row.event_id,
-      sessionId: row.session_id,
-      revision: row.revision,
-      type: row.event_type,
-      occurredAt: row.occurred_at,
-      payload: decodeEventPayload(row.payload_json),
-    };
-  } catch (error: unknown) {
-    throw new CorruptEventStoreError(
-      `Event ${JSON.stringify(row.event_id)} contains an invalid payload`,
-      { cause: error },
-    );
-  }
-}
+const SESSION_INTEGRITY_SELECT = `
+  SELECT s.session_id, s.current_revision, s.created_at, s.updated_at,
+         COALESCE(MAX(e.revision), 0) AS max_revision,
+         COUNT(e.revision) AS event_count
+    FROM sessions s
+    LEFT JOIN events e ON e.session_id = s.session_id
+`;
 
 class SqliteEventStore implements EventStore {
   readonly #database: Database.Database;
   readonly #kysely: Kysely<EventStoreDatabase>;
+  readonly #busyTimeoutMs: number;
   #closed = false;
 
-  public constructor(database: Database.Database) {
+  public constructor(database: Database.Database, busyTimeoutMs: number) {
     this.#database = database;
+    this.#busyTimeoutMs = busyTimeoutMs;
     this.#kysely = new Kysely<EventStoreDatabase>({ dialect: new SqliteDialect({ database }) });
   }
 
@@ -79,93 +57,14 @@ class SqliteEventStore implements EventStore {
     events: readonly EventToAppend[],
   ): Promise<readonly StoredEvent[]> {
     this.#assertOpen();
-    validateAppend(sessionId, expectedRevision, events);
-    const now = new Date().toISOString();
-    const encoded: {
-      readonly event: EventToAppend;
-      readonly occurredAt: string;
-      readonly payloadJson: string;
-    }[] = [];
-    let batchBytes = 0;
-    for (const event of events) {
-      const payloadJson = encodeEventPayload(event.payload);
-      batchBytes += Buffer.byteLength(payloadJson, "utf8");
-      if (batchBytes > MAX_BATCH_PAYLOAD_BYTES) {
-        throw new RangeError("Encoded event batch exceeds the 4 MiB payload budget");
-      }
-      encoded.push({ event, occurredAt: event.occurredAt ?? now, payloadJson });
-    }
-
-    const findRevision = this.#database.prepare<[string], RevisionRow>(
-      "SELECT current_revision FROM sessions WHERE session_id = ?",
-    );
-    const findEvent = this.#database.prepare<[string], { readonly event_id: string }>(
-      "SELECT event_id FROM events WHERE event_id = ?",
-    );
-    const insertSession = this.#database.prepare(
-      "INSERT INTO sessions(session_id, current_revision, created_at, updated_at) VALUES (?, ?, ?, ?)",
-    );
-    const updateSession = this.#database.prepare(
-      "UPDATE sessions SET current_revision = ?, updated_at = ? WHERE session_id = ?",
-    );
-    const insertEvent = this.#database.prepare(
-      "INSERT INTO events(session_id, revision, event_id, event_type, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?)",
-    );
-
-    const transaction = this.#database.transaction((): readonly StoredEvent[] => {
-      const revisionRow = findRevision.get(sessionId);
-      const actualRevision = revisionRow?.current_revision ?? 0n;
-      if (actualRevision !== expectedRevision) {
-        throw new RevisionConflictError(sessionId, expectedRevision, actualRevision);
-      }
-      for (const item of encoded) {
-        if (findEvent.get(item.event.eventId) !== undefined) {
-          throw new EventAlreadyExistsError(item.event.eventId);
-        }
-      }
-      if (revisionRow === undefined) insertSession.run(sessionId, 0n, now, now);
-
-      const stored: StoredEvent[] = [];
-      let revision = actualRevision;
-      for (const item of encoded) {
-        revision += 1n;
-        insertEvent.run(
-          sessionId,
-          revision,
-          item.event.eventId,
-          item.event.type,
-          item.occurredAt,
-          item.payloadJson,
-        );
-        stored.push({
-          eventId: item.event.eventId,
-          sessionId,
-          revision,
-          type: item.event.type,
-          occurredAt: item.occurredAt,
-          payload: decodeEventPayload(item.payloadJson),
-        });
-      }
-      updateSession.run(revision, now, sessionId);
-      return stored;
-    });
-
-    try {
-      return transaction.immediate();
-    } catch (error: unknown) {
-      if (error instanceof RevisionConflictError || error instanceof EventAlreadyExistsError)
-        throw error;
-      if (isUniqueConstraint(error)) {
-        const duplicate = encoded.find((item) => findEvent.get(item.event.eventId) !== undefined);
-        throw new EventAlreadyExistsError(duplicate?.event.eventId ?? "unknown", { cause: error });
-      }
-      throw error;
-    }
+    return appendEvents(this.#database, this.#busyTimeoutMs, sessionId, expectedRevision, events);
   }
 
   public async load(sessionId: string, options: LoadOptions): Promise<readonly StoredEvent[]> {
     this.#assertOpen();
     validateLoad(sessionId, options);
+    const metadata = this.#sessionIntegrity(sessionId);
+    if (metadata === undefined) return [];
     const rows = await this.#kysely
       .selectFrom("events")
       .selectAll()
@@ -174,37 +73,34 @@ class SqliteEventStore implements EventStore {
       .orderBy("revision", "asc")
       .limit(options.limit)
       .execute();
-    return rows.map(mapStoredEvent);
+    if (options.afterRevision < metadata.currentRevision && rows.length === 0) {
+      throw new CorruptEventStoreError("Event stream ended before its recorded current revision");
+    }
+    return validateEventRows(rows as readonly RuntimeEventRow[], sessionId, options.afterRevision);
   }
 
+  // better-sqlite3 returns the validated aggregate synchronously.
+  // eslint-disable-next-line @typescript-eslint/require-await
   public async currentRevision(sessionId: string): Promise<bigint> {
     this.#assertOpen();
     validateLoad(sessionId, { afterRevision: 0n, limit: 1 });
-    const row = await this.#kysely
-      .selectFrom("sessions")
-      .select("current_revision")
-      .where("session_id", "=", sessionId)
-      .executeTakeFirst();
-    return row?.current_revision ?? 0n;
+    return this.#sessionIntegrity(sessionId)?.currentRevision ?? 0n;
   }
 
+  // better-sqlite3 returns a committed point-in-time aggregate synchronously.
+  // eslint-disable-next-line @typescript-eslint/require-await
   public async listSessions(options: ListSessionsOptions): Promise<readonly SessionMetadata[]> {
     this.#assertOpen();
     validateList(options);
-    const rows = await this.#kysely
-      .selectFrom("sessions")
-      .selectAll()
-      .orderBy("updated_at", "desc")
-      .orderBy("session_id", "asc")
-      .limit(options.limit)
-      .offset(options.offset ?? 0)
-      .execute();
-    return rows.map((row) => ({
-      sessionId: row.session_id,
-      currentRevision: row.current_revision,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    const rows = this.#database
+      .prepare<[number, number], SessionIntegrityRow>(
+        `${SESSION_INTEGRITY_SELECT}
+        GROUP BY s.session_id, s.current_revision, s.created_at, s.updated_at
+        ORDER BY s.updated_at DESC, s.session_id ASC
+        LIMIT ? OFFSET ?`,
+      )
+      .all(options.limit, options.offset ?? 0);
+    return rows.map(validateSessionIntegrity);
   }
 
   public diagnostics(): StoreDiagnostics {
@@ -213,6 +109,7 @@ class SqliteEventStore implements EventStore {
       journalMode: String(this.#database.pragma("journal_mode", { simple: true })),
       schemaVersion: Number(this.#database.pragma("user_version", { simple: true })),
       synchronous: Number(this.#database.pragma("synchronous", { simple: true })),
+      busyTimeoutMs: Number(this.#database.pragma("busy_timeout", { simple: true })),
     };
   }
 
@@ -220,6 +117,17 @@ class SqliteEventStore implements EventStore {
     if (this.#closed) return;
     this.#closed = true;
     this.#database.close();
+  }
+
+  #sessionIntegrity(sessionId: string): SessionMetadata | undefined {
+    const row = this.#database
+      .prepare<[string], SessionIntegrityRow>(
+        `${SESSION_INTEGRITY_SELECT}
+        WHERE s.session_id = ?
+        GROUP BY s.session_id, s.current_revision, s.created_at, s.updated_at`,
+      )
+      .get(sessionId);
+    return row === undefined ? undefined : validateSessionIntegrity(row);
   }
 
   #assertOpen(): void {
@@ -248,19 +156,19 @@ export function openEventStore(options: OpenEventStoreOptions): EventStore {
   if (options.testOnlyMemory === true) {
     const database = new Database(":memory:");
     configure(database, true, busyTimeoutMs);
-    return new SqliteEventStore(database);
+    return new SqliteEventStore(database, busyTimeoutMs);
   }
-
   if (!isAbsolute(options.dataDirectory)) {
     throw new InvalidStoreOptionsError("dataDirectory must be an absolute path");
   }
+
   const verifier = options.pathVerifier ?? defaultPathVerifier();
-  const { databasePath } = prepareDatabasePath(options.dataDirectory, verifier);
-  const database = new Database(databasePath);
+  const prepared = prepareDatabasePath(options.dataDirectory, verifier);
+  const database = new Database(prepared.databasePath);
   try {
-    verifier.verifyDatabaseFile(databasePath);
+    reverifyDatabasePath(prepared, verifier);
     configure(database, false, busyTimeoutMs);
-    return new SqliteEventStore(database);
+    return new SqliteEventStore(database, busyTimeoutMs);
   } catch (error: unknown) {
     database.close();
     throw error;

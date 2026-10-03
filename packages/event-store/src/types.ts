@@ -35,11 +35,17 @@ export interface StoreDiagnostics {
   readonly journalMode: string;
   readonly schemaVersion: number;
   readonly synchronous: number;
+  readonly busyTimeoutMs: number;
 }
 
 export interface PathSecurityVerifier {
-  verifyDataDirectory(canonicalDataDirectory: string): void;
-  verifyDatabaseFile(databasePath: string): void;
+  verifyRequestedDataDirectory(requestedDataDirectory: string): void;
+  verifyDataDirectory(requestedDataDirectory: string, canonicalDataDirectory: string): string;
+  verifyDatabaseFile(
+    requestedDataDirectory: string,
+    canonicalDataDirectory: string,
+    databasePath: string,
+  ): string | undefined;
 }
 
 export type OpenEventStoreOptions =

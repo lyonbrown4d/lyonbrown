@@ -6,6 +6,7 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  CorruptEventStoreError,
   EventAlreadyExistsError,
   EventStoreClosedError,
   InvalidStoreOptionsError,
@@ -16,8 +17,9 @@ import {
 } from "../src/index.js";
 
 const allowTestPath: PathSecurityVerifier = {
-  verifyDataDirectory: () => undefined,
-  verifyDatabaseFile: () => undefined,
+  verifyRequestedDataDirectory: () => undefined,
+  verifyDataDirectory: (_requested, canonical) => canonical,
+  verifyDatabaseFile: (_requested, _canonical, databasePath) => databasePath,
 };
 
 const temporaryDirectories: string[] = [];
@@ -111,6 +113,25 @@ describe("SQLite event store", () => {
     store.close();
   });
 
+  it.each([
+    ["same session exact retry", "session-a", 0n],
+    ["other session with stale expected revision", "session-b", 99n],
+  ] as const)("prioritizes global event identity for %s", async (_label, sessionId, expected) => {
+    const store = openEventStore({ testOnlyMemory: true });
+    await store.append("session-a", 0n, [
+      { eventId: "event-global", type: "Original", payload: { stable: true } },
+    ]);
+
+    await expect(
+      store.append(sessionId, expected, [
+        { eventId: "event-global", type: "Retry", payload: { stable: true } },
+      ]),
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<EventAlreadyExistsError>>({ eventId: "event-global" }),
+    );
+    store.close();
+  });
+
   it("serializes concurrent appends so only one expected revision wins", async () => {
     const store = openEventStore({
       dataDirectory: makeDataDirectory(),
@@ -134,12 +155,12 @@ describe("SQLite event store", () => {
       { eventId: "event-1", type: "SessionStarted", payload: { durable: true } },
     ]);
     expect(first.diagnostics().journalMode).toBe("wal");
-    expect(first.diagnostics().schemaVersion).toBe(1);
+    expect(first.diagnostics().schemaVersion).toBe(2);
     first.close();
 
     const reopened = openEventStore({ dataDirectory, pathVerifier: allowTestPath });
     expect(await reopened.currentRevision("session-a")).toBe(1n);
-    expect(reopened.diagnostics().schemaVersion).toBe(1);
+    expect(reopened.diagnostics().schemaVersion).toBe(2);
     reopened.close();
   });
 
@@ -156,6 +177,18 @@ describe("SQLite event store", () => {
         "INSERT INTO sessions(session_id, current_revision, created_at, updated_at) VALUES (?, ?, ?, ?)",
       )
       .run("huge", 9_007_199_254_740_992n, "2026-01-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z");
+    seed
+      .prepare(
+        "INSERT INTO events(session_id, revision, event_id, event_type, occurred_at, payload_json) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        "huge",
+        9_007_199_254_740_992n,
+        "event-before-huge",
+        "BeforeHuge",
+        "2026-01-01T00:00:00.000Z",
+        "{}",
+      );
     seed.close();
 
     const store = openEventStore({ dataDirectory, pathVerifier: allowTestPath });
@@ -163,7 +196,7 @@ describe("SQLite event store", () => {
       { eventId: "event-huge", type: "Huge", payload: {} },
     ]);
     expect(appended[0]?.revision).toBe(9_007_199_254_740_993n);
-    expect(await store.currentRevision("huge")).toBe(9_007_199_254_740_993n);
+    await expect(store.currentRevision("huge")).rejects.toBeInstanceOf(CorruptEventStoreError);
     store.close();
   });
 

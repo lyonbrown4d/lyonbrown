@@ -7,13 +7,34 @@ export const MAX_PAYLOAD_DEPTH = 64;
 export const MAX_PAYLOAD_NODES = 100_000;
 
 const forbiddenKeys = new Set(["__proto__", "constructor", "prototype"]);
-const resolvedSecretKeys = new Set([
-  "resolvedValue",
-  "resolved_value",
-  "resolvedSecret",
-  "resolvedSecretValue",
-  "secretValue",
-]);
+const secretMaterialKeys = new Set(
+  [
+    "secret",
+    "resolvedValue",
+    "resolvedSecret",
+    "resolvedSecretValue",
+    "secretValue",
+    "plaintext",
+    "material",
+    "token",
+    "accessToken",
+    "refreshToken",
+    "authToken",
+    "apiKey",
+    "password",
+    "credential",
+    "credentials",
+    "privateKey",
+    "clientSecret",
+    "bearerToken",
+    "idToken",
+    "sessionToken",
+    "rawSecret",
+    "secretMaterial",
+    "secretPlaintext",
+  ].map(normalizeSecurityKey),
+);
+const secretReferencePattern = /^[a-z][a-z0-9_-]*:[^\s:][^\s]*$/u;
 const malformedUnicode = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
 
 interface TraversalState {
@@ -23,6 +44,68 @@ interface TraversalState {
 
 function fail(message: string, cause?: unknown): never {
   throw new PayloadValidationError(message, cause === undefined ? undefined : { cause });
+}
+
+function normalizeSecurityKey(key: string): string {
+  return key.toLowerCase().replaceAll(/[^a-z0-9]/gu, "");
+}
+
+function isSecretMaterialKey(key: string): boolean {
+  const normalized = normalizeSecurityKey(key);
+  return (
+    secretMaterialKeys.has(normalized) ||
+    normalized.endsWith("secret") ||
+    normalized.endsWith("token") ||
+    normalized.endsWith("password") ||
+    normalized.endsWith("apikey") ||
+    normalized.endsWith("privatekey") ||
+    normalized.endsWith("credential")
+  );
+}
+
+function descriptorValue(descriptors: Record<string, PropertyDescriptor>, key: string): unknown {
+  const descriptor = descriptors[key];
+  if (descriptor === undefined || !("value" in descriptor)) {
+    fail("Payload accessors are not allowed");
+  }
+  return descriptor.value as unknown;
+}
+
+function assertSecretBoundary(
+  descriptors: Record<string, PropertyDescriptor>,
+  keys: readonly string[],
+): void {
+  const normalizedKeys = keys.map(normalizeSecurityKey);
+  const kind = keys.includes("kind") ? descriptorValue(descriptors, "kind") : undefined;
+  const looksLikeSecretRef =
+    normalizedKeys.some((key) => key.endsWith("secretref")) ||
+    (typeof kind === "string" && normalizeSecurityKey(kind) === "secretref");
+
+  if (looksLikeSecretRef) {
+    const directReference =
+      keys.length === 1 && keys[0] === "secretRef"
+        ? descriptorValue(descriptors, "secretRef")
+        : undefined;
+    const taggedReference =
+      keys.length === 2 &&
+      keys.includes("kind") &&
+      keys.includes("reference") &&
+      kind === "secret-ref"
+        ? descriptorValue(descriptors, "reference")
+        : undefined;
+    const reference = directReference ?? taggedReference;
+    if (typeof reference !== "string" || !secretReferencePattern.test(reference)) {
+      fail(
+        'SecretRef must be exactly { secretRef: "provider:name" } or { kind: "secret-ref", reference: "provider:name" }',
+      );
+    }
+    return;
+  }
+
+  const secretKey = keys.find(isSecretMaterialKey);
+  if (secretKey !== undefined) {
+    fail(`Secret-like field ${JSON.stringify(secretKey)} must be redacted before persistence`);
+  }
 }
 
 function assertSafeString(value: string, role: string): void {
@@ -91,9 +174,6 @@ function visitObject(value: object, depth: number, state: TraversalState): Recor
 
   const descriptors = Object.getOwnPropertyDescriptors(value);
   const keys = Object.keys(descriptors);
-  if (keys.includes("secretRef") && keys.some((key) => resolvedSecretKeys.has(key))) {
-    fail("Resolved SecretRef values must never be persisted");
-  }
 
   const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
   for (const key of keys) {
@@ -102,9 +182,9 @@ function visitObject(value: object, depth: number, state: TraversalState): Recor
     const descriptor = descriptors[key];
     if (descriptor === undefined || !("value" in descriptor))
       fail("Payload accessors are not allowed");
-    const descriptorValue: unknown = descriptor.value as unknown;
-    result[key] = visit(descriptorValue, depth + 1, state);
   }
+  assertSecretBoundary(descriptors, keys);
+  for (const key of keys) result[key] = visit(descriptorValue(descriptors, key), depth + 1, state);
   return result;
 }
 
