@@ -1,7 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { isAbsolute, join, relative } from "node:path";
 
 import { afterEach, describe, expect, test } from "vitest";
 import { $, usePowerShell } from "zx";
@@ -26,7 +25,7 @@ const runPnpm: PnpmRunner = async (cwd, args) => {
 };
 
 async function makeRepository(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), "lyonbrown-preflight-"));
+  const root = await mkdtemp(join(tmpdir(), "lyonbrown preflight source "));
   temporaryDirectories.push(root);
 
   await Promise.all(
@@ -59,6 +58,11 @@ async function makeRepository(): Promise<string> {
     "utf8",
   );
   await writeFile(join(root, "apps/docs/package.json"), '{"private":true}', "utf8");
+  await mkdir(join(root, "packages/example"), { recursive: true });
+  await mkdir(join(root, "tools/example"), { recursive: true });
+  await writeFile(join(root, "packages/example/package.json"), '{"private":true}', "utf8");
+  await writeFile(join(root, "tools/example/package.json"), '{"private":true}', "utf8");
+  await writeFile(join(root, ".npmrc"), "strict-peer-dependencies=false\n", "utf8");
   await writeFile(
     join(root, "pnpm-workspace.yaml"),
     "packages:\n  - apps/*\n  - packages/*\n  - tools/*\n",
@@ -74,6 +78,8 @@ async function makeRepository(): Promise<string> {
       "importers:",
       "  .: {}",
       "  apps/docs: {}",
+      "  packages/example: {}",
+      "  tools/example: {}",
       "",
     ].join("\n"),
     "utf8",
@@ -117,13 +123,56 @@ describe("repository checks", () => {
   test("uses frozen lockfile-only validation with lifecycle scripts disabled", async () => {
     const root = await makeRepository();
     const calls: { cwd: string; args: readonly string[] }[] = [];
+    let mirrorRoot = "";
 
-    await inspectRepository(root, (cwd, args) => {
+    await inspectRepository(root, async (cwd, args) => {
+      mirrorRoot = cwd;
       calls.push({ cwd, args });
-      return Promise.resolve();
+      await expect(access(join(cwd, "package.json"))).resolves.toBeUndefined();
+      await expect(access(join(cwd, "pnpm-workspace.yaml"))).resolves.toBeUndefined();
+      await expect(access(join(cwd, "pnpm-lock.yaml"))).resolves.toBeUndefined();
+      await expect(access(join(cwd, "apps/docs/package.json"))).resolves.toBeUndefined();
+      await expect(access(join(cwd, "packages/example/package.json"))).resolves.toBeUndefined();
+      await expect(access(join(cwd, "tools/example/package.json"))).resolves.toBeUndefined();
+      await expect(access(join(cwd, ".npmrc"))).resolves.toBeUndefined();
+      await expect(access(join(cwd, "node_modules"))).rejects.toBeDefined();
     });
 
-    expect(calls).toEqual([{ cwd: root, args: FROZEN_LOCKFILE_ARGS }]);
+    expect(calls).toEqual([{ cwd: mirrorRoot, args: FROZEN_LOCKFILE_ARGS }]);
+    expect(mirrorRoot).not.toBe(root);
+    const relativeMirrorPath = relative(tmpdir(), mirrorRoot);
+    expect(relativeMirrorPath).not.toMatch(/^\.\./);
+    expect(isAbsolute(relativeMirrorPath)).toBe(false);
+    await expect(access(mirrorRoot)).rejects.toBeDefined();
+  });
+
+  test("does not change source lockfile contents or modification time", async () => {
+    const root = await makeRepository();
+    const lockfilePath = join(root, "pnpm-lock.yaml");
+    const fixedTimestamp = new Date("2020-01-02T03:04:05.000Z");
+    await utimes(lockfilePath, fixedTimestamp, fixedTimestamp);
+    const contentsBefore = await readFile(lockfilePath, "utf8");
+    const modifiedBefore = (await stat(lockfilePath, { bigint: true })).mtimeNs;
+
+    await expect(inspectRepository(root, runPnpm)).resolves.toEqual([]);
+
+    await expect(readFile(lockfilePath, "utf8")).resolves.toBe(contentsBefore);
+    expect((await stat(lockfilePath, { bigint: true })).mtimeNs).toBe(modifiedBefore);
+  });
+
+  test("removes the manifest mirror when pnpm validation fails", async () => {
+    const root = await makeRepository();
+    let mirrorRoot = "";
+
+    const failures = await inspectRepository(root, (cwd) => {
+      mirrorRoot = cwd;
+      return Promise.reject(new Error("synthetic frozen install failure"));
+    });
+
+    expect(failures).toEqual(
+      expect.arrayContaining([expect.stringMatching(/synthetic frozen install failure/)]),
+    );
+    await expect(access(mirrorRoot)).rejects.toBeDefined();
   });
 
   test("reports missing files and workspace boundary drift", async () => {
