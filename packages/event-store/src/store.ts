@@ -1,7 +1,7 @@
+import { chmodSync } from "node:fs";
 import { isAbsolute } from "node:path";
 
 import Database from "better-sqlite3";
-import { Kysely, SqliteDialect } from "kysely";
 
 import { appendEvents } from "./append.js";
 import {
@@ -15,8 +15,13 @@ import {
   type RuntimeEventRow,
   type SessionIntegrityRow,
 } from "./integrity.js";
-import { defaultPathVerifier, prepareDatabasePath, reverifyDatabasePath } from "./path-security.js";
-import { migrate, SCHEMA_VERSION, type EventStoreDatabase } from "./schema.js";
+import {
+  defaultPathVerifier,
+  prepareDatabasePath,
+  reverifyDatabasePath,
+  verifyDatabaseSidecars,
+} from "./path-security.js";
+import { migrate, SCHEMA_VERSION } from "./schema.js";
 import type {
   EventStore,
   EventToAppend,
@@ -39,14 +44,12 @@ const SESSION_INTEGRITY_SELECT = `
 
 class SqliteEventStore implements EventStore {
   readonly #database: Database.Database;
-  readonly #kysely: Kysely<EventStoreDatabase>;
   readonly #busyTimeoutMs: number;
   #closed = false;
 
   public constructor(database: Database.Database, busyTimeoutMs: number) {
     this.#database = database;
     this.#busyTimeoutMs = busyTimeoutMs;
-    this.#kysely = new Kysely<EventStoreDatabase>({ dialect: new SqliteDialect({ database }) });
   }
 
   // better-sqlite3 commits synchronously; async keeps the storage-port contract stable.
@@ -60,23 +63,26 @@ class SqliteEventStore implements EventStore {
     return appendEvents(this.#database, this.#busyTimeoutMs, sessionId, expectedRevision, events);
   }
 
+  // All native work completes synchronously before the returned Promise can be observed.
+  // eslint-disable-next-line @typescript-eslint/require-await
   public async load(sessionId: string, options: LoadOptions): Promise<readonly StoredEvent[]> {
     this.#assertOpen();
     validateLoad(sessionId, options);
     const metadata = this.#sessionIntegrity(sessionId);
     if (metadata === undefined) return [];
-    const rows = await this.#kysely
-      .selectFrom("events")
-      .selectAll()
-      .where("session_id", "=", sessionId)
-      .where("revision", ">", options.afterRevision)
-      .orderBy("revision", "asc")
-      .limit(options.limit)
-      .execute();
+    const rows = this.#database
+      .prepare<[string, bigint, number], RuntimeEventRow>(
+        `SELECT session_id, revision, event_id, event_type, occurred_at, payload_json
+           FROM events
+          WHERE session_id = ? AND revision > ?
+          ORDER BY revision ASC
+          LIMIT ?`,
+      )
+      .all(sessionId, options.afterRevision, options.limit);
     if (options.afterRevision < metadata.currentRevision && rows.length === 0) {
       throw new CorruptEventStoreError("Event stream ended before its recorded current revision");
     }
-    return validateEventRows(rows as readonly RuntimeEventRow[], sessionId, options.afterRevision);
+    return validateEventRows(rows, sessionId, options.afterRevision);
   }
 
   // better-sqlite3 returns the validated aggregate synchronously.
@@ -166,8 +172,12 @@ export function openEventStore(options: OpenEventStoreOptions): EventStore {
   const prepared = prepareDatabasePath(options.dataDirectory, verifier);
   const database = new Database(prepared.databasePath);
   try {
+    if (process.platform !== "win32" && prepared.databaseIdentity === undefined) {
+      chmodSync(prepared.databasePath, 0o600);
+    }
     reverifyDatabasePath(prepared, verifier);
     configure(database, false, busyTimeoutMs);
+    verifyDatabaseSidecars(prepared, verifier);
     return new SqliteEventStore(database, busyTimeoutMs);
   } catch (error: unknown) {
     database.close();

@@ -93,7 +93,9 @@ describe("corrupt and hostile persistence", () => {
     store.close();
     expect(seen.filter((entry) => entry.startsWith("requested:"))).toHaveLength(2);
     expect(seen.filter((entry) => entry.startsWith("dir:"))).toHaveLength(2);
-    expect(seen.filter((entry) => entry.startsWith("db:"))).toHaveLength(2);
+    expect(seen.filter((entry) => entry.endsWith("lyonbrown.sqlite3"))).toHaveLength(2);
+    expect(seen.filter((entry) => entry.endsWith("lyonbrown.sqlite3-wal"))).toHaveLength(2);
+    expect(seen.filter((entry) => entry.endsWith("lyonbrown.sqlite3-shm"))).toHaveLength(2);
 
     expect(() =>
       prepareDatabasePath(dataDirectory, {

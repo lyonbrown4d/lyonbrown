@@ -1,11 +1,24 @@
-import { existsSync, lstatSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  lstatSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PathSecurityError, openEventStore, type PathSecurityVerifier } from "../src/index.js";
-import { createPortablePathVerifier } from "../src/path-security.js";
+import {
+  assertSecurePosixDirectoryMetadata,
+  assertSecurePosixFileMetadata,
+  createPortablePathVerifier,
+} from "../src/path-security.js";
 
 const directories: string[] = [];
 
@@ -43,6 +56,93 @@ afterEach(() => {
 });
 
 describe("path security phases", () => {
+  it.runIf(process.platform !== "win32")(
+    "fails closed for an existing permissive POSIX directory without chmodding it",
+    () => {
+      const dataDirectory = temporaryDirectory("permissive-directory");
+      chmodSync(dataDirectory, 0o755);
+
+      expect(() => openEventStore({ dataDirectory })).toThrow(PathSecurityError);
+      expect(statSync(dataDirectory).mode & 0o777).toBe(0o755);
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "creates 0700/0600 storage and securely reopens it",
+    () => {
+      const parent = temporaryDirectory("secure-create");
+      const dataDirectory = join(parent, "data");
+      const databasePath = join(dataDirectory, "lyonbrown.sqlite3");
+      const store = openEventStore({ dataDirectory });
+
+      expect(statSync(dataDirectory).mode & 0o777).toBe(0o700);
+      expect(statSync(databasePath).mode & 0o777).toBe(0o600);
+      for (const suffix of ["-wal", "-shm"] as const) {
+        const sidecar = `${databasePath}${suffix}`;
+        if (existsSync(sidecar)) expect(statSync(sidecar).mode & 0o077).toBe(0);
+      }
+      store.close();
+
+      const reopened = openEventStore({ dataDirectory });
+      reopened.close();
+    },
+  );
+
+  it.runIf(process.platform !== "win32")(
+    "rejects an insecure existing database or WAL sidecar",
+    () => {
+      const dataDirectory = temporaryDirectory("insecure-artifact");
+      const databasePath = join(dataDirectory, "lyonbrown.sqlite3");
+      const first = openEventStore({ dataDirectory });
+      first.close();
+      chmodSync(databasePath, 0o644);
+
+      expect(() => openEventStore({ dataDirectory })).toThrow(PathSecurityError);
+      chmodSync(databasePath, 0o600);
+      writeFileSync(`${databasePath}-wal`, "not a real WAL", { mode: 0o644 });
+      expect(() => openEventStore({ dataDirectory })).toThrow(PathSecurityError);
+    },
+  );
+
+  it.each([0o755, 0o777])("rejects a POSIX data directory with mode %s", (mode) => {
+    expect(() => {
+      assertSecurePosixDirectoryMetadata({ kind: "directory", mode, uid: 1000 }, 1000);
+    }).toThrow(PathSecurityError);
+  });
+
+  it("requires POSIX storage to belong to the daemon uid", () => {
+    expect(() => {
+      assertSecurePosixDirectoryMetadata({ kind: "directory", mode: 0o700, uid: 1001 }, 1000);
+    }).toThrow(PathSecurityError);
+    expect(() => {
+      assertSecurePosixFileMetadata({ kind: "file", mode: 0o600, uid: 1001 }, 1000, "database");
+    }).toThrow(PathSecurityError);
+  });
+
+  it.each([0o700, 0o640, 0o606])("rejects a POSIX database artifact with mode %s", (mode) => {
+    expect(() => {
+      assertSecurePosixFileMetadata({ kind: "file", mode, uid: 1000 }, 1000, "database");
+    }).toThrow(PathSecurityError);
+  });
+
+  it("accepts a private POSIX directory and regular 0600 database artifact", () => {
+    expect(() => {
+      assertSecurePosixDirectoryMetadata({ kind: "directory", mode: 0o700, uid: 1000 }, 1000);
+    }).not.toThrow();
+    expect(() => {
+      assertSecurePosixFileMetadata({ kind: "file", mode: 0o600, uid: 1000 }, 1000, "database");
+    }).not.toThrow();
+  });
+
+  it("rejects non-directory and non-file POSIX metadata", () => {
+    expect(() => {
+      assertSecurePosixDirectoryMetadata({ kind: "file", mode: 0o700, uid: 1000 }, 1000);
+    }).toThrow(PathSecurityError);
+    expect(() => {
+      assertSecurePosixFileMetadata({ kind: "other", mode: 0o600, uid: 1000 }, 1000, "WAL");
+    }).toThrow(PathSecurityError);
+  });
+
   it("the portable verifier rejects junction ancestors before canonicalization", () => {
     const parent = temporaryDirectory("portable-parent");
     const target = temporaryDirectory("portable-target");
@@ -53,11 +153,17 @@ describe("path security phases", () => {
     expect(() => {
       verifier.verifyRequestedDataDirectory(join(junction, "child"));
     }).toThrow(PathSecurityError);
-    expect(verifier.verifyDataDirectory(target, target)).toBe(identity(target));
+    expect(() => verifier.verifyDataDirectory(junction, junction)).toThrow(PathSecurityError);
+    expect(() => verifier.verifyDatabaseFile(target, target, junction)).toThrow(PathSecurityError);
     expect(verifier.verifyDatabaseFile(target, target, join(target, "missing.sqlite3"))).toBe(
       undefined,
     );
-    expect(() => verifier.verifyDatabaseFile(target, target, target)).toThrow(PathSecurityError);
+    if (process.platform !== "win32") {
+      expect(verifier.verifyDataDirectory(target, target)).toBe(identity(target));
+      expect(() => verifier.verifyDatabaseFile(target, target, target)).toThrow(PathSecurityError);
+    } else {
+      expect(() => verifier.verifyDataDirectory(target, target)).toThrow(PathSecurityError);
+    }
   });
 
   it("presents a junction requested path before realpath can wash it into its target", () => {
@@ -80,7 +186,7 @@ describe("path security phases", () => {
     expect(seen[0]).toBe(`requested:${junction}`);
   });
 
-  it("checks requested, canonical directory and database both before and after open", () => {
+  it("checks the directory, database and WAL sidecars before and after open", () => {
     const dataDirectory = temporaryDirectory("phases");
     const calls: string[] = [];
     const store = openEventStore({ dataDirectory, pathVerifier: allowingVerifier(calls) });
@@ -88,7 +194,9 @@ describe("path security phases", () => {
 
     expect(calls.filter((call) => call.startsWith("requested:"))).toHaveLength(2);
     expect(calls.filter((call) => call.startsWith("directory:"))).toHaveLength(2);
-    expect(calls.filter((call) => call.startsWith("database:"))).toHaveLength(2);
+    expect(calls.filter((call) => call.endsWith("lyonbrown.sqlite3"))).toHaveLength(2);
+    expect(calls.filter((call) => call.endsWith("lyonbrown.sqlite3-wal"))).toHaveLength(2);
+    expect(calls.filter((call) => call.endsWith("lyonbrown.sqlite3-shm"))).toHaveLength(2);
   });
 
   it.each(["directory", "database"] as const)(
@@ -120,4 +228,20 @@ describe("path security phases", () => {
       );
     },
   );
+
+  it("fails closed when the database disappears during open", () => {
+    const dataDirectory = temporaryDirectory("identity-missing-database");
+    const base = allowingVerifier([]);
+    const verifier: PathSecurityVerifier = {
+      ...base,
+      verifyDatabaseFile: (_requested, _canonical, databasePath) => {
+        if (!databasePath.endsWith("lyonbrown.sqlite3")) return identity(databasePath);
+        return undefined;
+      },
+    };
+
+    expect(() => openEventStore({ dataDirectory, pathVerifier: verifier })).toThrow(
+      PathSecurityError,
+    );
+  });
 });

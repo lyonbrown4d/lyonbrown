@@ -41,10 +41,14 @@ export interface StoreDiagnostics {
 export interface PathSecurityVerifier {
   verifyRequestedDataDirectory(requestedDataDirectory: string): void;
   verifyDataDirectory(requestedDataDirectory: string, canonicalDataDirectory: string): string;
+  /**
+   * Verifies the primary database and its `-wal`/`-shm` artifacts. Return a stable identity for an
+   * existing artifact, or `undefined` only when that path does not exist.
+   */
   verifyDatabaseFile(
     requestedDataDirectory: string,
     canonicalDataDirectory: string,
-    databasePath: string,
+    databaseArtifactPath: string,
   ): string | undefined;
 }
 

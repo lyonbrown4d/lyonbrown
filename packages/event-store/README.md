@@ -53,6 +53,13 @@ Node does not expose enough Windows reparse-point and DACL information to claim 
 platform verifier backed by native reparse-point and ACL checks. Tests may explicitly use
 `{ testOnlyMemory: true }` or a test verifier; neither is a production fallback.
 
+On POSIX, an existing data directory must belong to the daemon's current uid and grant no group or
+other permissions (`mode & 0o077 === 0`); the package does not silently chmod a directory it did not
+create. A newly created directory uses `0700`. The database must be a regular file owned by the
+current uid with permissions no broader than `0600`; a newly created database is explicitly chmodded
+to `0600`. Existing `-wal` and `-shm` files are subject to the same ownership and permission checks
+both before SQLite opens and after WAL is configured.
+
 SQLite remains the final concurrency boundary. A malicious process that can replace a verified
 directory between verification and native `sqlite3_open` is outside the portable Node verifier's
 capabilities, so production packaging must grant the daemon data directory only to the current user
@@ -68,16 +75,26 @@ new event legitimately collides with a denied name.
 
 ## Native addon and Electron packaging
 
-`better-sqlite3` is a Node-API/native addon. The repository allowlists its install build script and
-pins the exact dependency version. CI must test every release target under Node 24.15.x. If the
-desktop ships Electron, keep this package in the daemon process and rebuild/package the addon for
-the daemon's Node ABI; do not bundle it into the Electron renderer or preload graph. If a future
-deployment embeds the daemon inside Electron, use the Electron ABI-specific rebuild as a separate
-artifact and test database open, WAL, bigint, migration, and shutdown on each target OS.
+`better-sqlite3` is a native addon distributed with N-API prebuilt binaries for supported targets,
+with a source-build fallback. The repository allowlists its install script and pins the exact
+dependency version. CI must test every release target under Node 24.15.x. Keep this package and
+`better-sqlite3` external to Electron renderer/preload and desktop bundler graphs: only the daemon
+artifact may load the addon.
 
 The package compiles ESM JavaScript and declarations with `tsc`. Native binaries are not copied into
-`dist`; the application packager must preserve `better-sqlite3` as an external runtime dependency
-and include its `.node` binary for the target platform and architecture.
+`dist`; the daemon packager must preserve `better-sqlite3` as an external runtime dependency and
+include its `.node` binary for the target platform and architecture. When the desktop distributes
+the daemon, the `.node` binary must remain outside ASAR (for example via `asarUnpack` or an external
+daemon resource). Every packaged daemon artifact needs a smoke test covering database open, WAL,
+bigint round-trip, migration, and clean shutdown on each target OS and architecture.
+
+## Integrity scan performance
+
+Session reads deliberately validate `sessions.current_revision` against full-history `COUNT` and
+`MAX` aggregates before returning data. This favors fail-closed corruption detection over constant
+time reads and can become expensive for long sessions. Before replacing the scan with checkpoints,
+incremental integrity metadata, or a different index strategy, add representative long-history
+benchmarks and retain an equivalent periodic full verification path.
 
 ## Verification
 

@@ -230,4 +230,21 @@ describe("SQLite event store", () => {
     store.close();
     await expect(store.currentRevision("session-a")).rejects.toBeInstanceOf(EventStoreClosedError);
   });
+
+  it("finishes a synchronous load before close and rejects later work with a typed error", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    await store.append("session-a", 0n, [
+      { eventId: "event-1", type: "Safe", payload: { durable: true } },
+    ]);
+
+    const inFlight = store.load("session-a", { afterRevision: 0n, limit: 10 });
+    store.close();
+
+    await expect(inFlight).resolves.toEqual([
+      expect.objectContaining({ eventId: "event-1", revision: 1n }),
+    ]);
+    await expect(store.load("session-a", { afterRevision: 0n, limit: 10 })).rejects.toBeInstanceOf(
+      EventStoreClosedError,
+    );
+  });
 });

@@ -2,33 +2,32 @@ import { CorruptEventStoreError } from "./errors.js";
 
 export const SCHEMA_VERSION = 2;
 
-export interface SessionRow {
-  session_id: string;
-  current_revision: bigint;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface EventRow {
-  session_id: string;
-  revision: bigint;
-  event_id: string;
-  event_type: string;
-  occurred_at: string;
-  payload_json: string;
-}
-
-export interface EventStoreDatabase {
-  sessions: SessionRow;
-  events: EventRow;
-}
-
 interface MigrationDatabase {
   exec(sql: string): void;
   pragma(source: string, options?: { readonly simple?: boolean }): unknown;
 }
 
-const CREATE_SCHEMA = `
+const CREATE_SCHEMA_V1 = `
+  CREATE TABLE sessions (
+    session_id TEXT PRIMARY KEY NOT NULL,
+    current_revision INTEGER NOT NULL CHECK(current_revision >= 0),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE events (
+    session_id TEXT NOT NULL,
+    revision INTEGER NOT NULL CHECK(revision > 0),
+    event_id TEXT NOT NULL UNIQUE,
+    event_type TEXT NOT NULL,
+    occurred_at TEXT NOT NULL,
+    payload_json TEXT NOT NULL CHECK(length(CAST(payload_json AS BLOB)) <= 1048576),
+    PRIMARY KEY(session_id, revision),
+    FOREIGN KEY(session_id) REFERENCES sessions(session_id) ON DELETE RESTRICT
+  ) STRICT;
+  CREATE INDEX events_session_revision ON events(session_id, revision);
+`;
+
+const CREATE_SCHEMA_V2 = `
   CREATE TABLE sessions (
     session_id TEXT PRIMARY KEY NOT NULL
       CHECK(length(CAST(session_id AS BLOB)) BETWEEN 1 AND 128),
@@ -58,7 +57,7 @@ function migrateVersionOne(database: MigrationDatabase): void {
     ALTER TABLE events RENAME TO events_v1;
     DROP INDEX events_session_revision;
     ALTER TABLE sessions RENAME TO sessions_v1;
-    ${CREATE_SCHEMA}
+    ${CREATE_SCHEMA_V2}
     INSERT INTO sessions SELECT * FROM sessions_v1;
     INSERT INTO events SELECT * FROM events_v1;
     DROP TABLE events_v1;
@@ -66,8 +65,29 @@ function migrateVersionOne(database: MigrationDatabase): void {
   `);
 }
 
+interface MigrationStep {
+  readonly fromVersion: number;
+  readonly toVersion: number;
+  apply(database: MigrationDatabase): void;
+}
+
+const MIGRATION_STEPS: readonly MigrationStep[] = [
+  {
+    fromVersion: 0,
+    toVersion: 1,
+    apply: (database) => {
+      database.exec(CREATE_SCHEMA_V1);
+    },
+  },
+  {
+    fromVersion: 1,
+    toVersion: 2,
+    apply: migrateVersionOne,
+  },
+];
+
 export function migrate(database: MigrationDatabase): void {
-  const currentVersion = Number(database.pragma("user_version", { simple: true }));
+  let currentVersion = Number(database.pragma("user_version", { simple: true }));
   if (!Number.isSafeInteger(currentVersion) || currentVersion < 0) {
     throw new CorruptEventStoreError("SQLite user_version is invalid");
   }
@@ -80,9 +100,17 @@ export function migrate(database: MigrationDatabase): void {
 
   database.exec("BEGIN IMMEDIATE");
   try {
-    if (currentVersion === 0) database.exec(CREATE_SCHEMA);
-    else migrateVersionOne(database);
-    database.exec(`PRAGMA user_version = ${String(SCHEMA_VERSION)}`);
+    while (currentVersion < SCHEMA_VERSION) {
+      const step = MIGRATION_STEPS.find(({ fromVersion }) => fromVersion === currentVersion);
+      if (step === undefined) {
+        throw new CorruptEventStoreError(
+          `No migration step exists from schema ${String(currentVersion)}`,
+        );
+      }
+      step.apply(database);
+      currentVersion = step.toVersion;
+      database.exec(`PRAGMA user_version = ${String(currentVersion)}`);
+    }
     database.exec("COMMIT");
   } catch (error: unknown) {
     try {
