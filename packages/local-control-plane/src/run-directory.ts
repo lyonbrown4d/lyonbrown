@@ -1,5 +1,5 @@
 import { createDiscoveryClient, type DiscoveryClient } from "./discovery-store.js";
-import { controlPlaneError } from "./errors.js";
+import { controlPlaneError, type ControlPlaneOperation } from "./errors.js";
 import {
   invokePlatform,
   resolveNativeControlPlaneProvider,
@@ -21,19 +21,23 @@ class OpaqueSecureRunDirectory implements SecureRunDirectory {
   declare public readonly [secureRunDirectoryBrand]: "SecureRunDirectory";
   public readonly discovery: DiscoveryClient;
 
-  public constructor(private readonly nativeHandle: SecureDirectoryHandle) {
-    this.discovery = createDiscoveryClient(nativeHandle);
-    RUN_DIRECTORY_HANDLES.set(this, nativeHandle);
+  public constructor(handle: SecureDirectoryHandle) {
+    this.discovery = createDiscoveryClient(handle);
+    RUN_DIRECTORY_HANDLES.set(this, handle);
   }
 
   public close(): Promise<void> {
-    return invokePlatform("close_directory", () => this.nativeHandle.close());
+    const handle = resolveRunDirectoryHandle(this, "close_directory");
+    return invokePlatform("close_directory", () => handle.close());
   }
 }
 
-export function resolveRunDirectoryHandle(directory: SecureRunDirectory): SecureDirectoryHandle {
+export function resolveRunDirectoryHandle(
+  directory: SecureRunDirectory,
+  operation: ControlPlaneOperation = "kernel_lock",
+): SecureDirectoryHandle {
   const handle = RUN_DIRECTORY_HANDLES.get(directory);
-  if (!handle) throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation: "kernel_lock" });
+  if (!handle) throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation });
   return handle;
 }
 

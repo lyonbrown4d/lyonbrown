@@ -20,19 +20,23 @@ export interface DiscoveryClient {
 }
 
 class AnchoredDiscoveryStore implements DiscoveryClient {
-  public constructor(private readonly directory: SecureDirectoryHandle) {}
+  public constructor(directory: SecureDirectoryHandle) {
+    DISCOVERY_HANDLES.set(this, directory);
+  }
 
   public async publish(descriptor: DiscoveryDescriptor): Promise<void> {
     const bytes = Buffer.from(serializeDiscoveryDescriptor(descriptor), "utf8");
+    const directory = resolveDiscoveryHandle(this, "atomic_replace");
     await invokePlatform("atomic_replace", () =>
-      this.directory.atomicReplacePrivateFile(DISCOVERY_FILE, bytes),
+      directory.atomicReplacePrivateFile(DISCOVERY_FILE, bytes),
     );
   }
 
   public async read(): Promise<DiscoveryDescriptor> {
+    const directory = resolveDiscoveryHandle(this, "read_descriptor");
     let result: PlatformResult<Uint8Array | null>;
     try {
-      result = await this.directory.readPrivateFile(DISCOVERY_FILE, MAX_DISCOVERY_BYTES);
+      result = await directory.readPrivateFile(DISCOVERY_FILE, MAX_DISCOVERY_BYTES);
     } catch {
       throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation: "read_descriptor" });
     }
@@ -45,6 +49,17 @@ class AnchoredDiscoveryStore implements DiscoveryClient {
   public fileName(): string {
     return DISCOVERY_FILE;
   }
+}
+
+const DISCOVERY_HANDLES = new WeakMap<AnchoredDiscoveryStore, SecureDirectoryHandle>();
+
+function resolveDiscoveryHandle(
+  store: AnchoredDiscoveryStore,
+  operation: "atomic_replace" | "read_descriptor",
+): SecureDirectoryHandle {
+  const handle = DISCOVERY_HANDLES.get(store);
+  if (!handle) throw controlPlaneError("PLATFORM_SECURITY_FAILURE", { operation });
+  return handle;
 }
 
 export function createDiscoveryClient(directory: SecureDirectoryHandle): DiscoveryClient {

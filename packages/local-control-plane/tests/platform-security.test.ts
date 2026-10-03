@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import { describe, expect, it } from "vitest";
 import {
   ControlPlaneError,
@@ -95,6 +96,48 @@ describe("native platform security boundary", () => {
     await expect(replacement.read()).rejects.toMatchObject({
       code: "DESCRIPTOR_NOT_FOUND",
     });
+  });
+
+  it("does not expose native capabilities through runtime object state", async () => {
+    const security = new FakePlatformSecurity();
+    const provider = security.provider;
+    const directory = await openSecureRunDirectory(RUN_PATH, provider);
+    const lease = await acquireLifecycleLock(directory);
+
+    expect(Reflect.ownKeys(provider)).toEqual([]);
+    expect(Object.getOwnPropertyNames(directory)).toEqual(["discovery"]);
+    expect(Reflect.ownKeys(directory.discovery)).toEqual([]);
+    expect(Reflect.ownKeys(lease ?? {})).toEqual(["kind", "release"]);
+    expect("readPrivateFile" in directory).toBe(false);
+    expect("atomicReplacePrivateFile" in directory).toBe(false);
+    expect("tryAcquireKernelLock" in directory).toBe(false);
+    expect("readPrivateFile" in directory.discovery).toBe(false);
+    expect("atomicReplacePrivateFile" in directory.discovery).toBe(false);
+    expect("tryAcquireKernelLock" in directory.discovery).toBe(false);
+    expect(Object.getOwnPropertyNames(Object.getPrototypeOf(directory) as object)).toEqual([
+      "constructor",
+      "close",
+    ]);
+    const detachedRead = directory.discovery.read.bind({});
+    await expect(detachedRead()).rejects.toMatchObject({
+      code: "PLATFORM_SECURITY_FAILURE",
+      details: { operation: "read_descriptor" },
+    });
+
+    const clone = structuredClone({ provider, directory });
+    expect(Reflect.ownKeys(clone.provider)).toEqual([]);
+    expect(Reflect.ownKeys(clone.directory)).toEqual(["discovery"]);
+    expect(Reflect.ownKeys(clone.directory.discovery as object)).toEqual([]);
+
+    const observable = `${JSON.stringify({ provider, directory, lease })}\n${inspect({
+      provider,
+      directory,
+      lease,
+    })}`;
+    expect(observable).not.toMatch(
+      /nativeHandle|readPrivateFile|atomicReplacePrivateFile|tryAcquireKernelLock/u,
+    );
+    await lease?.release();
   });
 
   it("requires unique same-directory temporaries and cleanup for atomic publication", async () => {

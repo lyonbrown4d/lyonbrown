@@ -39,6 +39,10 @@ constructors, result unwrappers, or parity helpers. Each build removes `dist`
 before TypeScript emits so deleted source cannot survive as stale package
 output.
 
+Opaque providers, run directories, and discovery clients keep native adapters
+and handles only in module-owned `WeakMap` state. Reflection, JSON, inspection,
+and structured cloning expose no native capability or raw operation method.
+
 The production Node-API adapter is not implemented yet and is an explicit
 agentd completion gate. Its Windows implementation must:
 
