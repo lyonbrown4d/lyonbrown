@@ -1,0 +1,33 @@
+{
+  "name": "@lyonbrown/event-store",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "pnpm": "10.33.4"
+  },
+  "scripts": {
+    "lint": "eslint src tests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "kysely": "0.29.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "9.39.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
