@@ -1,6 +1,11 @@
 import { $, usePowerShell } from "zx";
 
-import { isWorkspaceTask, runWorkspaceTask, type WorkspaceTask } from "./workspace-task-lib.js";
+import {
+  isWorkspaceTask,
+  ROOT_TASK_COMMANDS,
+  runWorkspaceTask,
+  type WorkspaceTask,
+} from "./workspace-task-lib.js";
 import { configureZxPlatform } from "./zx-platform.js";
 
 configureZxPlatform(process.platform, usePowerShell);
@@ -8,22 +13,8 @@ configureZxPlatform(process.platform, usePowerShell);
 const TASK_TIMEOUT_MS = 15 * 60 * 1000;
 
 async function runRoot(task: WorkspaceTask): Promise<void> {
-  switch (task) {
-    case "lint":
-      await $({
-        stdio: "inherit",
-        timeout: TASK_TIMEOUT_MS,
-      })`eslint scripts/**/*.ts apps/docs/.vitepress/**/*.mts eslint.config.mjs`;
-      return;
-    case "typecheck":
-      await $({ stdio: "inherit", timeout: TASK_TIMEOUT_MS })`tsc --noEmit -p tsconfig.json`;
-      return;
-    case "test":
-      await $({ stdio: "inherit", timeout: TASK_TIMEOUT_MS })`vitest run scripts/tests`;
-      return;
-    case "build":
-      await $({ stdio: "inherit", timeout: TASK_TIMEOUT_MS })`tsc -p tsconfig.build.json`;
-  }
+  const [executable, ...arguments_] = ROOT_TASK_COMMANDS[task];
+  await $({ stdio: "inherit", timeout: TASK_TIMEOUT_MS })`${executable} ${arguments_}`;
 }
 
 async function runWorkspace(task: WorkspaceTask): Promise<void> {

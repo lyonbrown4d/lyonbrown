@@ -1,8 +1,12 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { runWorkspaceTask } from "../workspace-task-lib.js";
+import { ROOT_TASK_COMMANDS, runWorkspaceTask } from "../workspace-task-lib.js";
 
 describe("workspace task orchestration", () => {
+  test("scopes root tests to the canonical scripts test directory", () => {
+    expect(ROOT_TASK_COMMANDS.test).toEqual(["vitest", "run", "--dir", "scripts/tests"]);
+  });
+
   test("validates the root before running workspace packages", async () => {
     const calls: string[] = [];
 
