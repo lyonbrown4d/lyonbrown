@@ -39,6 +39,7 @@ interface PiBridgeOptions {
   readonly adapter: KernelModelAdapter;
   readonly tracker: () => BudgetTracker;
   readonly limits: SanitizationLimits;
+  readonly outputLimits: SanitizationLimits;
   readonly tools: readonly KernelModelTool[];
   readonly onUnknownTool: (callId: string, name: string) => Promise<void>;
   readonly hasTool: (name: string) => boolean;
@@ -110,11 +111,20 @@ async function consumeModelEvent(
   rawEvent: KernelModelStreamEvent,
   options: PiBridgeOptions,
 ): Promise<{ partial: AssistantMessage; usage?: Usage; done: boolean }> {
-  accountRawTextDelta(rawEvent, options.tracker());
+  const rawEventType = inspectRawEvent(rawEvent, options.tracker());
   let sanitizedEvent: KernelJsonValue;
   try {
-    sanitizedEvent = sanitizeJson(rawEvent, options.limits);
-  } catch {
+    sanitizedEvent = sanitizeJson(
+      rawEvent,
+      rawEventType === "text_delta" ? options.outputLimits : options.limits,
+    );
+  } catch (error: unknown) {
+    if (
+      error instanceof KernelRuntimeError &&
+      (error.code === "INPUT_BUDGET_EXCEEDED" || error.code === "OUTPUT_BUDGET_EXCEEDED")
+    ) {
+      throw error;
+    }
     throw new KernelRuntimeError("MODEL_ERROR", "Invalid model event denied");
   }
   if (!isJsonObject(sanitizedEvent)) {
@@ -266,8 +276,8 @@ function isJsonObject(value: KernelJsonValue): value is Readonly<Record<string, 
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function accountRawTextDelta(event: unknown, tracker: BudgetTracker): void {
-  if (typeof event !== "object" || event === null || types.isProxy(event)) return;
+function inspectRawEvent(event: unknown, tracker: BudgetTracker): unknown {
+  if (typeof event !== "object" || event === null || types.isProxy(event)) return undefined;
   const descriptors = Object.getOwnPropertyDescriptors(event);
   const type = descriptors.type;
   const delta = descriptors.delta;
@@ -281,4 +291,5 @@ function accountRawTextDelta(event: unknown, tracker: BudgetTracker): void {
   ) {
     tracker.output(delta.value);
   }
+  return type && "value" in type ? type.value : undefined;
 }

@@ -13,18 +13,27 @@ export interface SanitizationLimits {
   readonly maxStringBytes: number;
   readonly maxCollectionEntries: number;
   readonly maxNodes: number;
+  readonly maxTotalBytes: number;
+  readonly totalBytesErrorCode: KernelErrorCode;
 }
 
 interface TraversalState {
   nodes: number;
+  totalBytes: number;
 }
 
-export function limitsFromBudget(budget: KernelResourceBudget): SanitizationLimits {
+export function limitsFromBudget(
+  budget: KernelResourceBudget,
+  maxTotalBytes = budget.maxInputBytes,
+  totalBytesErrorCode: KernelErrorCode = "INPUT_BUDGET_EXCEEDED",
+): SanitizationLimits {
   return {
     maxDepth: budget.maxValueDepth,
     maxStringBytes: budget.maxValueStringBytes,
     maxCollectionEntries: budget.maxCollectionEntries,
     maxNodes: budget.maxValueNodes,
+    maxTotalBytes,
+    totalBytesErrorCode,
   };
 }
 
@@ -82,7 +91,7 @@ export function boundedSummary(value: string, maximumBytes = 256): string {
 }
 
 export function sanitizeJson(value: unknown, limits: SanitizationLimits): KernelJsonValue {
-  return sanitizeValue(value, limits, { nodes: 0 }, 0);
+  return sanitizeValue(value, limits, { nodes: 0, totalBytes: 0 }, 0);
 }
 
 function sanitizeValue(
@@ -98,14 +107,26 @@ function sanitizeValue(
   if (depth > limits.maxDepth) {
     throw invalidValue("Value exceeds the allowed nesting depth");
   }
-  if (value === null || typeof value === "boolean") return value;
+  if (value === null) {
+    addTotalBytes(state, limits, 4);
+    return value;
+  }
+  if (typeof value === "boolean") {
+    addTotalBytes(state, limits, value ? 4 : 5);
+    return value;
+  }
   if (typeof value === "string") {
-    if (utf8Bytes(value) > limits.maxStringBytes) {
+    const bytes = utf8Bytes(value);
+    addTotalBytes(state, limits, jsonStringBudgetBytes(value));
+    if (bytes > limits.maxStringBytes) {
       throw invalidValue("Value exceeds the allowed string byte budget");
     }
     return sanitizeText(value);
   }
-  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    addTotalBytes(state, limits, utf8Bytes(String(value)));
+    return value;
+  }
   if (typeof value !== "object") throw invalidValue("Value is not JSON-compatible");
   if (types.isProxy(value)) throw invalidValue("Proxy values are not accepted");
   return Array.isArray(value)
@@ -122,6 +143,7 @@ function sanitizeArray(
   if (value.length > limits.maxCollectionEntries) {
     throw invalidValue("Array exceeds the allowed collection width");
   }
+  addTotalBytes(state, limits, 2 + Math.max(0, value.length - 1));
   const descriptors = Object.getOwnPropertyDescriptors(value);
   assertNoAccessors(descriptors);
   const output: KernelJsonValue[] = [];
@@ -160,6 +182,10 @@ function sanitizeObject(
   if (entries.length > limits.maxCollectionEntries) {
     throw invalidValue("Object exceeds the allowed collection width");
   }
+  addTotalBytes(state, limits, 2 + Math.max(0, entries.length - 1));
+  for (const [rawKey] of entries) {
+    addTotalBytes(state, limits, jsonStringBudgetBytes(rawKey) + 1);
+  }
   const output = Object.create(null) as Record<string, KernelJsonValue>;
   for (const [rawKey, descriptor] of entries) {
     if (DANGEROUS_KEYS.has(rawKey)) throw invalidValue("Dangerous object key rejected");
@@ -168,6 +194,7 @@ function sanitizeObject(
       throw invalidValue("Object key exceeds the allowed string byte budget");
     }
     const key = sanitizeText(rawKey);
+    if (DANGEROUS_KEYS.has(key)) throw invalidValue("Dangerous object key rejected");
     if (Object.hasOwn(output, key)) throw invalidValue("Sanitized object keys collide");
     output[key] = sanitizeValue(descriptor.value, limits, state, depth + 1);
   }
@@ -184,46 +211,35 @@ function invalidValue(message: string): KernelRuntimeError {
   return new KernelRuntimeError("UNTRUSTED_VALUE_INVALID", message);
 }
 
-export class SecretRedactor {
-  readonly #secrets = new Set<string>();
-
-  add(secret: string): void {
-    if (secret.length > 0) this.#secrets.add(secret);
+function addTotalBytes(state: TraversalState, limits: SanitizationLimits, bytes: number): void {
+  if (bytes > limits.maxTotalBytes - state.totalBytes) {
+    throw new KernelRuntimeError(
+      limits.totalBytesErrorCode,
+      `Value exceeds the ${String(limits.maxTotalBytes)}-byte aggregate resource budget`,
+    );
   }
-
-  text(value: string): string {
-    let output = sanitizeText(value);
-    for (const secret of this.#secrets) output = output.replaceAll(secret, "[REDACTED]");
-    return output;
-  }
-
-  summary(value: string, maximumBytes = 256): string {
-    return boundedSummary(this.text(value), maximumBytes);
-  }
-
-  json(value: unknown, limits: SanitizationLimits): KernelJsonValue {
-    return redactJson(sanitizeJson(value, limits), (text) => this.text(text));
-  }
+  state.totalBytes += bytes;
 }
 
-function redactJson(value: KernelJsonValue, redact: (value: string) => string): KernelJsonValue {
-  if (typeof value === "string") return redact(value);
-  if (Array.isArray(value)) {
-    const entries = value as readonly KernelJsonValue[];
-    return entries.map((entry) => redactJson(entry, redact));
-  }
-  if (value !== null && typeof value === "object") {
-    const output = Object.create(null) as Record<string, KernelJsonValue>;
-    for (const [key, entry] of Object.entries(value)) {
-      const redactedKey = redact(key);
-      if (Object.hasOwn(output, redactedKey)) {
-        throw invalidValue("Redacted object keys collide");
-      }
-      output[redactedKey] = redactJson(entry, redact);
+export function jsonStringBudgetBytes(value: string): number {
+  let bytes = utf8Bytes(value) + 2;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (
+      code === 0x22 ||
+      code === 0x5c ||
+      code === 0x08 ||
+      code === 0x09 ||
+      code === 0x0a ||
+      code === 0x0c ||
+      code === 0x0d
+    ) {
+      bytes += 1;
+    } else if (code <= 0x1f) {
+      bytes += 5;
     }
-    return output;
   }
-  return value;
+  return bytes;
 }
 
 export function redactSecretReferences(

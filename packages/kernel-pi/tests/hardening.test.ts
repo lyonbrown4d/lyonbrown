@@ -9,7 +9,6 @@ import {
   type PiKernelSessionOptions,
 } from "../src/index.js";
 import {
-  SecretRedactor,
   assertByteLimit,
   isSecretReference,
   redactSecretReferences,
@@ -17,12 +16,15 @@ import {
   sanitizeText,
   utf8Bytes,
 } from "../src/sanitization.js";
+import { SecretRedactor } from "../src/redaction.js";
 
 const valueLimits = {
   maxDepth: 2,
   maxStringBytes: 8,
   maxCollectionEntries: 4,
   maxNodes: 8,
+  maxTotalBytes: 64,
+  totalBytesErrorCode: "INPUT_BUDGET_EXCEEDED" as const,
 };
 
 const limits = {
@@ -67,14 +69,20 @@ describe("untrusted value hardening", () => {
 
   test("redacts registered values and symbolic secret references recursively", () => {
     const redactor = new SecretRedactor();
-    redactor.add("");
     redactor.add("token");
     expect(redactor.text("token and token")).toBe("[REDACTED] and [REDACTED]");
-    expect(redactor.json({ nested: ["token", 1] }, { ...valueLimits, maxDepth: 3 })).toEqual({
+    expect(
+      redactor.json({ nested: ["token", 1] }, { ...valueLimits, maxDepth: 3, maxStringBytes: 16 }),
+    ).toEqual({
       nested: ["[REDACTED]", 1],
     });
     const symbolic = { a: [{ kind: "secretRef", reference: "credential-id" }], b: false };
-    const symbolicLimits = { ...valueLimits, maxDepth: 3, maxStringBytes: 32 };
+    const symbolicLimits = {
+      ...valueLimits,
+      maxDepth: 3,
+      maxStringBytes: 32,
+      maxTotalBytes: 256,
+    };
     expect(redactSecretReferences(symbolic, symbolicLimits)).toEqual({
       a: ["[REDACTED]"],
       b: false,

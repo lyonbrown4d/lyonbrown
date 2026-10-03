@@ -5,21 +5,14 @@ import { BudgetTracker, validateBudget } from "./budget.js";
 import { KernelRuntimeError } from "./errors.js";
 import { createPiStreamFunction } from "./pi-bridge.js";
 import { createPiModel } from "./pi-conversion.js";
-import {
-  assertByteLimit,
-  limitsFromBudget,
-  SecretRedactor,
-  sanitizeBoundedText,
-  sanitizeJson,
-  sanitizeText,
-} from "./sanitization.js";
+import { SecretRedactor } from "./redaction.js";
+import { limitsFromBudget, sanitizeBoundedText, sanitizeText } from "./sanitization.js";
+import { normalizeTools } from "./tool-normalization.js";
 import { ToolExecutor } from "./tools.js";
 import type {
   KernelEvent,
   KernelEventListener,
-  KernelJsonValue,
   KernelSession,
-  KernelToolDefinition,
   PiKernelSessionOptions,
 } from "./types.js";
 
@@ -37,6 +30,11 @@ export class PiKernelSession implements KernelSession {
   constructor(private readonly options: PiKernelSessionOptions) {
     validateBudget(options.budget);
     const limits = limitsFromBudget(options.budget);
+    const outputLimits = limitsFromBudget(
+      options.budget,
+      options.budget.maxOutputBytes,
+      "OUTPUT_BUDGET_EXCEEDED",
+    );
     const systemPrompt = sanitizeBoundedText(options.systemPrompt, options.budget.maxInputBytes);
     const registeredTools = normalizeTools(options.toolRegistry.list(), options);
     const toolByName = new Map(registeredTools.map((tool) => [tool.name, tool]));
@@ -61,6 +59,7 @@ export class PiKernelSession implements KernelSession {
         adapter: options.model,
         tracker: () => this.#tracker,
         limits,
+        outputLimits,
         tools: registeredTools.map((tool) => ({
           name: tool.name,
           description: tool.description,
@@ -238,58 +237,6 @@ export class PiKernelSession implements KernelSession {
 
 export function createPiKernelSession(options: PiKernelSessionOptions): KernelSession {
   return new PiKernelSession(options);
-}
-
-function normalizeTools(
-  tools: readonly KernelToolDefinition[],
-  options: PiKernelSessionOptions,
-): readonly KernelToolDefinition[] {
-  if (tools.length > options.budget.maxCollectionEntries) {
-    throw new KernelRuntimeError("INPUT_BUDGET_EXCEEDED", "Tool registry exceeds resource budget");
-  }
-  const schemaLimits = {
-    ...limitsFromBudget(options.budget),
-    maxStringBytes: options.budget.maxInputBytes,
-  };
-  const names = new Set<string>();
-  return tools.map((tool) => {
-    const name = sanitizeIdentity(tool.name, options.budget.maxInputBytes, "Tool name");
-    if (names.has(name)) throw new TypeError("Tool names must be unique");
-    names.add(name);
-    if (tool.permissions.length > options.budget.maxCollectionEntries) {
-      throw new KernelRuntimeError(
-        "INPUT_BUDGET_EXCEEDED",
-        "Tool permissions exceed resource budget",
-      );
-    }
-    const inputSchema = sanitizeJson(tool.inputSchema, schemaLimits);
-    if (!isJsonObject(inputSchema)) throw new TypeError("Tool schema must be an object");
-    assertByteLimit(
-      JSON.stringify(inputSchema),
-      options.budget.maxInputBytes,
-      "INPUT_BUDGET_EXCEEDED",
-    );
-    return {
-      ...tool,
-      name,
-      label: sanitizeBoundedText(tool.label, options.budget.maxInputBytes),
-      description: sanitizeBoundedText(tool.description, options.budget.maxInputBytes),
-      permissions: tool.permissions.map((permission) =>
-        sanitizeIdentity(permission, options.budget.maxInputBytes, "Permission"),
-      ),
-      inputSchema,
-    };
-  });
-}
-
-function sanitizeIdentity(value: string, maximumBytes: number, label: string): string {
-  const sanitized = sanitizeBoundedText(value, maximumBytes);
-  if (sanitized !== value || sanitized.length === 0) throw new TypeError(`${label} is invalid`);
-  return sanitized;
-}
-
-function isJsonObject(value: KernelJsonValue): value is Readonly<Record<string, KernelJsonValue>> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function toPublicError(error: unknown): KernelRuntimeError {

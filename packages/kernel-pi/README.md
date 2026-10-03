@@ -28,6 +28,10 @@ rejects proxies and accessors without invoking them, and normalizes Unicode whil
 bidirectional-control characters. Secret redaction applies to both values and object keys and rejects
 post-redaction key collisions.
 
+JSON traversal also accounts aggregate UTF-8 bytes plus container/key structure before constructing the
+normalized value. Model/tool arguments use `maxInputBytes`; tool results use `maxToolResultBytes`. A final
+serialized-size assertion is retained only as a defensive consistency check for JSON escaping.
+
 Tool access is default-deny:
 
 1. The tool must exist in the injected registry.
@@ -36,7 +40,10 @@ Tool access is default-deny:
    error is a denial.
 4. Only after approval does the adapter append and await `tool_started`.
 5. `SecretRef` values are resolved after durable intent, immediately before `execute`. Resolved values are
-   registered with the redactor and never enter events or model-visible tool results.
+   registered in both raw and output-normalized forms and never enter events or model-visible tool results.
+   Variants are deduplicated and replaced longest-first, so overlapping secrets cannot leave suffixes. Empty
+   raw secrets or secrets that normalize to empty are rejected before `execute`; malformed Unicode is
+   normalized and redacted consistently with every output surface.
 6. Tool execution has one bounded timeout and no automatic retry. After `tool_started`, cancellation, timeout,
    a non-cooperative promise, or a missing durable result emits `tool_outcome_unknown` where possible and
    returns a fatal outcome for the outer runtime to reconcile.

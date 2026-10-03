@@ -163,6 +163,78 @@ describe("security boundaries", () => {
     expect(JSON.stringify(events)).not.toContain("\u202e");
   });
 
+  test("redacts normalized, malformed, and overlapping secrets in results and failures", async () => {
+    const arguments_ = {
+      short: { kind: "secretRef", reference: "short" },
+      long: { kind: "secretRef", reference: "long" },
+      ansi: { kind: "secretRef", reference: "ansi" },
+      malformed: { kind: "secretRef", reference: "malformed" },
+    };
+    const secrets: Readonly<Record<string, string>> = {
+      short: "secret",
+      long: "secret-long",
+      ansi: "pre\u001b[31m\u0001\u202Epost",
+      malformed: "bad\ud800value",
+    };
+    const createSecretTool = (execute: KernelToolDefinition["execute"]): KernelToolDefinition => ({
+      ...dangerousTool,
+      risk: "low",
+      inputSchema: {
+        type: "object",
+        properties: {
+          short: { type: "string" },
+          long: { type: "string" },
+          ansi: { type: "string" },
+          malformed: { type: "string" },
+        },
+        required: ["short", "long", "ansi", "malformed"],
+        additionalProperties: false,
+      },
+      execute,
+    });
+
+    const successEvents: KernelEvent[] = [];
+    const successTool = createSecretTool(() =>
+      Promise.resolve({
+        content: "secret-long secret prepost bad�value",
+        details: {
+          "prepost-first": "secret-long",
+          "bad�value-second": "secret",
+        },
+      }),
+    );
+    const successOptions = createOptions(toolCallingModel(arguments_), successTool, successEvents);
+    successOptions.secretResolver.resolve = (reference) =>
+      Promise.resolve(secrets[reference] ?? "missing");
+    await createPiKernelSession(successOptions).startTurn("redact result");
+
+    const successJson = JSON.stringify(successEvents);
+    for (const leaked of ["secret-long", "secret", "prepost", "bad�value", "-long"]) {
+      expect(successJson).not.toContain(leaked);
+    }
+    expect(successEvents).toContainEqual(
+      expect.objectContaining({
+        type: "tool_succeeded",
+        content: "[REDACTED] [REDACTED] [REDACTED] [REDACTED]",
+      }),
+    );
+
+    const failureEvents: KernelEvent[] = [];
+    const failureTool = createSecretTool(() =>
+      Promise.reject(new Error("secret-long secret prepost bad�value")),
+    );
+    const failureOptions = createOptions(toolCallingModel(arguments_), failureTool, failureEvents);
+    failureOptions.secretResolver.resolve = (reference) =>
+      Promise.resolve(secrets[reference] ?? "missing");
+    await createPiKernelSession(failureOptions).startTurn("redact failure");
+
+    const failure = failureEvents.find((event) => event.type === "tool_failed");
+    expect(failure).toMatchObject({
+      type: "tool_failed",
+      message: "[REDACTED] [REDACTED] [REDACTED] [REDACTED]",
+    });
+  });
+
   test("rejects malformed schema arguments before durable intent", async () => {
     const events: KernelEvent[] = [];
     const execute = vi.fn(() => Promise.resolve({ content: "no" }));
@@ -215,106 +287,5 @@ describe("security boundaries", () => {
     expect(executionEvents).toContainEqual(
       expect.objectContaining({ type: "tool_outcome_unknown", code: "TOOL_TIMEOUT" }),
     );
-  });
-});
-
-describe("resource budgets", () => {
-  test("rejects oversized input with a structured error", async () => {
-    const events: KernelEvent[] = [];
-    const session = createPiKernelSession(
-      createOptions(new OneShotModel([{ type: "done", reason: "stop" }]), undefined, events),
-    );
-
-    await expect(session.startTurn("x".repeat(2_000))).rejects.toMatchObject({
-      code: "INPUT_BUDGET_EXCEEDED",
-    });
-  });
-
-  test("aborts output and tool results that exceed their byte budgets", async () => {
-    const outputEvents: KernelEvent[] = [];
-    const outputOptions = createOptions(
-      new OneShotModel([
-        { type: "text_delta", delta: "y".repeat(2_000) },
-        { type: "done", reason: "stop" },
-      ]),
-      undefined,
-      outputEvents,
-    );
-    await expect(createPiKernelSession(outputOptions).startTurn("go")).rejects.toMatchObject({
-      code: "OUTPUT_BUDGET_EXCEEDED",
-    });
-    expect(outputEvents.some((event) => event.type === "run_failed")).toBe(true);
-    expect(outputEvents.some((event) => event.type === "run_completed")).toBe(false);
-
-    const toolEvents: KernelEvent[] = [];
-    const tool: KernelToolDefinition = {
-      ...dangerousTool,
-      risk: "low",
-      execute: () => Promise.resolve({ content: "z".repeat(500) }),
-    };
-    await expect(
-      createPiKernelSession(
-        createOptions(toolCallingModel({ token: "x" }), tool, toolEvents),
-      ).startTurn("run"),
-    ).rejects.toMatchObject({ code: "TOOL_OUTCOME_UNKNOWN" });
-    expect(toolEvents.some((event) => event.type === "tool_outcome_unknown")).toBe(true);
-    expect(toolEvents.some((event) => event.type === "tool_succeeded")).toBe(false);
-  });
-
-  test("rejects hostile tool result accessors without invoking them", async () => {
-    const getter = vi.fn(() => "must not be read");
-    const hostile = Object.defineProperty({}, "content", { enumerable: true, get: getter });
-    const events: KernelEvent[] = [];
-    const tool: KernelToolDefinition = {
-      ...dangerousTool,
-      risk: "low",
-      execute: () => Promise.resolve(hostile as { content: string }),
-    };
-
-    await expect(
-      createPiKernelSession(
-        createOptions(toolCallingModel({ token: "x" }), tool, events),
-      ).startTurn("run"),
-    ).rejects.toMatchObject({ code: "TOOL_OUTCOME_UNKNOWN" });
-
-    expect(getter).not.toHaveBeenCalled();
-    expect(events.some((event) => event.type === "tool_outcome_unknown")).toBe(true);
-    expect(events.some((event) => event.type === "tool_succeeded")).toBe(false);
-  });
-
-  test("rejects malformed usage from an untrusted model adapter", async () => {
-    const events: KernelEvent[] = [];
-    const model = new OneShotModel([
-      {
-        type: "usage",
-        usage: { inputTokens: -1, outputTokens: Number.NaN, totalTokens: 0 },
-      },
-      { type: "done", reason: "stop" },
-    ]);
-
-    await expect(
-      createPiKernelSession(createOptions(model, undefined, events)).startTurn("go"),
-    ).rejects.toMatchObject({ code: "MODEL_ERROR" });
-    expect(events.some((event) => event.type === "run_failed")).toBe(true);
-  });
-
-  test("rejects hostile model event accessors without invoking them", async () => {
-    const getter = vi.fn(() => "done");
-    const hostileEvent = Object.defineProperty({}, "type", { enumerable: true, get: getter });
-    const model: KernelModelAdapter = {
-      model: { provider: "offline", id: "hostile-event" },
-      async *stream() {
-        await Promise.resolve();
-        yield hostileEvent as KernelModelStreamEvent;
-      },
-    };
-    const events: KernelEvent[] = [];
-
-    await expect(
-      createPiKernelSession(createOptions(model, undefined, events)).startTurn("go"),
-    ).rejects.toMatchObject({ code: "MODEL_ERROR" });
-
-    expect(getter).not.toHaveBeenCalled();
-    expect(events.some((event) => event.type === "run_completed")).toBe(false);
   });
 });

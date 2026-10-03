@@ -4,7 +4,8 @@ import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
 import type { BudgetTracker } from "./budget.js";
-import { KernelRuntimeError, safeErrorMessage } from "./errors.js";
+import { KernelRuntimeError } from "./errors.js";
+import type { SecretRedactor } from "./redaction.js";
 import {
   assertByteLimit,
   limitsFromBudget,
@@ -12,7 +13,6 @@ import {
   sanitizeJson,
   sanitizeText,
   type SanitizationLimits,
-  type SecretRedactor,
 } from "./sanitization.js";
 import {
   abortCode,
@@ -23,6 +23,8 @@ import {
   raceAbort,
   replaceSecretRefsForValidation,
   resolveSecrets,
+  toSafePreExecutionError,
+  toSafeToolError,
 } from "./tool-support.js";
 import type {
   KernelEvent,
@@ -35,6 +37,7 @@ type EmitEvent = (event: KernelEvent) => Promise<void>;
 
 export class ToolExecutor {
   readonly #limits: SanitizationLimits;
+  readonly #resultLimits: SanitizationLimits;
 
   constructor(
     private readonly options: PiKernelSessionOptions,
@@ -44,6 +47,11 @@ export class ToolExecutor {
     private readonly markFatal: (error: KernelRuntimeError) => void,
   ) {
     this.#limits = limitsFromBudget(options.budget);
+    this.#resultLimits = limitsFromBudget(
+      options.budget,
+      options.budget.maxToolResultBytes,
+      "TOOL_RESULT_BUDGET_EXCEEDED",
+    );
   }
 
   createAgentTool(tool: KernelToolDefinition): AgentTool {
@@ -96,7 +104,7 @@ export class ToolExecutor {
       });
     } catch (error: unknown) {
       if (persistingIntent) throw error;
-      const safe = this.toSafePreExecutionError(error);
+      const safe = toSafePreExecutionError(error, this.redactor);
       await this.emitFailure(safeCallId, safeToolName, safe);
       throw safe;
     }
@@ -110,11 +118,11 @@ export class ToolExecutor {
           signal,
           this.options.secretResolver.resolve.bind(this.options.secretResolver),
           this.redactor,
-          this.options.budget.maxValueStringBytes,
+          this.#limits,
         );
       } catch (error: unknown) {
         if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
-        const safe = this.toSafeToolError(error);
+        const safe = toSafeToolError(error, this.redactor);
         await this.emitFailure(safeCallId, safeToolName, safe);
         throw safe;
       }
@@ -127,7 +135,7 @@ export class ToolExecutor {
         execution = tool.execute({ callId: safeCallId, arguments: resolved, signal });
       } catch (error: unknown) {
         if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
-        const safe = this.toSafeToolError(error);
+        const safe = toSafeToolError(error, this.redactor);
         await this.emitFailure(safeCallId, safeToolName, safe);
         throw safe;
       }
@@ -137,7 +145,7 @@ export class ToolExecutor {
         result = await raceAbort(execution, signal);
       } catch (error: unknown) {
         if (hasAborted(signal)) return await this.failUnknown(safeCallId, safeToolName, signal);
-        const safe = this.toSafeToolError(error);
+        const safe = toSafeToolError(error, this.redactor);
         await this.emitFailure(safeCallId, safeToolName, safe);
         throw safe;
       }
@@ -146,7 +154,7 @@ export class ToolExecutor {
       let content: string;
       let details: KernelJsonValue | undefined;
       try {
-        const normalizedResult = this.redactor.json(result, this.#limits);
+        const normalizedResult = this.redactor.json(result, this.#resultLimits);
         if (!isJsonObject(normalizedResult) || typeof normalizedResult.content !== "string") {
           throw new KernelRuntimeError("UNTRUSTED_VALUE_INVALID", "Tool result shape is invalid");
         }
@@ -278,19 +286,5 @@ export class ToolExecutor {
     });
     this.markFatal(fatal);
     throw fatal;
-  }
-
-  private toSafePreExecutionError(error: unknown): KernelRuntimeError {
-    if (error instanceof KernelRuntimeError) {
-      return new KernelRuntimeError(error.code, this.redactor.summary(error.message));
-    }
-    return new KernelRuntimeError("TOOL_DENIED", "Tool authorization unavailable");
-  }
-
-  private toSafeToolError(error: unknown): KernelRuntimeError {
-    if (error instanceof KernelRuntimeError) {
-      return new KernelRuntimeError(error.code, this.redactor.summary(error.message));
-    }
-    return new KernelRuntimeError("MODEL_ERROR", this.redactor.summary(safeErrorMessage(error)));
   }
 }
