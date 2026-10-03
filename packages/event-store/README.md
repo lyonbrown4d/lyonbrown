@@ -75,11 +75,13 @@ new event legitimately collides with a denied name.
 
 ## Native addon and Electron packaging
 
-`better-sqlite3` is a native addon distributed with N-API prebuilt binaries for supported targets,
-with a source-build fallback. The repository allowlists its install script and pins the exact
-dependency version. CI must test every release target under Node 24.15.x. Keep this package and
-`better-sqlite3` external to Electron renderer/preload and desktop bundler graphs: only the daemon
-artifact may load the addon.
+`better-sqlite3` is a native addon whose package includes N-API prebuilt binaries for the supported
+targets. The repository pins the exact dependency version and deliberately blocks its implicit
+`node-gyp rebuild`; installation must load the packaged prebuild and must not require a C++ toolchain
+on the user's machine. CI must verify the current platform/architecture prebuild and test every
+release target under Node 24.15.x. A missing target prebuild is a release-build failure, not a reason
+to fall back to compiling on the user's machine. Keep this package and `better-sqlite3` external to
+Electron renderer/preload and desktop bundler graphs: only the daemon artifact may load the addon.
 
 The package compiles ESM JavaScript and declarations with `tsc`. Native binaries are not copied into
 `dist`; the daemon packager must preserve `better-sqlite3` as an external runtime dependency and
