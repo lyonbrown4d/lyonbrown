@@ -30,7 +30,7 @@ async function runWorkspace(task: WorkspaceTask): Promise<void> {
   await $({
     stdio: "inherit",
     timeout: TASK_TIMEOUT_MS,
-  })`pnpm --recursive --if-present run ${task}`;
+  })`pnpm --recursive run ${task}`;
 }
 
 const requestedTask = process.argv[2] ?? "";

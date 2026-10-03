@@ -1,19 +1,17 @@
-import { access, copyFile, mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { access, readFile } from "node:fs/promises";
+import { join } from "node:path";
+
+import {
+  inspectWorkspaceManifests,
+  validateFrozenLockfile,
+  type PnpmRunner,
+} from "./preflight-workspace.js";
+
+export { FROZEN_LOCKFILE_ARGS, type PnpmRunner } from "./preflight-workspace.js";
 
 export const NODE_VERSION = "24.15.0";
 export const PNPM_VERSION = "10.33.4";
 export const PACKAGE_MANAGER = `pnpm@${PNPM_VERSION}`;
-export const FROZEN_LOCKFILE_ARGS = [
-  "install",
-  "--lockfile-only",
-  "--frozen-lockfile",
-  "--ignore-scripts",
-] as const;
-
-export type PnpmRunner = (cwd: string, args: readonly string[]) => Promise<void>;
-
 export const REQUIRED_FILES = [
   "package.json",
   "pnpm-lock.yaml",
@@ -39,9 +37,6 @@ const REQUIRED_SCRIPTS = [
 ] as const;
 
 const WORKSPACE_PACKAGES = ["apps/*", "packages/*", "tools/*"] as const;
-const WORKSPACE_ROOTS = ["apps", "packages", "tools"] as const;
-const MIRROR_PREFIX = "lyonbrown preflight mirror ";
-const ROOT_MANIFEST_PATHS = ["package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"] as const;
 
 interface PackageMetadata {
   packageManager?: unknown;
@@ -98,112 +93,6 @@ function equalValues(left: readonly string[], right: readonly string[]): boolean
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
-function isNotFoundError(error: unknown): error is NodeJS.ErrnoException {
-  return error instanceof Error && "code" in error && error.code === "ENOENT";
-}
-
-function resolveWithin(base: string, relativePath: string): string {
-  const resolvedBase = resolve(base);
-  const resolvedPath = resolve(resolvedBase, relativePath);
-  const pathFromBase = relative(resolvedBase, resolvedPath);
-  if (pathFromBase === "" || pathFromBase === ".." || pathFromBase.startsWith(`..${sep}`)) {
-    throw new Error(`Refusing path outside manifest mirror: ${relativePath}`);
-  }
-  if (isAbsolute(pathFromBase)) {
-    throw new Error(`Refusing absolute path in manifest mirror: ${relativePath}`);
-  }
-  return resolvedPath;
-}
-
-async function findWorkspaceManifests(root: string): Promise<string[]> {
-  const manifests: string[] = [];
-  for (const workspaceRoot of WORKSPACE_ROOTS) {
-    let entries;
-    try {
-      entries = await readdir(join(root, workspaceRoot), { withFileTypes: true });
-    } catch (error: unknown) {
-      if (isNotFoundError(error)) {
-        continue;
-      }
-      throw error;
-    }
-
-    // Node has no batched stat/access API; only direct workspace child manifests are examined.
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      const manifestPath = join(workspaceRoot, entry.name, "package.json");
-      try {
-        await access(join(root, manifestPath));
-        manifests.push(manifestPath);
-      } catch (error: unknown) {
-        if (!isNotFoundError(error)) {
-          throw error;
-        }
-      }
-    }
-  }
-  return manifests;
-}
-
-async function findOptionalPnpmConfig(root: string): Promise<string[]> {
-  try {
-    await access(join(root, ".npmrc"));
-    return [".npmrc"];
-  } catch (error: unknown) {
-    if (isNotFoundError(error)) {
-      return [];
-    }
-    throw error;
-  }
-}
-
-async function createManifestMirror(root: string): Promise<string> {
-  const mirrorRoot = await mkdtemp(join(tmpdir(), MIRROR_PREFIX));
-  try {
-    const manifestPaths = [
-      ...ROOT_MANIFEST_PATHS,
-      ...(await findWorkspaceManifests(root)),
-      ...(await findOptionalPnpmConfig(root)),
-    ];
-    for (const manifestPath of manifestPaths) {
-      const target = resolveWithin(mirrorRoot, manifestPath);
-      await mkdir(dirname(target), { recursive: true });
-      await copyFile(resolveWithin(root, manifestPath), target);
-    }
-    return mirrorRoot;
-  } catch (error: unknown) {
-    await removeManifestMirror(mirrorRoot);
-    throw error;
-  }
-}
-
-async function removeManifestMirror(mirrorRoot: string): Promise<void> {
-  const resolvedTempRoot = resolve(tmpdir());
-  const resolvedMirrorRoot = resolve(mirrorRoot);
-  if (
-    dirname(resolvedMirrorRoot) !== resolvedTempRoot ||
-    !basename(resolvedMirrorRoot).startsWith(MIRROR_PREFIX)
-  ) {
-    throw new Error(`Refusing to remove unsafe manifest mirror path: ${mirrorRoot}`);
-  }
-  await rm(resolvedMirrorRoot, { recursive: true, force: true });
-}
-
-export async function validateFrozenLockfile(root: string, runPnpm: PnpmRunner): Promise<void> {
-  const lockfile = await readFile(join(root, "pnpm-lock.yaml"), "utf8");
-  if (lockfile.trim() === "") {
-    throw new Error("pnpm-lock.yaml is empty");
-  }
-  const mirrorRoot = await createManifestMirror(root);
-  try {
-    await runPnpm(mirrorRoot, FROZEN_LOCKFILE_ARGS);
-  } finally {
-    await removeManifestMirror(mirrorRoot);
-  }
-}
-
 export async function inspectRepository(root: string, runPnpm: PnpmRunner): Promise<string[]> {
   const failures: string[] = [];
   await Promise.all(
@@ -246,8 +135,17 @@ export async function inspectRepository(root: string, runPnpm: PnpmRunner): Prom
     failures.push(`Unable to validate pnpm-workspace.yaml: ${String(error)}`);
   }
 
+  let workspaceManifestPaths: string[] = [];
   try {
-    await validateFrozenLockfile(root, runPnpm);
+    const workspaceInspection = await inspectWorkspaceManifests(root);
+    workspaceManifestPaths = workspaceInspection.manifestPaths;
+    failures.push(...workspaceInspection.failures);
+  } catch (error: unknown) {
+    failures.push(`Unable to inspect workspace package manifests: ${String(error)}`);
+  }
+
+  try {
+    await validateFrozenLockfile(root, runPnpm, workspaceManifestPaths);
   } catch (error: unknown) {
     failures.push(`Frozen lockfile validation failed: ${String(error)}`);
   }

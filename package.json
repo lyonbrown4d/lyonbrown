@@ -15,10 +15,10 @@
     "test": "tsx scripts/workspace-task.ts test",
     "build": "tsx scripts/workspace-task.ts build",
     "ci-gate": "tsx scripts/ci-gate.ts",
-    "format": "prettier --write \"scripts/**/*.ts\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md \"apps/docs/.vitepress/**/*.mts\" apps/docs/package.json apps/docs/tsconfig.json apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
-    "format:check": "prettier --check \"scripts/**/*.ts\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md \"apps/docs/.vitepress/**/*.mts\" apps/docs/package.json apps/docs/tsconfig.json apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
+    "format": "prettier --write \"scripts/**/*.ts\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\" \"apps/docs/.vitepress/**/*.mts\" apps/docs/package.json apps/docs/tsconfig.json apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
+    "format:check": "prettier --check \"scripts/**/*.ts\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\" \"apps/docs/.vitepress/**/*.mts\" apps/docs/package.json apps/docs/tsconfig.json apps/docs/index.md \"apps/docs/*/plans/node-typescript-pi-migration.md\"",
     "scripts:verify": "vitest run scripts/tests",
-    "audit": "pnpm audit --audit-level high --ignore-unfixable --registry=https://registry.npmjs.org"
+    "audit": "pnpm audit --registry=https://registry.npmjs.org"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",
@@ -29,7 +29,7 @@
     "tsx": "4.20.6",
     "typescript": "5.9.3",
     "typescript-eslint": "8.46.3",
-    "vitest": "3.2.6",
+    "vitest": "4.1.11",
     "zx": "8.8.5"
   },
   "pnpm": {

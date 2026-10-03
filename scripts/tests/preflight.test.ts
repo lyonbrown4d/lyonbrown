@@ -17,12 +17,21 @@ import { configureZxPlatform } from "../zx-platform.js";
 
 const temporaryDirectories: string[] = [];
 const TEST_COMMAND_TIMEOUT_MS = 30_000;
+const REQUIRED_WORKSPACE_SCRIPTS = ["lint", "typecheck", "test", "build"] as const;
 
 configureZxPlatform(process.platform, usePowerShell);
 
 const runPnpm: PnpmRunner = async (cwd, args) => {
   await $({ cwd, quiet: true, timeout: TEST_COMMAND_TIMEOUT_MS })`pnpm ${args}`;
 };
+
+function workspacePackage(name: string): string {
+  return JSON.stringify({
+    name,
+    private: true,
+    scripts: Object.fromEntries(REQUIRED_WORKSPACE_SCRIPTS.map((script) => [script, "test"])),
+  });
+}
 
 async function makeRepository(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "lyonbrown preflight source "));
@@ -57,11 +66,19 @@ async function makeRepository(): Promise<string> {
     }),
     "utf8",
   );
-  await writeFile(join(root, "apps/docs/package.json"), '{"private":true}', "utf8");
+  await writeFile(join(root, "apps/docs/package.json"), workspacePackage("@fixture/docs"), "utf8");
   await mkdir(join(root, "packages/example"), { recursive: true });
   await mkdir(join(root, "tools/example"), { recursive: true });
-  await writeFile(join(root, "packages/example/package.json"), '{"private":true}', "utf8");
-  await writeFile(join(root, "tools/example/package.json"), '{"private":true}', "utf8");
+  await writeFile(
+    join(root, "packages/example/package.json"),
+    workspacePackage("@fixture/package"),
+    "utf8",
+  );
+  await writeFile(
+    join(root, "tools/example/package.json"),
+    workspacePackage("@fixture/tool"),
+    "utf8",
+  );
   await writeFile(join(root, ".npmrc"), "strict-peer-dependencies=false\n", "utf8");
   await writeFile(
     join(root, "pnpm-workspace.yaml"),
@@ -115,10 +132,32 @@ describe("toolchain version checks", () => {
 });
 
 describe("repository checks", () => {
-  test("accepts the required metadata and workspace boundaries", async () => {
+  test("accepts complete workspace task contracts", async () => {
     const root = await makeRepository();
     await expect(inspectRepository(root, runPnpm)).resolves.toEqual([]);
   });
+
+  test.each(REQUIRED_WORKSPACE_SCRIPTS)(
+    "rejects a workspace package missing its %s script",
+    async (missingScript) => {
+      const root = await makeRepository();
+      const scripts = Object.fromEntries(
+        REQUIRED_WORKSPACE_SCRIPTS.filter((script) => script !== missingScript).map((script) => [
+          script,
+          "test",
+        ]),
+      );
+      await writeFile(
+        join(root, "apps/docs/package.json"),
+        JSON.stringify({ name: "@fixture/docs", private: true, scripts }),
+        "utf8",
+      );
+
+      await expect(inspectRepository(root, runPnpm)).resolves.toContain(
+        `Workspace package @fixture/docs (apps/docs/package.json) is missing scripts: ${missingScript}`,
+      );
+    },
+  );
 
   test("uses frozen lockfile-only validation with lifecycle scripts disabled", async () => {
     const root = await makeRepository();
