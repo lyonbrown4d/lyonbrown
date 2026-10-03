@@ -7,6 +7,7 @@ import {
   type CommandId,
   type ServerInstanceId,
 } from "./identifiers.js";
+import { readDataRecord, requireDataField } from "./record-boundary.js";
 
 export const PROTOCOL_VERSION = 1;
 
@@ -25,12 +26,13 @@ export interface CommandReceipt {
 
 export type CommandMetadataInput = Omit<CommandMetadata, "protocolVersion">;
 
-export interface UntrustedCommandMetadata {
-  readonly protocolVersion: unknown;
-  readonly clientInstanceId: unknown;
-  readonly commandId: unknown;
-  readonly expectedServerInstanceId?: unknown;
-}
+const COMMAND_METADATA_FIELDS = new Set([
+  "protocolVersion",
+  "clientInstanceId",
+  "commandId",
+  "expectedServerInstanceId",
+]);
+const COMMAND_RECEIPT_FIELDS = new Set(["accepted", "protocolVersion", "commandId"]);
 
 export function createCommandMetadata(input: CommandMetadataInput): CommandMetadata {
   return input.expectedServerInstanceId === undefined
@@ -47,22 +49,26 @@ export function createCommandMetadata(input: CommandMetadataInput): CommandMetad
       };
 }
 
-export function validateCommandMetadata(value: UntrustedCommandMetadata): CommandMetadata {
-  if (value.protocolVersion !== PROTOCOL_VERSION) {
+export function validateCommandMetadata(value: unknown): CommandMetadata {
+  const record = readDataRecord(value, "metadata", COMMAND_METADATA_FIELDS);
+  const protocolVersion = requireDataField(record, "metadata", "protocolVersion");
+  const clientInstanceId = requireDataField(record, "metadata", "clientInstanceId");
+  const commandId = requireDataField(record, "metadata", "commandId");
+  if (protocolVersion !== PROTOCOL_VERSION) {
     throw domainError("failed_precondition", "Unsupported protocol version", {
       reason: "protocol_version_mismatch",
       expected: PROTOCOL_VERSION,
-      ...(typeof value.protocolVersion === "number" || typeof value.protocolVersion === "string"
-        ? { actual: value.protocolVersion }
+      ...(typeof protocolVersion === "number" || typeof protocolVersion === "string"
+        ? { actual: protocolVersion }
         : {}),
     });
   }
   const input: CommandMetadataInput = {
-    clientInstanceId: asClientInstanceId(value.clientInstanceId),
-    commandId: asCommandId(value.commandId),
-    ...(value.expectedServerInstanceId === undefined
+    clientInstanceId: asClientInstanceId(clientInstanceId),
+    commandId: asCommandId(commandId),
+    ...(!record.has("expectedServerInstanceId")
       ? {}
-      : { expectedServerInstanceId: asServerInstanceId(value.expectedServerInstanceId) }),
+      : { expectedServerInstanceId: asServerInstanceId(record.get("expectedServerInstanceId")) }),
   };
   return createCommandMetadata(input);
 }
@@ -72,25 +78,29 @@ export function createCommandReceipt(commandId: CommandId, accepted: boolean): C
 }
 
 export function validateCommandReceipt(
-  value: Readonly<{ accepted: unknown; protocolVersion: unknown; commandId: unknown }>,
+  value: unknown,
   expectedCommandId?: CommandId,
 ): CommandReceipt {
-  if (value.protocolVersion !== PROTOCOL_VERSION) {
+  const record = readDataRecord(value, "receipt", COMMAND_RECEIPT_FIELDS);
+  const protocolVersion = requireDataField(record, "receipt", "protocolVersion");
+  const accepted = requireDataField(record, "receipt", "accepted");
+  const untrustedCommandId = requireDataField(record, "receipt", "commandId");
+  if (protocolVersion !== PROTOCOL_VERSION) {
     throw domainError("failed_precondition", "Unsupported protocol version", {
       reason: "protocol_version_mismatch",
       expected: PROTOCOL_VERSION,
-      ...(typeof value.protocolVersion === "number" || typeof value.protocolVersion === "string"
-        ? { actual: value.protocolVersion }
+      ...(typeof protocolVersion === "number" || typeof protocolVersion === "string"
+        ? { actual: protocolVersion }
         : {}),
     });
   }
-  if (typeof value.accepted !== "boolean") {
+  if (typeof accepted !== "boolean") {
     throw domainError("invalid_argument", "Receipt accepted flag must be boolean", {
       field: "accepted",
       reason: "invalid_type",
     });
   }
-  const commandId = asCommandId(value.commandId);
+  const commandId = asCommandId(untrustedCommandId);
   if (expectedCommandId !== undefined && commandId !== expectedCommandId) {
     throw domainError("failed_precondition", "Receipt belongs to a different command", {
       reason: "command_id_mismatch",
@@ -98,5 +108,5 @@ export function validateCommandReceipt(
       actual: commandId,
     });
   }
-  return createCommandReceipt(commandId, value.accepted);
+  return createCommandReceipt(commandId, accepted);
 }

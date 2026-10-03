@@ -63,6 +63,95 @@ describe("command contracts", () => {
     });
   });
 
+  it.each([null, [], "metadata", 1])("rejects non-record metadata: %j", (value) => {
+    expect(captureError(() => validateCommandMetadata(value))).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "metadata", reason: "invalid_record" },
+    });
+  });
+
+  it("rejects missing metadata fields", () => {
+    expect(
+      captureError(() =>
+        validateCommandMetadata({
+          protocolVersion: PROTOCOL_VERSION,
+          clientInstanceId: "client-01",
+        }),
+      ),
+    ).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "metadata.commandId", reason: "missing_required_field" },
+    });
+  });
+
+  it.each([null, undefined, ""])("rejects an invalid optional server epoch: %j", (epoch) => {
+    expect(
+      captureError(() =>
+        validateCommandMetadata({
+          protocolVersion: PROTOCOL_VERSION,
+          clientInstanceId: "client-01",
+          commandId: "command-01",
+          expectedServerInstanceId: epoch,
+        }),
+      ),
+    ).toMatchObject({ code: "invalid_argument" });
+  });
+
+  it("rejects metadata accessors and proxies without invoking them", () => {
+    let getterInvoked = false;
+    const accessorMetadata = Object.defineProperty(
+      { protocolVersion: PROTOCOL_VERSION, clientInstanceId: "client-01" },
+      "commandId",
+      {
+        enumerable: true,
+        get() {
+          getterInvoked = true;
+          return "command-01";
+        },
+      },
+    );
+    expect(captureError(() => validateCommandMetadata(accessorMetadata))).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "metadata.commandId", reason: "accessor_property" },
+    });
+    expect(getterInvoked).toBe(false);
+
+    let trapCount = 0;
+    const proxyMetadata = new Proxy(
+      {
+        protocolVersion: PROTOCOL_VERSION,
+        clientInstanceId: "client-01",
+        commandId: "command-01",
+      },
+      {
+        getPrototypeOf() {
+          trapCount += 1;
+          return Object.prototype;
+        },
+        ownKeys() {
+          trapCount += 1;
+          return [];
+        },
+      },
+    );
+    expect(captureError(() => validateCommandMetadata(proxyMetadata))).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "metadata", reason: "proxy_record" },
+    });
+    expect(trapCount).toBe(0);
+  });
+
+  it("rejects metadata records with dangerous prototypes", () => {
+    const metadata = Object.create({ inherited: true }) as Record<string, unknown>;
+    metadata.protocolVersion = PROTOCOL_VERSION;
+    metadata.clientInstanceId = "client-01";
+    metadata.commandId = "command-01";
+    expect(captureError(() => validateCommandMetadata(metadata))).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "metadata", reason: "invalid_record_prototype" },
+    });
+  });
+
   it("validates accepted receipts against protocol and command identity", () => {
     const receipt = createCommandReceipt(commandId, true);
     expect(validateCommandReceipt(receipt, commandId)).toEqual(receipt);
@@ -77,5 +166,34 @@ describe("command contracts", () => {
         details: { reason: "command_id_mismatch" },
       },
     );
+  });
+
+  it.each([null, [], { protocolVersion: PROTOCOL_VERSION }, { accepted: true }])(
+    "rejects malformed receipts: %j",
+    (value) => {
+      expect(captureError(() => validateCommandReceipt(value))).toMatchObject({
+        code: "invalid_argument",
+      });
+    },
+  );
+
+  it("rejects receipt accessors without invoking them", () => {
+    let invoked = false;
+    const value = Object.defineProperty(
+      { protocolVersion: PROTOCOL_VERSION, accepted: true },
+      "commandId",
+      {
+        enumerable: true,
+        get() {
+          invoked = true;
+          return "command-01";
+        },
+      },
+    );
+    expect(captureError(() => validateCommandReceipt(value))).toMatchObject({
+      code: "invalid_argument",
+      details: { field: "receipt.commandId", reason: "accessor_property" },
+    });
+    expect(invoked).toBe(false);
   });
 });

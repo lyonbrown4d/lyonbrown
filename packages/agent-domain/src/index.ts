@@ -31,10 +31,14 @@ export {
   type CommandMetadata,
   type CommandMetadataInput,
   type CommandReceipt,
-  type UntrustedCommandMetadata,
 } from "./protocol.js";
 export { MAX_UINT64, asRevision, incrementRevision, type Revision } from "./revision.js";
 export {
+  REPLAY_FINGERPRINT_MAX_BYTE_ARRAY_BYTES,
+  REPLAY_FINGERPRINT_MAX_CONTAINER_WIDTH,
+  REPLAY_FINGERPRINT_MAX_DEPTH,
+  REPLAY_FINGERPRINT_MAX_ENCODED_BYTES,
+  REPLAY_FINGERPRINT_MAX_NODES,
   canonicalEncode,
   commandFingerprint,
   createReplayKey,

@@ -129,8 +129,8 @@ describe("canonical command fingerprints", () => {
 
   it("rejects huge sparse arrays without iterating their declared length", () => {
     expect(captureError(() => canonicalEncode(new Array(4_294_967_295)))).toMatchObject({
-      code: "invalid_argument",
-      details: { reason: "sparse_array" },
+      code: "resource_exhausted",
+      details: { resource: "replay_fingerprint_container_width" },
     });
   });
 
