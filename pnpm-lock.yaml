@@ -54,6 +54,8 @@ importers:
         specifier: 1.6.4
         version: 1.6.4(@algolia/client-search@5.59.0)(@types/node@24.10.1)(postcss@8.5.28)(search-insights@2.17.3)(tsx@4.20.6)(typescript@5.9.3)
 
+  packages/agent-domain: {}
+
 packages:
 
   '@algolia/abtesting@1.25.0':
