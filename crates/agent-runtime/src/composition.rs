@@ -226,4 +226,8 @@ impl CompositionRoot {
   pub fn build_kernel(&self) -> Result<Kernel> {
     Ok(self.resolve::<KernelFactory>()?.build())
   }
+
+  pub fn model_registry(&self) -> Result<ModelRegistry> {
+    Ok(self.resolve::<ModelRegistry>()?.as_ref().clone())
+  }
 }

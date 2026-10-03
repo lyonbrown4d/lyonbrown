@@ -3,6 +3,14 @@ use std::time::Instant;
 use agent_core::{StepId, StepOutcome, TokenUsage, ToolCallId, ToolPreview, ToolResult, TurnId};
 use serde_json::Value;
 
+mod model_catalog;
+
+pub use model_catalog::{
+  MAX_MODEL_CATALOG_SIZE, MAX_MODEL_ID_BYTES, MAX_MODEL_PROVIDER_BYTES, ModelCatalogError,
+  ModelCatalogView, ModelLocalityView, ModelOptionDisabledReason, ModelOptionView, ModelPolicyView,
+  ModelRuntimeView, ModelTierView,
+};
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum RuntimePhase {
   #[default]
@@ -226,7 +234,8 @@ pub struct RuntimeSnapshot {
   pub turns: Vec<TurnView>,
   pub approval: Option<ApprovalView>,
   pub queued_follow_ups: Vec<String>,
-  pub model_selection: ModelSelection,
+  pub model_catalog: Option<ModelCatalogView>,
+  pub model_policy: ModelPolicyView,
   pub route: Option<RouteSummary>,
   pub last_error: Option<String>,
   pub model_setup: Option<ModelSetupView>,
@@ -240,7 +249,8 @@ impl Default for RuntimeSnapshot {
       turns: Vec::new(),
       approval: None,
       queued_follow_ups: Vec::new(),
-      model_selection: ModelSelection::Auto,
+      model_catalog: None,
+      model_policy: ModelPolicyView::default(),
       route: None,
       last_error: None,
       model_setup: None,

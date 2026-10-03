@@ -112,6 +112,18 @@ The fixed model roles are:
 
 Sessions default to `Auto`. Users may pin the session Worker without creating a new session or clearing working memory. Per-message overrides are deferred in phase two to avoid unclear scope and routing explanations.
 
+Contract milestone: `RuntimeSnapshot` now carries an optional bounded catalog
+of the daemon's configured provider routes plus active/pending session policy.
+The daemon, rather than either client, computes Worker eligibility. `Auto`
+currently means “no session override; use daemon base configuration and
+routing policy.” Bounded all-or-nothing provider probing prevents startup
+blocking and partial catalogs. Successful probing freezes one capability
+snapshot for both publication and scheduling; invalid identity, duplicate or
+oversized routes, and catalog overflow fail activation closed. Until selection
+is implemented, active remains `Auto` and pending remains absent even when the
+base configuration names a model. This milestone does **not** implement the
+selection command or the TUI/GUI model pickers; those remain M12 work.
+
 The role-based schema replaces the old `[model]` schema without a runtime
 compatibility mapper. Migration is explicit and configuration errors fail
 closed:

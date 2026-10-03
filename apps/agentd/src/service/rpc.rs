@@ -1,7 +1,7 @@
 use std::pin::Pin;
 
 use agent_app::{AgentCommand, ModelSelection as AppModelSelection};
-use agent_core::ToolCallId;
+use agent_core::{MAX_MODEL_ID_BYTES, MAX_MODEL_PROVIDER_BYTES, ToolCallId};
 use agent_protocol::PROTOCOL_VERSION;
 use agent_protocol::v1::agent_service_server::AgentService;
 use agent_protocol::v1::{
@@ -22,8 +22,6 @@ use crate::replay::fingerprint;
 const MAX_TEXT_BYTES: usize = 1024 * 1024;
 const MAX_CLIENT_NAME_BYTES: usize = 128;
 const MAX_CLIENT_VERSION_BYTES: usize = 64;
-const MAX_PROVIDER_BYTES: usize = 128;
-const MAX_MODEL_BYTES: usize = 256;
 const MAX_MODEL_DOWNLOAD_ID_BYTES: usize = 128;
 type EventStream = Pin<Box<dyn Stream<Item = Result<RuntimeEvent, Status>> + Send>>;
 
@@ -180,8 +178,8 @@ impl AgentService for AgentGrpcService {
         fingerprint("select_session_model", &[b"auto"]),
       ),
       Some(agent_protocol::v1::model_selection::Selection::Pinned(route)) => {
-        validate_required_bounded("provider", &route.provider, MAX_PROVIDER_BYTES)?;
-        validate_required_bounded("model", &route.model, MAX_MODEL_BYTES)?;
+        validate_required_bounded("provider", &route.provider, MAX_MODEL_PROVIDER_BYTES)?;
+        validate_required_bounded("model", &route.model, MAX_MODEL_ID_BYTES)?;
         let command_fingerprint = fingerprint(
           "select_session_model",
           &[b"pinned", route.provider.as_bytes(), route.model.as_bytes()],

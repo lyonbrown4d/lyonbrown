@@ -2,7 +2,7 @@ mod model_setup_support;
 
 use std::collections::HashMap;
 
-use agent_app::RuntimePhase;
+use agent_app::{ModelPolicyView, RuntimePhase};
 use agent_runtime::config::{LoadOptions, RuntimeConfig};
 use agent_runtime::model_manager::default_preset;
 use agentd::model_setup::{ModelSetupCoordinator, inspect_setup_plan};
@@ -29,6 +29,11 @@ async fn missing_default_model_starts_a_control_plane_runtime() {
   assert_eq!(
     controller.snapshot().phase,
     RuntimePhase::ModelSetupRequired
+  );
+  assert_eq!(controller.snapshot().model_catalog, None);
+  assert_eq!(
+    controller.snapshot().model_policy,
+    ModelPolicyView::default()
   );
   drop(controller);
   runtime.join().await.unwrap();
@@ -102,6 +107,7 @@ async fn active_runtime_builder_never_returns_the_waiting_runtime() {
   options.environment = Some(HashMap::new());
   let mut config = RuntimeConfig::load(options).unwrap();
   config.model.provider = "ollama".into();
+  config.model.model = Some("qwen3:8b".into());
   config.storage.enabled = false;
   let fingerprint = config.fingerprint().unwrap();
   let paths = DaemonPaths::resolve(workspace.path(), home.path(), &fingerprint).unwrap();
@@ -109,6 +115,17 @@ async fn active_runtime_builder_never_returns_the_waiting_runtime() {
   let prepared = build_active_runtime(config, &paths).await.unwrap();
 
   assert_eq!(prepared.controller.snapshot().phase, RuntimePhase::Ready);
+  let snapshot = prepared.controller.snapshot();
+  let catalog = snapshot
+    .model_catalog
+    .expect("active runtime publishes its configured registry catalog");
+  assert!(
+    catalog
+      .models
+      .iter()
+      .any(|model| model.route.provider == "ollama")
+  );
+  assert_eq!(snapshot.model_policy, ModelPolicyView::default());
   let shutdown = prepared.runtime.shutdown_handle();
   shutdown.request_shutdown();
   drop(prepared.controller);

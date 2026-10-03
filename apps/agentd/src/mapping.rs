@@ -1,5 +1,6 @@
 mod activity;
 mod common;
+mod model_catalog;
 mod model_setup;
 
 use std::time::Instant;
@@ -16,10 +17,12 @@ use agent_protocol::v1::{
 use crate::VersionedSnapshot;
 use activity::turn_to_wire;
 use common::{route_to_wire, tool_preview_to_wire};
+use model_catalog::{model_catalog_to_wire, model_policy_to_wire};
 use model_setup::model_setup_to_wire;
 
 pub fn snapshot_to_wire(versioned: VersionedSnapshot) -> RuntimeSnapshot {
   let snapshot = versioned.snapshot;
+  let active_selection = snapshot.model_policy.active.clone();
   RuntimeSnapshot {
     protocol_version: PROTOCOL_VERSION,
     revision: versioned.revision,
@@ -43,9 +46,11 @@ pub fn snapshot_to_wire(versioned: VersionedSnapshot) -> RuntimeSnapshot {
       approved_by: approval.approved_by,
     }),
     last_error: snapshot.last_error,
-    model_selection: Some(model_selection_to_wire(snapshot.model_selection)),
+    model_selection: Some(model_selection_to_wire(active_selection)),
     route: snapshot.route.map(route_to_wire),
     model_setup: snapshot.model_setup.map(model_setup_to_wire),
+    model_catalog: snapshot.model_catalog.map(model_catalog_to_wire),
+    model_policy: Some(model_policy_to_wire(snapshot.model_policy)),
   }
 }
 
@@ -58,7 +63,7 @@ pub(crate) fn event_to_wire(snapshot: VersionedSnapshot) -> RuntimeEvent {
   }
 }
 
-fn model_selection_to_wire(selection: AppModelSelection) -> ModelSelection {
+pub(super) fn model_selection_to_wire(selection: AppModelSelection) -> ModelSelection {
   let selection = match selection {
     AppModelSelection::Auto => Selection::Auto(true),
     AppModelSelection::Pinned { provider, model } => {

@@ -102,6 +102,16 @@ client 都不能直接访问 Kernel。
 
 会话默认使用 `Auto`，允许用户把 `worker` 固定到某个模型；切换只改变后续 step，不创建新会话、不清空工作记忆。第二阶段暂不做每条消息的临时模型覆盖，避免范围和解释成本失控。
 
+Contract 节点已经完成：`RuntimeSnapshot` 现在携带 daemon 已配置 provider route 的
+可选有界目录，以及 active/pending 会话 policy；Worker eligibility 由 daemon 计算，
+client 不自行推断。当前 `Auto` 的准确含义是“没有会话 override，使用 daemon 基础
+配置与路由策略”。provider 探测有界且全有或全无，不阻塞启动，也不发布部分目录；
+成功后冻结一份同时供发布与调度使用的能力快照。身份不一致、重复/超长 route 和目录
+溢出会使 activation fail closed。selection 尚未实现时，即使基础配置指定了模型，
+active 也始终为 `Auto` 且 pending 为空。
+这个节点**尚未**实现真实 selection command，也未实现 TUI/GUI 模型 picker；它们仍
+属于 M12 后续工作。
+
 角色化 schema 直接替换旧 `[model]` schema，不在 Runtime 中保留兼容映射。
 迁移必须显式完成，配置错误按 fail closed 处理。
 

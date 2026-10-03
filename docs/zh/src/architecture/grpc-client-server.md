@@ -187,6 +187,25 @@ epoch 不匹配的 Snapshot 不能改变它。断线时保留最后一次已接�
 缓存；Session 或 daemon epoch 改变时关闭检查器并清除旧选择。详情生成带缓存，并对
 字段、集合、JSON、行数和总字符数设置预算上限。
 
+共享 Snapshot contract 现在还原子携带可选的 UI 中立已配置模型目录，以及会话
+active/pending policy。目录来自 daemon Composition Root 实际注册的 provider，按
+exact route 稳定排序，最多接受 128 个唯一项；每项包含 tier、locality、上下文/输出
+上限、能力标记和由 daemon 计算的 Worker 可选择性。provider 探测并发执行并有
+逐 provider deadline；超时或 provider 运行期错误会省略整个目录而不中断启动；
+身份不一致、重复/非法 route 或目录溢出属于 invariant 破坏，会使 activation fail
+closed，不会静默去重或截断。探测成功后 registry 会冻结，因此同一 daemon epoch 内
+scheduler 与发布目录共享同一份不可变能力快照。`None` 表示本次没有发布目录，显式空目录仍可区分。
+目录仅表示 configured/selectable，不表示 online 或 ready，也不包含 endpoint、
+SecretRef、GGUF 路径或原始 provider 错误。
+
+当前 contract 中，只有同时声明 Worker tier、工具能力与流式能力的 route 才可作为
+会话 Worker；其他 route 仍会展示，并携带稳定的 disabled reason。
+
+`Auto` 表示会话没有 override，继续服从 daemon 的基础 provider/model 配置与路由策略；它不表示
+目录中的所有模型都可自动选择。selection command 落地前，active 始终为 `Auto`，
+pending 始终为空。contract 与投影已经落地，但真实模型选择 command
+仍为 unsupported，TUI/GUI 的真实 picker 也尚未实现。
+
 这个 MVP 以中英文展示路由与 fallback 原因、上下文与 token 用量、工具参数/结果/
 耗时、outcome 和相关 ID。它不是完整 event trace：尚无时间戳、严格事件历史、历史
 `ToolPreview`/capabilities 或完整 diagnostics；剪贴板复制也未实现。后续前端工作包括

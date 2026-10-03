@@ -3,9 +3,10 @@ use std::time::{Duration, Instant};
 
 use agent_app::{
   ActivityPhase, ActivityView, ApprovalState, ApprovalView, ContextSummary, ManagedModelView,
-  ModelFallbackView, ModelRoute, ModelSelection, ModelSetupAction, ModelSetupPhase,
-  ModelSetupSource, ModelSetupView, RouteSummary, RuntimePhase, RuntimeSnapshot, ToolActivityState,
-  ToolActivityView, TurnStatus, TurnView,
+  ModelCatalogView, ModelFallbackView, ModelLocalityView, ModelOptionView, ModelPolicyView,
+  ModelRoute, ModelSelection, ModelSetupAction, ModelSetupPhase, ModelSetupSource, ModelSetupView,
+  ModelTierView, RouteSummary, RuntimePhase, RuntimeSnapshot, ToolActivityState, ToolActivityView,
+  TurnStatus, TurnView,
 };
 use agent_client::decode_snapshot;
 use agent_core::{
@@ -110,9 +111,30 @@ fn full_snapshot() -> RuntimeSnapshot {
       approved_by: Some("user".into()),
     }),
     queued_follow_ups: vec!["document it".into()],
-    model_selection: ModelSelection::Pinned {
-      provider: "local".into(),
-      model: "worker".into(),
+    model_catalog: Some(ModelCatalogView {
+      models: vec![ModelOptionView {
+        route: ModelRoute {
+          provider: "local".into(),
+          model: "worker".into(),
+        },
+        tier: ModelTierView::Worker,
+        locality: ModelLocalityView::Local,
+        context_window: 32_768,
+        max_output_tokens: 4_096,
+        supports_tools: true,
+        supports_streaming: true,
+        supports_json: true,
+        supports_thinking: true,
+        selectable_for_worker: true,
+        disabled_reason: None,
+      }],
+    }),
+    model_policy: ModelPolicyView {
+      active: ModelSelection::Pinned {
+        provider: "local".into(),
+        model: "worker".into(),
+      },
+      pending: Some(ModelSelection::Auto),
     },
     route: Some(route()),
     last_error: Some("recoverable".into()),

@@ -48,24 +48,24 @@ pub async fn prepare_services(
   home: &Path,
 ) -> Result<PreparedServices> {
   let registry = ModelRegistry::new();
-  registry.register(Arc::new(OllamaProvider::with_default_models(
+  registry.try_register(Arc::new(OllamaProvider::with_default_models(
     &config.ollama.endpoint,
-  )?));
+  )?))?;
   let task_router = register_llamacpp(&registry, config, workspace, home).await?;
   let broker: Arc<dyn SecretBroker> = Arc::new(CompositeBroker::for_home(home)?);
   if config.anthropic.enabled || config.model.provider == "anthropic" {
-    registry.register(Arc::new(AnthropicProvider::with_secret_ref_default_models(
+    registry.try_register(Arc::new(AnthropicProvider::with_secret_ref_default_models(
       broker.clone(),
       config.anthropic.api_key_ref.clone(),
       &config.anthropic.endpoint,
-    )?));
+    )?))?;
   }
   if config.openai.enabled || config.model.provider == "openai" {
-    registry.register(Arc::new(OpenAiProvider::with_secret_ref_default_models(
+    registry.try_register(Arc::new(OpenAiProvider::with_secret_ref_default_models(
       broker.clone(),
       config.openai.api_key_ref.clone(),
       &config.openai.endpoint,
-    )?));
+    )?))?;
   }
   let tools = ToolRegistry::new();
   tools.register(Arc::new(ReadFileTool::new()));
@@ -151,7 +151,7 @@ async fn register_llamacpp(
     temperature: config.llamacpp.temperature,
     seed: config.llamacpp.seed,
   })?);
-  registry.register(provider.clone());
+  registry.try_register(provider.clone())?;
   Ok(Some(Arc::new(ModelTaskRouter::new(provider, model_id))))
 }
 

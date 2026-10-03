@@ -221,11 +221,7 @@ impl RuntimeConfig {
         "profile must not be empty".into(),
       ));
     }
-    if self.model.provider.trim().is_empty() {
-      return Err(ConfigLoadError::Validation(
-        "model.provider must not be empty".into(),
-      ));
-    }
+    validation::validate_model_route(&self.model)?;
     if self.model.max_tokens == 0 {
       return Err(ConfigLoadError::Validation(
         "model.max_tokens must be greater than zero".into(),
@@ -288,6 +284,7 @@ impl RuntimeConfig {
 }
 
 mod overrides;
+mod validation;
 mod workspace;
 use overrides::apply_cli_overrides;
 

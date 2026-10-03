@@ -2,6 +2,10 @@
 
 use serde::{Deserialize, Serialize};
 
+pub const MAX_MODEL_CATALOG_SIZE: usize = 128;
+pub const MAX_MODEL_PROVIDER_BYTES: usize = 128;
+pub const MAX_MODEL_ID_BYTES: usize = 256;
+
 /// 三层模型（§9）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ModelTier {

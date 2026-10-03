@@ -207,19 +207,23 @@ impl Actor {
     self.control = None;
     self.cancellation = None;
     self.deny_pending();
+    self.drain_events()?;
     if self.replay_required {
+      let models = crate::ModelRuntimeView {
+        catalog: self.projector.snapshot().model_catalog.clone(),
+        policy: self.projector.snapshot().model_policy.clone(),
+      };
       self.projector = super::initial_projector(
         self
           .kernel
           .as_ref()
           .expect("finished turn returns its kernel"),
-        crate::RuntimePhase::Ready,
+        crate::RuntimePhase::Completed,
+        models,
       );
       self.projector.set_queued_follow_ups(&self.queued);
       self.replay_required = false;
       self.publish();
-    } else {
-      self.drain_events()?;
     }
     self.publish();
     if was_cancelled {

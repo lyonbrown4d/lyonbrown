@@ -24,7 +24,7 @@ pub(super) fn route_to_wire(route: RouteSummary) -> agent_protocol::v1::RouteSum
   }
 }
 
-fn model_route_to_wire(route: ModelRoute) -> agent_protocol::v1::ModelRoute {
+pub(super) fn model_route_to_wire(route: ModelRoute) -> agent_protocol::v1::ModelRoute {
   agent_protocol::v1::ModelRoute {
     provider: route.provider,
     model: route.model,

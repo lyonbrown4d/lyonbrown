@@ -15,6 +15,7 @@ agent-core.workspace = true
 agent-launch = { path = "../../crates/agent-launch" }
 agent-local = { path = "../../crates/agent-local" }
 agent-kernel.workspace = true
+agent-model.workspace = true
 agent-runtime = { path = "../../crates/agent-runtime", default-features = false }
 agent-protocol.workspace = true
 agent-tool.workspace = true

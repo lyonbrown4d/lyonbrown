@@ -1,7 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use agent_app::{spawn_runtime, spawn_runtime_with_approvals};
+use agent_app::{
+  ModelCatalogView, ModelPolicyView, ModelRuntimeView, spawn_runtime_with_approvals_and_models,
+  spawn_runtime_with_models,
+};
+use agent_model::{RegistryError, RegistryErrorClass};
 use agent_runtime::composition::{CompositionRoot, RuntimePaths};
 use agent_runtime::config::RuntimeConfig;
 use agent_runtime::model_manager::{ModelPreset, available_memory_bytes, verify_model_file};
@@ -11,11 +15,14 @@ use async_trait::async_trait;
 use crate::model_setup::{PreparedRuntime, RuntimeActivator, SetupPlan, managed_runtime_config};
 use crate::runtime::{COMMAND_CAPACITY, DaemonPaths, approval_runtime};
 
+const MODEL_CATALOG_PROVIDER_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1);
+
 pub async fn build_active_runtime(
   config: RuntimeConfig,
   paths: &DaemonPaths,
 ) -> Result<PreparedRuntime> {
   let (approval, approvals) = approval_runtime(&config);
+  let policy = ModelPolicyView::default();
   let root = CompositionRoot::bootstrap(
     config,
     RuntimePaths::new(paths.workspace().to_path_buf(), paths.home().to_path_buf()),
@@ -23,14 +30,43 @@ pub async fn build_active_runtime(
   )
   .await
   .context("failed to initialize agent runtime")?;
+  let registry = root
+    .model_registry()
+    .context("failed to resolve configured model registry")?;
+  let catalog = match registry.seal_catalog(MODEL_CATALOG_PROVIDER_TIMEOUT).await {
+    Ok(capabilities) => Some(
+      ModelCatalogView::try_from_capabilities(capabilities)
+        .context("configured model registry exposed an invalid catalog")?,
+    ),
+    Err(error) if !catalog_failure_is_fatal(&error) => {
+      tracing::warn!(
+        error_code = "model_catalog_unavailable",
+        "configured model catalog is unavailable"
+      );
+      None
+    }
+    Err(error) => return Err(invariant_catalog_error(error)),
+  };
   let kernel = root
     .build_kernel()
     .context("failed to build agent kernel")?;
+  let models = ModelRuntimeView { catalog, policy };
   let (controller, runtime) = match approvals {
-    Some(approvals) => spawn_runtime_with_approvals(kernel, approvals, COMMAND_CAPACITY),
-    None => spawn_runtime(kernel, COMMAND_CAPACITY),
+    Some(approvals) => {
+      spawn_runtime_with_approvals_and_models(kernel, approvals, models, COMMAND_CAPACITY)
+    }
+    None => spawn_runtime_with_models(kernel, models, COMMAND_CAPACITY),
   };
   Ok(PreparedRuntime::new(controller, runtime))
+}
+
+fn invariant_catalog_error(error: RegistryError) -> anyhow::Error {
+  anyhow::Error::new(error).context("configured model registry violated catalog invariants")
+}
+
+#[doc(hidden)]
+pub fn catalog_failure_is_fatal(error: &RegistryError) -> bool {
+  error.class() == RegistryErrorClass::Invariant
 }
 
 #[derive(Clone)]

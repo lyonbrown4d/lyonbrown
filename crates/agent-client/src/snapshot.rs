@@ -1,5 +1,6 @@
 mod activity;
 mod common;
+mod model_catalog;
 mod model_setup;
 
 use std::time::{Duration, Instant};
@@ -16,6 +17,7 @@ use uuid::Uuid;
 
 use activity::turn_from_wire;
 use common::{json_value, route_from_wire, tool_preview_from_wire};
+use model_catalog::{catalog_from_wire, policy_from_wire};
 use model_setup::model_setup_from_wire;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -43,12 +45,38 @@ pub enum SnapshotDecodeError {
   ModelSelection,
   #[error("invalid model setup: {0}")]
   InvalidModelSetup(&'static str),
+  #[error("invalid model catalog: {0}")]
+  InvalidModelCatalog(&'static str),
+  #[error("invalid model policy: {0}")]
+  InvalidModelPolicy(&'static str),
 }
 
 pub fn decode_snapshot(wire: RuntimeSnapshot) -> Result<DecodedSnapshot, SnapshotDecodeError> {
   if wire.protocol_version != PROTOCOL_VERSION {
     return Err(SnapshotDecodeError::ProtocolVersion(wire.protocol_version));
   }
+  let legacy_selection = wire
+    .model_selection
+    .map(model_selection_from_wire)
+    .transpose()?;
+  let model_policy = match wire.model_policy {
+    Some(policy) => {
+      let policy = policy_from_wire(policy)?;
+      if legacy_selection
+        .as_ref()
+        .is_some_and(|legacy| legacy != &policy.active)
+      {
+        return Err(SnapshotDecodeError::InvalidModelPolicy(
+          "active policy conflicts with legacy selection",
+        ));
+      }
+      policy
+    }
+    None => agent_app::ModelPolicyView {
+      active: legacy_selection.ok_or(SnapshotDecodeError::Missing("model_selection"))?,
+      pending: None,
+    },
+  };
   let snapshot = AppSnapshot {
     phase: phase_from_wire(wire.phase)?,
     session_id: wire
@@ -62,11 +90,8 @@ pub fn decode_snapshot(wire: RuntimeSnapshot) -> Result<DecodedSnapshot, Snapsho
       .collect::<Result<_, _>>()?,
     approval: wire.pending_approval.map(approval_from_wire).transpose()?,
     queued_follow_ups: wire.queued_follow_ups,
-    model_selection: model_selection_from_wire(
-      wire
-        .model_selection
-        .ok_or(SnapshotDecodeError::Missing("model_selection"))?,
-    )?,
+    model_catalog: wire.model_catalog.map(catalog_from_wire).transpose()?,
+    model_policy,
     route: wire.route.map(route_from_wire).transpose()?,
     last_error: wire.last_error,
     model_setup: wire.model_setup.map(model_setup_from_wire).transpose()?,
@@ -94,15 +119,22 @@ fn approval_from_wire(
   })
 }
 
-fn model_selection_from_wire(
+pub(super) fn model_selection_from_wire(
   wire: agent_protocol::v1::ModelSelection,
 ) -> Result<AppModelSelection, SnapshotDecodeError> {
   match wire.selection {
     Some(Selection::Auto(true)) => Ok(AppModelSelection::Auto),
-    Some(Selection::Pinned(route)) => Ok(AppModelSelection::Pinned {
-      provider: route.provider,
-      model: route.model,
-    }),
+    Some(Selection::Pinned(route))
+      if !route.provider.trim().is_empty()
+        && route.provider.len() <= agent_app::MAX_MODEL_PROVIDER_BYTES
+        && !route.model.trim().is_empty()
+        && route.model.len() <= agent_app::MAX_MODEL_ID_BYTES =>
+    {
+      Ok(AppModelSelection::Pinned {
+        provider: route.provider,
+        model: route.model,
+      })
+    }
     _ => Err(SnapshotDecodeError::ModelSelection),
   }
 }

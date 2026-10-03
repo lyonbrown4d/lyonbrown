@@ -28,7 +28,9 @@ pub(crate) const COMMAND_CAPACITY: usize = 32;
 const APPROVAL_CAPACITY: usize = 4;
 const EPOCH_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub use crate::epoch::{MemoryProbe, ProductionRuntimeActivator, build_active_runtime};
+pub use crate::epoch::{
+  MemoryProbe, ProductionRuntimeActivator, build_active_runtime, catalog_failure_is_fatal,
+};
 pub use crate::model_setup::managed_runtime_config;
 
 #[derive(Debug, Clone)]

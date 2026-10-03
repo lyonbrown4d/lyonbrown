@@ -3,8 +3,8 @@ use tokio::task::{AbortHandle, JoinHandle};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-  AppController, ApprovalInbox, Projector, RuntimeActorError, RuntimePhase, RuntimeSnapshot,
-  channel,
+  AppController, ApprovalInbox, ModelRuntimeView, Projector, RuntimeActorError, RuntimePhase,
+  RuntimeSnapshot, channel,
 };
 
 mod actor;
@@ -68,7 +68,21 @@ impl Drop for RuntimeTask {
 }
 
 pub fn spawn_runtime(kernel: Kernel, command_capacity: usize) -> (AppController, RuntimeTask) {
-  spawn(kernel, None, RuntimePhase::Ready, command_capacity)
+  spawn(
+    kernel,
+    None,
+    RuntimePhase::Ready,
+    ModelRuntimeView::default(),
+    command_capacity,
+  )
+}
+
+pub fn spawn_runtime_with_models(
+  kernel: Kernel,
+  models: ModelRuntimeView,
+  command_capacity: usize,
+) -> (AppController, RuntimeTask) {
+  spawn(kernel, None, RuntimePhase::Ready, models, command_capacity)
 }
 
 pub fn spawn_runtime_waiting_for_model(
@@ -79,6 +93,7 @@ pub fn spawn_runtime_waiting_for_model(
     kernel,
     None,
     RuntimePhase::ModelSetupRequired,
+    ModelRuntimeView::default(),
     command_capacity,
   )
 }
@@ -92,6 +107,22 @@ pub fn spawn_runtime_with_approvals(
     kernel,
     Some(approvals),
     RuntimePhase::Ready,
+    ModelRuntimeView::default(),
+    command_capacity,
+  )
+}
+
+pub fn spawn_runtime_with_approvals_and_models(
+  kernel: Kernel,
+  approvals: ApprovalInbox,
+  models: ModelRuntimeView,
+  command_capacity: usize,
+) -> (AppController, RuntimeTask) {
+  spawn(
+    kernel,
+    Some(approvals),
+    RuntimePhase::Ready,
+    models,
     command_capacity,
   )
 }
@@ -100,9 +131,10 @@ fn spawn(
   kernel: Kernel,
   approvals: Option<ApprovalInbox>,
   initial_phase: RuntimePhase,
+  models: ModelRuntimeView,
   command_capacity: usize,
 ) -> (AppController, RuntimeTask) {
-  let projector = initial_projector(&kernel, initial_phase);
+  let projector = initial_projector(&kernel, initial_phase, models);
   let (controller, endpoint) = channel(projector.snapshot().clone(), command_capacity);
   let shutdown = CancellationToken::new();
   let task = tokio::spawn(actor::run(
@@ -125,10 +157,16 @@ fn spawn(
   )
 }
 
-fn initial_projector(kernel: &Kernel, initial_phase: RuntimePhase) -> Projector {
+fn initial_projector(
+  kernel: &Kernel,
+  initial_phase: RuntimePhase,
+  models: ModelRuntimeView,
+) -> Projector {
   let mut projector = Projector::new(RuntimeSnapshot {
     phase: RuntimePhase::Ready,
     session_id: Some(kernel.session_id()),
+    model_catalog: models.catalog,
+    model_policy: models.policy,
     ..RuntimeSnapshot::default()
   });
   projector.extend(kernel.event_log().iter().cloned());

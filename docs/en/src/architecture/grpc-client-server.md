@@ -228,6 +228,32 @@ instead of erasing it, and a Session or daemon-epoch change closes and clears
 the old selection. Detail generation is cached and bounded by field, collection,
 JSON, line, and total-character budgets.
 
+The shared Snapshot contract now also has an optional, UI-neutral configured
+model catalog and an active/pending session policy. The catalog is projected
+from the providers registered by the daemon composition root, accepts at most
+128 unique exact routes, and carries tier, locality, context/output limits, capability
+flags, and daemon-computed Worker selectability. Provider probes run
+concurrently with a per-provider deadline. A timeout or operational provider
+failure publishes no catalog instead of blocking startup. Identity mismatches,
+duplicate/invalid routes, and catalog overflow abort activation as invariant
+violations rather than being deduplicated or truncated. A successful probe
+seals the registry, so the scheduler and published catalog use the same immutable
+capability snapshot for that daemon epoch. `None` means no catalog was published, while an
+explicit empty catalog remains distinguishable. Catalog entries mean
+configured/selectable, not online or ready, and never contain endpoints,
+secret references, GGUF paths, or raw provider failures.
+
+For this contract revision, a route is selectable as the session Worker only
+when it declares the Worker tier plus tool and streaming support. Other routes
+remain visible with a stable disabled reason.
+
+`Auto` means there is no session override and the daemon continues to apply
+its base provider/model configuration and routing policy; it does not mean that every catalog
+entry is eligible. Until the selection command exists, active is always `Auto`
+and pending is always absent. The contract and projection are implemented, but the model
+selection command is still unsupported and neither TUI nor GUI has the real
+picker yet.
+
 This MVP exposes route and fallback reasons, context and token usage, tool
 arguments/results/duration, outcomes, and relevant IDs in English and Chinese.
 It is not a complete event trace: timestamps, strict event history, historical

@@ -381,6 +381,7 @@ dependencies = [
  "agent-kernel",
  "agent-launch",
  "agent-local",
+ "agent-model",
  "agent-protocol",
  "agent-runtime",
  "agent-tool",

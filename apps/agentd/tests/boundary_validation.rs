@@ -96,6 +96,26 @@ async fn oversized_pinned_model_name_is_rejected() {
 }
 
 #[tokio::test]
+async fn pinned_route_at_shared_limits_passes_rpc_validation() {
+  let (server, mut client) = service().await;
+  let result = client
+    .select_session_model(SelectSessionModelRequest {
+      metadata: Some(metadata_for(&server, "client", "select-at-limit")),
+      selection: Some(ModelSelection {
+        selection: Some(Selection::Pinned(ModelRoute {
+          provider: "p".repeat(128),
+          model: "m".repeat(256),
+        })),
+      }),
+    })
+    .await;
+
+  if let Err(error) = result {
+    assert_ne!(error.code(), tonic::Code::InvalidArgument);
+  }
+}
+
+#[tokio::test]
 async fn model_download_identifiers_are_required_and_bounded() {
   let (server, mut client) = service().await;
   let error = client

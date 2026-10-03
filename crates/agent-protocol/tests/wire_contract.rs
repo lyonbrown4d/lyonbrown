@@ -1,4 +1,7 @@
-use agent_protocol::v1::{HandshakeResponse, ModelSetupSnapshot, RequestMetadata, RuntimeSnapshot};
+use agent_protocol::v1::{
+  HandshakeResponse, ModelCatalog, ModelPolicy, ModelSetupSnapshot, RequestMetadata,
+  RuntimeSnapshot,
+};
 use prost::Message;
 
 #[test]
@@ -70,4 +73,21 @@ fn pre_model_setup_snapshot_still_decodes() {
   assert_eq!(decoded.protocol_version, 1);
   assert_eq!(decoded.revision, 7);
   assert!(decoded.model_setup.is_none());
+}
+
+#[test]
+fn runtime_snapshot_model_catalog_and_policy_use_additive_fields() {
+  let catalog = RuntimeSnapshot {
+    model_catalog: Some(ModelCatalog::default()),
+    ..RuntimeSnapshot::default()
+  }
+  .encode_to_vec();
+  let policy = RuntimeSnapshot {
+    model_policy: Some(ModelPolicy::default()),
+    ..RuntimeSnapshot::default()
+  }
+  .encode_to_vec();
+
+  assert_eq!(catalog, vec![0x62, 0x00]);
+  assert_eq!(policy, vec![0x6a, 0x00]);
 }

@@ -14,7 +14,10 @@ pub use context::{ContextItem, ContextItemKind, DataClassification};
 pub use error::AgentError;
 pub use event::{AgentEvent, StepOutcome};
 pub use ids::{ObservationId, SessionId, StepId, ToolCallId, TurnId};
-pub use model::{Locality, ModelCapabilities, ModelTier, StopReason, TokenUsage};
+pub use model::{
+  Locality, MAX_MODEL_CATALOG_SIZE, MAX_MODEL_ID_BYTES, MAX_MODEL_PROVIDER_BYTES,
+  ModelCapabilities, ModelTier, StopReason, TokenUsage,
+};
 pub use secret::SecretRef;
 pub use tool::{
   RiskLevel, SandboxStatus, ToolDefinition, ToolInvocation, ToolPreview, ToolResult, ToolSource,
