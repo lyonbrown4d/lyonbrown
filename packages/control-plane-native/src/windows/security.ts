@@ -85,48 +85,6 @@ export function withPrivateSecurity<T>(
   }
 }
 
-export function protectPrivateObject(
-  handle: Handle,
-  user: CurrentUser,
-  inheritable: boolean,
-): void {
-  const aceFlags = inheritable ? "OICI" : "";
-  const descriptorOutput: unknown[] = [null];
-  if (
-    !api.ConvertStringSecurityDescriptorToSecurityDescriptorW(
-      `D:P(A;${aceFlags};FA;;;${user.sidString})`,
-      SECURITY.sddlRevision1,
-      descriptorOutput,
-      null,
-    )
-  ) {
-    throw failureForLastError();
-  }
-  const descriptor = descriptorOutput[0] as Pointer;
-  try {
-    const present: unknown[] = [0];
-    const dacl: unknown[] = [null];
-    const defaulted: unknown[] = [0];
-    if (!api.GetSecurityDescriptorDacl(descriptor, present, dacl, defaulted) || !present[0]) {
-      throw failureForLastError();
-    }
-    const status = Number(
-      api.SetSecurityInfo(
-        handle,
-        SECURITY.seFileObject,
-        SECURITY.daclInformation | SECURITY.protectedDaclInformation,
-        null,
-        null,
-        dacl[0],
-        null,
-      ),
-    );
-    if (status !== 0) throw new NativeFailure(status === 5 ? "access_denied" : "io");
-  } finally {
-    api.LocalFree(descriptor);
-  }
-}
-
 function sameSid(pointer: Pointer, expected: Uint8Array): boolean {
   return Boolean(api.EqualSid(pointer, Buffer.from(expected)));
 }

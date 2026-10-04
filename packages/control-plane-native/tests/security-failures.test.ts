@@ -3,7 +3,6 @@ import { api } from "../src/windows/api.js";
 import { SECURITY } from "../src/windows/constants.js";
 import {
   currentUser,
-  protectPrivateObject,
   validateAccessAce,
   verifyPrivateObject,
   withPrivateSecurity,
@@ -31,13 +30,13 @@ function accessAce(flags: number, mask: number = SECURITY.fileAllAccess, type = 
   return ace;
 }
 
-function mockDescriptorConversion(): void {
-  vi.spyOn(api, "ConvertStringSecurityDescriptorToSecurityDescriptorW").mockImplementation(
-    (...arguments_: unknown[]) => {
-      (arguments_[2] as unknown[])[0] = 123n;
-      return 1;
-    },
-  );
+function mockSecurityInfo(dacl: unknown = 456n): void {
+  vi.spyOn(api, "GetSecurityInfo").mockImplementation((...arguments_: unknown[]) => {
+    (arguments_[3] as unknown[])[0] = 123n;
+    (arguments_[5] as unknown[])[0] = dacl;
+    (arguments_[7] as unknown[])[0] = 789n;
+    return 0;
+  });
   vi.spyOn(api, "LocalFree").mockImplementation(() => null);
 }
 
@@ -92,78 +91,45 @@ describe("Windows security failures", () => {
     }).toThrow(expect.objectContaining({ failureCode: "access_denied" }));
   });
 
-  it("rejects private DACL descriptor conversion failure", () => {
-    vi.spyOn(api, "ConvertStringSecurityDescriptorToSecurityDescriptorW").mockImplementation(
-      () => 0,
-    );
-    vi.spyOn(api, "GetLastError").mockImplementation(() => 5);
-    expect(() => {
-      protectPrivateObject(123n, user, false);
-    }).toThrow(expect.objectContaining({ failureCode: "access_denied" }));
-  });
-
-  it.each([
-    [0, 1],
-    [1, 0],
-  ])("rejects unusable private DACL metadata (%i, %i)", (result, present) => {
-    mockDescriptorConversion();
-    vi.spyOn(api, "GetSecurityDescriptorDacl").mockImplementation((...arguments_: unknown[]) => {
-      (arguments_[1] as unknown[])[0] = present;
-      (arguments_[2] as unknown[])[0] = 456n;
-      return result;
-    });
-    vi.spyOn(api, "GetLastError").mockImplementation(() => 87);
-    expect(() => {
-      protectPrivateObject(123n, user, false);
-    }).toThrow(expect.objectContaining({ failureCode: "io" }));
-  });
-
-  it.each([
-    [5, "access_denied"],
-    [87, "io"],
-  ])("coarsens SetSecurityInfo status %i", (status, code) => {
-    mockDescriptorConversion();
-    vi.spyOn(api, "GetSecurityDescriptorDacl").mockImplementation((...arguments_: unknown[]) => {
-      (arguments_[1] as unknown[])[0] = 1;
-      (arguments_[2] as unknown[])[0] = 456n;
-      return 1;
-    });
-    vi.spyOn(api, "SetSecurityInfo").mockImplementation(() => status);
-    expect(() => {
-      protectPrivateObject(123n, user, false);
-    }).toThrow(expect.objectContaining({ failureCode: code }));
-  });
-
-  it("applies a protected inheritable current-user-only DACL", () => {
-    mockDescriptorConversion();
-    const convert = vi.mocked(api.ConvertStringSecurityDescriptorToSecurityDescriptorW);
-    vi.spyOn(api, "GetSecurityDescriptorDacl").mockImplementation((...arguments_: unknown[]) => {
-      (arguments_[1] as unknown[])[0] = 1;
-      (arguments_[2] as unknown[])[0] = 456n;
-      return 1;
-    });
-    const set = vi.spyOn(api, "SetSecurityInfo").mockImplementation(() => 0);
-
-    expect(() => {
-      protectPrivateObject(123n, user, true);
-    }).not.toThrow();
-    expect(convert.mock.calls[0]?.[0]).toContain("OICI");
-    expect(set).toHaveBeenCalledWith(
-      123n,
-      SECURITY.seFileObject,
-      SECURITY.daclInformation | SECURITY.protectedDaclInformation,
-      null,
-      null,
-      456n,
-      null,
-    );
-  });
-
   it.each([
     [5, "access_denied"],
     [87, "io"],
   ])("coarsens GetSecurityInfo status %i", (status, code) => {
     vi.spyOn(api, "GetSecurityInfo").mockImplementation(() => status);
+    expect(() => {
+      verifyPrivateObject(123n, user, false);
+    }).toThrow(expect.objectContaining({ failureCode: code }));
+  });
+
+  it("rejects a secure object's wrong owner", () => {
+    mockSecurityInfo();
+    vi.spyOn(api, "EqualSid").mockImplementation(() => 0);
+    expect(() => {
+      verifyPrivateObject(123n, user, false);
+    }).toThrow(expect.objectContaining({ failureCode: "wrong_owner" }));
+  });
+
+  it("rejects a missing DACL", () => {
+    mockSecurityInfo(null);
+    vi.spyOn(api, "EqualSid").mockImplementation(() => 1);
+    expect(() => {
+      verifyPrivateObject(123n, user, false);
+    }).toThrow(expect.objectContaining({ failureCode: "insecure_acl" }));
+  });
+
+  it.each([
+    [0, 0, "io"],
+    [1, 0, "insecure_acl"],
+  ])("rejects unusable descriptor control (%i, %i)", (result, control, code) => {
+    mockSecurityInfo();
+    vi.spyOn(api, "EqualSid").mockImplementation(() => 1);
+    vi.spyOn(api, "GetSecurityDescriptorControl").mockImplementation(
+      (...arguments_: unknown[]) => {
+        (arguments_[1] as unknown[])[0] = control;
+        return result;
+      },
+    );
+    vi.spyOn(api, "GetLastError").mockImplementation(() => 87);
     expect(() => {
       verifyPrivateObject(123n, user, false);
     }).toThrow(expect.objectContaining({ failureCode: code }));

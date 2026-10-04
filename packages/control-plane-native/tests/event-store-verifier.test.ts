@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createNativeEventStorePathVerifier } from "../src/index.js";
 import { api } from "../src/windows/api.js";
+import { ERRORS } from "../src/windows/constants.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -195,7 +196,63 @@ describe.runIf(process.platform === "win32")("native Windows event-store verifie
     expect(firstDatabase).toBe(secondDatabase);
     expect(
       verifier.verifyDatabaseFile(dataDirectory, dataDirectory, `${databasePath}-wal`),
-    ).toBeUndefined();
+    ).toEqual(expect.any(String));
+    verifier.close?.();
+  });
+
+  it("securely creates and anchors missing sidecars before SQLite can open them", () => {
+    const parent = temporaryDirectory("sidecar-create");
+    const dataDirectory = join(parent, "data");
+    const databasePath = join(dataDirectory, "lyonbrown.sqlite3");
+    const verifier = createNativeEventStorePathVerifier();
+    verifier.verifyRequestedDataDirectory(dataDirectory);
+    verifier.verifyDataDirectory(dataDirectory, dataDirectory);
+    verifier.verifyDatabaseFile(dataDirectory, dataDirectory, databasePath);
+
+    for (const suffix of ["-wal", "-shm"] as const) {
+      const sidecar = `${databasePath}${suffix}`;
+      expect(verifier.verifyDatabaseFile(dataDirectory, dataDirectory, sidecar)).toEqual(
+        expect.any(String),
+      );
+      expect(existsSync(sidecar)).toBe(true);
+      expect(() => {
+        renameSync(sidecar, `${sidecar}.replaced`);
+      }).toThrow();
+    }
+
+    verifier.close?.();
+    expect(() => {
+      renameSync(`${databasePath}-wal`, `${databasePath}-wal.closed`);
+    }).not.toThrow();
+  });
+
+  it("fails closed when a sidecar appears between probe and CREATE_NEW", () => {
+    const parent = temporaryDirectory("sidecar-race");
+    const dataDirectory = join(parent, "data");
+    const databasePath = join(dataDirectory, "lyonbrown.sqlite3");
+    const walPath = `${databasePath}-wal`;
+    const verifier = createNativeEventStorePathVerifier();
+    verifier.verifyRequestedDataDirectory(dataDirectory);
+    verifier.verifyDataDirectory(dataDirectory, dataDirectory);
+    verifier.verifyDatabaseFile(dataDirectory, dataDirectory, databasePath);
+    const nativeCreate = api.CreateFileW;
+    let targetCalls = 0;
+    let lastError = 0;
+    vi.spyOn(api, "CreateFileW").mockImplementation((...arguments_: unknown[]) => {
+      const result = nativeCreate(...arguments_);
+      if (String(arguments_[0]).toLowerCase() === walPath.toLowerCase()) {
+        targetCalls += 1;
+        lastError = targetCalls === 1 ? ERRORS.fileNotFound : ERRORS.alreadyExists;
+        if (targetCalls === 1) writeFileSync(walPath, "racing replacement");
+      }
+      return result;
+    });
+    vi.spyOn(api, "GetLastError").mockImplementation(() => lastError);
+
+    expect(() => {
+      verifier.verifyDatabaseFile(dataDirectory, dataDirectory, walPath);
+    }).toThrow(PathSecurityError);
+    expect(targetCalls).toBe(2);
     verifier.close?.();
   });
 

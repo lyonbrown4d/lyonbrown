@@ -47,7 +47,6 @@ export const SECURITY = {
   ownerInformation: 0x0000_0001,
   daclInformation: 0x0000_0004,
   protectedDacl: 0x1000,
-  protectedDaclInformation: 0x8000_0000,
   seFileObject: 1,
   sddlRevision1: 1,
   accessAllowedAce: 0,

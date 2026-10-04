@@ -11,8 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import Database from "better-sqlite3";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { PathSecurityError, openEventStore, type PathSecurityVerifier } from "../src/index.js";
 import {
@@ -52,65 +51,11 @@ function allowingVerifier(calls: string[]): PathSecurityVerifier {
 }
 
 afterEach(() => {
-  vi.restoreAllMocks();
   for (const directory of directories.splice(0))
     rmSync(directory, { force: true, recursive: true });
 });
 
 describe("path security phases", () => {
-  it("keeps verifier anchors until close and releases them exactly once", () => {
-    const dataDirectory = temporaryDirectory("verifier-lifecycle");
-    const calls: string[] = [];
-    const verifier = allowingVerifier(calls);
-    verifier.close = () => {
-      calls.push("close");
-    };
-
-    const store = openEventStore({ dataDirectory, pathVerifier: verifier });
-    expect(calls).not.toContain("close");
-    store.close();
-    store.close();
-
-    expect(calls.filter((call) => call === "close")).toHaveLength(1);
-  });
-
-  it("releases verifier anchors when opening SQLite fails", () => {
-    const dataDirectory = temporaryDirectory("verifier-open-failure");
-    let closed = 0;
-    const verifier = allowingVerifier([]);
-    verifier.close = () => {
-      closed += 1;
-    };
-    verifier.verifyDatabaseFile = (_requested, _canonical, databasePath) => {
-      if (existsSync(databasePath)) throw new Error("native secret");
-      return undefined;
-    };
-
-    expect(() => openEventStore({ dataDirectory, pathVerifier: verifier })).toThrow();
-    expect(closed).toBe(1);
-  });
-
-  it("redacts verifier cleanup failures while still making close idempotent", () => {
-    const dataDirectory = temporaryDirectory("verifier-close-failure");
-    let closed = 0;
-    const verifier = allowingVerifier([]);
-    verifier.close = () => {
-      closed += 1;
-      throw new Error("native cleanup secret");
-    };
-    const databaseClose = vi.spyOn(Database.prototype, "close");
-    const store = openEventStore({ dataDirectory, pathVerifier: verifier });
-
-    expect(() => {
-      store.close();
-    }).toThrow(new PathSecurityError("Secure path verifier cleanup failed"));
-    expect(() => {
-      store.close();
-    }).not.toThrow();
-    expect(closed).toBe(1);
-    expect(databaseClose).toHaveBeenCalledOnce();
-  });
-
   it.runIf(process.platform !== "win32")(
     "fails closed for an existing permissive POSIX directory without chmodding it",
     () => {

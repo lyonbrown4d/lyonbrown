@@ -13,12 +13,7 @@ import {
   type OwnedHandle,
 } from "./handles.js";
 import { fileIdentity } from "./identity.js";
-import {
-  currentUser,
-  protectPrivateObject,
-  verifyPrivateObject,
-  withPrivateSecurity,
-} from "./security.js";
+import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.js";
 import { NativeFailure } from "../result.js";
 
 const DATABASE_NAMES = new Set([
@@ -81,7 +76,7 @@ function containsPath(root: string, child: string): boolean {
 
 function closeHandles(handles: Iterable<OwnedHandle>): void {
   let failed = false;
-  for (const handle of [...handles].toReversed()) {
+  for (const handle of handles) {
     try {
       handle.close();
     } catch {
@@ -95,7 +90,6 @@ export class WindowsEventStorePathVerifier implements PathSecurityVerifier {
   readonly #configuredRoot: string | undefined;
   readonly #directoryAnchors = new Map<string, AnchoredObject>();
   readonly #fileAnchors = new Map<string, AnchoredObject>();
-  readonly #missingSidecars = new Set<string>();
   #requestedDirectory: string | undefined;
   #closed = false;
 
@@ -149,16 +143,8 @@ export class WindowsEventStorePathVerifier implements PathSecurityVerifier {
       const artifactKey = key(databaseArtifactPath);
       const anchored = this.#fileAnchors.get(artifactKey);
       if (anchored) return anchored.identity;
-      const name = win32.basename(databaseArtifactPath);
-      const handle = this.#openArtifact(databaseArtifactPath, name);
-      if (!handle) {
-        this.#missingSidecars.add(artifactKey);
-        return undefined;
-      }
+      const handle = this.#openArtifact(databaseArtifactPath);
       try {
-        if (this.#missingSidecars.delete(artifactKey)) {
-          protectPrivateObject(handle.borrow(), currentUser(), false);
-        }
         validateObjectType(handle, "file");
         verifyPrivateObject(handle.borrow(), currentUser(), false);
         const identity = fileIdentity(handle);
@@ -176,7 +162,7 @@ export class WindowsEventStorePathVerifier implements PathSecurityVerifier {
     this.#closed = true;
     const handles = [
       ...[...this.#fileAnchors.values()].map(({ handle }) => handle),
-      ...[...this.#directoryAnchors.values()].map(({ handle }) => handle),
+      ...[...this.#directoryAnchors.values()].map(({ handle }) => handle).toReversed(),
     ];
     this.#fileAnchors.clear();
     this.#directoryAnchors.clear();
@@ -233,13 +219,12 @@ export class WindowsEventStorePathVerifier implements PathSecurityVerifier {
     }
   }
 
-  #openArtifact(path: string, name: string): OwnedHandle | undefined {
+  #openArtifact(path: string): OwnedHandle {
     try {
       return openRegularFile(path, ACCESS.genericRead | ACCESS.writeDac, SHARE.read | SHARE.write);
     } catch (error) {
       if (!(error instanceof NativeFailure) || error.failureCode !== "not_found") throw error;
     }
-    if (name !== "lyonbrown.sqlite3") return undefined;
     const user = currentUser();
     return withPrivateSecurity(user, false, (security) =>
       createFile(

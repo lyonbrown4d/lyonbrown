@@ -45,6 +45,28 @@ const SESSION_INTEGRITY_SELECT = `
     LEFT JOIN events e ON e.session_id = s.session_id
 `;
 
+function closeStoreResources(
+  database: Database.Database | undefined,
+  verifier: PathSecurityVerifier | undefined,
+): EventStoreError | undefined {
+  let failure: EventStoreError | undefined;
+  try {
+    database?.close();
+  } catch {
+    failure = new EventStoreError("Event store close failed");
+  }
+  try {
+    verifier?.close?.();
+  } catch {
+    failure ??= new PathSecurityError("Secure path verifier cleanup failed");
+  }
+  return failure;
+}
+
+function redactOpenFailure(error: unknown): EventStoreError {
+  return error instanceof EventStoreError ? error : new EventStoreError("Event store open failed");
+}
+
 class SqliteEventStore implements EventStore {
   readonly #database: Database.Database;
   readonly #busyTimeoutMs: number;
@@ -131,17 +153,7 @@ class SqliteEventStore implements EventStore {
   public close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    let failure: EventStoreError | undefined;
-    try {
-      this.#verifier?.close?.();
-    } catch {
-      failure = new PathSecurityError("Secure path verifier cleanup failed");
-    }
-    try {
-      this.#database.close();
-    } catch {
-      failure ??= new EventStoreError("Event store close failed");
-    }
+    const failure = closeStoreResources(this.#database, this.#verifier);
     if (failure) throw failure;
   }
 
@@ -201,16 +213,7 @@ export function openEventStore(options: OpenEventStoreOptions): EventStore {
     verifyDatabaseSidecars(prepared, verifier);
     return new SqliteEventStore(database, busyTimeoutMs, verifier);
   } catch (error: unknown) {
-    try {
-      verifier.close?.();
-    } catch {
-      // Preserve the primary open failure while still releasing every remaining resource.
-    }
-    try {
-      database?.close();
-    } catch {
-      // Native verifier implementations redact their own failures; the primary error wins here.
-    }
-    throw error;
+    closeStoreResources(database, verifier);
+    throw redactOpenFailure(error);
   }
 }
