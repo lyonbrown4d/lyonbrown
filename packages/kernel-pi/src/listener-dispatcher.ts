@@ -49,10 +49,6 @@ export class ListenerDispatcher {
     for (const subscription of this.#subscriptions) subscription.enqueue(event);
   }
 
-  cancelPending(): void {
-    for (const subscription of this.#subscriptions) subscription.cancelPending();
-  }
-
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
@@ -82,11 +78,6 @@ class ListenerSubscription {
     }
     this.#queue.push(event);
     this.scheduleDrain();
-  }
-
-  cancelPending(): void {
-    this.#queue.length = 0;
-    this.#current?.abort();
   }
 
   close(): void {

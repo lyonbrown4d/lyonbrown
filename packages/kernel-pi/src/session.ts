@@ -133,7 +133,6 @@ export class PiKernelSession implements KernelSession {
 
   cancel(): void {
     this.#cancelled = true;
-    this.#listeners.cancelPending();
     this.#agent.abort();
   }
 

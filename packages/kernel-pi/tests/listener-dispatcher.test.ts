@@ -74,26 +74,6 @@ describe("listener dispatcher", () => {
     dispatcher.dispose();
   });
 
-  test("detaches a hung invocation on cancel without removing the subscriber", async () => {
-    const diagnostics: string[] = [];
-    const dispatcher = new ListenerDispatcher({ maxPendingEvents: 4, timeoutMs: 10_000 }, (error) =>
-      diagnostics.push(error.message),
-    );
-    const listener = vi.fn(() => new Promise<void>(() => undefined));
-    dispatcher.subscribe(listener);
-    dispatcher.dispatch(event(1));
-    await vi.waitFor(() => {
-      expect(listener).toHaveBeenCalledOnce();
-    });
-    dispatcher.cancelPending();
-    dispatcher.dispatch(event(2));
-    await vi.waitFor(() => {
-      expect(listener).toHaveBeenCalledTimes(2);
-    });
-    expect(diagnostics).toEqual([]);
-    dispatcher.dispose();
-  });
-
   test("times out a hung subscriber and consumes its pending invocation", async () => {
     const diagnostics: string[] = [];
     const dispatcher = new ListenerDispatcher({ maxPendingEvents: 4, timeoutMs: 10 }, (error) =>
