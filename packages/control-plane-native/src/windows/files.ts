@@ -82,7 +82,7 @@ function renamePayload(directory: Handle, destination: string): Buffer {
   return payload;
 }
 
-function disposeOnClose(handle: OwnedHandle): void {
+export function disposeOnClose(handle: OwnedHandle): void {
   const disposition = Buffer.from([1]);
   if (
     !api.SetFileInformationByHandle(
@@ -94,6 +94,19 @@ function disposeOnClose(handle: OwnedHandle): void {
   ) {
     throw failureForLastError();
   }
+}
+
+export function atomicReplaceOpenFile(
+  directory: OwnedHandle,
+  file: OwnedHandle,
+  destination: string,
+): void {
+  const payload = renamePayload(directory.borrow(), destination);
+  const ioStatus = Buffer.alloc(pointerSize * 2);
+  const status = Number(
+    api.NtSetInformationFile(file.borrow(), ioStatus, payload, payload.length, 10),
+  );
+  if (status < 0) throw failureForNtStatus(status);
 }
 
 export function atomicReplace(
@@ -127,12 +140,7 @@ export function atomicReplace(
     }
     if (Number(written[0]) !== input.length) throw failureForLastError(29);
     if (!api.FlushFileBuffers(handle.borrow())) throw failureForLastError();
-    const payload = renamePayload(directory.borrow(), destination);
-    const ioStatus = Buffer.alloc(pointerSize * 2);
-    const status = Number(
-      api.NtSetInformationFile(handle.borrow(), ioStatus, payload, payload.length, 10),
-    );
-    if (status < 0) throw failureForNtStatus(status);
+    atomicReplaceOpenFile(directory, handle, destination);
     renamed = true;
   } finally {
     try {

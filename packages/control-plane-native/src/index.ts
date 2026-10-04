@@ -4,7 +4,9 @@ import {
 } from "@lyonbrown/local-control-plane/native-adapter";
 import { createPlatformSecurity } from "./platform.js";
 import { createPlatformEventStorePathVerifier } from "./platform.js";
+import { createPlatformModelStorageCapability } from "./platform.js";
 import type { PathSecurityVerifier } from "@lyonbrown/event-store/path-verifier";
+import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
 import type { WindowsEventStoreVerifierOptions } from "./windows/store-verifier.js";
 
 let provider: NativeControlPlaneProvider | undefined;
@@ -18,6 +20,12 @@ export function createNativeEventStorePathVerifier(
   options: WindowsEventStoreVerifierOptions = {},
 ): PathSecurityVerifier {
   return createPlatformEventStorePathVerifier(options);
+}
+
+export function createNativeModelStorageCapability(
+  modelsDirectory: string,
+): NativeModelStorageCapability {
+  return createPlatformModelStorageCapability(modelsDirectory);
 }
 
 export type { WindowsEventStoreVerifierOptions as NativeEventStorePathVerifierOptions };

@@ -59,6 +59,12 @@ export const api = {
     "uint32_t",
     HANDLE,
   ]),
+  ReOpenFile: stdcall(kernel32, "ReOpenFile", HANDLE.name, [
+    HANDLE,
+    "uint32_t",
+    "uint32_t",
+    "uint32_t",
+  ]),
   CloseHandle: stdcall(kernel32, "CloseHandle", "int32_t", [HANDLE]),
   GetLastError: stdcall(kernel32, "GetLastError", "uint32_t", []),
   GetCurrentProcess: stdcall(kernel32, "GetCurrentProcess", HANDLE.name, []),
