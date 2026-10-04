@@ -25,15 +25,21 @@ class AgentRuntimeHostAdapter implements RuntimeHost {
         return mapRuntimeFailure(error, command.kind);
       }
     }
+    if (command.kind === "queue-follow-up") {
+      if (empty(command.text)) return failure("EMPTY_TEXT");
+      try {
+        await this.runtime.followUp(command.text);
+        return OK;
+      } catch (error: unknown) {
+        return mapRuntimeFailure(error, command.kind);
+      }
+    }
     if (!hasActiveTurn(state)) return failure("NO_ACTIVE_TURN");
     if (command.kind !== "cancel-turn" && empty(command.text)) return failure("EMPTY_TEXT");
     try {
       switch (command.kind) {
         case "steer-current-turn":
-          this.runtime.steer(command.text);
-          break;
-        case "queue-follow-up":
-          this.runtime.followUp(command.text);
+          await this.runtime.steer(command.text);
           break;
         case "cancel-turn":
           this.runtime.cancel();

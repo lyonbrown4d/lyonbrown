@@ -45,8 +45,7 @@ describe("runtime host adapter commands", () => {
       error: { code: "NO_ACTIVE_TURN" },
     });
     await expect(host.execute({ kind: "queue-follow-up", text: "later" })).resolves.toEqual({
-      ok: false,
-      error: { code: "NO_ACTIVE_TURN" },
+      ok: true,
     });
     await expect(host.execute({ kind: "cancel-turn" })).resolves.toEqual({
       ok: false,
@@ -61,7 +60,7 @@ describe("runtime host adapter commands", () => {
     });
     expect(runtime.starts).toEqual([]);
     expect(runtime.steering).toEqual([]);
-    expect(runtime.followUps).toEqual([]);
+    expect(runtime.followUps).toEqual(["later"]);
     expect(runtime.cancelCalls).toBe(0);
   });
 

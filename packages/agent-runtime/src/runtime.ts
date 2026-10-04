@@ -57,31 +57,50 @@ class DefaultAgentRuntime implements AgentRuntime {
           text,
         }),
       );
-      await this.#kernel.startTurn(text, options);
+      this.#launchKernel(text, options);
+    } catch {
+      this.#running = false;
+      if (this.writer.fatal !== undefined) throw this.writer.fatal;
+      throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
+    }
+  }
+
+  async steer(input: string): Promise<void> {
+    this.#assertAvailable();
+    if (!this.#running)
+      throw runtimeError("TERMINAL_SESSION", "Runtime session has no active turn");
+    const text = validateText(input, "input");
+    try {
+      await this.writer.append(
+        parseAgentRuntimeEvent({
+          type: "steering_submitted",
+          sessionId: this.options.sessionId,
+          text,
+        }),
+      );
+      this.#kernel.steer(text);
     } catch {
       if (this.writer.fatal !== undefined) throw this.writer.fatal;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
-    } finally {
-      this.#running = false;
     }
   }
 
-  steer(input: string): void {
+  async followUp(input: string): Promise<void> {
     this.#assertAvailable();
+    const text = validateText(input, "input");
     try {
-      this.#kernel.steer(validateText(input, "input"));
+      await this.writer.append(
+        parseAgentRuntimeEvent({
+          type: "follow_up_queued",
+          sessionId: this.options.sessionId,
+          text,
+        }),
+      );
     } catch {
+      if (this.writer.fatal !== undefined) throw this.writer.fatal;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
     }
-  }
-
-  followUp(input: string): void {
-    this.#assertAvailable();
-    try {
-      this.#kernel.followUp(validateText(input, "input"));
-    } catch {
-      throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
-    }
+    this.#resumeQueuedFollowUps();
   }
 
   cancel(): void {
@@ -112,6 +131,78 @@ class DefaultAgentRuntime implements AgentRuntime {
     this.#assertUsable();
     if (this.writer.fatal !== undefined) throw this.writer.fatal;
     return this.writer.append(mapKernelEvent(this.options.sessionId, event));
+  }
+
+  #launchKernel(input: string, options?: { readonly signal?: AbortSignal }): void {
+    void this.#runKernel(input, options);
+  }
+
+  async #runKernel(input: string, options?: { readonly signal?: AbortSignal }): Promise<void> {
+    try {
+      await this.#kernel.startTurn(input, options);
+    } catch {
+      await this.#recordKernelFailure();
+    } finally {
+      this.#running = false;
+      this.#resumeQueuedFollowUps();
+    }
+  }
+
+  async #recordKernelFailure(): Promise<void> {
+    if (this.#disposed || this.writer.fatal !== undefined || this.writer.state.outcomeUnknown)
+      return;
+    const status = this.writer.state.turns.at(-1)?.status;
+    if (status !== "submitted" && status !== "running") return;
+    try {
+      await this.writer.append(
+        parseAgentRuntimeEvent({
+          type: "run_failed",
+          sessionId: this.options.sessionId,
+          code: "KERNEL_FAILURE",
+          message: "Kernel session failed",
+        }),
+      );
+    } catch {
+      // The writer retains a sanitized sticky failure for the next command boundary.
+    }
+  }
+
+  #resumeQueuedFollowUps(): void {
+    if (
+      this.#running ||
+      this.#disposed ||
+      this.writer.fatal !== undefined ||
+      this.writer.state.outcomeUnknown ||
+      this.writer.state.phase === "failed_terminal"
+    ) {
+      return;
+    }
+    const text = this.writer.state.queuedFollowUps[0];
+    if (text === undefined) return;
+    const status = this.writer.state.turns.at(-1)?.status;
+    if (status === "submitted" || status === "running") return;
+    this.#running = true;
+    void this.#claimFollowUp(text);
+  }
+
+  async #claimFollowUp(text: string): Promise<void> {
+    try {
+      await this.writer.append(
+        parseAgentRuntimeEvent({
+          type: "follow_up_started",
+          sessionId: this.options.sessionId,
+          text,
+        }),
+      );
+    } catch {
+      this.#running = false;
+      return;
+    }
+    this.#launchKernel(text);
+  }
+
+  resumeQueuedFollowUps(): void {
+    this.#resumeQueuedFollowUps();
   }
 
   #assertAvailable(): void {
@@ -155,7 +246,9 @@ export async function createAgentRuntime(
     );
   }
   try {
-    return new DefaultAgentRuntime(options, writer, feeds);
+    const runtime = new DefaultAgentRuntime(options, writer, feeds);
+    runtime.resumeQueuedFollowUps();
+    return runtime;
   } catch {
     throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
   }

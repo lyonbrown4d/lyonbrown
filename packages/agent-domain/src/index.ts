@@ -62,6 +62,7 @@ export {
   reduceAgentRuntimeEvent,
   type AgentRuntimePhase,
   type AgentRuntimeState,
+  type RuntimeActivityState,
   type RuntimeFailure,
   type RuntimeToolState,
   type RuntimeTurnState,

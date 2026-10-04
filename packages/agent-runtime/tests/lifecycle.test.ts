@@ -65,6 +65,23 @@ describe("agent runtime lifecycle", () => {
     store.close();
   });
 
+  test("sanitizes a kernel factory failure after opening the session", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    await expect(
+      createAgentRuntime({
+        sessionId: asSessionId("session-kernel-construction-failure"),
+        eventStore: runtimeEventStore(store),
+        createKernelSession: () => {
+          throw new Error("raw constructor secret");
+        },
+      }),
+    ).rejects.toMatchObject({ code: "KERNEL_FAILURE", message: "Kernel session failed" });
+    expect(await eventTypes(store, "session-kernel-construction-failure")).toEqual([
+      "session_opened",
+    ]);
+    store.close();
+  });
+
   test("rebuilds state from durable events without opening the session twice", async () => {
     const store = openEventStore({ testOnlyMemory: true });
     const firstKernel = new CapturingKernelFactory();
@@ -80,6 +97,7 @@ describe("agent runtime lifecycle", () => {
       await sink.append({ type: "run_completed", sessionId: "session-recover" });
     };
     await first.startTurn("persisted question");
+    await expect.poll(() => first.snapshot().phase).toBe("completed");
     const expected = first.snapshot();
     first.dispose();
     const recovered = await createAgentRuntime({
@@ -94,6 +112,64 @@ describe("agent runtime lifecycle", () => {
       (await eventTypes(store, "session-recover")).filter((type) => type === "session_opened"),
     ).toHaveLength(1);
     recovered.dispose();
+    store.close();
+  });
+
+  test("recovers a completed run's durable follow-up and starts it as the next turn", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    const sessionId = asSessionId("session-follow-up-recovery");
+    const events = [
+      { type: "session_opened", sessionId },
+      { type: "user_message_submitted", sessionId, text: "first" },
+      { type: "run_started", sessionId },
+      { type: "steering_submitted", sessionId, text: "focus" },
+      { type: "run_completed", sessionId },
+      { type: "follow_up_queued", sessionId, text: "second" },
+    ] as const;
+    await store.append(
+      sessionId,
+      0n,
+      events.map((event, index) => ({
+        eventId: `follow-up-${String(index)}`,
+        type: event.type,
+        payload: event,
+      })),
+    );
+    const starts: string[] = [];
+    const runtime = await createAgentRuntime({
+      sessionId,
+      eventStore: runtimeEventStore(store),
+      createEventId: sequentialEventIds("recovered"),
+      createKernelSession: ({ eventSink }) => ({
+        async startTurn(input) {
+          starts.push(input);
+          await eventSink.append({ type: "run_started", sessionId });
+          await eventSink.append({ type: "run_completed", sessionId });
+        },
+        steer: () => undefined,
+        followUp: () => undefined,
+        cancel: () => undefined,
+        subscribe: () => () => undefined,
+        dispose: () => undefined,
+      }),
+    });
+
+    await expect.poll(() => starts).toEqual(["second"]);
+    await expect.poll(() => runtime.snapshot().phase).toBe("completed");
+    expect(runtime.snapshot()).toMatchObject({
+      queuedFollowUps: [],
+      turns: [
+        { userText: "first", steering: ["focus"] },
+        { userText: "second", status: "completed" },
+      ],
+    });
+    expect(await eventTypes(store, sessionId)).toEqual([
+      ...events.map((event) => event.type),
+      "follow_up_started",
+      "run_started",
+      "run_completed",
+    ]);
+    runtime.dispose();
     store.close();
   });
 

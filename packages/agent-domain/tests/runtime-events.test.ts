@@ -33,6 +33,17 @@ describe("runtime event boundary", () => {
   });
 
   test.each([
+    { type: "steering_submitted", sessionId: "session-1", text: "focus" },
+    { type: "follow_up_queued", sessionId: "session-1", text: "summarize" },
+    { type: "follow_up_started", sessionId: "session-1", text: "summarize" },
+  ] as const)("accepts the durable control event $type", (input) => {
+    expect(parseAgentRuntimeEvent(input)).toEqual({
+      ...input,
+      sessionId: asSessionId("session-1"),
+    });
+  });
+
+  test.each([
     { value: { type: "unknown", sessionId: "session-1" }, reason: /event type/u },
     { value: { type: "__proto__", sessionId: "session-1" }, reason: /event type/u },
     {

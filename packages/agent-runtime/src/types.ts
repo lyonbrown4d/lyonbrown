@@ -30,8 +30,8 @@ export interface AgentRuntime {
   snapshot(): AgentRuntimeState;
   snapshots(): RuntimeSnapshotFeed;
   startTurn(input: string, options?: { readonly signal?: AbortSignal }): Promise<void>;
-  steer(input: string): void;
-  followUp(input: string): void;
+  steer(input: string): Promise<void>;
+  followUp(input: string): Promise<void>;
   cancel(): void;
   dispose(): void;
 }

@@ -154,6 +154,7 @@ describe("agent runtime", () => {
     });
 
     await runtime.startTurn("change it");
+    await expect.poll(() => runtime.snapshot().phase).toBe("failed_terminal");
     expect(runtime.snapshot()).toMatchObject({
       phase: "failed_terminal",
       outcomeUnknown: true,
@@ -180,9 +181,7 @@ describe("agent runtime", () => {
 
     await expect(feed.next()).resolves.toEqual({ value: undefined, done: true });
     await expect(runtime.startTurn("no")).rejects.toMatchObject({ code: "RUNTIME_DISPOSED" });
-    expect(() => {
-      runtime.steer("no");
-    }).toThrow(expect.objectContaining({ code: "RUNTIME_DISPOSED" }));
+    await expect(runtime.steer("no")).rejects.toMatchObject({ code: "RUNTIME_DISPOSED" });
     store.close();
   });
 
@@ -225,10 +224,13 @@ describe("agent runtime", () => {
       sessionId: asSessionId("session-controls"),
       eventStore: runtimeEventStore(store),
       createEventId: sequentialEventIds(),
-      createKernelSession: () => ({
+      createKernelSession: ({ eventSink }) => ({
         startTurn: () =>
           new Promise<void>((resolve) => {
             release = resolve;
+          }).then(async () => {
+            await eventSink.append({ type: "run_started", sessionId: "session-controls" });
+            await eventSink.append({ type: "run_completed", sessionId: "session-controls" });
           }),
         steer: (input) => {
           calls.push(`steer:${input}`);
@@ -247,12 +249,12 @@ describe("agent runtime", () => {
     await Promise.resolve();
 
     await expect(runtime.startTurn("second")).rejects.toMatchObject({ code: "SESSION_BUSY" });
-    runtime.steer("focus");
-    runtime.followUp("then summarize");
+    await runtime.steer("focus");
     runtime.cancel();
-    expect(calls).toEqual(["steer:focus", "follow:then summarize", "cancel"]);
+    expect(calls).toEqual(["steer:focus", "cancel"]);
     release?.();
     await active;
+    await expect.poll(() => runtime.snapshot().phase).toBe("completed");
 
     const aborted = new AbortController();
     aborted.abort();

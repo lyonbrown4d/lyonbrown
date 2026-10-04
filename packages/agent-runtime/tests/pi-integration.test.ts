@@ -52,6 +52,7 @@ test("runs the real Pi kernel through the durable runtime adapter", async () => 
   });
 
   await runtime.startTurn("question");
+  await expect.poll(() => runtime.snapshot().phase).toBe("completed");
 
   expect(runtime.snapshot()).toMatchObject({
     phase: "completed",

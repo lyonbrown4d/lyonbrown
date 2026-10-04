@@ -137,6 +137,36 @@ describe("runtime snapshot projection", () => {
     ]);
   });
 
+  test("projects durable steering, queued follow-ups, and usage on the owning activity", async () => {
+    const state = stateFrom([
+      { type: "session_opened" },
+      { type: "user_message_submitted", text: "first" },
+      { type: "run_started" },
+      { type: "turn_started", turn: 1 },
+      { type: "steering_submitted", text: "focus" },
+      { type: "usage_recorded", inputTokens: 2, outputTokens: 1, totalTokens: 3 },
+      { type: "turn_completed", turn: 1 },
+      { type: "run_completed" },
+      { type: "user_message_submitted", text: "second" },
+      { type: "run_started" },
+      { type: "turn_started", turn: 1 },
+      { type: "usage_recorded", inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+      { type: "follow_up_queued", text: "third" },
+    ]);
+
+    const snapshot = await createRuntimeHostAdapter(new FakeAgentRuntime(state)).snapshot();
+
+    expect(snapshot.queuedFollowUps).toEqual(["third"]);
+    expect(snapshot.turns[0]).toMatchObject({
+      steering: ["focus"],
+      activities: [{ usage: { input: 2, output: 1, cacheRead: 0 } }],
+    });
+    expect(snapshot.turns[1]).toMatchObject({
+      steering: [],
+      activities: [{ usage: { input: 5, output: 3, cacheRead: 0 } }],
+    });
+  });
+
   test.each([
     [[], TurnStatus.TURN_STATUS_PENDING],
     [[{ type: "run_started" }, { type: "turn_started", turn: 1 }], TurnStatus.TURN_STATUS_RUNNING],
@@ -164,6 +194,19 @@ describe("runtime snapshot projection", () => {
     ]);
     const snapshot = await createRuntimeHostAdapter(new FakeAgentRuntime(state)).snapshot();
     expect(snapshot.turns[0]?.status).toBe(expected);
+  });
+
+  test("keeps a cancelled empty activity in preparing phase", async () => {
+    const state = stateFrom([
+      { type: "session_opened" },
+      { type: "user_message_submitted", text: "question" },
+      { type: "run_started" },
+      { type: "turn_started", turn: 1 },
+      { type: "run_cancelled" },
+    ]);
+
+    const snapshot = await createRuntimeHostAdapter(new FakeAgentRuntime(state)).snapshot();
+    expect(snapshot.turns[0]?.activities[0]?.phase).toBe(ActivityPhase.ACTIVITY_PHASE_PREPARING);
   });
 
   test.each([

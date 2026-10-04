@@ -55,7 +55,16 @@ test("StartTurn persists domain events before the adapter streams the projected 
     ok: true,
   });
   await expect(firstEvent).resolves.toMatchObject({ value: { revision: 2n } });
-  const finalEvent = await iterator.next();
+  let finalEvent = await iterator.next();
+  for (let remaining = 8; remaining > 0; remaining -= 1) {
+    if (
+      !finalEvent.done &&
+      finalEvent.value.snapshot?.phase === RuntimePhase.RUNTIME_PHASE_COMPLETED
+    ) {
+      break;
+    }
+    finalEvent = await iterator.next();
+  }
   expect(finalEvent).toMatchObject({
     done: false,
     value: {
@@ -95,6 +104,50 @@ test("StartTurn persists domain events before the adapter streams the projected 
   store.close();
 });
 
+test("StartTurn returns its receipt before a blocked kernel finishes", async () => {
+  const store = openEventStore({ testOnlyMemory: true });
+  let release: (() => void) | undefined;
+  let entered: (() => void) | undefined;
+  const kernelEntered = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const runtime = await createAgentRuntime({
+    sessionId: asSessionId("adapter-background"),
+    eventStore: createRuntimeEventStorePort(store),
+    createKernelSession: ({ eventSink }) => ({
+      async startTurn() {
+        entered?.();
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        await eventSink.append({ type: "run_started", sessionId: "adapter-background" });
+        await eventSink.append({ type: "run_completed", sessionId: "adapter-background" });
+      },
+      steer: () => undefined,
+      followUp: () => undefined,
+      cancel: () => undefined,
+      subscribe: () => () => undefined,
+      dispose: () => undefined,
+    }),
+  });
+  const host = createRuntimeHostAdapter(runtime);
+  let returned = false;
+  const receipt = host.execute({ kind: "start-turn", text: "question" }).then((result) => {
+    returned = true;
+    return result;
+  });
+
+  await kernelEntered;
+  await expect(receipt).resolves.toEqual({ ok: true });
+  expect(returned).toBe(true);
+  expect(runtime.snapshot().revision).toBe(2n);
+
+  release?.();
+  await expect.poll(() => runtime.snapshot().phase).toBe("completed");
+  runtime.dispose();
+  store.close();
+});
+
 test("a recovered unresolved tool rejects a new start without invoking the replacement kernel", async () => {
   const store = openEventStore({ testOnlyMemory: true });
   const eventStore = createRuntimeEventStorePort(store);
@@ -123,6 +176,7 @@ test("a recovered unresolved tool rejects a new start without invoking the repla
     }),
   });
   await first.startTurn("build");
+  await expect.poll(() => first.snapshot().tools.at(-1)?.status).toBe("running");
   first.dispose();
 
   let replacementStarts = 0;

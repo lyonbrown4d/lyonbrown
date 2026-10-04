@@ -112,12 +112,12 @@ export class FakeAgentRuntime implements AgentRuntime {
     this.starts.push(input);
   }
 
-  steer(input: string): void {
+  async steer(input: string): Promise<void> {
     if (this.controlError !== undefined) throw this.controlError;
     this.steering.push(input);
   }
 
-  followUp(input: string): void {
+  async followUp(input: string): Promise<void> {
     if (this.controlError !== undefined) throw this.controlError;
     this.followUps.push(input);
   }

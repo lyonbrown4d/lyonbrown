@@ -18,6 +18,9 @@ export interface RuntimeUsage {
 export type AgentRuntimeEvent =
   | ({ readonly type: "session_opened" } & RuntimeEventBase)
   | ({ readonly type: "user_message_submitted"; readonly text: string } & RuntimeEventBase)
+  | ({ readonly type: "steering_submitted"; readonly text: string } & RuntimeEventBase)
+  | ({ readonly type: "follow_up_queued"; readonly text: string } & RuntimeEventBase)
+  | ({ readonly type: "follow_up_started"; readonly text: string } & RuntimeEventBase)
   | ({ readonly type: "run_started" } & RuntimeEventBase)
   | ({ readonly type: "run_completed" } & RuntimeEventBase)
   | ({ readonly type: "run_cancelled" } & RuntimeEventBase)
@@ -54,6 +57,9 @@ export type AgentRuntimeEvent =
 const FIELDS_BY_TYPE: Readonly<Record<AgentRuntimeEvent["type"], ReadonlySet<string>>> = {
   session_opened: new Set(["type", "sessionId"]),
   user_message_submitted: new Set(["type", "sessionId", "text"]),
+  steering_submitted: new Set(["type", "sessionId", "text"]),
+  follow_up_queued: new Set(["type", "sessionId", "text"]),
+  follow_up_started: new Set(["type", "sessionId", "text"]),
   run_started: new Set(["type", "sessionId"]),
   run_completed: new Set(["type", "sessionId"]),
   run_cancelled: new Set(["type", "sessionId"]),
@@ -142,6 +148,9 @@ export function parseAgentRuntimeEvent(value: unknown): AgentRuntimeEvent {
     case "run_cancelled":
       return Object.freeze({ type, sessionId });
     case "user_message_submitted":
+    case "steering_submitted":
+    case "follow_up_queued":
+    case "follow_up_started":
       return Object.freeze({ type, sessionId, text: text(record, "text") });
     case "turn_started":
     case "turn_completed":

@@ -17,7 +17,8 @@ import {
 
 type RuntimeState = ReturnType<AgentRuntime["snapshot"]>;
 type RuntimeTurn = RuntimeState["turns"][number];
-type RuntimeTool = RuntimeState["tools"][number];
+type RuntimeActivity = RuntimeTurn["activities"][number];
+type RuntimeTool = RuntimeActivity["tools"][number];
 
 const MAX_UINT32 = 0xffff_ffff;
 const MAX_UINT64 = 0xffff_ffff_ffff_ffffn;
@@ -41,66 +42,54 @@ export function assertProtocolRevision(value: bigint): bigint {
 function projectTrustedState(state: RuntimeState): RuntimeSnapshot {
   const revision = assertProtocolRevision(state.revision);
   const sessionId = requiredIdentifier(state.sessionId);
-  const tools = requireArray(state.tools).map(projectTool);
-  const usage = projectUsage(state.usage);
-  const turns = requireArray(state.turns).map((turn, index) =>
-    projectTurn(turn, index, tools, usage, index === state.turns.length - 1),
-  );
+  requireArray(state.tools);
+  projectUsage(state.usage);
+  const turns = requireArray(state.turns).map(projectTurn);
+  const queuedFollowUps = requireArray(state.queuedFollowUps).map(requiredText);
   requireCount(state.assistantTextBytes);
   if (typeof state.outcomeUnknown !== "boolean") throw new Error("invalid state");
   if (state.outcomeUnknown && state.phase !== "failed_terminal") throw new Error("invalid state");
-  if (tools.length > 0 && turns.at(-1)?.activities.length !== 1) throw new Error("invalid tools");
   return RuntimeSnapshot.create({
     protocolVersion: PROTOCOL_VERSION,
     revision,
     phase: runtimePhase(state),
     sessionId,
     turns,
-    queuedFollowUps: [],
+    queuedFollowUps,
     lastError: projectLastError(state.lastError),
     modelSelection: AUTO_SELECTION,
   });
 }
 
-function projectTurn(
-  turn: RuntimeTurn,
-  index: number,
-  currentTools: readonly ToolActivity[],
-  currentUsage: TokenUsage | undefined,
-  isCurrent: boolean,
-): TurnSnapshot {
+function projectTurn(turn: RuntimeTurn, index: number): TurnSnapshot {
   const turnId = `turn-${String(index + 1)}`;
   const status = turnStatus(turn.status);
-  const step = turn.turn;
-  const activities =
-    step === undefined
-      ? []
-      : [projectActivity(turn, step, turnId, currentTools, currentUsage, isCurrent)];
+  const activities = requireArray(turn.activities).map((activity) =>
+    projectActivity(activity, turn.status, turnId),
+  );
+  if (turn.turn !== undefined) requireCount(turn.turn);
   return TurnSnapshot.create({
     turnId,
     userText: requiredText(turn.userText),
     assistantText: requiredText(turn.assistantText),
     status,
-    steering: [],
+    steering: requireArray(turn.steering).map(requiredText),
     activities,
   });
 }
 
 function projectActivity(
-  turn: RuntimeTurn,
-  rawStep: number,
+  activity: RuntimeActivity,
+  turnStatusValue: RuntimeTurn["status"],
   turnId: string,
-  currentTools: readonly ToolActivity[],
-  currentUsage: TokenUsage | undefined,
-  isCurrent: boolean,
 ): ActivitySnapshot {
-  const step = requireCount(rawStep);
-  const tools = isCurrent ? currentTools : [];
-  const usage = isCurrent ? currentUsage : undefined;
+  const step = requireCount(activity.turn);
+  const tools = requireArray(activity.tools).map(projectTool);
+  const usage = projectUsage(activity.usage);
   return ActivitySnapshot.create({
     stepId: `${turnId}-step-${String(step)}`,
-    phase: activityPhase(turn, tools),
-    assistantText: requiredText(turn.assistantText),
+    phase: activityPhase(turnStatusValue, activity, tools),
+    assistantText: requiredText(activity.assistantText),
     usage,
     tools: [...tools],
   });
@@ -172,30 +161,32 @@ function turnStatus(status: RuntimeTurn["status"]): TurnStatus {
   }
 }
 
-function activityPhase(turn: RuntimeTurn, tools: readonly ToolActivity[]): ActivityPhase {
-  switch (turn.status) {
-    case "submitted":
-      return ActivityPhase.ACTIVITY_PHASE_PREPARING;
+function activityPhase(
+  turnStatusValue: RuntimeTurn["status"],
+  activity: RuntimeActivity,
+  tools: readonly ToolActivity[],
+): ActivityPhase {
+  if (turnStatusValue === "failed") return ActivityPhase.ACTIVITY_PHASE_FAILED;
+  if (turnStatusValue === "cancelled") {
+    if (tools.some((tool) => tool.state === ToolActivityState.TOOL_ACTIVITY_STATE_RUNNING)) {
+      return ActivityPhase.ACTIVITY_PHASE_RUNNING_TOOL;
+    }
+    return activity.assistantText.length === 0
+      ? ActivityPhase.ACTIVITY_PHASE_PREPARING
+      : ActivityPhase.ACTIVITY_PHASE_STREAMING;
+  }
+  switch (activity.status) {
+    case "completed":
+      return ActivityPhase.ACTIVITY_PHASE_COMPLETED;
     case "running":
       if (tools.some((tool) => tool.state === ToolActivityState.TOOL_ACTIVITY_STATE_RUNNING)) {
         return ActivityPhase.ACTIVITY_PHASE_RUNNING_TOOL;
       }
-      return turn.assistantText.length === 0
-        ? ActivityPhase.ACTIVITY_PHASE_PREPARING
-        : ActivityPhase.ACTIVITY_PHASE_STREAMING;
-    case "completed":
-      return ActivityPhase.ACTIVITY_PHASE_COMPLETED;
-    case "failed":
-      return ActivityPhase.ACTIVITY_PHASE_FAILED;
-    case "cancelled":
-      if (tools.some((tool) => tool.state === ToolActivityState.TOOL_ACTIVITY_STATE_RUNNING)) {
-        return ActivityPhase.ACTIVITY_PHASE_RUNNING_TOOL;
-      }
-      return turn.assistantText.length === 0
+      return activity.assistantText.length === 0
         ? ActivityPhase.ACTIVITY_PHASE_PREPARING
         : ActivityPhase.ACTIVITY_PHASE_STREAMING;
     default:
-      return exhaustive(turn.status);
+      return exhaustive(activity.status);
   }
 }
 
