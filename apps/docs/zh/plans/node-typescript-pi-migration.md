@@ -25,11 +25,12 @@ Lyonbrown 将从当前 Rust 实现迁移到 Node.js 24 LTS、pnpm、ESM 与 stri
 ### 包
 
 - `packages/protocol`：protobuf 源、生成的 gRPC binding、wire DTO、版本策略与兼容性 fixture。
-- `packages/domain`：领域事件、标识符、不变量与纯状态转换。
-- `packages/kernel`：编排 port 与确定性 runtime 状态机。
-- `packages/client`：认证 gRPC client、重连/replay 与 client 侧 epoch fencing。
+- `packages/agent-domain`：领域事件、标识符、不变量与纯状态转换。
+- `packages/kernel-pi`：Pi Agent Core / Pi AI 的隔离适配层。
+- `packages/agent-runtime`：持久化优先的编排、恢复与 Snapshot feed。
+- `packages/agent-client`：认证 gRPC client、重连/replay 与 client 侧 epoch fencing。
 - `packages/local-control-plane`：发现、endpoint 发布、进程生命周期与操作系统访问控制适配器。
-- `packages/storage`：EventStore、snapshot、migration、幂等与恢复。
+- `packages/event-store`：EventStore、migration、幂等与恢复。
 - `packages/tooling`：工具/MCP 适配、策略执行、审批与审计元数据。
 - `packages/ui-model`：TUI/desktop 共用且与 Pi 无关的 view model、projection、command 与交互契约。
 - `packages/local-model`：`node-llama-cpp` 集成、模型缓存/设置、下载生命周期与激活 fencing。
@@ -42,7 +43,7 @@ Lyonbrown 将从当前 Rust 实现迁移到 Node.js 24 LTS、pnpm、ESM 与 stri
 - Pi TUI（`@earendil-works/pi-tui`）为 `apps/agent` 提供终端渲染原语。
 - `node-llama-cpp` 提供默认本地推理适配器。
 - `@grpc/grpc-js` 与生成的 protobuf binding 保持 daemon/client 边界。
-- Electron + React 实现桌面 shell 和 UI，并消费 `packages/client` 与 `packages/ui-model`。
+- Electron + React 实现桌面 shell 和 UI，并消费 `packages/agent-client` 与 `packages/ui-model`。
 
 ## 必须保持的行为
 
@@ -72,11 +73,11 @@ Lyonbrown 将从当前 Rust 实现迁移到 Node.js 24 LTS、pnpm、ESM 与 stri
 
 ### P2 — Domain、EventStore 与 Storage
 
-将标识符、事件、reducer、snapshot、migration、replay 和崩溃恢复迁入 `packages/domain`、`packages/storage`。用 Rust fixture 比较事件流和 projection，包括损坏尾部与重复投递场景。
+将标识符、事件、reducer、snapshot、migration、replay 和崩溃恢复迁入 `packages/agent-domain`、`packages/event-store`。用 Rust fixture 比较事件流和 projection，包括损坏尾部与重复投递场景。
 
 ### P3 — Kernel 与 Pi 执行适配器
 
-实现 `packages/kernel`，适配 Pi Agent Core 和 Pi AI 且不暴露 Pi 类型。迁移 context、skill、tool、MCP、approval、secret/privacy、取消与错误语义；为每类执行场景验证确定性领域事件。
+实现 `packages/kernel-pi` 与 `packages/agent-runtime`，适配 Pi Agent Core 和 Pi AI 且不暴露 Pi 类型。迁移 context、skill、tool、MCP、approval、secret/privacy、取消与错误语义；为每类执行场景验证确定性领域事件。
 
 ### P4 — `agentd`、gRPC 与本地模型
 

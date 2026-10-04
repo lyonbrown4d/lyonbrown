@@ -25,11 +25,12 @@ The non-negotiable invariants are:
 ### Packages
 
 - `packages/protocol`: protobuf sources, generated gRPC bindings, wire DTOs, versioning, and compatibility fixtures.
-- `packages/domain`: domain events, identifiers, invariants, and pure state transitions.
-- `packages/kernel`: orchestration ports and the deterministic runtime state machine.
-- `packages/client`: authenticated gRPC client, reconnect/replay behavior, and client-side epoch fencing.
+- `packages/agent-domain`: domain events, identifiers, invariants, and pure state transitions.
+- `packages/kernel-pi`: isolated Pi Agent Core and Pi AI adapters.
+- `packages/agent-runtime`: persistence-first orchestration, recovery, and the Snapshot feed.
+- `packages/agent-client`: authenticated gRPC client, reconnect/replay behavior, and client-side epoch fencing.
 - `packages/local-control-plane`: discovery, endpoint publication, process lifecycle, and OS-specific access-control adapters.
-- `packages/storage`: EventStore, snapshots, migrations, idempotency, and recovery.
+- `packages/event-store`: EventStore, migrations, idempotency, and recovery.
 - `packages/tooling`: tool/MCP adapters, policy enforcement, approvals, and audit metadata.
 - `packages/ui-model`: Pi-independent view models, projections, commands, and interaction contracts shared by TUI and desktop.
 - `packages/local-model`: `node-llama-cpp` integration, model cache/setup, download lifecycle, and activation fencing.
@@ -42,7 +43,7 @@ The non-negotiable invariants are:
 - Pi TUI (`@earendil-works/pi-tui`) supplies terminal rendering primitives for `apps/agent`.
 - `node-llama-cpp` supplies the default local inference adapter.
 - `@grpc/grpc-js` and generated protobuf bindings preserve the daemon/client boundary.
-- Electron + React implement the desktop shell and UI while consuming `packages/client` and `packages/ui-model`.
+- Electron + React implement the desktop shell and UI while consuming `packages/agent-client` and `packages/ui-model`.
 
 ## Required behavioral parity
 
@@ -72,11 +73,11 @@ Create `packages/protocol`, generate deterministic TypeScript gRPC bindings, imp
 
 ### P2 — Domain, EventStore, and storage
 
-Port identifiers, events, reducers, snapshots, migrations, replay, and crash recovery into `packages/domain` and `packages/storage`. Compare event streams and projections against Rust fixtures, including corrupted-tail and duplicate-delivery cases.
+Port identifiers, events, reducers, snapshots, migrations, replay, and crash recovery into `packages/agent-domain` and `packages/event-store`. Compare event streams and projections against Rust fixtures, including corrupted-tail and duplicate-delivery cases.
 
 ### P3 — Kernel and Pi execution adapters
 
-Implement `packages/kernel`; adapt Pi Agent Core and Pi AI without exposing Pi types. Port context, skills, tools, MCP, approval, secret/privacy, cancellation, and error semantics. Validate deterministic domain events for every execution scenario.
+Implement `packages/kernel-pi` and `packages/agent-runtime`; adapt Pi Agent Core and Pi AI without exposing Pi types. Port context, skills, tools, MCP, approval, secret/privacy, cancellation, and error semantics. Validate deterministic domain events for every execution scenario.
 
 ### P4 — `agentd`, gRPC, and local models
 

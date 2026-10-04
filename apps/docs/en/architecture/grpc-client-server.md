@@ -203,11 +203,12 @@ paths.
 ## TypeScript migration status
 
 On the current migration branch, the protocol, domain model, UI projection,
-SQLite EventStore, Pi Kernel adapter, and fail-closed `local-control-plane`
-contract are covered by TypeScript tests. The `agent-runtime`, `agent-client`,
-and Node `agentd` gRPC vertical slices are in progress. The secure native
-provider, real discover/reuse/spawn flow, releasable daemon composition, and
-TUI/GUI product integration remain explicit release blockers.
+SQLite EventStore, Pi Kernel adapter, `agent-runtime`, authenticated
+`agent-client`, and Node `agentd` gRPC vertical slices are covered by TypeScript
+tests. `local-control-plane` remains fail closed when its native capability is
+missing. The secure native provider, real discover/reuse/spawn flow, releasable
+daemon composition, and TUI/GUI product integration remain explicit release
+blockers.
 
 > The remainder of this section is a product acceptance baseline and a behavior
 > oracle from the previous implementation. It does not mean those capabilities
