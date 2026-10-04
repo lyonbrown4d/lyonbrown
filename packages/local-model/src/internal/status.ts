@@ -25,12 +25,21 @@ export const statusFor = (
           : [],
 });
 
-export const validProgress = (downloaded: number, total: number | null): boolean =>
+export const validProgress = (
+  downloaded: number,
+  total: number | null,
+  previousDownloaded: number,
+  previousTotal: number | null,
+): boolean =>
   Number.isSafeInteger(downloaded) &&
-  downloaded >= 0 &&
+  downloaded >= previousDownloaded &&
   downloaded <= DEFAULT_PRESET.maxBytes &&
   (total === null ||
-    (Number.isSafeInteger(total) && total >= downloaded && total <= DEFAULT_PRESET.maxBytes));
+    (Number.isSafeInteger(total) &&
+      total >= downloaded &&
+      total <= DEFAULT_PRESET.maxBytes &&
+      (previousTotal === null || total >= previousTotal))) &&
+  !(previousTotal !== null && total === null);
 
 export const cloneStatus = (status: LocalModelStatus): LocalModelStatus => ({
   ...status,

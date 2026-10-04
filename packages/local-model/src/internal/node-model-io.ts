@@ -1,12 +1,13 @@
-import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
-import { lstat, mkdir, rename, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { createModelDownloader } from "node-llama-cpp";
 import lockfile from "proper-lockfile";
 
+import type {
+  NativeInstallLockAnchor,
+  NativeModelStagingFile,
+  NativeModelStorageCapability,
+} from "../native-storage.js";
 import { MODEL_DOWNLOAD_URI } from "./catalog.js";
 import type {
   DownloadArtifact,
@@ -15,8 +16,10 @@ import type {
   LocalModelIo,
   ModelPreset,
 } from "./contracts.js";
+import { verifyModelFile } from "./file-verification.js";
+import { DEFAULT_MODEL_IDENTITY } from "./model-identity.js";
 
-interface ModelDownloaderApi {
+export interface ModelDownloaderApi {
   createModelDownloader(options: {
     modelUri: string;
     dirPath: string;
@@ -29,63 +32,48 @@ interface ModelDownloaderApi {
   }): Promise<{ download(options?: { signal?: AbortSignal }): Promise<string> }>;
 }
 
+export type ModelFileVerifier = typeof verifyModelFile;
+export type ProcessLockAcquirer = typeof acquireProcessLock;
+
 interface NativeArtifact {
   readonly operationId: string;
-  readonly stagingDirectory: string;
-  readonly filePath: string;
+  readonly staging: NativeModelStagingFile;
 }
 
 export class NodeModelIo implements LocalModelIo {
   private readonly artifacts = new WeakMap<DownloadArtifact, NativeArtifact>();
 
   constructor(
-    private readonly modelsDirectory: string,
+    private readonly storage: NativeModelStorageCapability,
     private readonly api: ModelDownloaderApi = { createModelDownloader },
+    private readonly verifyFile: ModelFileVerifier = verifyModelFile,
+    private readonly lockProcess: ProcessLockAcquirer = acquireProcessLock,
   ) {}
 
   async inspectInstalled(preset: ModelPreset, signal: AbortSignal): Promise<boolean> {
-    const destination = this.destination(preset);
-    try {
-      const metadata = await lstat(destination);
-      if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > preset.maxBytes) {
-        return false;
-      }
-      return (await this.digest(destination, signal)) === preset.sha256;
-    } catch (error) {
-      if (isNotFound(error)) return false;
-      throw new Error("model_inspection_failed");
-    }
+    let verified = false;
+    const result = await this.storage.withInstalledFile(
+      DEFAULT_MODEL_IDENTITY,
+      signal,
+      async (filePath) => {
+        await this.verifyFile(filePath, preset, signal);
+        verified = true;
+        return true;
+      },
+    );
+    return result.kind === "present" && result.value === true && verified;
   }
 
   async acquireInstallLock(preset: ModelPreset, signal: AbortSignal): Promise<InstallLockLease> {
-    await mkdir(this.modelsDirectory, { recursive: true });
-    const target = join(this.modelsDirectory, `.${preset.id}.install`);
-    await writeFile(target, "", { flag: "a" });
-    for (;;) {
-      this.throwIfAborted(signal);
-      try {
-        const release = await lockfile.lock(target, {
-          realpath: false,
-          retries: 0,
-          stale: 30_000,
-          update: 10_000,
-        });
-        let released = false;
-        return {
-          async release(): Promise<void> {
-            if (released) return;
-            released = true;
-            await release();
-          },
-        };
-      } catch (error) {
-        if (!isLockContended(error)) throw new Error("model_install_lock_failed");
-        try {
-          await delay(50, undefined, { signal });
-        } catch {
-          throw new Error("model_download_cancelled");
-        }
-      }
+    void preset;
+    throwIfAborted(signal);
+    const anchor = await this.storage.acquireInstallLockAnchor(DEFAULT_MODEL_IDENTITY, signal);
+    try {
+      const releaseLock = await anchor.withLockTarget((target) => this.lockProcess(target, signal));
+      return combineLockReleases(releaseLock, anchor);
+    } catch (error) {
+      await releaseAnchorQuietly(anchor);
+      throw error;
     }
   }
 
@@ -97,9 +85,62 @@ export class NodeModelIo implements LocalModelIo {
       onProgress: (progress: DownloadProgress) => void;
     },
   ): Promise<DownloadArtifact> {
-    await mkdir(this.modelsDirectory, { recursive: true });
-    const stagingDirectory = join(this.modelsDirectory, `.staging-${randomUUID()}`);
-    await mkdir(stagingDirectory, { recursive: false });
+    const staging = await this.storage.createStagingFile(
+      DEFAULT_MODEL_IDENTITY,
+      request.operationId,
+      request.signal,
+    );
+    try {
+      await staging.withFilePath((filePath, directoryPath) =>
+        this.downloadToPath(preset, request, filePath, directoryPath),
+      );
+      const artifact = Object.freeze({ operationId: request.operationId, token: Symbol() });
+      this.artifacts.set(artifact, { operationId: request.operationId, staging });
+      return artifact;
+    } catch (error) {
+      await staging.cleanup();
+      throw error;
+    }
+  }
+
+  async verify(
+    artifact: DownloadArtifact,
+    preset: ModelPreset,
+    signal: AbortSignal,
+  ): Promise<number> {
+    const native = this.requireArtifact(artifact);
+    let verifiedBytes: number | undefined;
+    const returned = await native.staging.withFilePath(async (filePath) => {
+      verifiedBytes = await this.verifyFile(filePath, preset, signal);
+      return verifiedBytes;
+    });
+    if (verifiedBytes === undefined || returned !== verifiedBytes) {
+      throw new Error("model_integrity_failed");
+    }
+    return verifiedBytes;
+  }
+
+  async activate(artifact: DownloadArtifact): Promise<void> {
+    await this.requireArtifact(artifact).staging.activate();
+  }
+
+  async cleanup(artifact: DownloadArtifact | undefined): Promise<void> {
+    if (artifact === undefined) return;
+    const native = this.artifacts.get(artifact);
+    if (native === undefined) return;
+    this.artifacts.delete(artifact);
+    await native.staging.cleanup();
+  }
+
+  private async downloadToPath(
+    preset: ModelPreset,
+    request: {
+      readonly signal: AbortSignal;
+      readonly onProgress: (progress: DownloadProgress) => void;
+    },
+    expectedPath: string,
+    directoryPath: string,
+  ): Promise<void> {
     const controller = new AbortController();
     const forwardAbort = () => {
       controller.abort(request.signal.reason);
@@ -112,7 +153,7 @@ export class NodeModelIo implements LocalModelIo {
     try {
       const downloader = await this.api.createModelDownloader({
         modelUri: MODEL_DOWNLOAD_URI,
-        dirPath: stagingDirectory,
+        dirPath: directoryPath,
         fileName: preset.filename,
         showCliProgress: false,
         skipExisting: false,
@@ -138,56 +179,13 @@ export class NodeModelIo implements LocalModelIo {
           request.onProgress({ downloadedBytes: downloadedSize, totalBytes: totalSize });
         },
       });
-      const filePath = resolve(await downloader.download({ signal: controller.signal }));
-      this.throwIfAborted(controller.signal);
-      this.throwIfAborted(request.signal);
-      const expectedPath = resolve(stagingDirectory, preset.filename);
-      if (filePath !== expectedPath) throw new Error("model_download_target_invalid");
-      const artifact = Object.freeze({ operationId: request.operationId, token: Symbol() });
-      this.artifacts.set(artifact, {
-        operationId: request.operationId,
-        stagingDirectory,
-        filePath,
-      });
-      return artifact;
-    } catch (error) {
-      await rm(stagingDirectory, { recursive: true, force: true });
-      throw error;
+      const returnedPath = await downloader.download({ signal: controller.signal });
+      throwIfAborted(controller.signal);
+      throwIfAborted(request.signal);
+      if (returnedPath !== expectedPath) throw new Error("model_download_target_invalid");
     } finally {
       request.signal.removeEventListener("abort", forwardAbort);
     }
-  }
-
-  async verify(
-    artifact: DownloadArtifact,
-    preset: ModelPreset,
-    signal: AbortSignal,
-  ): Promise<number> {
-    const native = this.requireArtifact(artifact);
-    const metadata = await lstat(native.filePath);
-    if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > preset.maxBytes) {
-      throw new Error("model_integrity_failed");
-    }
-    const digest = await this.digest(native.filePath, signal);
-    if (digest !== preset.sha256) throw new Error("model_integrity_failed");
-    return metadata.size;
-  }
-
-  async activate(artifact: DownloadArtifact, preset: ModelPreset): Promise<void> {
-    const native = this.requireArtifact(artifact);
-    await rename(native.filePath, this.destination(preset));
-  }
-
-  async cleanup(artifact: DownloadArtifact | undefined): Promise<void> {
-    if (artifact === undefined) return;
-    const native = this.artifacts.get(artifact);
-    if (native === undefined) return;
-    this.artifacts.delete(artifact);
-    await rm(native.stagingDirectory, { recursive: true, force: true });
-  }
-
-  private destination(preset: ModelPreset): string {
-    return join(this.modelsDirectory, preset.filename);
   }
 
   private requireArtifact(artifact: DownloadArtifact): NativeArtifact {
@@ -197,23 +195,61 @@ export class NodeModelIo implements LocalModelIo {
     }
     return native;
   }
-
-  private async digest(path: string, signal?: AbortSignal): Promise<string> {
-    const hash = createHash("sha256");
-    for await (const chunk of createReadStream(path)) {
-      if (signal?.aborted) throw new Error("model_download_cancelled");
-      hash.update(chunk as Buffer);
-    }
-    return hash.digest("hex");
-  }
-
-  private throwIfAborted(signal: AbortSignal): void {
-    if (signal.aborted) throw new Error("model_download_cancelled");
-  }
 }
 
-const isNotFound = (error: unknown): boolean =>
-  typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+const acquireProcessLock = async (
+  target: string,
+  signal: AbortSignal,
+): Promise<() => Promise<void>> => {
+  for (;;) {
+    throwIfAborted(signal);
+    try {
+      return await lockfile.lock(target, {
+        realpath: false,
+        retries: 0,
+        stale: 30_000,
+        update: 10_000,
+      });
+    } catch (error) {
+      if (!isLockContended(error)) throw new Error("model_install_lock_failed");
+      try {
+        await delay(50, undefined, { signal });
+      } catch {
+        throw new Error("model_download_cancelled");
+      }
+    }
+  }
+};
+
+const combineLockReleases = (
+  releaseLock: () => Promise<void>,
+  anchor: NativeInstallLockAnchor,
+): InstallLockLease => {
+  let released = false;
+  return {
+    async release(): Promise<void> {
+      if (released) return;
+      released = true;
+      try {
+        await releaseLock();
+      } finally {
+        await anchor.release();
+      }
+    },
+  };
+};
+
+const releaseAnchorQuietly = async (anchor: NativeInstallLockAnchor): Promise<void> => {
+  try {
+    await anchor.release();
+  } catch {
+    // The public manager sanitizes privileged storage failures.
+  }
+};
+
+const throwIfAborted = (signal: AbortSignal): void => {
+  if (signal.aborted) throw new Error("model_download_cancelled");
+};
 
 const isLockContended = (error: unknown): boolean =>
   typeof error === "object" && error !== null && "code" in error && error.code === "ELOCKED";

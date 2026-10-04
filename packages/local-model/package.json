@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --coverage && tsx scripts/check-coverage.ts",
     "test:prebuild-smoke": "tsx scripts/prebuild-smoke.ts",
-    "build": "pnpm clean && tsc -p tsconfig.build.json"
+    "build": "pnpm clean && tsc -p tsconfig.build.json && tsx scripts/check-public-api.ts"
   },
   "engines": {
     "node": ">=24.15.0 <25",

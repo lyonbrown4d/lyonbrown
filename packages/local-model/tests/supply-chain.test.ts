@@ -8,6 +8,14 @@ const repositoryRoot = new URL("../../../", import.meta.url);
 describe("node-llama-cpp supply-chain policy", () => {
   it("keeps the root entry path-free and requires an explicit secure composition capability", async () => {
     const rootEntry = await readFile(new URL("src/index.ts", packageRoot), "utf8");
+    const composition = await readFile(
+      new URL("src/internal/composed-service.ts", packageRoot),
+      "utf8",
+    );
+    const declarationCheck = await readFile(
+      new URL("scripts/check-public-api.ts", packageRoot),
+      "utf8",
+    );
     const manifest = JSON.parse(await readFile(new URL("package.json", packageRoot), "utf8")) as {
       exports?: Record<string, unknown>;
     };
@@ -15,6 +23,10 @@ describe("node-llama-cpp supply-chain policy", () => {
     expect(rootEntry).not.toContain("createDefaultLocalModelService");
     expect(rootEntry).not.toContain("factory");
     expect(manifest.exports?.["./composition"]).toBeDefined();
+    expect(composition).toContain("new NodeModelIo(");
+    expect(composition).toContain("createNodeLlamaEngine");
+    expect(declarationCheck).toContain("dist/index.d.ts");
+    expect(declarationCheck).toContain("filePath");
   });
 
   it("pins node-llama-cpp as a required runtime dependency", async () => {

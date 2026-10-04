@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { LocalModelPhase, LocalModelService } from "../src/index.js";
+import { DEFAULT_PRESET } from "../src/internal/catalog.js";
 import { createLocalModelManager } from "../src/internal/manager.js";
 import { artifact, Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.js";
 
@@ -45,7 +46,7 @@ describe("explicit background download lifecycle", () => {
     expect(io.downloadCalls).toBe(1);
   });
 
-  it("ignores invalid or late progress and isolates observers", async () => {
+  it("aborts invalid progress, fails closed, and isolates observers", async () => {
     const io = new FakeModelIo();
     const service = await createMissingService(io, () => "op-1");
     const unsubscribe = service.subscribe(() => {
@@ -54,18 +55,30 @@ describe("explicit background download lifecycle", () => {
     service.startDownload();
     await waitForPhase(service, "downloading");
     io.downloads[0]?.onProgress({ downloadedBytes: -1, totalBytes: 100 });
-    io.downloads[0]?.onProgress({ downloadedBytes: 200, totalBytes: 100 });
-    io.downloads[0]?.onProgress({ downloadedBytes: 1, totalBytes: Number.NaN });
-    expect(service.status().downloadedBytes).toBe(0);
-    io.downloads[0]?.onProgress({ downloadedBytes: 1, totalBytes: null });
-    expect(service.status().totalBytes).toBeNull();
+    expect(io.downloads[0]?.signal.aborted).toBe(true);
     unsubscribe();
     io.downloads[0]?.completion.resolve(artifact("op-1"));
-    await waitForPhase(service, "ready");
+    await waitForPhase(service, "failed");
     io.downloads[0]?.onProgress({ downloadedBytes: 50, totalBytes: 100 });
-    expect(service.status().phase).toBe("ready");
-    expect(service.startDownload()).toEqual({ kind: "already-ready" });
+    expect(service.status().phase).toBe("failed");
     expect(service.cancelDownload("op-1")).toEqual({ kind: "no-active-operation" });
+  });
+
+  it("keeps a manager-owned hard limit when a malicious I/O adapter bypasses its boundary", async () => {
+    const io = new FakeModelIo();
+    const service = await createMissingService(io, () => "op-malicious");
+    service.startDownload();
+    await waitForPhase(service, "downloading");
+
+    io.downloads[0]?.onProgress({
+      downloadedBytes: DEFAULT_PRESET.maxBytes + 1,
+      totalBytes: DEFAULT_PRESET.maxBytes + 1,
+    });
+
+    expect(io.downloads[0]?.signal.aborted).toBe(true);
+    io.downloads[0]?.completion.resolve(artifact("op-malicious"));
+    await waitForPhase(service, "failed");
+    expect(io.activateCalls).toBe(0);
   });
 
   it("cancels a matching operation before installation", async () => {

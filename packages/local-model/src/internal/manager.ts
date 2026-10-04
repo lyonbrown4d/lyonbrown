@@ -15,6 +15,9 @@ import { cloneStatus, statusFor, validProgress } from "./status.js";
 interface ActiveOperation {
   readonly id: string;
   readonly controller: AbortController;
+  invalidBoundaryInput: boolean;
+  downloadedBytes: number;
+  totalBytes: number | null;
 }
 
 interface ActiveLoad {
@@ -71,7 +74,13 @@ class LocalModelManager implements LocalModelService {
     if (this.active !== undefined) return { kind: "in-progress", operationId: this.active.id };
     const id = this.operationId();
     const controller = new AbortController();
-    this.active = { id, controller };
+    this.active = {
+      id,
+      controller,
+      invalidBoundaryInput: false,
+      downloadedBytes: 0,
+      totalBytes: null,
+    };
     this.publish(statusFor("waiting-for-lock", id, 0, DEFAULT_PRESET.expectedDownloadBytes));
     const task = this.runDownload(id, controller);
     this.operationTasks.add(task);
@@ -193,6 +202,7 @@ class LocalModelManager implements LocalModelService {
       this.throwIfCancelled(controller.signal);
       this.publishFor(id, statusFor("verifying", id));
       const bytes = await this.io.verify(artifact, DEFAULT_PRESET, controller.signal);
+      if (!validVerifiedBytes(bytes)) throw new Error("model_integrity_failed");
       this.throwIfCancelled(controller.signal);
       this.publishFor(id, statusFor("installing", id, bytes, bytes));
       if (!this.isActive(id)) return;
@@ -201,8 +211,9 @@ class LocalModelManager implements LocalModelService {
       this.active = undefined;
       this.publish(statusFor("ready", null, bytes, bytes));
     } catch {
-      if (!this.isActive(id)) return;
-      const cancelled = controller.signal.aborted;
+      const active = this.active;
+      if (active?.id !== id) return;
+      const cancelled = controller.signal.aborted && !active.invalidBoundaryInput;
       this.active = undefined;
       this.publish(
         cancelled
@@ -224,7 +235,15 @@ class LocalModelManager implements LocalModelService {
   }
 
   private onProgress(id: string, downloadedBytes: number, totalBytes: number | null): void {
-    if (!validProgress(downloadedBytes, totalBytes)) return;
+    const active = this.active;
+    if (active?.id !== id) return;
+    if (!validProgress(downloadedBytes, totalBytes, active.downloadedBytes, active.totalBytes)) {
+      active.invalidBoundaryInput = true;
+      active.controller.abort(new Error("model_download_limits_exceeded"));
+      return;
+    }
+    active.downloadedBytes = downloadedBytes;
+    active.totalBytes = totalBytes;
     this.publishFor(id, statusFor("downloading", id, downloadedBytes, totalBytes));
   }
 
@@ -265,3 +284,6 @@ const waitForTasks = async (
     });
   });
 };
+
+const validVerifiedBytes = (bytes: number): boolean =>
+  Number.isSafeInteger(bytes) && bytes >= 0 && bytes <= DEFAULT_PRESET.maxBytes;
