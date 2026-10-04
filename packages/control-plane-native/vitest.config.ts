@@ -12,6 +12,7 @@ export function testPlan(platform: NodeJS.Platform): TestPlan {
   return {
     coverageInclude: [
       "src/index.ts",
+      "src/platform.ts",
       "src/posix-provider.ts",
       "src/result.ts",
     ],

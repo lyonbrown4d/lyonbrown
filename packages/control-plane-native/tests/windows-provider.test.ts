@@ -257,8 +257,10 @@ describe.runIf(windows)("Windows native control plane", () => {
     const workspace = join(root, "workspace");
     await mkdir(workspace);
     const provider = createControlPlaneNativeProvider();
+    const alternateCase = workspace.toUpperCase();
+    expect(alternateCase).not.toBe(workspace);
     const first = await deriveScope(workspace, "fixture", provider, "win32");
-    const second = await deriveScope(join(root, "workspace"), "fixture", provider, "win32");
+    const second = await deriveScope(alternateCase, "fixture", provider, "win32");
     expect(first.scopeId).toBe(second.scopeId);
     expect(first.canonicalWorkspace).toMatch(/^\\\\\?\\/u);
   });
