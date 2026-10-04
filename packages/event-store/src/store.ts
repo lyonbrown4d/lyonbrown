@@ -7,7 +7,9 @@ import { appendEvents } from "./append.js";
 import {
   CorruptEventStoreError,
   EventStoreClosedError,
+  EventStoreError,
   InvalidStoreOptionsError,
+  PathSecurityError,
 } from "./errors.js";
 import {
   validateEventRows,
@@ -28,6 +30,7 @@ import type {
   ListSessionsOptions,
   LoadOptions,
   OpenEventStoreOptions,
+  PathSecurityVerifier,
   SessionMetadata,
   StoredEvent,
   StoreDiagnostics,
@@ -45,11 +48,17 @@ const SESSION_INTEGRITY_SELECT = `
 class SqliteEventStore implements EventStore {
   readonly #database: Database.Database;
   readonly #busyTimeoutMs: number;
+  readonly #verifier: PathSecurityVerifier | undefined;
   #closed = false;
 
-  public constructor(database: Database.Database, busyTimeoutMs: number) {
+  public constructor(
+    database: Database.Database,
+    busyTimeoutMs: number,
+    verifier?: PathSecurityVerifier,
+  ) {
     this.#database = database;
     this.#busyTimeoutMs = busyTimeoutMs;
+    this.#verifier = verifier;
   }
 
   // better-sqlite3 commits synchronously; async keeps the storage-port contract stable.
@@ -122,7 +131,18 @@ class SqliteEventStore implements EventStore {
   public close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    this.#database.close();
+    let failure: EventStoreError | undefined;
+    try {
+      this.#verifier?.close?.();
+    } catch {
+      failure = new PathSecurityError("Secure path verifier cleanup failed");
+    }
+    try {
+      this.#database.close();
+    } catch {
+      failure ??= new EventStoreError("Event store close failed");
+    }
+    if (failure) throw failure;
   }
 
   #sessionIntegrity(sessionId: string): SessionMetadata | undefined {
@@ -169,18 +189,28 @@ export function openEventStore(options: OpenEventStoreOptions): EventStore {
   }
 
   const verifier = options.pathVerifier ?? defaultPathVerifier();
-  const prepared = prepareDatabasePath(options.dataDirectory, verifier);
-  const database = new Database(prepared.databasePath);
+  let database: Database.Database | undefined;
   try {
+    const prepared = prepareDatabasePath(options.dataDirectory, verifier);
+    database = new Database(prepared.databasePath);
     if (process.platform !== "win32" && prepared.databaseIdentity === undefined) {
       chmodSync(prepared.databasePath, 0o600);
     }
     reverifyDatabasePath(prepared, verifier);
     configure(database, false, busyTimeoutMs);
     verifyDatabaseSidecars(prepared, verifier);
-    return new SqliteEventStore(database, busyTimeoutMs);
+    return new SqliteEventStore(database, busyTimeoutMs, verifier);
   } catch (error: unknown) {
-    database.close();
+    try {
+      verifier.close?.();
+    } catch {
+      // Preserve the primary open failure while still releasing every remaining resource.
+    }
+    try {
+      database?.close();
+    } catch {
+      // Native verifier implementations redact their own failures; the primary error wins here.
+    }
     throw error;
   }
 }

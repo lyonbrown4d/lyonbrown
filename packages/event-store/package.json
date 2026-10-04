@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./path-verifier": {
+      "types": "./dist/path-verifier.d.ts",
+      "import": "./dist/path-verifier.js"
     }
   },
   "engines": {

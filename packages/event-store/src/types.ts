@@ -50,6 +50,8 @@ export interface PathSecurityVerifier {
     canonicalDataDirectory: string,
     databaseArtifactPath: string,
   ): string | undefined;
+  /** Releases native path anchors retained for the lifetime of an opened store. */
+  close?(): void;
 }
 
 export type OpenEventStoreOptions =
