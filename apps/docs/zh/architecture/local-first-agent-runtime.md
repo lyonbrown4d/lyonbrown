@@ -686,10 +686,7 @@ Model
 ```json
 {
   "summary": "数据库连接池在重试风暴后耗尽",
-  "sources": [
-    "tool://logs/request-92#L820-L1160",
-    "file://config/db.yaml#L31-L58"
-  ]
+  "sources": ["tool://logs/request-92#L820-L1160", "file://config/db.yaml#L31-L58"]
 }
 ```
 

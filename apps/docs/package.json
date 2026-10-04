@@ -11,7 +11,7 @@
     "dev": "vitepress dev",
     "build": "vitepress build",
     "preview": "vitepress preview",
-    "lint": "prettier --check .vitepress package.json tsconfig.json index.md en/plans/node-typescript-pi-migration.md zh/plans/node-typescript-pi-migration.md",
+    "lint": "prettier --check .vitepress package.json tsconfig.json \"**/*.md\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitepress build --outDir .vitepress/test-dist"
   },

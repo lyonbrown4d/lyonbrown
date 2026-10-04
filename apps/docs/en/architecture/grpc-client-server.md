@@ -35,11 +35,11 @@ remote-control endpoint.
 Protocol Buffers are the source of truth. Unary RPCs carry commands and queries;
 one server-streaming RPC carries coalescible full runtime snapshots.
 
-| Shape | Operations |
-|---|---|
+| Shape         | Operations                                     |
+| ------------- | ---------------------------------------------- |
 | Unary command | start, steer, queue, cancel, approval response |
-| Unary query | handshake, health, latest snapshot |
-| Server stream | latest full runtime snapshots with revisions |
+| Unary query   | handshake, health, latest snapshot             |
+| Server stream | latest full runtime snapshots with revisions   |
 
 Every command contains a `command_id`, `client_instance_id`, and the
 `expected_server_instance_id` returned by the handshake. Before a command enters
@@ -69,7 +69,7 @@ daemon while its entry remains cached; it is not cross-process exactly-once.
 Clients must not blindly replay an unconfirmed non-idempotent command after the
 `server_instance_id` changes.
 
-The wire contract stays separate from Rust domain types. New protobuf fields
+The wire contract stays separate from TypeScript domain types. New protobuf fields
 use new tags, and published tags are never reused. Version one has a 16 MiB gRPC
 encode/decode budget. Oversized Snapshots fail explicitly; pagination or bounded
 history truncation should be added before raising that budget without a bound.
@@ -147,30 +147,33 @@ daemon's lifetime lock. Locks and discovery live in the same secure run
 directory. The descriptor is published atomically, and the token is not passed
 through command-line arguments or environment variables.
 
-Unix enforces owner-only runtime directories and files, atomic discovery
-publication, and process locks. Windows enforces the equivalent boundary with
-protected current-user-only DACLs, rejects reparse points, and validates every
-descriptor and lock handle before use. Neither platform falls back to
-permissive access or an unauthenticated daemon.
+These filesystem semantics are release gates for the TypeScript production
+entry point. The POSIX provider must supply dirfd/openat, `O_NOFOLLOW`,
+owner-only permissions, atomic publication, and kernel locks. The Windows
+provider must use protected current-user-only DACLs, reject reparse points, and
+validate descriptors, locks, and file identity through handles. A missing or
+failed provider must fail closed on every platform; there is no path-based or
+permissive fallback.
 
-## Ownership and Rust ecosystem choices
+## Ownership and Node/TypeScript ecosystem choices
 
-- `agent-protocol`: protobuf definitions, generated types, and versioning;
+- `protocol`: protobuf definitions, generated types, and versioning;
 - `agent-client`: authenticated connections, command correlation, Snapshots,
   streams, retries, and reconnects;
-- `agent-local`: tokens, discovery, secure directories, and both locks;
+- `local-control-plane`: tokens, discovery, secure directories, and both lock contracts;
 - `agent-launch`: discover/reuse/spawn/readiness coordination;
 - `agent-runtime`: configuration, composition, models, and runtime services;
 - `agentd`: the only composition root and gRPC server;
 - TUI/GUI: interaction and presentation only.
 
-The implementation prefers established Rust crates: `tonic`/`prost` for gRPC
-and protobuf, `tokio` for async runtime, processes, and signals, `serde` for the
-bounded schema, `getrandom`, `secrecy`, and `subtle` for token generation,
-secret wrapping, and constant-time comparison, `file-id` for cross-platform
-workspace identity, and `rustix` for the Unix file security boundary. Project
-code is reserved for Lyonbrown-specific scope,
-lifecycle, and UI semantics.
+The implementation prefers established Node packages: `@grpc/grpc-js` for gRPC,
+`ts-proto` for generated protocol types, Pi Agent Core for the agent loop, and
+`better-sqlite3` for the local event store. Node 24 does not expose the complete
+secure filesystem API, so the native provider uses an exactly pinned Koffi
+binding for a narrow OS surface while retaining `node:fs` for safe fd operations.
+Project code is reserved for Lyonbrown-specific scope, epoch, lifecycle,
+persistence ordering, and UI semantics rather than reimplementing gRPC,
+databases, or the agent loop.
 
 ## Model and download boundary
 
@@ -197,14 +200,19 @@ because atomic installation cannot be interrupted. The daemon catalog owns the
 model ID, URL, digest, and destination; clients cannot submit arbitrary URLs or
 paths.
 
-## Current implementation boundary
+## TypeScript migration status
 
-The protocol, authentication, scope handshake, secure discovery, two-lock
-design, launch coordinator, `agentd` composition, reconnecting shared client,
-and unified C/S entry points for TUI and GUI are implemented and covered by the
-workspace test suite. Explicit daemon-side background downloads, progress on
-the single Snapshot stream, in-process epoch replacement, and fail-closed
-command epoch fencing are also implemented.
+On the current migration branch, the protocol, domain model, UI projection,
+SQLite EventStore, Pi Kernel adapter, and fail-closed `local-control-plane`
+contract are covered by TypeScript tests. The `agent-runtime`, `agent-client`,
+and Node `agentd` gRPC vertical slices are in progress. The secure native
+provider, real discover/reuse/spawn flow, releasable daemon composition, and
+TUI/GUI product integration remain explicit release blockers.
+
+> The remainder of this section is a product acceptance baseline and a behavior
+> oracle from the previous implementation. It does not mean those capabilities
+> are already exposed by the new TypeScript product entry point. Migration does
+> not add an embedded mode, Rust bridge, or dual-write compatibility path.
 
 Both clients now expose the same model-setup loop over those Snapshot/RPCs:
 explicit start or retry, progress, cancellation where allowed, persistent

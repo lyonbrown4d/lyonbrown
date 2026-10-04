@@ -40,26 +40,26 @@ Root: `D:\Projects\lyonbrown`; edition 2024; resolver 2; shared versions in work
 
 ### MVP crate inventory (12 crates + 5 providers + 1 app, 18 packages total)
 
-| Crate | Responsibility |
-|---|---|
-| `crates/agent-core` | Pure shared types, no logic: ids, errors, ContextItem, AgentEvent, tool types, ModelCapabilities, SecretRef |
-| `crates/agent-kernel` | State machine, agent loop, event bus, session/working memory, retry/cancel |
-| `crates/agent-model` | ModelProvider trait, registry, scheduler, policy, quality gate |
-| `crates/agent-context` | Prompt Compiler (profile+workspace+skills→system prompt), context budget, token estimation; semantic/vector retrieval and compression are Phase 2 |
-| `crates/agent-profile` | AgentProfile YAML loading/validation |
-| `crates/agent-workspace` | Repository detection, WorkspaceProfile, AGENTS.md/CLAUDE.md parsing |
-| `crates/agent-index` | Incremental workspace index via `ignore` + `notify`, SQLite FTS5 keyword search; exposed to the CLI as the read-only `search_workspace` tool |
-| `crates/agent-skill` | Skill YAML, registry, trigger matching |
-| `crates/agent-tool` | Tool trait, registry, executor, approval, timeout, redaction hooks + built-in Shell/FS tools |
-| `crates/agent-secret` | SecretBroker (env/file/composite), late binding, output redaction |
-| `crates/agent-mcp` | rmcp client bridge → integrated into Tool Registry |
-| `crates/agent-storage` | SQLite (rusqlite bundled): session/event log, resume |
-| `apps/agent-cli` | clap REPL, streaming renderer, approval prompts, configuration |
-| `providers/provider-ollama` | Local Worker+Control (Ollama HTTP API) |
-| `providers/provider-anthropic` | Remote (Messages API SSE) |
-| `providers/provider-openai` | Remote (Chat Completions SSE) |
-| `providers/provider-mock` | Scripted Mock Provider; all kernel/e2e tests run offline |
-| `providers/provider-llamacpp` | Optional `llama-cpp` feature, disabled by default (M9 stretch) |
+| Crate                          | Responsibility                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/agent-core`            | Pure shared types, no logic: ids, errors, ContextItem, AgentEvent, tool types, ModelCapabilities, SecretRef                                       |
+| `crates/agent-kernel`          | State machine, agent loop, event bus, session/working memory, retry/cancel                                                                        |
+| `crates/agent-model`           | ModelProvider trait, registry, scheduler, policy, quality gate                                                                                    |
+| `crates/agent-context`         | Prompt Compiler (profile+workspace+skills→system prompt), context budget, token estimation; semantic/vector retrieval and compression are Phase 2 |
+| `crates/agent-profile`         | AgentProfile YAML loading/validation                                                                                                              |
+| `crates/agent-workspace`       | Repository detection, WorkspaceProfile, AGENTS.md/CLAUDE.md parsing                                                                               |
+| `crates/agent-index`           | Incremental workspace index via `ignore` + `notify`, SQLite FTS5 keyword search; exposed to the CLI as the read-only `search_workspace` tool      |
+| `crates/agent-skill`           | Skill YAML, registry, trigger matching                                                                                                            |
+| `crates/agent-tool`            | Tool trait, registry, executor, approval, timeout, redaction hooks + built-in Shell/FS tools                                                      |
+| `crates/agent-secret`          | SecretBroker (env/file/composite), late binding, output redaction                                                                                 |
+| `crates/agent-mcp`             | rmcp client bridge → integrated into Tool Registry                                                                                                |
+| `crates/agent-storage`         | SQLite (rusqlite bundled): session/event log, resume                                                                                              |
+| `apps/agent-cli`               | clap REPL, streaming renderer, approval prompts, configuration                                                                                    |
+| `providers/provider-ollama`    | Local Worker+Control (Ollama HTTP API)                                                                                                            |
+| `providers/provider-anthropic` | Remote (Messages API SSE)                                                                                                                         |
+| `providers/provider-openai`    | Remote (Chat Completions SSE)                                                                                                                     |
+| `providers/provider-mock`      | Scripted Mock Provider; all kernel/e2e tests run offline                                                                                          |
+| `providers/provider-llamacpp`  | Optional `llama-cpp` feature, disabled by default (M9 stretch)                                                                                    |
 
 Trimmed from §31 as Phase 2/3 work (§38–39): `agent-capability` (folded into agent-tool for MVP), `agent-sync`, `agent-sandbox`, `agent-telemetry` (use tracing initially), `agent-server`, and `agent-desktop`. `agent-sandbox` now has a separate [cross-platform design](../architecture/cross-platform-sandbox.md): M3 Shell must identify itself as host/unsandboxed, while Phase 2 delivers WASI plus native OS backends.
 
@@ -251,36 +251,36 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 
 **Required (M0–M2):**
 
-| Crate | Notes | Used by |
-|---|---|---|
-| `tokio` 1.x | `rt-multi-thread, macros, process, io-util, time, signal` | All async code |
-| `tokio-util` | `CancellationToken` | kernel, tool |
-| `tokio-stream` / `futures` | ModelStream pipeline | model, providers |
-| `async-trait` | Object-safe async traits | model, tool, secret |
-| `serde` + `serde_json` | derive | Global |
-| `serde_yml` | Maintained YAML (not unmaintained serde_yaml) | profile, skill |
-| `toml` 1.1.6 | Direct TOML parsing, including MCP configuration | cli, mcp |
-| `config-rs` (crate name `config`) 0.15.26 | Layered configuration; TOML/YAML/JSON/JSON5/RON/INI enabled | cli |
-| `thiserror` 2.x / `anyhow` | Errors | Global |
-| `tracing` + `tracing-subscriber` | env-filter; telemetry seam for Phase 2 | Global |
-| `reqwest` 0.13.5 | `rustls, stream, json`; default features disabled (avoid OpenSSL on Windows) | providers |
-| `clap` 4.x derive | CLI | cli |
-| `rusqlite` | `bundled`; synchronous API through spawn_blocking | storage |
-| `uuid` (v4) / `chrono` | IDs, timestamps | core |
-| `dirs` | `~/.agent` | cli, storage, secret |
-| `which` | Locate MCP server executables | mcp, workspace |
-| `cap-std` 4.0.3 | Capability-relative filesystem access that contains symlinks/junctions within the workspace | tool |
-| `wiremock` | **dev-dependency only** — offline provider HTTP tests | provider tests |
+| Crate                                     | Notes                                                                                       | Used by              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------- |
+| `tokio` 1.x                               | `rt-multi-thread, macros, process, io-util, time, signal`                                   | All async code       |
+| `tokio-util`                              | `CancellationToken`                                                                         | kernel, tool         |
+| `tokio-stream` / `futures`                | ModelStream pipeline                                                                        | model, providers     |
+| `async-trait`                             | Object-safe async traits                                                                    | model, tool, secret  |
+| `serde` + `serde_json`                    | derive                                                                                      | Global               |
+| `serde_yml`                               | Maintained YAML (not unmaintained serde_yaml)                                               | profile, skill       |
+| `toml` 1.1.6                              | Direct TOML parsing, including MCP configuration                                            | cli, mcp             |
+| `config-rs` (crate name `config`) 0.15.26 | Layered configuration; TOML/YAML/JSON/JSON5/RON/INI enabled                                 | cli                  |
+| `thiserror` 2.x / `anyhow`                | Errors                                                                                      | Global               |
+| `tracing` + `tracing-subscriber`          | env-filter; telemetry seam for Phase 2                                                      | Global               |
+| `reqwest` 0.13.5                          | `rustls, stream, json`; default features disabled (avoid OpenSSL on Windows)                | providers            |
+| `clap` 4.x derive                         | CLI                                                                                         | cli                  |
+| `rusqlite`                                | `bundled`; synchronous API through spawn_blocking                                           | storage              |
+| `uuid` (v4) / `chrono`                    | IDs, timestamps                                                                             | core                 |
+| `dirs`                                    | `~/.agent`                                                                                  | cli, storage, secret |
+| `which`                                   | Locate MCP server executables                                                               | mcp, workspace       |
+| `cap-std` 4.0.3                           | Capability-relative filesystem access that contains symlinks/junctions within the workspace | tool                 |
+| `wiremock`                                | **dev-dependency only** — offline provider HTTP tests                                       | provider tests       |
 
 **Deferrable:**
 
-| Crate | Flag | Timing |
-|---|---|---|
-| `rmcp` **3.4.0** (official MCP SDK; `client, transport-child-process`; verified latest stable on crates.io) | Needed only in M7; pin exact version and isolate all rmcp types inside agent-mcp | M7 |
-| `tiktoken-rs` | Defer; begin with `chars/4` heuristic + provider TokenUsage | post-MVP |
-| `ratatui` 0.30.2 (default Crossterm backend) | Full TUI; core exposes only AgentEvent and ApprovalPrompt | M8 |
-| `llama-cpp-2` 0.1.156 | In-process embedded llama.cpp; optional `llama-cpp`, off by default | M9 stretch |
-| `axum` / `opentelemetry` / `wasmtime` etc. | Defer | Phase 2/3 |
+| Crate                                                                                                       | Flag                                                                             | Timing     |
+| ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------- |
+| `rmcp` **3.4.0** (official MCP SDK; `client, transport-child-process`; verified latest stable on crates.io) | Needed only in M7; pin exact version and isolate all rmcp types inside agent-mcp | M7         |
+| `tiktoken-rs`                                                                                               | Defer; begin with `chars/4` heuristic + provider TokenUsage                      | post-MVP   |
+| `ratatui` 0.30.2 (default Crossterm backend)                                                                | Full TUI; core exposes only AgentEvent and ApprovalPrompt                        | M8         |
+| `llama-cpp-2` 0.1.156                                                                                       | In-process embedded llama.cpp; optional `llama-cpp`, off by default              | M9 stretch |
+| `axum` / `opentelemetry` / `wasmtime` etc.                                                                  | Defer                                                                            | Phase 2/3  |
 
 ---
 
@@ -292,7 +292,7 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 - Acceptance: clean `cargo build --workspace`; serde round-trip for every AgentEvent variant; ContextItem priority ordering; clean clippy
 - Verify: `cargo test -p agent-core && cargo clippy --workspace -- -D warnings`
 
-**M1 — Kernel + MockProvider (offline e2e, complete)** (2–3 days) — *core risk-reduction milestone*
+**M1 — Kernel + MockProvider (offline e2e, complete)** (2–3 days) — _core risk-reduction milestone_
 
 - Build: agent-kernel state machine/transition table/EventBus/`run_turn`/memory/max-step guard/cancellation; agent-model trait/registry/gate; agent-tool registry/timed executor/approval; scripted provider-mock; echo + read_file test tools; §7 e2e
 - Acceptance: offline user→mock tool call→observation→answer flow and full event assertion; exhaustive transitions; max-step loop guard; cancellation
@@ -372,14 +372,14 @@ Default HeuristicGate escalates empty output, explicit error markers, or output 
 
 ## 6. Risks
 
-| # | Risk | Probability/impact | Mitigation |
-|---|---|---|---|
-| R1 | Embedded llama.cpp on Windows MSVC: native C/C++ compilation plus CRT/link and GPU-backend combinations | Medium/high if forced | Isolate `llama-cpp-2` in provider-llamacpp behind an off-by-default feature; start CPU-only and validate it separately in CI; M9 remains removable because Ollama covers the default local path |
-| R2 | MCP Rust SDK maturity and breaking 1.x→2.x→3.x changes | Medium/medium | Exact pin; isolate rmcp types; local Rust fixture; CLI feature gate |
-| R3 | Provider protocol differences can silently break tool calls | High/medium | Normalize per provider; precise offline wiremock sequences; disable qwen thinking; common JSON Schema |
-| R4 | Windows quoting, cwd/inheritance, junction/8.3 paths, line endings, GBK/UTF-8 | Medium/medium | Explicit cwd and one argument to cmd; M3 uses cap-std 4.0.3 handle-relative access plus early `..`/absolute-path rejection, with Windows junction and workspace-replacement regressions; shell output is byte-read/lossy UTF-8 while FS reads require UTF-8; retain a plain approval UI path |
-| R5 | Control model lacks tools | Certain/low if respected | Discover capabilities; filter tool steps; assert before request; test Worker yes/Control no in M2 |
-| R6 | 27B Q3 Worker latency | Medium/low | 300s model vs 60s tool timeout; stream progress; cap at 20 steps |
+| #   | Risk                                                                                                    | Probability/impact       | Mitigation                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------------------------------------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Embedded llama.cpp on Windows MSVC: native C/C++ compilation plus CRT/link and GPU-backend combinations | Medium/high if forced    | Isolate `llama-cpp-2` in provider-llamacpp behind an off-by-default feature; start CPU-only and validate it separately in CI; M9 remains removable because Ollama covers the default local path                                                                                              |
+| R2  | MCP Rust SDK maturity and breaking 1.x→2.x→3.x changes                                                  | Medium/medium            | Exact pin; isolate rmcp types; local Rust fixture; CLI feature gate                                                                                                                                                                                                                          |
+| R3  | Provider protocol differences can silently break tool calls                                             | High/medium              | Normalize per provider; precise offline wiremock sequences; disable qwen thinking; common JSON Schema                                                                                                                                                                                        |
+| R4  | Windows quoting, cwd/inheritance, junction/8.3 paths, line endings, GBK/UTF-8                           | Medium/medium            | Explicit cwd and one argument to cmd; M3 uses cap-std 4.0.3 handle-relative access plus early `..`/absolute-path rejection, with Windows junction and workspace-replacement regressions; shell output is byte-read/lossy UTF-8 while FS reads require UTF-8; retain a plain approval UI path |
+| R5  | Control model lacks tools                                                                               | Certain/low if respected | Discover capabilities; filter tool steps; assert before request; test Worker yes/Control no in M2                                                                                                                                                                                            |
+| R6  | 27B Q3 Worker latency                                                                                   | Medium/low               | 300s model vs 60s tool timeout; stream progress; cap at 20 steps                                                                                                                                                                                                                             |
 
 ---
 

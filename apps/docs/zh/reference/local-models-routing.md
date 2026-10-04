@@ -16,12 +16,12 @@ discovery 前退出。未配置路径时，默认 preset 是约 1.1 GB 的
 不会在启动过程中下载；client 仍可进入界面，但在模型设置完成前不可提交任务。
 可将 `[model].model` 设为其他内置 preset ID 覆盖默认值：
 
-| Preset | 下载大小 | 最低可用 RAM | 文件 |
-|---|---:|---:|---|
-| `qwen3-0.6b-q8_0` | 0.64 GB | 2 GiB | `Qwen3-0.6B-Q8_0.gguf` |
-| `qwen3-1.7b-q4_k_m`（默认） | 1.11 GB | 4 GiB | `Qwen3-1.7B-Q4_K_M.gguf` |
-| `qwen3-4b-q4_k_m` | 2.50 GB | 8 GiB | `Qwen3-4B-Q4_K_M.gguf` |
-| `qwen3-8b-q4_k_m` | 5.03 GB | 14 GiB | `Qwen3-8B-Q4_K_M.gguf` |
+| Preset                      | 下载大小 | 最低可用 RAM | 文件                     |
+| --------------------------- | -------: | -----------: | ------------------------ |
+| `qwen3-0.6b-q8_0`           |  0.64 GB |        2 GiB | `Qwen3-0.6B-Q8_0.gguf`   |
+| `qwen3-1.7b-q4_k_m`（默认） |  1.11 GB |        4 GiB | `Qwen3-1.7B-Q4_K_M.gguf` |
+| `qwen3-4b-q4_k_m`           |  2.50 GB |        8 GiB | `Qwen3-4B-Q4_K_M.gguf`   |
+| `qwen3-8b-q4_k_m`           |  5.03 GB |       14 GiB | `Qwen3-8B-Q4_K_M.gguf`   |
 
 内存保护使用启动时操作系统报告的可用内存，不是物理内存总量，也不单独使用 VRAM。若当前可用 RAM 低于所选 preset 的门槛，启动会明确失败，不会静默更换用户选择。
 

@@ -17,12 +17,14 @@
 Agent Kernel（事件驱动 + 状态机）· Agent Profile · Workspace Runtime · Skill Registry · Model Provider + Scheduler（三层模型、Step 级调度、两阶段路由）· Tool Runtime（Shell/Filesystem）· MCP · SecretRef + 基础 Secret Broker · CLI
 
 **已确认决策：**
+
 - 范围 = §37 完整 MVP
 - 本地：Ollama Provider（默认路径）+ embedded llama.cpp（可选 feature，默认关闭，M9 stretch）
 - 远程：Anthropic + OpenAI，均流式 + tool calling
 - Kernel 全部逻辑必须先经 MockProvider 离线跑通，再接真实 Provider
 
 **必须保留的抽象接缝（文档强制）：**
+
 - Model Provider Neutral：统一 `ModelProvider` trait，禁止写死 Provider enum
 - Session 属于 Runtime：模型切换不丢失工作风格/Workspace/Skill/Plan/Tool 状态
 - Secret 永不进入模型上下文：SecretRef 逻辑引用 + Late Binding + 输出 Redaction
@@ -37,26 +39,26 @@ Agent Kernel（事件驱动 + 状态机）· Agent Profile · Workspace Runtime 
 
 ### MVP crate 清单（12 crates + 5 providers + 1 app，共 18 个包）
 
-| Crate | 职责 |
-|---|---|
-| `crates/agent-core` | 纯共享类型、无逻辑：ids、errors、ContextItem、AgentEvent、tool 类型、ModelCapabilities、SecretRef |
-| `crates/agent-kernel` | 状态机、agent loop、事件总线、session/working memory、retry/cancel |
-| `crates/agent-model` | ModelProvider trait、registry、scheduler、policy、quality gate |
-| `crates/agent-context` | Prompt Compiler（profile+workspace+skills→system prompt）、context budget、token 估算；语义检索/向量检索与 compression 属 Phase 2 |
-| `crates/agent-profile` | AgentProfile YAML 加载/校验 |
-| `crates/agent-workspace` | 仓库检测、WorkspaceProfile、AGENTS.md/CLAUDE.md 解析 |
-| `crates/agent-index` | `ignore` + `notify` 增量工作区索引，SQLite FTS5 关键词检索；CLI 通过只读 `search_workspace` 工具使用 |
-| `crates/agent-skill` | Skill YAML、registry、trigger 匹配 |
-| `crates/agent-tool` | Tool trait、registry、执行器、审批、超时、redaction 钩子 + 内置 Shell/FS 工具 |
-| `crates/agent-secret` | SecretBroker（env/file/composite）、延迟绑定、输出 redaction |
-| `crates/agent-mcp` | rmcp client 桥接 → 并入 Tool Registry |
-| `crates/agent-storage` | SQLite（rusqlite bundled）：session/event 日志、resume |
-| `apps/agent-cli` | clap REPL、流式渲染、审批提示、配置 |
-| `providers/provider-ollama` | 本地 Worker+Control（Ollama HTTP API） |
-| `providers/provider-anthropic` | 远程（Messages API SSE） |
-| `providers/provider-openai` | 远程（Chat Completions SSE） |
-| `providers/provider-mock` | 脚本化 Mock Provider，全部 kernel/e2e 测试离线跑 |
-| `providers/provider-llamacpp` | 可选 feature `llama-cpp`、默认关闭（M9 stretch） |
+| Crate                          | 职责                                                                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/agent-core`            | 纯共享类型、无逻辑：ids、errors、ContextItem、AgentEvent、tool 类型、ModelCapabilities、SecretRef                                 |
+| `crates/agent-kernel`          | 状态机、agent loop、事件总线、session/working memory、retry/cancel                                                                |
+| `crates/agent-model`           | ModelProvider trait、registry、scheduler、policy、quality gate                                                                    |
+| `crates/agent-context`         | Prompt Compiler（profile+workspace+skills→system prompt）、context budget、token 估算；语义检索/向量检索与 compression 属 Phase 2 |
+| `crates/agent-profile`         | AgentProfile YAML 加载/校验                                                                                                       |
+| `crates/agent-workspace`       | 仓库检测、WorkspaceProfile、AGENTS.md/CLAUDE.md 解析                                                                              |
+| `crates/agent-index`           | `ignore` + `notify` 增量工作区索引，SQLite FTS5 关键词检索；CLI 通过只读 `search_workspace` 工具使用                              |
+| `crates/agent-skill`           | Skill YAML、registry、trigger 匹配                                                                                                |
+| `crates/agent-tool`            | Tool trait、registry、执行器、审批、超时、redaction 钩子 + 内置 Shell/FS 工具                                                     |
+| `crates/agent-secret`          | SecretBroker（env/file/composite）、延迟绑定、输出 redaction                                                                      |
+| `crates/agent-mcp`             | rmcp client 桥接 → 并入 Tool Registry                                                                                             |
+| `crates/agent-storage`         | SQLite（rusqlite bundled）：session/event 日志、resume                                                                            |
+| `apps/agent-cli`               | clap REPL、流式渲染、审批提示、配置                                                                                               |
+| `providers/provider-ollama`    | 本地 Worker+Control（Ollama HTTP API）                                                                                            |
+| `providers/provider-anthropic` | 远程（Messages API SSE）                                                                                                          |
+| `providers/provider-openai`    | 远程（Chat Completions SSE）                                                                                                      |
+| `providers/provider-mock`      | 脚本化 Mock Provider，全部 kernel/e2e 测试离线跑                                                                                  |
+| `providers/provider-llamacpp`  | 可选 feature `llama-cpp`、默认关闭（M9 stretch）                                                                                  |
 
 从 §31 中裁剪（属 Phase 2/3，见 §38-39）：`agent-capability`（MVP 并入 agent-tool）、`agent-sync`、`agent-sandbox`、`agent-telemetry`（先用 tracing）、`agent-server`、`agent-desktop`。其中 `agent-sandbox` 已形成独立的[跨平台设计](../architecture/cross-platform-sandbox.md)：M3 的 Shell 必须明确标记为 host/unsandboxed，Phase 2 以 WASI + OS 原生后端落地。
 
@@ -285,89 +287,99 @@ pub trait QualityGate: Send + Sync {
 
 **必须（M0–M2）：**
 
-| Crate | 备注 | 使用者 |
-|---|---|---|
-| `tokio` 1.x | `rt-multi-thread, macros, process, io-util, time, signal` | 全部异步 |
-| `tokio-util` | `CancellationToken` | kernel, tool |
-| `tokio-stream` / `futures` | ModelStream 管道 | model, providers |
-| `async-trait` | 对象安全异步 trait | model, tool, secret |
-| `serde` + `serde_json` | derive | 全局 |
-| `serde_yml` | 维护中的 YAML（非停维护的 serde_yaml） | profile, skill |
-| `toml` 1.1.6 | 直接解析 TOML（包括 MCP 配置） | cli, mcp |
-| `config-rs`（crate 名 `config`）0.15.26 | 分层配置；启用 TOML/YAML/JSON/JSON5/RON/INI 格式 | cli |
-| `thiserror` 2.x / `anyhow` | 错误 | 全局 |
-| `tracing` + `tracing-subscriber` | env-filter（Phase 2 的 telemetry 接缝） | 全局 |
-| `reqwest` 0.13.5 | `rustls, stream, json`，**不用默认 feature**（Windows 避开 OpenSSL） | providers |
-| `clap` 4.x derive | CLI | cli |
-| `rusqlite` | `bundled`（自带 SQLite C，无系统依赖；同步 API 走 spawn_blocking） | storage |
-| `uuid` (v4) / `chrono` | id、时间戳 | core |
-| `dirs` | `~/.agent` | cli, storage, secret |
-| `which` | 定位 MCP server 可执行文件 | mcp, workspace |
-| `cap-std` 4.0.3 | capability-relative 文件访问，阻止 symlink/junction 越过 workspace | tool |
-| `wiremock` | **仅 dev-dependency** — provider 离线 HTTP 测试 | providers (tests) |
+| Crate                                   | 备注                                                                 | 使用者               |
+| --------------------------------------- | -------------------------------------------------------------------- | -------------------- |
+| `tokio` 1.x                             | `rt-multi-thread, macros, process, io-util, time, signal`            | 全部异步             |
+| `tokio-util`                            | `CancellationToken`                                                  | kernel, tool         |
+| `tokio-stream` / `futures`              | ModelStream 管道                                                     | model, providers     |
+| `async-trait`                           | 对象安全异步 trait                                                   | model, tool, secret  |
+| `serde` + `serde_json`                  | derive                                                               | 全局                 |
+| `serde_yml`                             | 维护中的 YAML（非停维护的 serde_yaml）                               | profile, skill       |
+| `toml` 1.1.6                            | 直接解析 TOML（包括 MCP 配置）                                       | cli, mcp             |
+| `config-rs`（crate 名 `config`）0.15.26 | 分层配置；启用 TOML/YAML/JSON/JSON5/RON/INI 格式                     | cli                  |
+| `thiserror` 2.x / `anyhow`              | 错误                                                                 | 全局                 |
+| `tracing` + `tracing-subscriber`        | env-filter（Phase 2 的 telemetry 接缝）                              | 全局                 |
+| `reqwest` 0.13.5                        | `rustls, stream, json`，**不用默认 feature**（Windows 避开 OpenSSL） | providers            |
+| `clap` 4.x derive                       | CLI                                                                  | cli                  |
+| `rusqlite`                              | `bundled`（自带 SQLite C，无系统依赖；同步 API 走 spawn_blocking）   | storage              |
+| `uuid` (v4) / `chrono`                  | id、时间戳                                                           | core                 |
+| `dirs`                                  | `~/.agent`                                                           | cli, storage, secret |
+| `which`                                 | 定位 MCP server 可执行文件                                           | mcp, workspace       |
+| `cap-std` 4.0.3                         | capability-relative 文件访问，阻止 symlink/junction 越过 workspace   | tool                 |
+| `wiremock`                              | **仅 dev-dependency** — provider 离线 HTTP 测试                      | providers (tests)    |
 
 **可延后：**
 
-| Crate | 标记 | 时机 |
-|---|---|---|
-| `rmcp` **3.4.0**（官方 MCP SDK，`client, transport-child-process`，已核实为 crates.io 最新稳定版） | M7 才需要——**pin 精确版本**，所有 rmcp 类型隔离在 agent-mcp 内 | M7 |
-| `tiktoken-rs` | 延后——先用 `chars/4` 启发式 + provider 回报的 TokenUsage，不够准再加 feature | post-MVP |
-| `ratatui` 0.30.2（默认 Crossterm backend） | 完整 TUI；核心只暴露 AgentEvent 与 ApprovalPrompt | M8 |
-| `llama-cpp-2` 0.1.156 | 进程内嵌入 llama.cpp；可选 feature `llama-cpp`，默认关 | M9 stretch |
-| `axum` / `opentelemetry` / `wasmtime` 等 | 延后 | Phase 2/3 |
+| Crate                                                                                              | 标记                                                                         | 时机       |
+| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------- |
+| `rmcp` **3.4.0**（官方 MCP SDK，`client, transport-child-process`，已核实为 crates.io 最新稳定版） | M7 才需要——**pin 精确版本**，所有 rmcp 类型隔离在 agent-mcp 内               | M7         |
+| `tiktoken-rs`                                                                                      | 延后——先用 `chars/4` 启发式 + provider 回报的 TokenUsage，不够准再加 feature | post-MVP   |
+| `ratatui` 0.30.2（默认 Crossterm backend）                                                         | 完整 TUI；核心只暴露 AgentEvent 与 ApprovalPrompt                            | M8         |
+| `llama-cpp-2` 0.1.156                                                                              | 进程内嵌入 llama.cpp；可选 feature `llama-cpp`，默认关                       | M9 stretch |
+| `axum` / `opentelemetry` / `wasmtime` 等                                                           | 延后                                                                         | Phase 2/3  |
 
 ---
 
 ## 4. 里程碑（M0–M9）
 
 **M0 — Skeleton + agent-core（已完成）**（0.5–1 天）
+
 - 构建：git init、workspace Cargo.toml（workspace deps、lint）、17 个包 stub 全部可编译；`agent-core` 完整（ids/errors/ContextItem/AgentEvent/tool 类型/ModelCapabilities/SecretRef）；rustfmt.toml、.gitignore
 - 验收：`cargo build --workspace` 干净；每个 AgentEvent 变体 serde round-trip 测试；ContextItem priority 排序测试；clippy 干净
 - 验证：`cargo test -p agent-core && cargo clippy --workspace -- -D warnings`
 
-**M1 — Kernel + MockProvider（离线 e2e，已完成）**（2–3 天）——*去风险核心里程碑*
+**M1 — Kernel + MockProvider（离线 e2e，已完成）**（2–3 天）——_去风险核心里程碑_
+
 - 构建：agent-kernel（状态机 + 转换表、EventBus、`Kernel::run_turn`、session/working memory、max-steps 防护、cancel token）；agent-model（trait、ModelRegistry、HeuristicGate）；agent-tool（registry、带超时执行器、ApprovalPolicy + AllowAll）；provider-mock（脚本化 step）；内置 echo + read_file 测试工具；§7 的 e2e 测试
 - 验收：离线 e2e 通过（用户消息→mock 工具调用→观察→最终回答，全事件序列断言）；状态机转换表穷举测试；max-steps 循环防护测试；cancel 测试
 - 验证：`cargo test -p agent-kernel --test e2e_mock`（无网络）
 - 实施说明：M1 的 `HeuristicGate` 只处理空回答和显式错误，升级会重新选择当前首个可用模型；复杂度分级、tier 切换与可审计路由原因在 M2 的 `ModelScheduler` 中实现。
 
 **M2 — Ollama Provider + 本地模型（已完成）**（2 天）
+
 - 构建：provider-ollama（`/api/chat` NDJSON 流式、`tools` 参数、`format:"json"`、qwen worker `think:false`、`done` chunk 取 usage）；从配置装配 ModelRegistry；ModelScheduler 静态过滤 + 启发式复杂度；CLI v1（`agent ask`、`agent chat` REPL、流式渲染、`--provider/--model`、`--approve-all`）
 - 配置：基于 `config-rs` 0.15.26 分层加载，支持 TOML、YAML、JSON、JSON5、RON 和 INI；环境变量使用 `LYONBROWN_` 前缀。覆盖优先级固定为：内置 defaults < 全局配置 < workspace 配置 < 显式指定的配置文件 < 环境变量 < CLI 参数
 - 验收：`agent ask "say hi"` 从 translategemma:4b 流出；工具 step 路由到 qwen3.8-27b（control 模型永不接工具 step——用 fake registry 断言 ModelSelected 事件）；scheduler 单测：简单输入选 Control、代码输入选 Worker
 - 验证：`cargo run -p agent-cli -- ask "1+1等于几" --provider ollama --model translategemma:4b`（Ollama 已在 :11434）
 
 **M3 — Tool Runtime：Shell + Filesystem + 审批 + redaction（已完成）**（2–3 天）
+
 - 构建：shell 工具（tokio::process、默认 `cmd.exe /c`、cwd=workspace root、60s 超时、env 注入钩子、输出上限 32KB + 截断标志）；fs 工具（read/write/list——基于 `cap-std` 的 capability-relative 文件访问，且前置拒绝 `..`/绝对路径）；风险级别（shell=Execute、fs.write=Write、read/list=Read）；CLI 审批提示（y/n/a/d），Write/Execute 才问，Read 自动放行；`--deny-all`；非 TTY 默认拒绝高风险（fail-closed）
 - 验收：单测：`..`、symlink/junction 与 workspace 路径替换逃逸被拒；执行器在期限内返回 timeout 并终止直接 shell（后代进程树的强制回收属于 Phase 2 sandbox，不在 M3 伪作保证）；审批 Deny 产出 `ToolResult{ok:false}` 且循环继续；e2e：模型调 shell → Windows 上真实 echo 执行
 - 验证：`cargo test -p agent-tool` + 手动 `cargo run -p agent-cli -- chat` 让它列文件
 
 **M4 — Profile + Workspace + Skills + Prompt Compiler（已完成）**（2–3 天）
+
 - 构建：agent-profile（§5 YAML，`~/.agent/profiles/<id>.yaml`，内置默认 profile）；agent-workspace（manifest 检测、AGENTS.md/CLAUDE.md/README/CONTRIBUTING → canonical instructions、`~/.agent/workspaces/<hash>/` 缓存、不污染仓库）；agent-skill（`~/.agent/skills/` YAML + trigger 匹配）；agent-context 编译器：system prompt = profile → 模型能力说明 → workspace profile → 仓库指令 → 匹配 skills → 工具使用说明；budget 裁剪（优先级序，system + 最近 3 条用户消息 + 最近工具观察永不丢）；TokenEstimator 启发式；用 prompt/step 意图产生真正的 `needs_tools` 信号，替换 M3“只要注册工具就保守选 Worker”的临时策略
 - 验收：`agent .` 在全新 cargo 仓库零配置检测出 Rust workspace；编译出的 system prompt 五段齐全且顺序固定（fixture 仓库断言）；trigger "quarkus" 的 skill 仅在词出现时激活；budget 测试：200KB 低优先级被裁到 8K 预算内、高优先级保留
 - 验证：`cargo test -p agent-context -p agent-workspace -p agent-skill -p agent-profile`
 
 **M5 — Secrets（已完成）**（1–2 天）
+
 - 构建：agent-secret（EnvSecretBroker、FileSecretBroker 读 `~/.agent/secrets/<name>`（裸值或 KEY=VALUE，创建时 0600）、CompositeBroker）；shell 工具 env 参数约定 `{NAME: "secret:<ref>"}` 仅执行期解析；redaction：会话级已解析值集合，扫出所有 ToolResult.output 与观察
 - 验收：**安全测试**——脚本 mock 请求 shell 带 `secret:test_value` 引用；子进程看到 env（测试用 `echo` 断言）；断言序列化事件日志中任何 AgentEvent 变体都不含 secret 明文（全变体扫描）；引用缺失 ⇒ `ToolResult{ok:false, error:"secret not found"}`，不 panic、不泄漏
 - 验证：`cargo test -p agent-kernel --test secret_e2e`
 
 **M6 — 远程 Providers（Anthropic + OpenAI）+ 回退（已完成）**（3 天）
+
 - 构建：provider-anthropic（Messages API、SSE、`tool_use`/`tool_result` block、max_tokens 必填）；provider-openai（chat completions SSE、`tool_calls` delta 按 index 累积、忽略 reasoning 字段）；API key 走 SecretRef（`env:ANTHROPIC_API_KEY` 等），配置不落明文；scheduler 回退：本地 worker ModelError（timeout/5xx）⇒ 远程 Frontier 重试一次（`ModelSelected{reason:"fallback"}`）
 - 验收：**wiremock 离线测试**：SSE 流解析为 ModelEvent 序列（含 OpenAI 多段 tool-call delta 累积、Anthropic block 式）；auth 失败与 429 路径；回退测试（MockProvider 先失败一次、registry 第二项成功）
 - 验证：`cargo test -p provider-anthropic -p provider-openai`、`cargo test -p agent-kernel --test fallback`（离线）；有 key 才做远程 live smoke。
 
 **M7 — MCP（已完成）**（2 天）
+
 - 构建：agent-mcp 基于 rmcp 3.4.0 pin 死：`~/.agent/config.toml` `[mcp.servers.<name>] { command, args }`（workspace `agent.toml` 仅在 `--trust-workspace-mcp` 下可覆盖 MCP 命令）；启动时 spawn stdio server，`list_tools` → `ToolDefinition{name: "mcp.<server>.<tool>", source: Mcp, risk: Execute}`；`McpTool::invoke` 转换 rmcp content → string，60s 超时，redaction 与其他工具一致
 - 验收：测试 fixture = 自写 Rust stdio MCP server（`agent-mcp/tests/` 内，无 npx/网络）；bridge 测试：工具列出、调用、结果往返；kernel e2e：mock provider 请求 `mcp.<server>.<tool>` 得到观察；server 崩溃 ⇒ 工具返回 error 结果，kernel 存活
 - 验证：`cargo test -p agent-mcp`（离线，spawn 本地 fixture server）
 
 **M8 — Storage、resume、收尾（已完成）**（2 天）
+
 - 构建：agent-storage（rusqlite bundled、`~/.agent/agent.db`：`sessions`、`events(session_id, seq, json)`、`tool_audit`；WAL、spawn_blocking）；每事件落库；`agent resume <session-id>` 从事件重建 Session；Ctrl-C 第一次 = 取消当前 step（Cancelled 状态、干净退出）、第二次 = 强制；`agent sessions` 列表。基于 `ratatui` 0.30.2 + Crossterm 的 TUI 已提前在 M4 后交付（事件流、消息、工具审批/结果面板），并保留 headless CLI
 - 验收：resume 测试——模拟 2 step 后中断，resume 后模型看到前序上下文（mock 断言请求消息）；事件日志回放重建等价的工作记忆内容（条目 ID/时间戳不保证相同）；全 workspace 测试绿
 - 验证：`cargo test --workspace`、`cargo clippy --workspace --all-targets -- -D warnings`
 
 **M9 —（stretch）llama.cpp（已完成本机真实模型验收）**（1–2 天）
+
 - 构建：`provider-llamacpp` 通过 `llama-cpp-2` 0.1.156 **进程内嵌入** llama.cpp：Agent 自己加载 GGUF、持有 backend/model/context 生命周期并把 token 流归一化为 `ModelEvent`；不依赖 HTTP daemon，也不启动外部推理进程。用 workspace feature `llama-cpp` 隔离原生构建（默认关），CPU 为默认后端，CUDA/Vulkan 后续按 feature 开启；模型只加载一次，推理先串行化，后续再引入 context pool
 - 验收：feature build 编译过；加载小 GGUF 完成一次补全。若预编译 artifact 在本机有问题，**砍掉 M9**——Ollama 已覆盖本地层，不阻塞 MVP
 - 验证：`cargo test -p provider-llamacpp --features llama-cpp`；设置 `LYONBROWN_GGUF_MODEL` 后运行 `cargo test -p provider-llamacpp --features llama-cpp live_completion_smoke_test -- --ignored`。
@@ -383,6 +395,7 @@ pub trait QualityGate: Send + Sync {
 Kernel 在每 step 前构造 `StepContext`（`needs_tools` 来自上一步工具使用或 control 模型预分类、`complexity`、`escalated`、`turn_classification`）。`scheduler.decide()` 同步纯函数（registry 查询 + policy）——无需 runtime 即可单测。Quality gate 在本地模型 `EndTurn` 之后跑：默认 HeuristicGate；判 Escalate 时 Kernel 以 `escalated=true` 重入 SelectingModel，**每 step 升级预算恰为 1**（循环防护）。理由：把 §11 的两阶段路由实现为贯穿既有状态机的数据流，而不是第二套控制结构。
 
 **D3. CLI 审批 UX：按风险分级，三键 + flags。**
+
 - `Read`（fs read/list）→ 自动放行，不提示。
 - `Write`/`Execute`/`Network` → 提示：工具名、格式化 JSON 参数、声明的 secret 引用（仅名字），然后 `approve? [y]es / [n]o / [a]lways-this-session / [d]eny-all-rest`。`a` 把工具名存入 CLI 的 ApprovalPolicy 会话白名单。
 - flags：`--approve-all`、`--deny-all`；**非 TTY（管道/CI）默认拒绝高风险工具（fail-closed）**。Deny 产出 `ToolResult{ok:false, error:"denied by user"}`——循环继续，模型可以适应，符合 §17（模型提议、策略决定）。
@@ -402,14 +415,14 @@ Shell 工具输入 schema：`{ command: string, env?: { [NAME]: "secret:<ref>" }
 
 ## 6. 风险
 
-| # | 风险 | 概率/影响 | 缓解 |
-|---|---|---|---|
-| R1 | **Windows MSVC 下 embedded llama.cpp**：原生 C/C++ 构建、CRT/链接与 GPU backend 组合复杂 | 中/高（若强推） | 用 `llama-cpp-2` 隔离在 `provider-llamacpp` 和 `llama-cpp` feature 后、**默认关**；CPU 后端先行并在 CI 单独验证；M9 仅 stretch——Ollama 已满足默认本地路径 |
-| R2 | **MCP Rust SDK 成熟度**：rmcp 官方且活跃（3.4.0，已核实 crates.io 最新稳定版），但 1.x→2.x→3.x 有过破坏性变更；协议本身在演进 | 中/中 | workspace deps 里 pin 精确版本；rmcp 类型全部隔离在 agent-mcp（不越桥）；测试用本地 Rust stdio fixture server，不依赖 npx；CLI 里 MCP feature-gate，MCP 构建坏了不阻塞 chat |
-| R3 | **Provider 协议差异**：Anthropic `tool_use`/`tool_result` content block + max_tokens 必填 + 消息里无 system role；OpenAI `tool_calls` 以 delta 流式到达需按 index 累积；Ollama 工具调用整块在最终 chunk 送达、结构化输出用 `format:"json"`、qwen3.8 默认发 thinking 需禁用 | 高/中（静默错工具调用） | 每个 provider 在自己的 crate 内归一化为 ModelEvent；**每个 provider 配 wiremock 离线测试**断言精确 ModelEvent 序列；qwen worker `thinking: Some(false)`；JSON-Schema input_schema 作三种格式公分母。Provider 的 bug 结构性困在 provider crate 内 |
-| R4 | **Windows 进程/路径**：`cmd.exe /c` 引号（嵌套引号、`&`、`^`）、CWD 与进程继承、junction/8.3 短名、fs 工具换行符、控制台代码页（GBK vs UTF-8）破坏中文输出 | 中/中 | Shell 工具显式设 cwd、整条命令作单个参数传给 `cmd.exe /c`（不自解析）；M3 使用 `cap-std` 4.0.3 做 handle-relative 文件访问并提前拒绝 `..`/绝对路径，junction 越界有 Windows 回归测试；子进程 stdout 按字节读、UTF-8 带替换解码；审批提示保留纯文本路径 |
-| R5 | **Control 模型无工具能力**（translategemma:4b 无 Ollama `tools` 支持） | 确定/低（若遵守） | `ModelCapabilities.supports_tools` 来自 Ollama `/api/show`/tags；scheduler 静态过滤把无工具模型排除出 `needs_tools` step；kernel 请求前断言。M2 在本机实测确认 worker 有 tools、control 无 |
-| R6 | **27B Q3 worker 延迟**——多 step turn 很慢；天真超时会杀死合法 step | 中/低 | 模型超时宽（300s）vs 工具超时（60s）；CLI 流式渲染 delta 让用户始终看到进展；`max_steps_per_turn=20` 封顶最坏情况 |
+| #   | 风险                                                                                                                                                                                                                                                                       | 概率/影响               | 缓解                                                                                                                                                                                                                                                   |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R1  | **Windows MSVC 下 embedded llama.cpp**：原生 C/C++ 构建、CRT/链接与 GPU backend 组合复杂                                                                                                                                                                                   | 中/高（若强推）         | 用 `llama-cpp-2` 隔离在 `provider-llamacpp` 和 `llama-cpp` feature 后、**默认关**；CPU 后端先行并在 CI 单独验证；M9 仅 stretch——Ollama 已满足默认本地路径                                                                                              |
+| R2  | **MCP Rust SDK 成熟度**：rmcp 官方且活跃（3.4.0，已核实 crates.io 最新稳定版），但 1.x→2.x→3.x 有过破坏性变更；协议本身在演进                                                                                                                                              | 中/中                   | workspace deps 里 pin 精确版本；rmcp 类型全部隔离在 agent-mcp（不越桥）；测试用本地 Rust stdio fixture server，不依赖 npx；CLI 里 MCP feature-gate，MCP 构建坏了不阻塞 chat                                                                            |
+| R3  | **Provider 协议差异**：Anthropic `tool_use`/`tool_result` content block + max_tokens 必填 + 消息里无 system role；OpenAI `tool_calls` 以 delta 流式到达需按 index 累积；Ollama 工具调用整块在最终 chunk 送达、结构化输出用 `format:"json"`、qwen3.8 默认发 thinking 需禁用 | 高/中（静默错工具调用） | 每个 provider 在自己的 crate 内归一化为 ModelEvent；**每个 provider 配 wiremock 离线测试**断言精确 ModelEvent 序列；qwen worker `thinking: Some(false)`；JSON-Schema input_schema 作三种格式公分母。Provider 的 bug 结构性困在 provider crate 内       |
+| R4  | **Windows 进程/路径**：`cmd.exe /c` 引号（嵌套引号、`&`、`^`）、CWD 与进程继承、junction/8.3 短名、fs 工具换行符、控制台代码页（GBK vs UTF-8）破坏中文输出                                                                                                                 | 中/中                   | Shell 工具显式设 cwd、整条命令作单个参数传给 `cmd.exe /c`（不自解析）；M3 使用 `cap-std` 4.0.3 做 handle-relative 文件访问并提前拒绝 `..`/绝对路径，junction 越界有 Windows 回归测试；子进程 stdout 按字节读、UTF-8 带替换解码；审批提示保留纯文本路径 |
+| R5  | **Control 模型无工具能力**（translategemma:4b 无 Ollama `tools` 支持）                                                                                                                                                                                                     | 确定/低（若遵守）       | `ModelCapabilities.supports_tools` 来自 Ollama `/api/show`/tags；scheduler 静态过滤把无工具模型排除出 `needs_tools` step；kernel 请求前断言。M2 在本机实测确认 worker 有 tools、control 无                                                             |
+| R6  | **27B Q3 worker 延迟**——多 step turn 很慢；天真超时会杀死合法 step                                                                                                                                                                                                         | 中/低                   | 模型超时宽（300s）vs 工具超时（60s）；CLI 流式渲染 delta 让用户始终看到进展；`max_steps_per_turn=20` 封顶最坏情况                                                                                                                                      |
 
 ---
 

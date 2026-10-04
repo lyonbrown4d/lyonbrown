@@ -193,12 +193,12 @@ terminal-native selection remains the available copy path.
 
 The running Composer exposes two explicit intents:
 
-| Input | Meaning | Runtime effect |
-|---|---|---|
-| `Enter` | Steer the current turn now | Emits `SteerCurrentTurn` and injects at the next safe boundary |
-| `Alt-Enter` | Queue for the next step | Emits `QueueFollowUp` without interrupting the active tool |
-| `Ctrl-C` | Cancel the current turn | First press requests cancellation; second press force-stops |
-| `Ctrl-O` | Inspect details | Opens the current activity Inspector without changing execution |
+| Input       | Meaning                    | Runtime effect                                                  |
+| ----------- | -------------------------- | --------------------------------------------------------------- |
+| `Enter`     | Steer the current turn now | Emits `SteerCurrentTurn` and injects at the next safe boundary  |
+| `Alt-Enter` | Queue for the next step    | Emits `QueueFollowUp` without interrupting the active tool      |
+| `Ctrl-C`    | Cancel the current turn    | First press requests cancellation; second press force-stops     |
+| `Ctrl-O`    | Inspect details            | Opens the current activity Inspector without changing execution |
 
 Queued text appears beneath the Composer and can be removed or edited. The UI spells out “steer now” and “queue next”; shortcut hints alone are insufficient.
 
@@ -253,13 +253,13 @@ Theme and language are client preferences. A Session model pin is shared applica
 
 ## 4. Input state machine
 
-| Current state | `Enter` | `Alt-Enter` | `Esc` | `Ctrl-C` |
-|---|---|---|---|---|
-| Ready | Submit a new turn | Queue a follow-up after submission | Clear selection/close overlay | Clear input; next press asks to exit |
-| Streaming / RunningTool | Steer now | Queue next | Close overlay | Cancel turn |
-| AwaitingApproval | Invoke focused action | No-op | Deny once | First: Deny once and cancel; second: Force stop and exit |
-| Overlay | Apply/enter | Overlay-specific | Close overlay | Close overlay; next press cancels turn |
-| Cancelling | No-op | No-op | No-op | Force-stop |
+| Current state           | `Enter`               | `Alt-Enter`                        | `Esc`                         | `Ctrl-C`                                                 |
+| ----------------------- | --------------------- | ---------------------------------- | ----------------------------- | -------------------------------------------------------- |
+| Ready                   | Submit a new turn     | Queue a follow-up after submission | Clear selection/close overlay | Clear input; next press asks to exit                     |
+| Streaming / RunningTool | Steer now             | Queue next                         | Close overlay                 | Cancel turn                                              |
+| AwaitingApproval        | Invoke focused action | No-op                              | Deny once                     | First: Deny once and cancel; second: Force stop and exit |
+| Overlay                 | Apply/enter           | Overlay-specific                   | Close overlay                 | Close overlay; next press cancels turn                   |
+| Cancelling              | No-op                 | No-op                              | No-op                         | Force-stop                                               |
 
 Every keyboard action first becomes a typed UI intent, then maps to an `AgentCommand`. Widgets never manipulate the Kernel directly.
 
@@ -267,27 +267,27 @@ Every keyboard action first becomes a typed UI intent, then maps to an `AgentCom
 
 The default is `hearth-teal`. Every theme implements the same semantic tokens; components never hard-code a theme's literal colors.
 
-| ID | Display name | Background | Primary accent | Secondary accent |
-|---|---|---:|---:|---:|
-| `carbon-mint` | Carbon Mint | `#090C10` | `#5EEAD4` | `#A5B4FC` |
-| `ink-violet` | Ink Violet | `#0C0B10` | `#A78BFA` | `#7DD3FC` |
-| `slate-blue` | Slate Blue | `#0A0F16` | `#60A5FA` | `#67E8F9` |
-| `hearth-teal` | Hearth Teal (default) | `#0B1113` | `#E07A5F` | `#74C7B8` |
-| `sandstone-espresso` | Sandstone Espresso | `#100E0C` | `#D4A373` | `#8FB996` |
-| `graphite-coral` | Graphite Coral | `#101114` | `#F28C70` | `#82A7C9` |
+| ID                   | Display name          | Background | Primary accent | Secondary accent |
+| -------------------- | --------------------- | ---------: | -------------: | ---------------: |
+| `carbon-mint`        | Carbon Mint           |  `#090C10` |      `#5EEAD4` |        `#A5B4FC` |
+| `ink-violet`         | Ink Violet            |  `#0C0B10` |      `#A78BFA` |        `#7DD3FC` |
+| `slate-blue`         | Slate Blue            |  `#0A0F16` |      `#60A5FA` |        `#67E8F9` |
+| `hearth-teal`        | Hearth Teal (default) |  `#0B1113` |      `#E07A5F` |        `#74C7B8` |
+| `sandstone-espresso` | Sandstone Espresso    |  `#100E0C` |      `#D4A373` |        `#8FB996` |
+| `graphite-coral`     | Graphite Coral        |  `#101114` |      `#F28C70` |        `#82A7C9` |
 
 ### 5.1 Theme previews
 
-| Carbon Mint | Ink Violet |
-|---|---|
+| Carbon Mint                                         | Ink Violet                                        |
+| --------------------------------------------------- | ------------------------------------------------- |
 | ![Carbon Mint](../assets/tui/theme-carbon-mint.png) | ![Ink Violet](../assets/tui/theme-ink-violet.png) |
 
-| Slate Blue | Hearth Teal |
-|---|---|
+| Slate Blue                                        | Hearth Teal                                         |
+| ------------------------------------------------- | --------------------------------------------------- |
 | ![Slate Blue](../assets/tui/theme-slate-blue.png) | ![Hearth Teal](../assets/tui/theme-hearth-teal.png) |
 
-| Sandstone Espresso | Graphite Coral |
-|---|---|
+| Sandstone Espresso                                                | Graphite Coral                                            |
+| ----------------------------------------------------------------- | --------------------------------------------------------- |
 | ![Sandstone Espresso](../assets/tui/theme-sandstone-espresso.png) | ![Graphite Coral](../assets/tui/theme-graphite-coral.png) |
 
 ### 5.2 Semantic tokens
@@ -367,14 +367,14 @@ imply completion of the still-missing selector surfaces.
 
 Recommended ownership:
 
-| Capability | Owner |
-|---|---|
-| `Theme`, tokens, and Ratatui style mapping | TUI client |
-| `Locale`, message catalog, and key hints | TUI client, with shared locale IDs |
-| `UiPreferences` persistence | config/client preference storage |
-| `SteerCurrentTurn`, `QueueFollowUp` | typed `agent-app` commands |
-| `ApprovalView`, `ToolPreview` | `agent-app` / `agent-tool` |
-| Session model pin and RoutingDecision | `agent-app` / `agent-model` |
+| Capability                                 | Owner                              |
+| ------------------------------------------ | ---------------------------------- |
+| `Theme`, tokens, and Ratatui style mapping | TUI client                         |
+| `Locale`, message catalog, and key hints   | TUI client, with shared locale IDs |
+| `UiPreferences` persistence                | config/client preference storage   |
+| `SteerCurrentTurn`, `QueueFollowUp`        | typed `agent-app` commands         |
+| `ApprovalView`, `ToolPreview`              | `agent-app` / `agent-tool`         |
+| Session model pin and RoutingDecision      | `agent-app` / `agent-model`        |
 
 `UiPreferences` contains at least:
 

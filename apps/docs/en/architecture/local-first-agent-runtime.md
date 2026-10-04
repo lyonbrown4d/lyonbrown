@@ -404,10 +404,7 @@ Compressed results must preserve Source References:
 ```json
 {
   "summary": "The database connection pool was exhausted after a retry storm",
-  "sources": [
-    "tool://logs/request-92#L820-L1160",
-    "file://config/db.yaml#L31-L58"
-  ]
+  "sources": ["tool://logs/request-92#L820-L1160", "file://config/db.yaml#L31-L58"]
 }
 ```
 
@@ -520,7 +517,10 @@ Bind Secrets only at the final trusted execution stage.
 ## 19. Payment Integration-Test Example
 
 ```json
-{"tool":"payment.integration_test","arguments":{"environment":"production","merchant":"main","amount":0.01}}
+{
+  "tool": "payment.integration_test",
+  "arguments": { "environment": "production", "merchant": "main", "amount": 0.01 }
+}
 ```
 
 ```yaml
@@ -582,7 +582,7 @@ Raw Tool Result → Secret Scanner → Redaction → Model Observation
 ```
 
 ```json
-{"access_token":"[REDACTED]","order_id":"202609210001"}
+{ "access_token": "[REDACTED]", "order_id": "202609210001" }
 ```
 
 ---

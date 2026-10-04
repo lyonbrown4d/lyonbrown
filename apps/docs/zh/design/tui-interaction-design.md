@@ -166,12 +166,12 @@ revision 或 epoch 不匹配的 Snapshot 不能局部改变对话、审批或检
 
 运行中的 Composer 有两种明确意图：
 
-| 操作 | 语义 | 对 Runtime 的影响 |
-|---|---|---|
-| `Enter` | 立即引导当前 turn | 形成 `SteerCurrentTurn`，在下一个安全边界注入 |
-| `Alt-Enter` | 排队到下一步 | 形成 `QueueFollowUp`，不打断当前工具 |
-| `Ctrl-C` | 取消当前 turn | 第一次请求取消，第二次强制停止 |
-| `Ctrl-O` | 查看详情 | 打开当前活动 Inspector，不改变执行 |
+| 操作        | 语义              | 对 Runtime 的影响                             |
+| ----------- | ----------------- | --------------------------------------------- |
+| `Enter`     | 立即引导当前 turn | 形成 `SteerCurrentTurn`，在下一个安全边界注入 |
+| `Alt-Enter` | 排队到下一步      | 形成 `QueueFollowUp`，不打断当前工具          |
+| `Ctrl-C`    | 取消当前 turn     | 第一次请求取消，第二次强制停止                |
+| `Ctrl-O`    | 查看详情          | 打开当前活动 Inspector，不改变执行            |
 
 排队内容显示在 Composer 下方，可移除或编辑。界面必须明确写出“立即引导”和“排队到下一步”，不能只靠快捷键提示推断。
 
@@ -223,13 +223,13 @@ revision 或 epoch 不匹配的 Snapshot 不能局部改变对话、审批或检
 
 ## 4. 输入状态机
 
-| 当前状态 | `Enter` | `Alt-Enter` | `Esc` | `Ctrl-C` |
-|---|---|---|---|---|
-| Ready | 提交新 turn | 排队为提交后的 follow-up | 清除选择/关闭 overlay | 清空输入；再次按下退出确认 |
-| Streaming / RunningTool | 立即引导 | 排队下一步 | 关闭 overlay | 取消 turn |
-| AwaitingApproval | 执行焦点动作 | 无操作 | Deny once | 第一次 Deny once 并取消；第二次强制停止并退出 |
-| Overlay | 应用/进入 | 由 overlay 定义 | 关闭 overlay | 关闭 overlay；再次按下取消 turn |
-| Cancelling | 无操作 | 无操作 | 无操作 | 强制停止 |
+| 当前状态                | `Enter`      | `Alt-Enter`              | `Esc`                 | `Ctrl-C`                                      |
+| ----------------------- | ------------ | ------------------------ | --------------------- | --------------------------------------------- |
+| Ready                   | 提交新 turn  | 排队为提交后的 follow-up | 清除选择/关闭 overlay | 清空输入；再次按下退出确认                    |
+| Streaming / RunningTool | 立即引导     | 排队下一步               | 关闭 overlay          | 取消 turn                                     |
+| AwaitingApproval        | 执行焦点动作 | 无操作                   | Deny once             | 第一次 Deny once 并取消；第二次强制停止并退出 |
+| Overlay                 | 应用/进入    | 由 overlay 定义          | 关闭 overlay          | 关闭 overlay；再次按下取消 turn               |
+| Cancelling              | 无操作       | 无操作                   | 无操作                | 强制停止                                      |
 
 所有键盘动作都必须先转成类型化的 UI intent，再映射到 `AgentCommand`。Widget 不直接操作 Kernel。
 
@@ -237,27 +237,27 @@ revision 或 epoch 不匹配的 Snapshot 不能局部改变对话、审批或检
 
 默认主题是 `hearth-teal`。所有主题共享语义 token，组件不得硬编码某个主题的具体色值。
 
-| ID | 显示名称 | Background | Primary accent | Secondary accent |
-|---|---|---:|---:|---:|
-| `carbon-mint` | 碳墨薄荷 | `#090C10` | `#5EEAD4` | `#A5B4FC` |
-| `ink-violet` | 墨夜紫罗兰 | `#0C0B10` | `#A78BFA` | `#7DD3FC` |
-| `slate-blue` | 岩板蓝 | `#0A0F16` | `#60A5FA` | `#67E8F9` |
-| `hearth-teal` | 炉火深青（默认） | `#0B1113` | `#E07A5F` | `#74C7B8` |
-| `sandstone-espresso` | 砂岩咖啡 | `#100E0C` | `#D4A373` | `#8FB996` |
-| `graphite-coral` | 石墨珊瑚 | `#101114` | `#F28C70` | `#82A7C9` |
+| ID                   | 显示名称         | Background | Primary accent | Secondary accent |
+| -------------------- | ---------------- | ---------: | -------------: | ---------------: |
+| `carbon-mint`        | 碳墨薄荷         |  `#090C10` |      `#5EEAD4` |        `#A5B4FC` |
+| `ink-violet`         | 墨夜紫罗兰       |  `#0C0B10` |      `#A78BFA` |        `#7DD3FC` |
+| `slate-blue`         | 岩板蓝           |  `#0A0F16` |      `#60A5FA` |        `#67E8F9` |
+| `hearth-teal`        | 炉火深青（默认） |  `#0B1113` |      `#E07A5F` |        `#74C7B8` |
+| `sandstone-espresso` | 砂岩咖啡         |  `#100E0C` |      `#D4A373` |        `#8FB996` |
+| `graphite-coral`     | 石墨珊瑚         |  `#101114` |      `#F28C70` |        `#82A7C9` |
 
 ### 5.1 主题预览
 
-| 碳墨薄荷 | 墨夜紫罗兰 |
-|---|---|
+| 碳墨薄荷                                         | 墨夜紫罗兰                                        |
+| ------------------------------------------------ | ------------------------------------------------- |
 | ![碳墨薄荷](../assets/tui/theme-carbon-mint.png) | ![墨夜紫罗兰](../assets/tui/theme-ink-violet.png) |
 
-| 岩板蓝 | 炉火深青 |
-|---|---|
+| 岩板蓝                                        | 炉火深青                                         |
+| --------------------------------------------- | ------------------------------------------------ |
 | ![岩板蓝](../assets/tui/theme-slate-blue.png) | ![炉火深青](../assets/tui/theme-hearth-teal.png) |
 
-| 砂岩咖啡 | 石墨珊瑚 |
-|---|---|
+| 砂岩咖啡                                                | 石墨珊瑚                                            |
+| ------------------------------------------------------- | --------------------------------------------------- |
 | ![砂岩咖啡](../assets/tui/theme-sandstone-espresso.png) | ![石墨珊瑚](../assets/tui/theme-graphite-coral.png) |
 
 ### 5.2 语义 token
@@ -332,13 +332,13 @@ focus.ring
 
 建议的模块归属：
 
-| 能力 | 所属模块 |
-|---|---|
-| `Theme`, token 与 Ratatui style 映射 | TUI client |
-| `Locale`, 文案目录与键位提示 | TUI client，共享 locale ID |
-| `UiPreferences` 持久化 | 配置/客户端偏好存储 |
-| `SteerCurrentTurn`, `QueueFollowUp` | `agent-app` 类型化命令 |
-| `ApprovalView`, `ToolPreview` | `agent-app` / `agent-tool` |
+| 能力                                 | 所属模块                    |
+| ------------------------------------ | --------------------------- |
+| `Theme`, token 与 Ratatui style 映射 | TUI client                  |
+| `Locale`, 文案目录与键位提示         | TUI client，共享 locale ID  |
+| `UiPreferences` 持久化               | 配置/客户端偏好存储         |
+| `SteerCurrentTurn`, `QueueFollowUp`  | `agent-app` 类型化命令      |
+| `ApprovalView`, `ToolPreview`        | `agent-app` / `agent-tool`  |
 | Session model pin 与 RoutingDecision | `agent-app` / `agent-model` |
 
 `UiPreferences` 至少包含：

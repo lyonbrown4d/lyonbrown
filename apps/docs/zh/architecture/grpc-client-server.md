@@ -32,10 +32,10 @@ TUI/GUI 只持有呈现状态、输入映射和 client 生命周期。这一边�
 Protocol Buffers 是协议真相源。命令与查询使用 unary RPC；可合并的 Runtime
 完整快照使用一条 server-streaming RPC。
 
-| 形态 | 操作 |
-|---|---|
-| Unary command | 开始、引导、排队、取消、审批响应 |
-| Unary query | 握手、健康检查、最新快照 |
+| 形态          | 操作                                |
+| ------------- | ----------------------------------- |
+| Unary command | 开始、引导、排队、取消、审批响应    |
+| Unary query   | 握手、健康检查、最新快照            |
 | Server stream | 带 revision 的最新 Runtime 完整快照 |
 
 每条命令包含 `command_id`、`client_instance_id` 和握手返回的
@@ -61,7 +61,7 @@ daemon 使用有容量的进程内 replay cache；一次逻辑调用的 transpor
 提供跨进程 exactly-once。发现 `server_instance_id` 变化后，客户端不得盲目重
 放未确认的非幂等命令。
 
-Wire contract 与 Rust 领域类型分离。新增 protobuf 字段只能使用新 tag，禁止
+Wire contract 与 TypeScript 领域类型分离。新增 protobuf 字段只能使用新 tag，禁止
 复用已发布 tag。v1 的 gRPC 编解码预算为 16 MiB；超限 Snapshot 明确失败，后
 续应使用分页或有界历史裁剪，而不是无界提高上限。
 
@@ -126,26 +126,27 @@ endpoint、bearer token 与 server epoch 同时替换旧的命令和事件通道
 discovery 文件位于同一个安全运行目录；descriptor 使用原子发布，token 不通
 过命令行参数或环境变量传递。
 
-Unix 已实现 owner-only 运行目录、文件权限、原子 discovery 发布和进程锁。
-Windows 通过受保护的 current-user-only DACL 提供等价边界，拒绝 reparse point，
-并在使用前校验 descriptor 与 lock 的句柄。两个平台都不会退化为宽松权限，也
-不会启动未认证 daemon。
+这些文件系统语义是 TypeScript 生产入口的发布门槛。POSIX provider 必须提供
+dirfd/openat、`O_NOFOLLOW`、owner-only 权限、原子发布与 kernel lock；Windows
+provider 必须使用受保护的 current-user-only DACL，拒绝 reparse point，并基于句柄
+校验 descriptor、lock 与文件身份。任一平台的 provider 缺失或校验失败时都必须
+fail closed，不能退化为普通路径文件操作或宽松权限。
 
-## 所有权与 Rust 生态选型
+## 所有权与 Node/TypeScript 生态选型
 
-- `agent-protocol`：protobuf 定义、生成类型与协议版本；
+- `protocol`：protobuf 定义、生成类型与协议版本；
 - `agent-client`：认证连接、命令关联、Snapshot、stream、重试与重连；
-- `agent-local`：token、discovery、安全目录与双锁；
+- `local-control-plane`：token、discovery、安全目录与双锁契约；
 - `agent-launch`：discover/reuse/spawn/readiness 协调；
 - `agent-runtime`：配置、composition、模型与 Runtime 服务；
 - `agentd`：唯一 composition root 和 gRPC server；
 - TUI/GUI：仅负责交互与呈现。
 
-实现优先复用成熟 Rust 生态：`tonic`/`prost` 承载 gRPC 与 protobuf，`tokio`
-承载异步 Runtime、进程与信号，`serde` 负责受限 schema，`getrandom`、`secrecy`
-和 `subtle` 用于 token 生成、秘密包装与常量时间比较，`file-id` 提供跨平台
-workspace 身份，Unix 文件安全边界使用 `rustix`。只有项目特有的 scope、
-生命周期与 UI 语义保留在自有 crate 中。
+实现优先复用成熟 Node 生态：`@grpc/grpc-js` 承载 gRPC，`ts-proto` 生成协议类型，
+Pi Agent Core 承载 agent loop，`better-sqlite3` 承载本地事件存储。Node 24 未暴露
+完整的安全文件 API，因此 native provider 使用精确锁定的 Koffi 调用窄 OS API，
+其余 fd 操作继续复用 `node:fs`。项目代码只保留 Lyonbrown 特有的 scope、epoch、
+生命周期、持久化顺序与 UI 语义，不自建 gRPC、数据库或 agent loop。
 
 ## 模型与下载边界
 
@@ -165,12 +166,16 @@ phase 覆盖等待锁、检查、下载、校验、安装、激活、就绪、�
 TooLate，因为此时原子落盘不能被中断。模型 ID、URL、摘要和目标路径均由 daemon
 内置目录决定，client 不能提交任意 URL 或文件路径。
 
-## 当前落地边界
+## TypeScript 迁移状态
 
-协议、认证、scope 握手、安全 discovery、双锁、launch coordinator、`agentd`
-composition、可重连共用 client 以及 TUI/GUI 统一 C/S 入口已经落地，并由
-workspace 测试覆盖。显式后台模型下载、单 Snapshot 进度流、in-process epoch
-切换和 fail-closed 命令 epoch fencing 也已落地。
+截至当前迁移分支，`protocol`、领域模型、UI 投影、SQLite EventStore、Pi Kernel
+适配器和 fail-closed 的 `local-control-plane` 契约已经由 TypeScript 测试覆盖。
+`agent-runtime`、`agent-client` 与 Node `agentd` gRPC 垂直切片正在实现。安全 native
+provider、真实 discover/reuse/spawn、可发布 daemon composition、TUI/GUI 产品接入
+仍是明确的发布阻断项。
+
+> 下文描述产品验收基线和旧实现提供的行为 oracle，不表示这些能力已经进入新的
+> TypeScript 产品入口。迁移期间不提供 embedded、Rust bridge 或双写兼容模式。
 
 两端现已在同一组 Snapshot/RPC 上提供完整模型设置闭环：显式开始或重试、进度、
 允许时取消、失败详情留屏，以及英文/简体中文文案。GUI 将设置卡片放在

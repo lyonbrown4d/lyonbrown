@@ -20,12 +20,12 @@ startup. The client can still enter its UI, but submission stays unavailable
 until model setup is resolved. Set `[model].model` to another built-in preset ID
 to override the default:
 
-| Preset | Download | Minimum available RAM | File |
-|---|---:|---:|---|
-| `qwen3-0.6b-q8_0` | 0.64 GB | 2 GiB | `Qwen3-0.6B-Q8_0.gguf` |
-| `qwen3-1.7b-q4_k_m` (default) | 1.11 GB | 4 GiB | `Qwen3-1.7B-Q4_K_M.gguf` |
-| `qwen3-4b-q4_k_m` | 2.50 GB | 8 GiB | `Qwen3-4B-Q4_K_M.gguf` |
-| `qwen3-8b-q4_k_m` | 5.03 GB | 14 GiB | `Qwen3-8B-Q4_K_M.gguf` |
+| Preset                        | Download | Minimum available RAM | File                     |
+| ----------------------------- | -------: | --------------------: | ------------------------ |
+| `qwen3-0.6b-q8_0`             |  0.64 GB |                 2 GiB | `Qwen3-0.6B-Q8_0.gguf`   |
+| `qwen3-1.7b-q4_k_m` (default) |  1.11 GB |                 4 GiB | `Qwen3-1.7B-Q4_K_M.gguf` |
+| `qwen3-4b-q4_k_m`             |  2.50 GB |                 8 GiB | `Qwen3-4B-Q4_K_M.gguf`   |
+| `qwen3-8b-q4_k_m`             |  5.03 GB |                14 GiB | `Qwen3-8B-Q4_K_M.gguf`   |
 
 The memory guard uses available memory reported by the operating system at startup, not total physical RAM, and VRAM is not a separate input. If available RAM is below the selected preset's threshold, startup fails instead of silently changing the user's choice.
 

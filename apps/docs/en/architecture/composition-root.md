@@ -1,48 +1,70 @@
-# FluxDI Composition Root
+# TypeScript Composition Root
 
-Lyonbrown pins `FluxDI 1.2.2` as the repository-wide composition skeleton. It wires objects without spreading dependency injection into the domain model: domain crates such as `agent-core`, `agent-model`, `agent-tool`, `agent-secret`, `agent-profile`, and `agent-storage` continue to express dependencies through constructors, traits, and explicit parameters and do not depend on FluxDI. The CLI and GPUI GUI own separate composition roots. A future server or other application entry point should use the same boundary rather than make domain crates container-aware.
+Lyonbrown has one production composition root in the Node/TypeScript `agentd`.
+Domain packages express dependencies through constructors, factories, and
+consumer-owned narrow interfaces. They do not use a service locator or depend on
+a DI container. The TUI and GUI are gRPC clients and never construct a Kernel or
+Runtime.
 
 ## Composition boundary
 
-Startup has two phases:
+Startup proceeds in this order:
 
-1. `CoreModule` binds the already resolved `RuntimeConfig`, `RuntimePaths`, and `ApprovalPolicy`.
-2. After external resources are prepared asynchronously, `RuntimeModule` binds the model and tool registries, Secret Broker, Agent/Workspace Profiles, Skill Registry, optional Storage, optional Task Router, and the final `KernelFactory`.
-
-The GUI `GuiModule` binds `CockpitState` and `CockpitFactory`, then validates its graph before opening a window. Both applications expose typed entry points such as `build_kernel()` or `create_cockpit()` instead of a generic container resolver.
+1. Resolve and freeze runtime configuration, workspace identity, and path policy.
+2. Acquire the secure run directory and daemon-lifetime lock.
+3. Open the EventStore and recover the runtime projection from durable events.
+4. Construct model, tool, approval, and Pi Kernel adapters.
+5. Construct `agent-runtime`, then start the authenticated loopback gRPC server.
+6. Atomically publish the discovery descriptor and only then become ready.
 
 ```text
-configuration + paths + approval policy
-                  │
-                  ▼
-          FluxDI CompositionRoot
-                  │
-                  ├── ModelRegistry / TaskRouter
-                  ├── ToolRegistry / SecretBroker
-                  ├── AgentProfile / WorkspaceProfile / SkillRegistry
-                  ├── SessionStore (optional)
-                  └── KernelFactory ──► Kernel
+configuration + EpochIdentity + secure local capabilities
+                           │
+                           ▼
+                  agentd composition root
+                           │
+                           ├── EventStore
+                           ├── Pi Kernel adapter
+                           ├── Model / Tool / Approval ports
+                           ├── AgentRuntime
+                           └── authenticated gRPC server
 ```
 
-`KernelFactory` is the narrow adapter between the container and the domain builder. It derives `RoutingPolicy` from the Profile and passes configuration, registries, approval, secrets, profiles, storage, and routing to `Kernel::builder()`. The Kernel neither parses configuration nor resolves dependencies from a global container.
+Composition uses explicit factories rather than a container:
 
-## Dependency-graph validation
+- `createAgentRuntime({ store, kernelFactory, clock, ids })`
+- `createAgentGrpcServer({ host, token, serverInstanceId, scopeId })`
+- `createAgentClient({ binding, deadlines })`
 
-The composition root calls `try_validate_graph()` after all asynchronous services are registered. This validation detects missing bindings, cycles, and incomplete `KernelFactory` dependencies before the CLI accepts a session. Every new root-level service should:
+Concrete Pi, SQLite, and gRPC types remain inside their adapter packages. Domain
+events and runtime projections do not depend on them. The production entry point
+does not export a generic resolver, unauthenticated server, embedded runtime, or
+test bootstrap.
 
-- be registered by an application module;
-- declare Provider edges with `with_dependency`;
-- be covered by `CompositionRoot::validate()` and composition-root tests.
+## Lifecycle and failure boundaries
 
-Startup can still fail while opening a model file, network resource, or database. Graph validation verifies composition relationships; it does not replace resource health checks.
+`agentd` exclusively owns models, tools, sessions, and durable state. A command
+may publish a Snapshot or successful receipt only after persistence succeeds. If
+a side effect outcome cannot be established, the session becomes terminal instead
+of guessing that execution may continue.
 
-## Override and replacement strategy
+`EpochIdentity` injects `server_instance_id`, scope, and bearer token as one
+immutable launch identity. Runtime replacement constructs a new composition and
+rotates the epoch rather than hot-swapping global singletons.
 
-Replacement happens at composition-root inputs, not through a service locator in domain crates:
+The secure native provider is a hard production dependency. Without it, startup
+fails closed with `NATIVE_SECURITY_PROVIDER_REQUIRED`. There is no fallback to
+path-based filesystem operations, `proper-lockfile`, raw endpoint/token flags, or
+a Rust bridge.
 
-- Configuration is overlaid in the order “built-in defaults → global file → trusted workspace file → `--config` → environment → CLI flags,” then one `RuntimeConfig` instance is bound.
-- Paths and approval policy are supplied by the caller, so tests can use temporary directories and a `SessionApprovalPolicy` without modifying domain code.
-- Providers, tools, the Secret Broker, profiles, storage, and the Task Router are constructed by `prepare_services` and then bound as interfaces or registries. Alternative implementations belong at this application-layer seam.
-- Optional capabilities use explicit wrapper bindings, keeping “not registered” distinct from “configured off.”
+## Test replacement strategy
 
-The production root should not hot-swap singletons after startup. Tests that need different implementations should create an isolated root. A new application entry point should reuse the domain construction APIs while owning its own modules and lifecycle.
+Tests inject an in-memory EventStore, fake Kernel/model, fake clock/IDs, and a fake
+control-plane provider at consumer boundaries. gRPC tests still use a real
+`grpc-js` loopback transport to verify authentication, epoch fencing, replay, and
+stream behavior. Fakes are not exported as product entry points.
+
+During migration, the previous Rust code may remain on the branch as a behavior
+oracle. It is not part of the final runtime and does not define a compatibility
+mode. Once the equivalent TypeScript vertical slices pass their parity tests, the
+old implementation is removed as a whole.

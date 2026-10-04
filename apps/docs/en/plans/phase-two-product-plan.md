@@ -490,13 +490,13 @@ Additional requirements:
 
 The following choices require evidence from the preceding milestone:
 
-| Decision gate | Trigger | Required evidence |
-|---|---|---|
+| Decision gate                                   | Trigger                           | Required evidence                                                                                                                       |
+| ----------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | One product package or separate TUI/GUI bundles | Before the first public installer | Both options must atomically include the exact-version sibling `agentd`; compare install size, upgrade behavior, and release complexity |
-| Keep a dedicated Router resident | M15 | Clear latency, memory, or task-success improvement over Worker reuse |
-| Long-term GPUI commitment | After M13 | Three platforms, IME, accessibility, performance, and upgrade cost |
-| Add per-turn model overrides | After M14 | Frequent real need without damaging routing clarity |
-| Concurrent multi-Kernel sessions | After M13 | Defined background-work and resource model |
-| Built-in code editor | After M14 | Read-only preview plus external editor cannot satisfy core work |
+| Keep a dedicated Router resident                | M15                               | Clear latency, memory, or task-success improvement over Worker reuse                                                                    |
+| Long-term GPUI commitment                       | After M13                         | Three platforms, IME, accessibility, performance, and upgrade cost                                                                      |
+| Add per-turn model overrides                    | After M14                         | Frequent real need without damaging routing clarity                                                                                     |
+| Concurrent multi-Kernel sessions                | After M13                         | Defined background-work and resource model                                                                                              |
+| Built-in code editor                            | After M14                         | Read-only preview plus external editor cannot satisfy core work                                                                         |
 
 Explicitly deferred from phase two: Sub-agent orchestration, long-term vector memory, plugin marketplace, remote Sync Server, and a complete IDE. None should block the model control plane or the two-client interaction loop.
