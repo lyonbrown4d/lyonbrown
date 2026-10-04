@@ -12,10 +12,6 @@ class AgentRuntimeHostAdapter implements RuntimeHost {
   constructor(private readonly runtime: AgentRuntime) {}
 
   async execute(command: RuntimeCommand): Promise<RuntimeResult> {
-    const state = this.runtime.snapshot();
-    if (state.outcomeUnknown || state.phase === "failed_terminal") {
-      return failure("RUNTIME_STOPPED");
-    }
     if (command.kind === "start-turn") {
       if (empty(command.text)) return failure("EMPTY_TEXT");
       try {
@@ -34,7 +30,6 @@ class AgentRuntimeHostAdapter implements RuntimeHost {
         return mapRuntimeFailure(error, command.kind);
       }
     }
-    if (!hasActiveTurn(state)) return failure("NO_ACTIVE_TURN");
     if (command.kind !== "cancel-turn" && empty(command.text)) return failure("EMPTY_TEXT");
     try {
       switch (command.kind) {
@@ -98,14 +93,6 @@ function isAborted(signal: AbortSignal): boolean {
   return signal.aborted;
 }
 
-function hasActiveTurn(state: ReturnType<AgentRuntime["snapshot"]>): boolean {
-  if (state.phase === "running" || state.tools.some((tool) => tool.status === "running")) {
-    return true;
-  }
-  const status = state.turns.at(-1)?.status;
-  return status === "submitted" || status === "running";
-}
-
 function empty(value: string): boolean {
   return typeof value !== "string" || value.trim().length === 0;
 }
@@ -113,6 +100,8 @@ function empty(value: string): boolean {
 function mapRuntimeFailure(error: unknown, command: RuntimeCommand["kind"]): RuntimeResult {
   if (!(error instanceof AgentRuntimeError)) return failure("RUNTIME_STOPPED");
   switch (error.code) {
+    case "NO_ACTIVE_TURN":
+      return failure("NO_ACTIVE_TURN");
     case "SESSION_BUSY":
       return failure("TURN_ALREADY_ACTIVE");
     case "KERNEL_FAILURE":

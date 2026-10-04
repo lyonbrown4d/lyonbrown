@@ -40,19 +40,23 @@ describe("runtime host adapter commands", () => {
       ok: false,
       error: { code: "EMPTY_TEXT" },
     });
+    runtime.controlError = new AgentRuntimeError("NO_ACTIVE_TURN", "no active turn");
     await expect(host.execute({ kind: "steer-current-turn", text: "focus" })).resolves.toEqual({
       ok: false,
       error: { code: "NO_ACTIVE_TURN" },
     });
+    runtime.controlError = undefined;
     await expect(host.execute({ kind: "queue-follow-up", text: "later" })).resolves.toEqual({
       ok: true,
     });
+    runtime.controlError = new AgentRuntimeError("NO_ACTIVE_TURN", "no active turn");
     await expect(host.execute({ kind: "cancel-turn" })).resolves.toEqual({
       ok: false,
       error: { code: "NO_ACTIVE_TURN" },
     });
 
     runtime.state = activeState();
+    runtime.controlError = undefined;
     runtime.startError = new AgentRuntimeError("SESSION_BUSY", "already active");
     await expect(host.execute({ kind: "start-turn", text: "second" })).resolves.toEqual({
       ok: false,
@@ -99,7 +103,7 @@ describe("runtime host adapter commands", () => {
     });
   });
 
-  test("fails recovered terminal sessions closed before invoking the runtime", async () => {
+  test("maps recovered terminal failures decided by the runtime", async () => {
     const runtime = new FakeAgentRuntime(
       stateFrom([
         { type: "session_opened" },
@@ -116,6 +120,8 @@ describe("runtime host adapter commands", () => {
         { type: "run_failed", code: "TOOL_TIMEOUT", message: "outcome unknown" },
       ]),
     );
+    runtime.startError = new AgentRuntimeError("TERMINAL_SESSION", "terminal session");
+    runtime.controlError = new AgentRuntimeError("TERMINAL_SESSION", "terminal session");
     const host = createRuntimeHostAdapter(runtime);
 
     await expect(host.execute({ kind: "start-turn", text: "retry" })).resolves.toEqual({

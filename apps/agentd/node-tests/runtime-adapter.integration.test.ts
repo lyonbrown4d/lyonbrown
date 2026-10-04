@@ -201,6 +201,14 @@ test("a recovered unresolved tool rejects a new start without invoking the repla
     ok: false,
     error: { code: "RUNTIME_STOPPED" },
   });
+  await expect(host.execute({ kind: "steer-current-turn", text: "retry" })).resolves.toEqual({
+    ok: false,
+    error: { code: "RUNTIME_STOPPED" },
+  });
+  await expect(host.execute({ kind: "cancel-turn" })).resolves.toEqual({
+    ok: false,
+    error: { code: "RUNTIME_STOPPED" },
+  });
   expect(replacementStarts).toBe(0);
 
   await recovered.dispose();

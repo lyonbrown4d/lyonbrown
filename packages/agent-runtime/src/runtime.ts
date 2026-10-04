@@ -17,6 +17,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   readonly #kernel: ReturnType<CreateAgentRuntimeOptions["createKernelSession"]>;
   readonly #background = new RuntimeBackgroundTasks();
   #running = false;
+  #claimPending = false;
   #cancelRequested = false;
   #pendingFollowUps = 0;
   #disposed = false;
@@ -53,6 +54,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
       throw runtimeError("SESSION_BUSY", "A runtime turn is already active");
     const text = validateText(input, "input");
     this.#running = true;
+    this.#claimPending = true;
     this.#cancelRequested = false;
     try {
       await this.writer.append(
@@ -63,10 +65,12 @@ export class DefaultAgentRuntime implements AgentRuntime {
         }),
       );
     } catch {
+      this.#claimPending = false;
       this.#running = false;
       if (this.writer.fatal !== undefined) throw this.writer.fatal;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
     }
+    this.#claimPending = false;
     if (this.#disposed) {
       this.#running = false;
       throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
@@ -84,8 +88,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
 
   async steer(input: string): Promise<void> {
     this.#assertAvailable();
-    if (!this.#running)
-      throw runtimeError("TERMINAL_SESSION", "Runtime session has no active turn");
+    runtimeHelpers.assertActiveControl(this.writer.state, this.#running, this.#claimPending);
     const text = validateText(input, "input");
     try {
       await this.writer.append(
@@ -130,6 +133,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
 
   cancel(): void {
     this.#assertAvailable();
+    runtimeHelpers.assertActiveControl(this.writer.state, this.#running, this.#claimPending);
     const wasRequested = this.#cancelRequested;
     this.#cancelRequested = true;
     try {
@@ -165,7 +169,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
     try {
       await this.#kernel.startTurn(input, { signal });
     } catch {
-      await this.#recordKernelFailure();
+      await runtimeHelpers.recordKernelFailure(this.writer, this.options.sessionId, this.#disposed);
     } finally {
       this.#cancelRequested = false;
       this.#running = false;
@@ -174,26 +178,9 @@ export class DefaultAgentRuntime implements AgentRuntime {
   }
 
   #superviseKernelFailure(): void {
-    this.#background.track(async () => this.#recordKernelFailure());
-  }
-
-  async #recordKernelFailure(): Promise<void> {
-    if (this.#disposed || this.writer.fatal !== undefined || this.writer.state.outcomeUnknown)
-      return;
-    const status = this.writer.state.turns.at(-1)?.status;
-    if (status !== "submitted" && status !== "running") return;
-    try {
-      await this.writer.append(
-        parseAgentRuntimeEvent({
-          type: "run_failed",
-          sessionId: this.options.sessionId,
-          code: "KERNEL_FAILURE",
-          message: "Kernel session failed",
-        }),
-      );
-    } catch {
-      // The writer retains a sanitized sticky failure for the next command boundary.
-    }
+    this.#background.track(async () =>
+      runtimeHelpers.recordKernelFailure(this.writer, this.options.sessionId, this.#disposed),
+    );
   }
 
   #resumeQueuedFollowUps(): void {
@@ -211,8 +198,12 @@ export class DefaultAgentRuntime implements AgentRuntime {
     const status = this.writer.state.turns.at(-1)?.status;
     if (status === "submitted" || status === "running") return;
     this.#running = true;
+    this.#claimPending = true;
     this.#cancelRequested = false;
-    if (!this.#background.track(async () => this.#claimFollowUp(text))) this.#running = false;
+    if (!this.#background.track(async () => this.#claimFollowUp(text))) {
+      this.#claimPending = false;
+      this.#running = false;
+    }
   }
 
   async #claimFollowUp(text: string): Promise<void> {
@@ -225,9 +216,11 @@ export class DefaultAgentRuntime implements AgentRuntime {
         }),
       );
     } catch {
+      this.#claimPending = false;
       this.#running = false;
       return;
     }
+    this.#claimPending = false;
     if (this.#disposed) {
       this.#running = false;
       return;
@@ -260,6 +253,9 @@ export class DefaultAgentRuntime implements AgentRuntime {
     if (this.writer.fatal !== undefined) throw this.writer.fatal;
     if (this.writer.state.outcomeUnknown) {
       throw runtimeError("TERMINAL_SESSION", "Runtime session has an uncertain tool outcome");
+    }
+    if (this.writer.state.phase === "failed_terminal") {
+      throw runtimeError("TERMINAL_SESSION", "Runtime session is terminal");
     }
     if (
       !this.#running &&

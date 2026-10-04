@@ -128,7 +128,23 @@ export function applyRuntimeEvent(
     }
     case "runtime_error": {
       const failure = freezeFailure(event);
-      return freezeState({ ...state, revision, phase: "failed", lastError: failure });
+      if (!hasActiveTurn(state)) {
+        return freezeState({
+          ...state,
+          revision,
+          phase: "failed_terminal",
+          lastError: failure,
+        });
+      }
+      return updateLastTurn(
+        state,
+        revision,
+        (turn) => ({
+          ...updateLastActivity(turn, (activity) => ({ ...activity, status: "failed" })),
+          status: "failed",
+        }),
+        { phase: "failed_terminal", lastError: failure },
+      );
     }
   }
 }
@@ -160,7 +176,11 @@ function addUsage(current: RuntimeUsage, delta: RuntimeUsage): RuntimeUsage {
 }
 
 function assertFollowUpCanStart(state: AgentRuntimeState, text: string): void {
-  if (state.phase === "running" || state.tools.some((tool) => tool.status === "running")) {
+  if (
+    hasActiveTurn(state) ||
+    state.phase === "running" ||
+    state.tools.some((tool) => tool.status === "running")
+  ) {
     throw domainError("failed_precondition", "Runtime session has unresolved work", {
       reason: "unresolved_runtime_work",
     });

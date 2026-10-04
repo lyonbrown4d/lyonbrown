@@ -49,12 +49,23 @@ describe("agent runtime cancellation boundary", () => {
   test.each(cancelFailureCases)("sanitizes a kernel cancel $name", async ({ create }) => {
     const store = openEventStore({ testOnlyMemory: true });
     const { failure, accesses } = create();
+    let finishKernel = (): void => undefined;
+    let kernelFinished = (): void => undefined;
+    const kernelGate = new Promise<void>((resolve) => {
+      finishKernel = resolve;
+    });
+    const kernelDone = new Promise<void>((resolve) => {
+      kernelFinished = resolve;
+    });
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-cancel-failure"),
       eventStore: runtimeEventStore(store),
       createEventId: sequentialEventIds(),
       createKernelSession: () => ({
-        startTurn: () => Promise.resolve(),
+        startTurn: async () => {
+          await kernelGate;
+          kernelFinished();
+        },
         steer: () => undefined,
         followUp: () => undefined,
         cancel: () => {
@@ -65,12 +76,16 @@ describe("agent runtime cancellation boundary", () => {
         dispose: () => undefined,
       }),
     });
+    await runtime.startTurn("active turn");
     let caught: unknown;
     try {
       runtime.cancel();
     } catch (error) {
       caught = error;
     }
+    finishKernel();
+    await kernelDone;
+    await new Promise<void>((resolve) => setImmediate(resolve));
     await runtime.dispose();
     store.close();
 

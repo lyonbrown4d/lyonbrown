@@ -2,6 +2,7 @@ import { domainError } from "./errors.js";
 import type { SessionId } from "./identifiers.js";
 import { incrementRevision, type Revision } from "./revision.js";
 import type { AgentRuntimeEvent } from "./runtime-events.js";
+import { hasActiveTurn } from "./runtime-state-mutations.js";
 import { applyRuntimeEvent } from "./runtime-state-reducer.js";
 import type { AgentRuntimeState } from "./runtime-state-types.js";
 import { ZERO_RUNTIME_USAGE, freezeState } from "./runtime-state-types.js";
@@ -63,16 +64,19 @@ export function reduceAgentRuntimeEvent(
       reason: "session_already_opened",
     });
   }
-  if (state.outcomeUnknown && input.event.type !== "run_failed") {
-    throw domainError(
-      "failed_precondition",
-      "Runtime session is terminal after an uncertain outcome",
-      { reason: "terminal_uncertain_outcome" },
-    );
+  if (
+    state.phase === "failed_terminal" &&
+    !(state.outcomeUnknown && input.event.type === "run_failed")
+  ) {
+    throw domainError("failed_precondition", "Runtime session is terminal", {
+      reason: state.outcomeUnknown ? "terminal_uncertain_outcome" : "terminal_runtime_error",
+    });
   }
   if (
     input.event.type === "user_message_submitted" &&
-    (state.phase === "running" || state.tools.some((tool) => tool.status === "running"))
+    (hasActiveTurn(state) ||
+      state.phase === "running" ||
+      state.tools.some((tool) => tool.status === "running"))
   ) {
     throw domainError("failed_precondition", "Runtime session has unresolved work", {
       reason: "unresolved_runtime_work",

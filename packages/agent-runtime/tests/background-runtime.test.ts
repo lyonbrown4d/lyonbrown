@@ -15,7 +15,7 @@ describe("supervised runtime commands", () => {
       createEventId: sequentialEventIds(),
     });
 
-    await expect(runtime.steer("focus")).rejects.toMatchObject({ code: "TERMINAL_SESSION" });
+    await expect(runtime.steer("focus")).rejects.toMatchObject({ code: "NO_ACTIVE_TURN" });
     await runtime.dispose();
     store.close();
   });
