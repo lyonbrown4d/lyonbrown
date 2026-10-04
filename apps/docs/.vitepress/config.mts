@@ -17,6 +17,7 @@ const englishSidebar = [
     text: "Plans",
     items: [
       { text: "Node/TypeScript + Pi Migration", link: "/en/plans/node-typescript-pi-migration" },
+      { text: "Migration Pause Checkpoint", link: "/en/plans/migration-status" },
     ],
   },
   {
@@ -43,7 +44,10 @@ const chineseSidebar = [
   },
   {
     text: "计划",
-    items: [{ text: "Node/TypeScript + Pi 迁移", link: "/zh/plans/node-typescript-pi-migration" }],
+    items: [
+      { text: "Node/TypeScript + Pi 迁移", link: "/zh/plans/node-typescript-pi-migration" },
+      { text: "迁移暂停检查点", link: "/zh/plans/migration-status" },
+    ],
   },
   {
     text: "参考",
