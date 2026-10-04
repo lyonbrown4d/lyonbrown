@@ -85,8 +85,12 @@ class DefaultAgentRuntime implements AgentRuntime {
   }
 
   cancel(): void {
-    this.#assertUsable();
-    this.#kernel.cancel();
+    this.#assertAvailable();
+    try {
+      this.#kernel.cancel();
+    } catch {
+      throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
+    }
   }
 
   dispose(): void {

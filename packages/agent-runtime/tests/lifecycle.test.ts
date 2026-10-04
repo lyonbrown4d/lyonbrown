@@ -1,6 +1,6 @@
 import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { createAgentRuntime } from "../src/index.js";
 import {
@@ -122,17 +122,25 @@ describe("agent runtime lifecycle", () => {
       })),
     );
     const kernel = new CapturingKernelFactory();
+    const replacementCancel = vi.fn();
     const runtime = await createAgentRuntime({
       sessionId,
       eventStore: runtimeEventStore(store),
-      createKernelSession: kernel.create,
+      createKernelSession: (input) => ({
+        ...kernel.create(input),
+        cancel: replacementCancel,
+      }),
       createEventId: sequentialEventIds("new"),
     });
 
     await expect(runtime.startTurn("must not clear pending tool")).rejects.toMatchObject({
       code: "TERMINAL_SESSION",
     });
+    expect(() => {
+      runtime.cancel();
+    }).toThrow(expect.objectContaining({ code: "TERMINAL_SESSION" }));
     expect(kernel.starts).toEqual([]);
+    expect(replacementCancel).not.toHaveBeenCalled();
     expect(await eventTypes(store, sessionId)).toEqual(events.map((event) => event.type));
     runtime.dispose();
     store.close();
