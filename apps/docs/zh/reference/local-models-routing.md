@@ -2,7 +2,7 @@
 
 ## Node daemon 默认持有 llama.cpp
 
-Lyonbrown 只有一种产品架构：`agentd` 持有 Runtime、模型、工具、MCP 和 Session，TUI 与 GUI 只是经过认证的 gRPC client。客户端不加载 GGUF，也没有 embedded Runtime 回退。
+Lyonbrown 只有一种产品架构：`agentd` 持有 Runtime、模型、工具、MCP 和 Session，TUI 是经过认证的 gRPC client。客户端不加载 GGUF，也没有 embedded Runtime 回退。
 
 Node 实现使用精确锁定的 `node-llama-cpp`，并将其作为必需依赖随产品交付。发布包只使用验证过的预编译原生二进制；运行时设置 `build: "never"` 与 `skipDownload: true`，禁止首次启动时静默编译 llama.cpp 或下载原生组件。原生二进制缺失或不兼容时必须返回结构化不可用状态。
 
@@ -21,13 +21,13 @@ revision 和摘要固定在代码中，不使用 `main`。固定 resolve URL 避
 
 ## 非阻塞启动与显式下载
 
-打开 TUI/GUI 或启动 daemon 不会自动下载模型。缓存检查在后台执行，界面可以立即显示连接和模型设置状态。模型缺失时禁止提交依赖该模型的 turn，但用户仍可查看状态、修改配置或退出。
+打开 TUI 或启动 daemon 不会自动下载模型。缓存检查在后台执行，界面可以立即显示连接和模型设置状态。模型缺失时禁止提交依赖该模型的 turn，但用户仍可查看状态、修改配置或退出。
 
 下载只能由用户显式触发。daemon 投影以下阶段：
 
 `checking → setup-required → waiting-for-lock → downloading → verifying → installing → ready`
 
-取消或失败分别进入 `cancelled` 和 `failed`。每次操作都有新的 `operation_id`；旧 ID 不能取消新任务。进入原子安装阶段后取消返回 TooLate。任务属于 daemon，关闭某个 client 不会隐式取消下载。进度与结果进入现有的版本化 `RuntimeSnapshot`；TUI/GUI 不实现下载器。
+取消或失败分别进入 `cancelled` 和 `failed`。每次操作都有新的 `operation_id`；旧 ID 不能取消新任务。进入原子安装阶段后取消返回 TooLate。任务属于 daemon，关闭 TUI 不会隐式取消下载。进度与结果进入现有的版本化 `RuntimeSnapshot`；TUI 不实现下载器。
 
 ## 安全与完整性边界
 
@@ -46,7 +46,7 @@ revision 和摘要固定在代码中，不使用 `main`。固定 resolve URL 避
 
 `packages/local-model` 正在完成托管 preset、后台检查/下载、跨进程锁、摘要验证、原子激活和原生加载生命周期。只有在 native 安全存储适配器与 `agentd` composition root 接通并通过真实 GGUF 测试后，它才是可发布的默认模型闭环。
 
-在此之前，本文中的状态和交互是已接受的产品契约，不表示当前 Node `agentd` 入口已经可以执行本地推理。Rust 实现只保留为迁移期行为 oracle，不是兼容运行模式。
+在此之前，本文中的状态和交互是已接受的产品契约，不表示当前 Node `agentd` 入口已经可以执行本地推理。仍需保留的历史行为由 TypeScript 回归测试和语言无关 fixture 承载。
 
 ## 类型化任务路由
 

@@ -1,61 +1,40 @@
-# TypeScript 组合根
+# `agentd` 组合根
 
-Lyonbrown 的唯一生产组合根位于 Node/TypeScript `agentd`。领域包通过构造函数、
-工厂和由 consumer 定义的窄接口表达依赖，不使用 service locator，也不把依赖注入
-容器扩散到领域模型。TUI 与 GUI 是 gRPC 客户端，不再构造 Kernel 或 Runtime。
+`apps/agentd` 是唯一生产组合根。依赖注入只存在于进程边界，不让领域对象从容器
+主动解析服务。
 
-## 装配边界
+## 所有权
 
-启动按以下顺序完成：
+daemon 构造并持有：
 
-1. 解析并冻结 Runtime 配置、工作区身份与路径策略；
-2. 获取安全运行目录和 daemon 生命周期锁；
-3. 打开 EventStore，并从持久化事件恢复 Runtime 投影；
-4. 构造模型、工具、审批与 Pi Kernel 适配器；
-5. 构造 `agent-runtime`，再启动认证的 loopback gRPC server；
-6. 原子发布 discovery descriptor，最后进入 ready 状态。
+- 带作用域的 run/data 目录及原生安全能力；
+- 生命周期锁、发现描述符、endpoint 与认证 token；
+- EventStore、durable Runtime、Pi kernel session、工具、MCP 与 Secret；
+- 托管 `node-llama-cpp` 模型存储和生命周期；
+- 认证 gRPC 服务与 Snapshot stream。
 
-```text
-配置 + EpochIdentity + 安全本地能力
-                 │
-                 ▼
-            agentd composition
-                 │
-                 ├── EventStore
-                 ├── Pi Kernel adapter
-                 ├── Model / Tool / Approval ports
-                 ├── AgentRuntime
-                 └── authenticated gRPC server
-```
+TUI 只能得到窄化后的 `agent-launch`、`agent-client` 与 `ui-model` 接口，不能得到
+数据库句柄、模型路径、原始 bearer token、供应商 Secret 或 Pi 对象。
 
-组合使用显式工厂而非容器：
+## 启动顺序
 
-- `createAgentRuntime({ store, kernelFactory, clock, ids })`
-- `createAgentGrpcServer({ host, token, serverInstanceId, scopeId })`
-- `createAgentClient({ binding, deadlines })`
+1. 解析并校验类型化进程配置。
+2. 使用稳定的文件系统身份与有效配置指纹推导 workspace scope。
+3. 打开受保护的 run/data 目录并取得 daemon 生命周期 lease。
+4. 打开并恢复 EventStore，再构造 Runtime 与 Pi 适配器。
+5. 在私有 endpoint 启动认证 gRPC server。
+6. 最后发布发现描述符；发布时服务必须已可用。
 
-Pi、SQLite 与 gRPC 的具体类型分别留在各自适配包内。领域事件和 Runtime 投影不依赖
-这些实现类型。生产入口不导出任意解析器、未认证 server、embedded runtime 或测试
-bootstrap。
+描述符发布前发生的失败不会被 client 发现，并按所有权逆序清理。进程绝不回退到
+embedded Runtime。
 
-## 生命周期与失败边界
+## 关闭顺序
 
-`agentd` 独占模型、工具、Session 和持久化状态。命令只有在持久化成功后才可发布
-Snapshot 或成功 receipt；无法确认副作用结果时，当前 Session 进入终止状态，不能
-继续推测执行。
+daemon 先停止接受 RPC 与 stream，在期限内优雅关闭 gRPC，超时后强制关闭；随后
+dispose Runtime 和模型资源、关闭 EventStore、释放 lease 与目录锚点，最后移除发现
+状态。每一步都必须尝试；诊断只返回脱敏后的第一个失败，不泄漏凭据或本地敏感路径。
 
-`EpochIdentity` 将 `server_instance_id`、scope 与 bearer token 作为一次启动的不可变
-整体注入。替换 Runtime 时创建新的组合实例并轮换 epoch，而不是热替换全局单例。
+## 测试接缝
 
-安全 native provider 是生产组合根的硬依赖。缺失时入口必须以
-`NATIVE_SECURITY_PROVIDER_REQUIRED` fail closed；不得退化为普通路径文件操作、
-`proper-lockfile`、原始 endpoint/token 参数或 Rust bridge。
-
-## 测试替换策略
-
-测试在 consumer 边界注入内存 EventStore、fake Kernel/model、fake clock/ID 和 fake
-control-plane provider。gRPC 测试仍使用真实 `grpc-js` loopback transport，验证认证、
-epoch fencing、replay 与 stream 行为；fake 不作为产品入口导出。
-
-当前迁移阶段允许旧 Rust 代码作为行为 oracle 留在分支中，但它不属于最终运行时，
-也不形成兼容模式。对应 TypeScript 垂直切片通过对照测试后，旧实现将整体移除。
+生产组合显式注入原生能力；平台实现不可用时 fail closed。测试在同一边界使用 port
+与 fake，生产默认值不得选择测试 helper。

@@ -2,7 +2,7 @@
 
 ## The Node daemon owns llama.cpp by default
 
-Lyonbrown has one product architecture: `agentd` owns the runtime, models, tools, MCP connections, and sessions. The TUI and GUI are authenticated gRPC clients. They do not load GGUF files and there is no embedded Runtime fallback.
+Lyonbrown has one product architecture: `agentd` owns the runtime, models, tools, MCP connections, and sessions. The TUI is an authenticated gRPC client. It does not load GGUF files and there is no embedded Runtime fallback.
 
 The Node implementation uses an exactly pinned `node-llama-cpp` as a required product dependency. Release artifacts use only verified prebuilt native binaries. Runtime options set `build: "never"` and `skipDownload: true`, preventing first launch from silently compiling llama.cpp or fetching a native component. A missing or incompatible binary produces a structured unavailable state.
 
@@ -21,13 +21,13 @@ Both revision and digest are pinned in code; the catalog does not use `main`. A 
 
 ## Non-blocking startup and explicit download
 
-Opening the TUI/GUI or starting the daemon never starts a model download. Cache inspection runs in the background, so the UI can immediately show connection and setup state. A missing model disables model-dependent turn submission, but the user can still inspect state, change configuration, or leave.
+Opening the TUI or starting the daemon never starts a model download. Cache inspection runs in the background, so the UI can immediately show connection and setup state. A missing model disables model-dependent turn submission, but the user can still inspect state, change configuration, or leave.
 
 Only an explicit user action starts a download. The daemon projects these phases:
 
 `checking → setup-required → waiting-for-lock → downloading → verifying → installing → ready`
 
-Cancellation and failure use `cancelled` and `failed`. Every operation receives a new `operation_id`; a stale ID cannot cancel a newer job. Cancellation is too late once atomic installation starts. The daemon owns the job, so closing one client does not implicitly cancel it. Progress and results use the existing versioned `RuntimeSnapshot`; TUI and GUI do not implement downloaders.
+Cancellation and failure use `cancelled` and `failed`. Every operation receives a new `operation_id`; a stale ID cannot cancel a newer job. Cancellation is too late once atomic installation starts. The daemon owns the job, so closing the TUI does not implicitly cancel it. Progress and results use the existing versioned `RuntimeSnapshot`; the TUI does not implement a downloader.
 
 ## Security and integrity boundary
 
@@ -46,7 +46,7 @@ Production must fail closed when this capability is absent; it must not fall bac
 
 `packages/local-model` is completing the managed preset, background inspection/download, cross-process locking, digest validation, atomic activation, and native-load lifecycle. It becomes a releasable default-model path only after its native secure-storage adapter is connected to the `agentd` composition root and passes a real-GGUF test.
 
-Until then, the states and interactions in this document are the accepted product contract, not a claim that the current Node `agentd` entry point can already run local inference. The Rust implementation remains a migration-time behavior oracle, not a compatibility runtime.
+Until then, the states and interactions in this document are the accepted product contract, not a claim that the current Node `agentd` entry point can already run local inference. Required historical behavior is preserved by TypeScript regression tests and language-neutral fixtures.
 
 ## Typed task routing
 

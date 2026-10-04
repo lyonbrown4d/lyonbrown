@@ -14,9 +14,9 @@
 1. 生产代码与测试代码分离：测试放在独立的 `tests/` 目录或 `*.test.ts` 文件中，不在生产模块中内嵌测试。
 2. 手写源文件达到或超过 300 行时，必须评估能否按职责、领域、层或可独立测试行为拆分。仅为压缩行数不得破坏内聚性；保留大文件时需在评审中说明理由。
 3. Pi Agent Core、Pi AI 与 Pi TUI 的具体类型只能存在于适配层；不得泄漏到 gRPC/proto 公共契约或 UI view model。
-4. `apps/agent`（TUI）和 `apps/desktop`（GUI）只是经过认证的 client，不拥有 Runtime、模型、工具、MCP 连接或 EventStore；这些能力由 `apps/agentd` 组合和持有。
+4. `apps/agent-cli`（TUI）只是经过认证的 client，不拥有 Runtime、模型、工具、MCP 连接或 EventStore；这些能力由 `apps/agentd` 组合和持有。
 5. EventStore 是会话与执行状态的真相源，Pi 是执行引擎。执行结果必须先映射为 Lyonbrown 领域事件，再投影给 client。
-6. 迁移期间 Rust 实现是行为 oracle。完成对等测试与切换验收前，不得随意删除 Rust crate、provider、测试或 Cargo 基线，也不得用未验证的 TypeScript 行为覆盖它们。
+6. 仓库只保留 Node.js / TypeScript 产品实现。不得重新引入 Rust runtime、GUI/Desktop client 或双实现兼容路径；历史行为需要保留时，转换为语言无关 fixture 或 TypeScript 回归测试。
 7. 新的工程风格与结构约束必须收敛到本文件，不散落为口头约定。
 
 ## 验证
@@ -34,4 +34,4 @@ pnpm build
 pnpm ci-gate
 ```
 
-涉及迁移行为时，还必须运行对应的 Rust oracle/parity 测试；通过 parity 前不得声称迁移完成。
+涉及迁移行为时，必须补充 TypeScript 回归测试、协议 fixture 或黑盒测试；不得依赖已移除的 Rust oracle。

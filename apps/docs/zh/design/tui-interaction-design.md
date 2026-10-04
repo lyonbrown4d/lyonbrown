@@ -2,8 +2,7 @@
 
 > 状态：Accepted
 > 决策日期：2026-10-01
-> 适用范围：M12 TUI 产品化，以及 GUI 共享交互契约
-> 关联计划：[第二阶段产品与交互实施计划](../plans/phase-two-product-plan.md)
+> 适用范围：Node.js TUI 产品化
 
 ## 1. 设计结论
 
@@ -116,15 +115,7 @@ daemon 操作；本地 `Q` 退出和全局 `F2` 语言切换仍可用。退出 c
 daemon 已经接受的下载；取消只能通过显式操作项发起。校验仍是独立可见 phase，
 Runtime 绝不加载未经校验的文件。
 
-### 2.6 GUI 共用模型设置界面
-
-GUI 消费同一套模型设置投影和命令。设置卡片位于 conversation 与 Composer 之间，
-Runtime 状态栏展示真实 phase 以及已知或未知进度。顶部栏可在英文与简体中文间
-切换全部 client 文案，但不翻译标识符。过期模型设置状态继续可读，`Download`、
-`Retry` 和 `Cancel` 则在 fresh Snapshot 被接受前禁用。GUI 同样只允许一个模型
-设置命令处于待处理状态，并保留失败详情。
-
-### 2.7 基于 Snapshot 的活动检查器
+### 2.6 基于 Snapshot 的活动检查器
 
 已落地的 TUI 检查器只读展示最后一次已接受 `RuntimeSnapshot` 中已有的活动；它既不
 发送 daemon 命令，也不重建 Snapshot 未携带的事件。精确的 `Ctrl-O` 可从对话界面

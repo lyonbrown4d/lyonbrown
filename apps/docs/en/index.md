@@ -6,27 +6,24 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 
 ## Documents
 
-- [Architecture: Local-First Agent Runtime](architecture/local-first-agent-runtime.md)
 - [Local gRPC Client/Server Architecture](architecture/grpc-client-server.md)
 - [FluxDI Composition Root](architecture/composition-root.md)
 - [TUI Visual and Interaction Baseline](design/tui-interaction-design.md)
 - [Node.js / TypeScript + Pi Migration Plan](plans/node-typescript-pi-migration.md)
-- [Phase-One MVP Implementation Plan](plans/mvp-implementation-plan.md)
-- [Phase-Two Product and Interaction Plan](plans/phase-two-product-plan.md)
 - [Configuration Reference](reference/configuration.md)
 - [Local Models and Task Routing](reference/local-models-routing.md)
 
 ## Current status
 
 - Lyonbrown now has one C/S product architecture: `agentd` is the sole owner of
-  the Kernel, models, tools, MCP connections, and session storage; TUI and GUI
-  are authenticated gRPC clients with no embedded Runtime compatibility path.
+  the Kernel, models, tools, MCP connections, and session storage; the TUI is
+  an authenticated gRPC client with no embedded Runtime compatibility path.
 - llama.cpp is a default `agentd` capability. If its configured model is absent,
   the Runtime enters `ModelSetupRequired` without forcing a download. The daemon
   implements explicit background download, cancellation, progress, and epoch
-  activation. TUI and GUI now share explicit bilingual setup controls, progress,
+  activation. The TUI exposes bilingual setup controls, progress,
   retry/cancel behavior, and fail-closed epoch fencing over the same gRPC state.
-- `agent` enters the Ratatui/Crossterm chat TUI by default; `agent .` is the
+- `agent` enters the Node.js Pi TUI chat by default; `agent .` is the
   explicit equivalent. Legacy chat/headless subcommands are not retained.
 - The TUI selects `zh-CN` for recognized Simplified Chinese system locales and
   otherwise uses `en-US`. `F2` switches language globally; `/language`,
@@ -39,4 +36,6 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
   turn/step details, keeps stale cached evidence visible, and adapts across
   30×8, 52×12, and 90×20 terminals. Real session/model selectors and the Theme
   overlay with preference persistence remain M12 work.
-- Cross-platform process sandboxing remains Phase 2 and is outside this MVP.
+- GUI/Desktop and the previous Rust implementation have been removed from the
+  product scope. Historical behavior that remains required is represented by
+  TypeScript tests and language-neutral protocol fixtures.

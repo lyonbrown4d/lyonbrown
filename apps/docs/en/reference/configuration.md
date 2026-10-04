@@ -4,13 +4,13 @@
 
 ## Configuration ownership
 
-Only `agentd` parses and freezes configuration. TUI and GUI clients may send protocol-defined user choices, but they do not read provider secrets, select storage paths, or construct separate runtimes. The daemon hashes normalized effective configuration into `effective_config_fingerprint`; together with workspace filesystem identity, it determines the local daemon scope.
+Only `agentd` parses and freezes configuration. The TUI may send protocol-defined user choices, but it does not read provider secrets, select storage paths, or construct a separate runtime. The daemon hashes normalized effective configuration into `effective_config_fingerprint`; together with workspace filesystem identity, it determines the local daemon scope.
 
 Discovery, startup and lifetime locks, EventStore, and Runtime within one scope must use the same frozen configuration. A configuration change establishes a new authenticated epoch instead of mutating an old Runtime's security boundary in place.
 
 ## Entry-point behavior
 
-`agent` opens the workspace chat TUI by default; `agent .` is the explicit form. The product will not restore `chat`, `ask`, `sessions`, or `resume` compatibility subcommands. TUI and GUI connect to `agentd` over authenticated gRPC. Only the daemon creates the Kernel and owns Runtime state.
+`agent` opens the workspace chat TUI by default; `agent .` is the explicit form. The product will not restore `chat`, `ask`, `sessions`, or `resume` compatibility subcommands. The TUI connects to `agentd` over authenticated gRPC. Only the daemon creates the Kernel and owns Runtime state.
 
 Model inspection or download cannot block client startup. An unavailable daemon produces connection state; a missing model produces setup state. Only an explicit user action may start a background model download.
 
@@ -26,7 +26,7 @@ The Node loader must use deterministic precedence and complete schema validation
 
 Workspace configuration is not trusted by default. Provider endpoints, model routing, MCP commands, approval policy, storage paths, and remote-send policy require separate authorization rather than one broad switch. Unknown fields, NULs, relative security roots, paths that cannot be normalized, and conflicting settings fail closed.
 
-The parser, schema library, and file format remain an implementation decision. Until the loader and migration tooling exist, the product does not promise the old Rust `config-rs` set of TOML, YAML, JSON5, RON, and INI formats.
+The parser, schema library, and file format remain an implementation decision. Until the loader and migration tooling exist, the product promises no legacy multi-format compatibility.
 
 ## Default local model
 

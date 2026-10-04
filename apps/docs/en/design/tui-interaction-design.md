@@ -2,8 +2,7 @@
 
 > Status: Accepted
 > Decision date: 2026-10-01
-> Scope: M12 TUI productization and the GUI shared interaction contract
-> Related plan: [Phase-Two Product and Interaction Plan](../plans/phase-two-product-plan.md)
+> Scope: Node.js TUI productization
 
 ## 1. Decision
 
@@ -130,17 +129,7 @@ requires the explicit control.
 Verification remains a separate visible phase, and the Runtime never loads an
 unverified file.
 
-### 2.6 Shared GUI model-setup surface
-
-The GUI consumes the same setup projection and commands. Its setup card sits
-between the conversation and Composer, while the Runtime rail shows the actual
-phase and known or unknown progress. The top bar switches all client copy
-between English and Simplified Chinese without translating identifiers. Stale
-setup state remains readable, but Download, Retry, and Cancel are disabled
-until a fresh Snapshot is accepted. The GUI also permits only one pending setup
-command and keeps failure details visible.
-
-### 2.7 Snapshot-backed Activity Inspector
+### 2.6 Snapshot-backed Activity Inspector
 
 The implemented TUI Inspector is a read-only view of activity already present
 in the last accepted `RuntimeSnapshot`; it neither issues a daemon command nor

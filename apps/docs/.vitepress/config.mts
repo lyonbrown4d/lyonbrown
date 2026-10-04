@@ -5,10 +5,8 @@ const englishSidebar = [
   {
     text: "Architecture",
     items: [
-      { text: "Local-First Agent Runtime", link: "/en/architecture/local-first-agent-runtime" },
       { text: "Local gRPC Client/Server", link: "/en/architecture/grpc-client-server" },
       { text: "Composition Root", link: "/en/architecture/composition-root" },
-      { text: "Cross-Platform Sandbox", link: "/en/architecture/cross-platform-sandbox" },
     ],
   },
   {
@@ -19,8 +17,6 @@ const englishSidebar = [
     text: "Plans",
     items: [
       { text: "Node/TypeScript + Pi Migration", link: "/en/plans/node-typescript-pi-migration" },
-      { text: "Phase-One MVP", link: "/en/plans/mvp-implementation-plan" },
-      { text: "Phase-Two Product", link: "/en/plans/phase-two-product-plan" },
     ],
   },
   {
@@ -37,10 +33,8 @@ const chineseSidebar = [
   {
     text: "架构",
     items: [
-      { text: "本地优先 Agent Runtime", link: "/zh/architecture/local-first-agent-runtime" },
       { text: "本地 gRPC C/S", link: "/zh/architecture/grpc-client-server" },
       { text: "组合根", link: "/zh/architecture/composition-root" },
-      { text: "跨平台 Sandbox", link: "/zh/architecture/cross-platform-sandbox" },
     ],
   },
   {
@@ -49,11 +43,7 @@ const chineseSidebar = [
   },
   {
     text: "计划",
-    items: [
-      { text: "Node/TypeScript + Pi 迁移", link: "/zh/plans/node-typescript-pi-migration" },
-      { text: "第一阶段 MVP", link: "/zh/plans/mvp-implementation-plan" },
-      { text: "第二阶段产品", link: "/zh/plans/phase-two-product-plan" },
-    ],
+    items: [{ text: "Node/TypeScript + Pi 迁移", link: "/zh/plans/node-typescript-pi-migration" }],
   },
   {
     text: "参考",

@@ -4,13 +4,13 @@
 
 ## 配置所有权
 
-配置只在 `agentd` 解析并冻结。TUI 与 GUI 可以提交经过协议定义的用户选择，但不读取 Provider 密钥、不决定存储路径，也不分别构造 Runtime。daemon 将规范化后的有效配置计算为 `effective_config_fingerprint`；它与工作区文件系统身份共同决定本地 daemon scope。
+配置只在 `agentd` 解析并冻结。TUI 可以提交经过协议定义的用户选择，但不读取 Provider 密钥、不决定存储路径，也不构造独立 Runtime。daemon 将规范化后的有效配置计算为 `effective_config_fingerprint`；它与工作区文件系统身份共同决定本地 daemon scope。
 
 同一个 scope 内的 discovery、启动锁、生命周期锁、EventStore 和 Runtime 必须使用同一份冻结配置。配置变化需要建立新的受认证 epoch，不能原地改变旧 Runtime 的安全边界。
 
 ## 入口行为
 
-`agent` 默认进入工作区 chat TUI，`agent .` 是显式写法。不会恢复 `chat`、`ask`、`sessions` 或 `resume` 兼容子命令。TUI 与 GUI 都通过认证 gRPC 连接 `agentd`；只有 daemon 创建 Kernel 并持有 Runtime 状态。
+`agent` 默认进入工作区 chat TUI，`agent .` 是显式写法。不会恢复 `chat`、`ask`、`sessions` 或 `resume` 兼容子命令。TUI 通过认证 gRPC 连接 `agentd`；只有 daemon 创建 Kernel 并持有 Runtime 状态。
 
 客户端启动不能被模型检查或下载阻塞。daemon 不可用时显示连接状态；模型缺失时显示设置状态。只有显式用户操作才能开始后台模型下载。
 
@@ -26,7 +26,7 @@ Node 配置加载器落地时必须采用确定性的优先级，并在计算 fi
 
 工作区配置不是默认信任源。Provider endpoint、模型路由、MCP 命令、审批策略、存储路径和远程发送策略必须分别授权，不能用一个宽泛开关隐式放行全部能力。未知字段、NUL、相对安全根、不可规范化路径和冲突设置均 fail closed。
 
-配置解析器、schema 库和格式仍属于待决选型；在实现与迁移工具完成前，不承诺旧 Rust `config-rs` 支持的 TOML/YAML/JSON5/RON/INI 多格式集合。
+配置解析器、schema 库和格式仍属于待决选型；在实现与迁移工具完成前，不承诺旧版多格式兼容。
 
 ## 默认本地模型
 
