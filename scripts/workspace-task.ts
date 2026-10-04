@@ -18,10 +18,12 @@ async function runRoot(task: WorkspaceTask): Promise<void> {
 }
 
 async function runWorkspace(task: WorkspaceTask): Promise<void> {
+  // Package lifecycle hooks rebuild shared generated/native dependencies.
+  // Serial execution prevents concurrent Buf and native build races on Windows.
   await $({
     stdio: "inherit",
     timeout: TASK_TIMEOUT_MS,
-  })`pnpm --recursive run ${task}`;
+  })`pnpm --recursive --workspace-concurrency=1 run ${task}`;
 }
 
 const requestedTask = process.argv[2] ?? "";

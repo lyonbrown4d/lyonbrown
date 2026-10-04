@@ -61,6 +61,21 @@ Lyonbrown 将从当前 Rust 实现迁移到 Node.js 24 LTS、pnpm、ESM 与 stri
 - MCP 连接生命周期、能力协商、工具/resource 映射、取消与恢复；
 - 显式模型设置状态、进度、取消、重试、校验、epoch 激活与离线行为。
 
+## 当前进度
+
+| 阶段 | 状态   | 已落地 / 主要剩余项                                                                                                                                 |
+| ---- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0   | 已完成 | Node/pnpm/strict ESM、统一门禁、双语 VitePress                                                                                                      |
+| P1   | 进行中 | protobuf/gRPC、认证 client 与 replay 已有测试；完整 Rust/Node 黑盒 parity harness 待完成                                                            |
+| P2   | 进行中 | 领域 reducer、SQLite EventStore、恢复、Windows 路径锚定已落地；真实迁移/回滚演练待完成                                                              |
+| P3   | 进行中 | Pi kernel 与 durable Runtime adapter 已落地；tool/MCP/approval/context 全链路仍待迁移                                                               |
+| P4   | 进行中 | gRPC server、control plane、launch coordinator、本地模型 foundation 已落地；daemon composition、系统 process adapter 和 native model storage 待完成 |
+| P5   | 未开始 | TUI/desktop 产品接入仍使用设计文档与共享 UI contract 作为输入                                                                                       |
+| P6   | 未开始 | parity、打包、签名、升级/回滚和最终切换                                                                                                             |
+
+“已落地”只表示对应 TypeScript slice 和目标测试存在，不表示生产入口已经贯通或可以
+删除 Rust oracle。
+
 ## 分阶段交付
 
 ### P0 — 工程基线与文档

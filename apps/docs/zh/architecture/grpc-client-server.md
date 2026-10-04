@@ -169,10 +169,16 @@ TooLate，因为此时原子落盘不能被中断。模型 ID、URL、摘要和�
 ## TypeScript 迁移状态
 
 截至当前迁移分支，`protocol`、领域模型、UI 投影、SQLite EventStore、Pi Kernel
-适配器、`agent-runtime`、认证 `agent-client` 与 Node `agentd` gRPC 垂直切片都已由
-TypeScript 测试覆盖；`local-control-plane` 在 native capability 缺失时保持 fail closed。
-安全 native provider、真实 discover/reuse/spawn、可发布 daemon composition、
-TUI/GUI 产品接入仍是明确的发布阻断项。
+适配器、durable `agent-runtime`、认证 `agent-client` 与 Node `agentd` gRPC adapter
+均已有 TypeScript 测试。Windows native provider 已提供安全运行目录、锁、原子发布、
+scoped 路径以及数据库/WAL/SHM 全生命周期锚定；`agent-launch` 已覆盖
+discover/reuse/spawn/readiness 与 epoch fencing。`local-control-plane` 在 native
+capability 缺失时继续 fail closed。
+
+`packages/local-model` 已提供必需的 `node-llama-cpp`、固定默认 preset、显式后台下载、
+校验与加载生命周期，但真实 Windows `NativeModelStorageCapability`、可发布的 daemon
+composition root、系统 process/discovery adapter 以及 TUI/GUI 产品接入仍是明确的发布
+阻断项。
 
 > 下文描述产品验收基线和旧实现提供的行为 oracle，不表示这些能力已经进入新的
 > TypeScript 产品入口。迁移期间不提供 embedded、Rust bridge 或双写兼容模式。

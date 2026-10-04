@@ -61,6 +61,22 @@ The migration must preserve the observable behavior represented by Rust tests an
 - MCP connection lifecycle, capability negotiation, tool/resource mapping, cancellation, and recovery;
 - explicit model setup state, progress, cancellation, retry, verification, epoch activation, and offline behavior.
 
+## Current progress
+
+| Phase | Status      | Delivered / primary remaining work                                                                                                                             |
+| ----- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0    | Complete    | Node/pnpm/strict ESM, unified gates, and bilingual VitePress                                                                                                   |
+| P1    | In progress | protobuf/gRPC, authenticated client, and replay tests exist; the complete Rust/Node black-box parity harness remains                                           |
+| P2    | In progress | domain reducers, SQLite EventStore, recovery, and Windows path anchoring are implemented; real migration/rollback rehearsals remain                            |
+| P3    | In progress | Pi Kernel and durable Runtime adapters are implemented; end-to-end tools, MCP, approval, and context migration remain                                          |
+| P4    | In progress | gRPC server, control plane, launch coordinator, and local-model foundation exist; daemon composition, system process adapters, and native model storage remain |
+| P5    | Not started | TUI/desktop product integration still consumes the design documents and shared UI contract as inputs                                                           |
+| P6    | Not started | parity, packaging, signing, upgrade/rollback, and final cutover                                                                                                |
+
+“Implemented” means that a TypeScript slice and its targeted tests exist. It does
+not mean that the production entry point is connected or that the Rust oracle
+can be removed.
+
 ## Phased delivery
 
 ### P0 — Engineering foundation and documentation

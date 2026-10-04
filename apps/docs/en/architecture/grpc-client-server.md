@@ -203,12 +203,19 @@ paths.
 ## TypeScript migration status
 
 On the current migration branch, the protocol, domain model, UI projection,
-SQLite EventStore, Pi Kernel adapter, `agent-runtime`, authenticated
-`agent-client`, and Node `agentd` gRPC vertical slices are covered by TypeScript
-tests. `local-control-plane` remains fail closed when its native capability is
-missing. The secure native provider, real discover/reuse/spawn flow, releasable
-daemon composition, and TUI/GUI product integration remain explicit release
-blockers.
+SQLite EventStore, Pi Kernel adapter, durable `agent-runtime`, authenticated
+`agent-client`, and Node `agentd` gRPC adapter are covered by TypeScript tests.
+The Windows native provider now supplies secure run directories, locks, atomic
+publication, scoped paths, and lifetime anchoring for the database and WAL/SHM
+artifacts. `agent-launch` covers discover/reuse/spawn/readiness and epoch
+fencing. `local-control-plane` remains fail closed when its native capability is
+missing.
+
+`packages/local-model` now provides required `node-llama-cpp`, the pinned
+default preset, explicit background download, validation, and load lifecycle.
+A real Windows `NativeModelStorageCapability`, the releasable daemon composition
+root, system process/discovery adapters, and TUI/GUI product integration remain
+explicit release blockers.
 
 > The remainder of this section is a product acceptance baseline and a behavior
 > oracle from the previous implementation. It does not mean those capabilities
