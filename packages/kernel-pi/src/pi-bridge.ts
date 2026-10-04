@@ -163,7 +163,8 @@ async function consumeModelEvent(
   const event = sanitizedEvent as unknown as KernelModelStreamEvent;
   if (event.type === "usage") {
     assertUsage(event.usage);
-    return { partial, usage: toPiUsage(event.usage), done: false };
+    const usage = toPiUsage(event.usage);
+    return { partial: { ...partial, usage }, usage, done: false };
   }
   if (event.type === "text_delta") {
     const delta = sanitizeText(event.delta);

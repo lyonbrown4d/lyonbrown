@@ -107,7 +107,12 @@ describe("Pi kernel integration", () => {
       { type: "text_delta", delta: "he" },
       { type: "text_delta", delta: "llo" },
     ]);
-    expect(events.some((event) => event.type === "usage")).toBe(true);
+    expect(events.filter((event) => event.type === "usage")).toEqual([
+      {
+        type: "usage",
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      },
+    ]);
     expect(subscribed).toEqual(events);
     expect(model.requests).toHaveLength(1);
   });
