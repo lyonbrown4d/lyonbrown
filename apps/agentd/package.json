@@ -1,0 +1,35 @@
+{
+  "name": "@lyonbrown/agentd",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "format": "prettier --write \"node-src/**/*.ts\" \"node-tests/**/*.ts\" \"*.{json,ts,mjs}\"",
+    "format:check": "prettier --check \"node-src/**/*.ts\" \"node-tests/**/*.ts\" \"*.{json,ts,mjs}\"",
+    "lint": "pnpm format:check && eslint --config eslint.config.mjs node-src node-tests vitest.config.ts eslint.config.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "pnpm": "10.33.4"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "1.14.5",
+    "@lyonbrown/local-control-plane": "workspace:*",
+    "@lyonbrown/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "4.1.11"
+  }
+}

@@ -1,0 +1,27 @@
+import type { RuntimeEvent, RuntimeSnapshot } from "@lyonbrown/protocol";
+
+export type RuntimeCommand =
+  | { readonly kind: "start-turn"; readonly text: string }
+  | { readonly kind: "steer-current-turn"; readonly text: string }
+  | { readonly kind: "queue-follow-up"; readonly text: string }
+  | { readonly kind: "cancel-turn" };
+
+export type RuntimeFailure =
+  | { readonly code: "RUNTIME_STOPPED" }
+  | { readonly code: "TURN_ALREADY_ACTIVE" }
+  | { readonly code: "NO_ACTIVE_TURN" }
+  | { readonly code: "EMPTY_TEXT" }
+  | { readonly code: "STEERING"; readonly reason: string }
+  | { readonly code: "MODEL_SETUP_REQUIRED" };
+
+export type RuntimeResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: RuntimeFailure };
+
+/** Pi and other execution-engine types stop at this daemon-owned port. */
+export interface RuntimeHost {
+  execute(command: RuntimeCommand): Promise<RuntimeResult>;
+  snapshot(): RuntimeSnapshot | Promise<RuntimeSnapshot>;
+  subscribe(afterRevision: bigint, signal: AbortSignal): AsyncIterable<RuntimeEvent>;
+  capabilities(): readonly string[];
+}

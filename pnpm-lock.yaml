@@ -42,6 +42,22 @@ importers:
         specifier: 8.8.5
         version: 8.8.5
 
+  apps/agentd:
+    dependencies:
+      '@grpc/grpc-js':
+        specifier: 1.14.5
+        version: 1.14.5
+      '@lyonbrown/local-control-plane':
+        specifier: workspace:*
+        version: link:../../packages/local-control-plane
+      '@lyonbrown/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+
   apps/docs:
     devDependencies:
       prettier:
