@@ -6,7 +6,7 @@ export {
   type RuntimeEventStorePort,
   type RuntimeEventStoreSource,
 } from "./event-store-port.js";
-export { createAgentRuntime } from "./runtime.js";
+export { createAgentRuntime } from "./runtime-factory.js";
 export type {
   AgentRuntime,
   CreateAgentRuntimeOptions,

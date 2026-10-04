@@ -188,6 +188,11 @@ describe("agent runtime reducer", () => {
     let state = createInitialAgentRuntimeState(sessionId);
     state = apply(state, 1n, { type: "session_opened", sessionId });
     state = apply(state, 2n, {
+      type: "user_message_submitted",
+      sessionId,
+      text: "question",
+    });
+    state = apply(state, 3n, {
       type: "usage_recorded",
       sessionId,
       inputTokens: Number.MAX_SAFE_INTEGER,
@@ -196,7 +201,7 @@ describe("agent runtime reducer", () => {
     });
 
     expect(() =>
-      apply(state, 3n, {
+      apply(state, 4n, {
         type: "usage_recorded",
         sessionId,
         inputTokens: 1,

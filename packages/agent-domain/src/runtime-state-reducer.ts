@@ -46,26 +46,33 @@ export function applyRuntimeEvent(
         event.text,
       );
     case "run_started":
+      assertActiveTurn(state);
       return updateCurrentTurn(state, revision, "running", { phase: "running" });
     case "turn_started":
+      assertActiveTurn(state);
       return updateLastTurn(state, revision, (turn) => appendActivity(turn, event.turn), {
         phase: "running",
       });
     case "assistant_text_delta":
+      assertActiveTurn(state);
       return updateLastTurn(state, revision, (turn) => appendAssistantDelta(turn, event.delta), {
         assistantTextBytes: checkedAssistantBytes(state.assistantTextBytes, event.delta),
       });
     case "usage_recorded":
+      assertActiveTurn(state);
       return recordUsage(state, revision, event);
     case "turn_completed":
+      assertActiveTurn(state);
       return updateLastTurn(state, revision, (turn) => ({
         ...updateLastActivity(turn, (activity) => ({ ...activity, status: "completed" })),
         status: "running",
         turn: event.turn,
       }));
     case "run_completed":
+      assertActiveTurn(state);
       return updateCurrentTurn(state, revision, "completed", { phase: "completed" });
     case "run_cancelled":
+      assertActiveTurn(state);
       return updateCurrentTurn(state, revision, "cancelled", { phase: "cancelled" });
     case "tool_started":
       assertActiveTurn(state);
@@ -112,6 +119,7 @@ export function applyRuntimeEvent(
       );
     }
     case "run_failed": {
+      if (!state.outcomeUnknown) assertActiveTurn(state);
       const failure = freezeFailure(event);
       return updateCurrentTurn(state, revision, "failed", {
         phase: state.outcomeUnknown ? "failed_terminal" : "failed",

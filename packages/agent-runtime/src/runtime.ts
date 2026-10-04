@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import {
   parseAgentRuntimeEvent,
   validateText,
@@ -9,16 +7,18 @@ import type { KernelEvent } from "@lyonbrown/kernel-pi";
 
 import { RuntimeBackgroundTasks } from "./background-tasks.js";
 import { runtimeError } from "./errors.js";
-import { RuntimeEventWriter } from "./event-writer.js";
+import type { RuntimeEventWriter } from "./event-writer.js";
 import { mapKernelEvent } from "./kernel-events.js";
-import { recoverRuntimeState } from "./recovery.js";
+import * as runtimeHelpers from "./runtime-helpers.js";
 import { LatestSnapshotFeed } from "./snapshot-feed.js";
 import type { AgentRuntime, CreateAgentRuntimeOptions, RuntimeSnapshotFeed } from "./types.js";
 
-class DefaultAgentRuntime implements AgentRuntime {
+export class DefaultAgentRuntime implements AgentRuntime {
   readonly #kernel: ReturnType<CreateAgentRuntimeOptions["createKernelSession"]>;
   readonly #background = new RuntimeBackgroundTasks();
   #running = false;
+  #cancelRequested = false;
+  #pendingFollowUps = 0;
   #disposed = false;
   #disposePromise: Promise<void> | undefined;
 
@@ -49,9 +49,11 @@ class DefaultAgentRuntime implements AgentRuntime {
   async startTurn(input: string, options?: { readonly signal?: AbortSignal }): Promise<void> {
     this.#assertAvailable();
     options?.signal?.throwIfAborted();
-    if (this.#running) throw runtimeError("SESSION_BUSY", "A runtime turn is already active");
+    if (this.#running || this.#pendingFollowUps > 0)
+      throw runtimeError("SESSION_BUSY", "A runtime turn is already active");
     const text = validateText(input, "input");
     this.#running = true;
+    this.#cancelRequested = false;
     try {
       await this.writer.append(
         parseAgentRuntimeEvent({
@@ -65,7 +67,16 @@ class DefaultAgentRuntime implements AgentRuntime {
       if (this.writer.fatal !== undefined) throw this.writer.fatal;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
     }
-    if (this.#disposed || !this.#launchKernel(text, options)) {
+    if (this.#disposed) {
+      this.#running = false;
+      throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- cancel can race while append awaits.
+    if (this.#cancelRequested) {
+      await this.#finishPendingCancellation();
+      return;
+    }
+    if (!this.#launchKernel(text, options)) {
       this.#running = false;
       throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
     }
@@ -99,6 +110,7 @@ class DefaultAgentRuntime implements AgentRuntime {
   async followUp(input: string): Promise<void> {
     this.#assertAvailable();
     const text = validateText(input, "input");
+    this.#pendingFollowUps += 1;
     try {
       await this.writer.append(
         parseAgentRuntimeEvent({
@@ -110,15 +122,20 @@ class DefaultAgentRuntime implements AgentRuntime {
     } catch {
       if (this.writer.fatal !== undefined) throw this.writer.fatal;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
+    } finally {
+      this.#pendingFollowUps -= 1;
     }
     this.#resumeQueuedFollowUps();
   }
 
   cancel(): void {
     this.#assertAvailable();
+    const wasRequested = this.#cancelRequested;
+    this.#cancelRequested = true;
     try {
       this.#kernel.cancel();
     } catch {
+      this.#cancelRequested = wasRequested;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
     }
   }
@@ -133,12 +150,13 @@ class DefaultAgentRuntime implements AgentRuntime {
   #appendKernelEvent(event: KernelEvent): Promise<void> {
     this.#assertUsable();
     if (this.writer.fatal !== undefined) throw this.writer.fatal;
+    if (runtimeHelpers.ignoresLateKernelEvent(this.writer.state, event)) return Promise.resolve();
     return this.writer.append(mapKernelEvent(this.options.sessionId, event));
   }
 
   #launchKernel(input: string, options?: { readonly signal?: AbortSignal }): boolean {
     return this.#background.track((lifecycleSignal) =>
-      this.#runKernel(input, combineSignal(options?.signal, lifecycleSignal)),
+      this.#runKernel(input, runtimeHelpers.combineRuntimeSignal(options?.signal, lifecycleSignal)),
     );
   }
 
@@ -149,6 +167,7 @@ class DefaultAgentRuntime implements AgentRuntime {
     } catch {
       await this.#recordKernelFailure();
     } finally {
+      this.#cancelRequested = false;
       this.#running = false;
       this.#resumeQueuedFollowUps();
     }
@@ -192,6 +211,7 @@ class DefaultAgentRuntime implements AgentRuntime {
     const status = this.writer.state.turns.at(-1)?.status;
     if (status === "submitted" || status === "running") return;
     this.#running = true;
+    this.#cancelRequested = false;
     if (!this.#background.track(async () => this.#claimFollowUp(text))) this.#running = false;
   }
 
@@ -208,7 +228,27 @@ class DefaultAgentRuntime implements AgentRuntime {
       this.#running = false;
       return;
     }
-    if (this.#disposed || !this.#launchKernel(text)) this.#running = false;
+    if (this.#disposed) {
+      this.#running = false;
+      return;
+    }
+    if (this.#cancelRequested) {
+      await this.#finishPendingCancellation();
+      return;
+    }
+    if (!this.#launchKernel(text)) this.#running = false;
+  }
+
+  async #finishPendingCancellation(): Promise<void> {
+    try {
+      await this.writer.append(
+        parseAgentRuntimeEvent({ type: "run_cancelled", sessionId: this.options.sessionId }),
+      );
+    } finally {
+      this.#cancelRequested = false;
+      this.#running = false;
+      this.#resumeQueuedFollowUps();
+    }
   }
 
   resumeQueuedFollowUps(): void {
@@ -223,7 +263,7 @@ class DefaultAgentRuntime implements AgentRuntime {
     }
     if (
       !this.#running &&
-      (isUnresolvedTurn(this.writer.state) ||
+      (runtimeHelpers.hasUnresolvedTurn(this.writer.state) ||
         this.writer.state.phase === "running" ||
         this.writer.state.tools.some((tool) => tool.status === "running"))
     ) {
@@ -252,45 +292,5 @@ class DefaultAgentRuntime implements AgentRuntime {
 
   #assertUsable(): void {
     if (this.#disposed) throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
-  }
-}
-
-function combineSignal(userSignal: AbortSignal | undefined, lifecycleSignal: AbortSignal) {
-  return userSignal === undefined
-    ? lifecycleSignal
-    : AbortSignal.any([userSignal, lifecycleSignal]);
-}
-
-function isUnresolvedTurn(state: AgentRuntimeState): boolean {
-  const status = state.turns.at(-1)?.status;
-  return status === "submitted" || status === "running";
-}
-
-export async function createAgentRuntime(
-  options: CreateAgentRuntimeOptions,
-): Promise<AgentRuntime> {
-  const state = await recoverRuntimeState(options.sessionId, options.eventStore);
-  const feeds = new Set<LatestSnapshotFeed>();
-  const writer = new RuntimeEventWriter({
-    sessionId: options.sessionId,
-    eventStore: options.eventStore,
-    initialState: state,
-    createEventId: options.createEventId ?? randomUUID,
-    now: options.now ?? (() => new Date().toISOString()),
-    publish: (snapshot) => {
-      for (const feed of feeds) feed.publish(snapshot);
-    },
-  });
-  if (state.phase === "uninitialized") {
-    await writer.append(
-      parseAgentRuntimeEvent({ type: "session_opened", sessionId: options.sessionId }),
-    );
-  }
-  try {
-    const runtime = new DefaultAgentRuntime(options, writer, feeds);
-    runtime.resumeQueuedFollowUps();
-    return runtime;
-  } catch {
-    throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
   }
 }

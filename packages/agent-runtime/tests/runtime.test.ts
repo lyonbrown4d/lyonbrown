@@ -32,10 +32,11 @@ describe("agent runtime", () => {
     const feed = runtime.snapshots();
     await expect(feed.next()).resolves.toMatchObject({ value: { revision: 1n } });
 
+    await runtime.startTurn("question");
     gateNext = true;
     const pending = kernel.emit({ type: "run_started", sessionId: "session-feed" });
     await Promise.resolve();
-    expect(runtime.snapshot().revision).toBe(1n);
+    expect(runtime.snapshot().revision).toBe(2n);
     release?.();
     await pending;
     gateNext = false;
@@ -43,7 +44,7 @@ describe("agent runtime", () => {
     await kernel.emit({ type: "text_delta", delta: "b" });
 
     await expect(feed.next()).resolves.toMatchObject({
-      value: { revision: 4n },
+      value: { revision: 5n },
       done: false,
     });
     feed.close();
@@ -75,6 +76,7 @@ describe("agent runtime", () => {
       createEventId: sequentialEventIds(),
     });
 
+    await runtime.startTurn("question");
     await Promise.all([
       kernel.emit({ type: "run_started", sessionId: "session-serial" }),
       kernel.emit({ type: "text_delta", delta: "one" }),
@@ -86,7 +88,7 @@ describe("agent runtime", () => {
 
     expect(maximumActive).toBe(1);
     expect(runtime.snapshot()).toMatchObject({
-      revision: 4n,
+      revision: 5n,
       usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
     });
     await runtime.dispose();
@@ -122,6 +124,9 @@ describe("agent runtime", () => {
     await expect(runtime.startTurn("must reject")).rejects.toMatchObject({
       code: "EVENT_SINK_UNAVAILABLE",
     });
+    await expect(
+      kernel.emit({ type: "run_started", sessionId: "session-fatal" }),
+    ).rejects.toMatchObject({ code: "EVENT_SINK_UNAVAILABLE" });
     expect(kernel.starts).toEqual([]);
     await runtime.dispose();
     base.close();
@@ -139,6 +144,7 @@ describe("agent runtime", () => {
         code: "TOOL_TIMEOUT",
         message: "Tool outcome is unknown",
       });
+      await sink.append({ type: "text_delta", delta: "must be ignored" });
       await sink.append({
         type: "run_failed",
         sessionId: "session-unknown",
@@ -158,6 +164,7 @@ describe("agent runtime", () => {
     expect(runtime.snapshot()).toMatchObject({
       phase: "failed_terminal",
       outcomeUnknown: true,
+      turns: [{ assistantText: "" }],
     });
     await expect(runtime.startTurn("must reject")).rejects.toMatchObject({
       code: "TERMINAL_SESSION",
@@ -217,18 +224,21 @@ describe("agent runtime", () => {
     const store = openEventStore({ testOnlyMemory: true });
     const calls: string[] = [];
     let release: (() => void) | undefined;
+    let receivedSignal: AbortSignal | undefined;
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-controls"),
       eventStore: runtimeEventStore(store),
       createEventId: sequentialEventIds(),
       createKernelSession: ({ eventSink }) => ({
-        startTurn: () =>
-          new Promise<void>((resolve) => {
+        startTurn: (_input, options) => {
+          receivedSignal = options?.signal;
+          return new Promise<void>((resolve) => {
             release = resolve;
           }).then(async () => {
             await eventSink.append({ type: "run_started", sessionId: "session-controls" });
             await eventSink.append({ type: "run_completed", sessionId: "session-controls" });
-          }),
+          });
+        },
         steer: (input) => {
           calls.push(`steer:${input}`);
         },
@@ -242,8 +252,11 @@ describe("agent runtime", () => {
         dispose: () => undefined,
       }),
     });
-    const active = runtime.startTurn("first");
+    const caller = new AbortController();
+    const active = runtime.startTurn("first", { signal: caller.signal });
     await Promise.resolve();
+    await expect.poll(() => receivedSignal).toBeDefined();
+    expect(receivedSignal?.aborted).toBe(false);
 
     await expect(runtime.startTurn("second")).rejects.toMatchObject({ code: "SESSION_BUSY" });
     await runtime.steer("focus");
@@ -252,6 +265,8 @@ describe("agent runtime", () => {
     release?.();
     await active;
     await expect.poll(() => runtime.snapshot().phase).toBe("completed");
+    caller.abort();
+    expect(receivedSignal?.aborted).toBe(true);
 
     const aborted = new AbortController();
     aborted.abort();
