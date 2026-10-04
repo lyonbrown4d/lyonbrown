@@ -46,29 +46,55 @@ const createAnchoredLlamaEngine = (
 ): LlamaEngineAdapter => ({
   async loadDefault(signal: AbortSignal): Promise<LlamaLease> {
     let callbackLease: LlamaLease | undefined;
-    let callbackInvoked = false;
-    const result = await capability.withInstalledFile(
-      DEFAULT_MODEL_IDENTITY,
-      signal,
-      async (filePath) => {
-        callbackInvoked = true;
-        await verifier(filePath, DEFAULT_PRESET, signal);
-        callbackLease = await engineFactory(filePath).loadDefault(signal);
-        return callbackLease;
-      },
-    );
-    if (
-      result.kind !== "present" ||
-      !callbackInvoked ||
-      callbackLease === undefined ||
-      result.value !== callbackLease
-    ) {
+    let callbackTask: Promise<LlamaLease> | undefined;
+    const callbackState = { invoked: false, violation: false, closed: false };
+    try {
+      const result = await capability.withInstalledFile(
+        DEFAULT_MODEL_IDENTITY,
+        signal,
+        (filePath) => {
+          if (callbackState.closed || callbackState.invoked) {
+            callbackState.violation = true;
+            const rejected = Promise.reject<LlamaLease>(new Error("secure_model_anchor_invalid"));
+            void rejected.catch(() => undefined);
+            return rejected;
+          }
+          callbackState.invoked = true;
+          callbackTask = (async () => {
+            await verifier(filePath, DEFAULT_PRESET, signal);
+            callbackLease = await engineFactory(filePath).loadDefault(signal);
+            return callbackLease;
+          })();
+          void callbackTask.catch(() => undefined);
+          return callbackTask;
+        },
+      );
+      callbackState.closed = true;
+      if (
+        result.kind !== "present" ||
+        callbackState.violation ||
+        callbackLease === undefined ||
+        result.value !== callbackLease
+      ) {
+        throw new Error("secure_model_anchor_invalid");
+      }
+      return callbackLease;
+    } catch {
+      callbackState.closed = true;
+      await settleQuietly(callbackTask);
       await disposeQuietly(callbackLease);
       throw new Error("secure_model_anchor_invalid");
     }
-    return callbackLease;
   },
 });
+
+const settleQuietly = async (task: Promise<unknown> | undefined): Promise<void> => {
+  try {
+    await task;
+  } catch {
+    // The stable public error below replaces private verifier or loader details.
+  }
+};
 
 const disposeQuietly = async (lease: LlamaLease | undefined): Promise<void> => {
   try {

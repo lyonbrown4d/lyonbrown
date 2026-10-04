@@ -23,9 +23,9 @@ describe("secure local-model composition", () => {
   it("binds the fixed identity and holds the native anchor through verification and load", async () => {
     const loadCompletion = new Deferred<{ dispose(): Promise<void> }>();
     const storage = new MemoryStorage(true);
-    const verifier = vi.fn(async () => {
+    const verifier = vi.fn(() => {
       expect(storage.anchorHeld).toBe(true);
-      return 1;
+      return Promise.resolve(1);
     });
     const nodeLlamaEngine = vi.fn(() => ({
       loadDefault: () => {
@@ -61,6 +61,66 @@ describe("secure local-model composition", () => {
     await flushTasks();
 
     expect(service.status().phase).toBe("setup-required");
+  });
+
+  it("disposes a loaded lease when installed-anchor teardown rejects", async () => {
+    const storage = new MemoryStorage(true);
+    storage.rejectAfterCallbackOnAccess = 2;
+    const dispose = vi.fn(() => Promise.resolve());
+    const service = createComposedLocalModelService(storage, {
+      verifyFile: () => Promise.resolve(1),
+      nodeLlamaEngine: () => ({
+        loadDefault: () => Promise.resolve({ dispose }),
+      }),
+    });
+    await flushTasks();
+
+    await expect(service.load()).resolves.toEqual({
+      kind: "unavailable",
+      code: "native_runtime_unavailable",
+    });
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("invokes the load callback exactly once and preserves the first lease", async () => {
+    const storage = new MemoryStorage(true);
+    storage.duplicateCallbackOnAccess = 2;
+    const dispose = vi.fn(() => Promise.resolve());
+    const nodeLlamaEngine = vi.fn(() => ({
+      loadDefault: () => Promise.resolve({ dispose }),
+    }));
+    const service = createComposedLocalModelService(storage, {
+      verifyFile: () => Promise.resolve(1),
+      nodeLlamaEngine,
+    });
+    await flushTasks();
+
+    await expect(service.load()).resolves.toEqual({
+      kind: "unavailable",
+      code: "native_runtime_unavailable",
+    });
+    expect(nodeLlamaEngine).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("redacts disposal failures after installed-anchor teardown rejects", async () => {
+    const storage = new MemoryStorage(true);
+    storage.rejectAfterCallbackOnAccess = 2;
+    const dispose = vi.fn(() => Promise.reject(new Error("C:\\private\\native lease")));
+    const service = createComposedLocalModelService(storage, {
+      verifyFile: () => Promise.resolve(1),
+      nodeLlamaEngine: () => ({
+        loadDefault: () => Promise.resolve({ dispose }),
+      }),
+    });
+    await flushTasks();
+
+    const result = await service.load();
+
+    expect(result).toEqual({ kind: "unavailable", code: "native_runtime_unavailable" });
+    expect(JSON.stringify(result)).not.toContain("private");
+    expect(dispose).toHaveBeenCalledOnce();
+    await flushTasks();
   });
 
   it("aborts at both downloader and manager boundaries on invalid progress", async () => {
@@ -118,6 +178,9 @@ class MemoryStorage implements NativeModelStorageCapability {
   anchorHeld = false;
   activateCalls = 0;
   skipInstalledCallback = false;
+  rejectAfterCallbackOnAccess: number | undefined;
+  duplicateCallbackOnAccess: number | undefined;
+  private installedAccesses = 0;
 
   constructor(private readonly installed: boolean) {}
 
@@ -129,11 +192,7 @@ class MemoryStorage implements NativeModelStorageCapability {
     });
   }
 
-  createStagingFile(
-    identity: NativeModelIdentity,
-    _operationId: string,
-    _signal: AbortSignal,
-  ): Promise<NativeModelStagingFile> {
+  createStagingFile(identity: NativeModelIdentity): Promise<NativeModelStagingFile> {
     this.identities.push(identity);
     return Promise.resolve({
       withFilePath: (use) => use("C:\\anchored\\staging\\Qwen.gguf", "C:\\anchored\\staging"),
@@ -150,14 +209,27 @@ class MemoryStorage implements NativeModelStorageCapability {
     _signal: AbortSignal,
     use: (filePath: string) => Promise<T>,
   ): Promise<NativeInstalledFileResult<T>> {
+    void _signal;
     this.identities.push(identity);
+    this.installedAccesses += 1;
     if (!this.installed) return { kind: "missing" };
     if (this.skipInstalledCallback) {
       return { kind: "present", value: true as T };
     }
     this.anchorHeld = true;
     try {
-      return { kind: "present", value: await use("C:\\anchored\\Qwen.gguf") };
+      const value = await use("C:\\anchored\\Qwen.gguf");
+      if (this.duplicateCallbackOnAccess === this.installedAccesses) {
+        try {
+          await use("C:\\anchored\\Qwen.gguf");
+        } catch {
+          // The provider violation is intentionally swallowed to test caller-side fencing.
+        }
+      }
+      if (this.rejectAfterCallbackOnAccess === this.installedAccesses) {
+        throw new Error("C:\\private\\anchor teardown failed");
+      }
+      return { kind: "present", value };
     } finally {
       this.anchorHeld = false;
     }

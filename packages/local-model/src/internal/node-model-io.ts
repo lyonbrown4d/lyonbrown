@@ -61,7 +61,7 @@ export class NodeModelIo implements LocalModelIo {
         return true;
       },
     );
-    return result.kind === "present" && result.value === true && verified;
+    return result.kind === "present" && result.value && verified;
   }
 
   async acquireInstallLock(preset: ModelPreset, signal: AbortSignal): Promise<InstallLockLease> {

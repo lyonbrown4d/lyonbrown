@@ -5,7 +5,7 @@ const forbidden = /\b(filePath|modelPath|directoryPath|modelUri|url|Native|node-
 
 for (const file of declarationFiles) {
   const declaration = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
-  const leaked = declaration.match(forbidden)?.[0];
+  const leaked = forbidden.exec(declaration)?.[0];
   if (leaked !== undefined) {
     throw new Error(`root public declaration leaks composition detail: ${leaked}`);
   }
