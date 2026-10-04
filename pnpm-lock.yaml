@@ -97,6 +97,28 @@ importers:
 
   packages/agent-domain: {}
 
+  packages/agent-launch:
+    dependencies:
+      '@lyonbrown/agent-client':
+        specifier: workspace:*
+        version: link:../agent-client
+      '@lyonbrown/local-control-plane':
+        specifier: workspace:*
+        version: link:../local-control-plane
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      eslint:
+        specifier: 9.39.1
+        version: 9.39.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@24.10.1)(@vitest/coverage-v8@4.1.11)(vite@6.4.3(@types/node@24.10.1)(tsx@4.20.6))
+
   packages/agent-runtime:
     dependencies:
       '@lyonbrown/agent-domain':
