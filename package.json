@@ -10,8 +10,11 @@
   },
   "scripts": {
     "preflight": "tsx scripts/preflight.ts",
+    "dependencies:build": "pnpm --filter \"./packages/**\" --recursive --workspace-concurrency=1 run build",
     "lint": "tsx scripts/workspace-task.ts lint",
+    "pretypecheck": "pnpm dependencies:build",
     "typecheck": "tsx scripts/workspace-task.ts typecheck",
+    "pretest": "pnpm dependencies:build",
     "test": "tsx scripts/workspace-task.ts test",
     "build": "tsx scripts/workspace-task.ts build",
     "ci-gate": "tsx scripts/ci-gate.ts",
