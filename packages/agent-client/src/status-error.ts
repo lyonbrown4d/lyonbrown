@@ -21,9 +21,7 @@ export function mapServiceError(error: ServiceError): AgentClientError {
     case status.CANCELLED:
       return clientError("cancelled", "CANCELLED", "agent request was cancelled");
     default:
-      return clientError("protocol", "UNSUPPORTED", "agent daemon rejected the request", {
-        grpcCode: error.code,
-      });
+      return clientError("protocol", "UNSUPPORTED", "agent daemon rejected the request");
   }
 }
 

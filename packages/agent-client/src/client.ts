@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Metadata, type ServiceError } from "@grpc/grpc-js";
+import { Metadata } from "@grpc/grpc-js";
 import type { EpochBinding } from "@lyonbrown/local-control-plane";
 import {
   GetSnapshotRequest,
@@ -18,12 +18,12 @@ import {
 
 import { mapCommand, type WireCommand } from "./command.js";
 import { clientError } from "./errors.js";
+import { mapHandshake } from "./handshake.js";
 import { mapSnapshot } from "./snapshot.js";
 import { isRetryableTransportError } from "./status-error.js";
 import {
   TransportFailure,
   createTransport,
-  deadline,
   delay,
   eventIterable,
   normalizeDeadlines,
@@ -32,6 +32,7 @@ import {
   type NormalizedDeadlines,
   type TransportState,
 } from "./transport.js";
+import { publicUnaryCall, unaryCall, type CapturedTransport } from "./unary.js";
 import type {
   AgentClient,
   AgentCommand,
@@ -44,12 +45,14 @@ import type {
   RuntimeSnapshotDto,
   SubscribeEventsInput,
 } from "./types.js";
-import { protocolId, requireId, requireNonNegativeRevision } from "./validation.js";
+import { requireId, requireNonNegativeRevision } from "./validation.js";
 
 export class DefaultAgentClient implements AgentClient {
   readonly #clientInstanceId: string;
   readonly #deadlines: NormalizedDeadlines;
+  readonly #expectedScopeId: string;
   #state: TransportState;
+  #bindingGeneration = 0;
   #handshakenEpoch: string | null = null;
   #closed = false;
 
@@ -59,19 +62,27 @@ export class DefaultAgentClient implements AgentClient {
       options.clientInstanceId ?? randomUUID(),
     );
     this.#deadlines = normalizeDeadlines(options.deadlines);
+    this.#expectedScopeId = options.binding.scopeId;
     this.#state = createTransport(options.binding);
   }
 
   public async health(): Promise<HealthDto> {
-    const state = this.#current();
-    const response = await this.#unary<HealthResponse>(state, (metadata, deadline, callback) => {
-      state.wire.health(
-        HealthRequest.fromPartial({ metadata: this.#requestMetadata(randomUUID(), "") }),
-        metadata,
-        { deadline },
-        callback,
-      );
-    });
+    const captured = this.#capture();
+    const response = await publicUnaryCall<HealthResponse>(
+      this.#authorization(captured.state.binding),
+      this.#deadlines.unaryMs,
+      () => {
+        this.#fence(captured);
+      },
+      (metadata, deadline, callback) => {
+        captured.state.wire.health(
+          HealthRequest.fromPartial({ metadata: this.#requestMetadata(randomUUID(), "") }),
+          metadata,
+          { deadline },
+          callback,
+        );
+      },
+    );
     if (
       response.protocolVersion !== PROTOCOL_VERSION ||
       response.status !== HealthStatus.HEALTH_STATUS_SERVING
@@ -82,86 +93,104 @@ export class DefaultAgentClient implements AgentClient {
   }
 
   public async handshake(input: HandshakeInput): Promise<HandshakeDto> {
-    const state = this.#current();
+    const captured = this.#capture();
     const clientName = requireId("clientName", input.clientName);
     const clientVersion = requireId("clientVersion", input.clientVersion);
-    const response = await this.#unary<HandshakeResponse>(state, (metadata, deadline, callback) => {
-      state.wire.handshake(
-        HandshakeRequest.fromPartial({
-          metadata: this.#requestMetadata(randomUUID(), ""),
-          clientName,
-          clientVersion,
-        }),
-        metadata,
-        { deadline },
-        callback,
-      );
-    });
-    this.#validateHandshake(response, state.binding);
-    if (this.#state.binding.serverInstanceId !== state.binding.serverInstanceId) {
-      throw staleEpoch(state.binding.serverInstanceId, this.#state.binding.serverInstanceId);
-    }
-    this.#handshakenEpoch = state.binding.serverInstanceId;
-    return {
-      protocolVersion: response.protocolVersion,
-      serverVersion: protocolId("handshake.server_version", response.serverVersion),
-      serverInstanceId: response.serverInstanceId,
-      capabilities: response.capabilities.map((capability) =>
-        protocolId("handshake.capability", capability),
-      ),
-      scopeId: response.scopeFingerprint,
-    };
+    const response = await publicUnaryCall<HandshakeResponse>(
+      this.#authorization(captured.state.binding),
+      this.#deadlines.unaryMs,
+      () => {
+        this.#fence(captured);
+      },
+      (metadata, deadline, callback) => {
+        captured.state.wire.handshake(
+          HandshakeRequest.fromPartial({
+            metadata: this.#requestMetadata(randomUUID(), ""),
+            clientName,
+            clientVersion,
+          }),
+          metadata,
+          { deadline },
+          callback,
+        );
+      },
+    );
+    const handshake = mapHandshake(response, captured.state.binding);
+    this.#fence(captured);
+    this.#handshakenEpoch = captured.state.binding.serverInstanceId;
+    return handshake;
   }
 
   public enqueue(command: AgentCommand): Promise<CommandReceiptDto> {
     try {
       const state = this.#current();
       this.#requireHandshake(state.binding.serverInstanceId);
+      const expectedGeneration = this.#bindingGeneration;
       const commandId = randomUUID();
       const expectedServerInstanceId = state.binding.serverInstanceId;
       const metadata = this.#requestMetadata(commandId, expectedServerInstanceId);
       const wireCommand = mapCommand(command, metadata);
-      return this.#executeCommand(wireCommand, commandId, expectedServerInstanceId);
+      return this.#executeCommand(
+        wireCommand,
+        commandId,
+        expectedServerInstanceId,
+        expectedGeneration,
+      );
     } catch (error: unknown) {
       return Promise.reject(publicError(error));
     }
   }
 
   public async getSnapshot(): Promise<RuntimeSnapshotDto> {
-    const state = this.#current();
-    this.#requireHandshake(state.binding.serverInstanceId);
-    const response = await this.#unary<RuntimeSnapshot>(state, (metadata, deadline, callback) => {
-      state.wire.getSnapshot(
-        GetSnapshotRequest.fromPartial({
-          metadata: this.#requestMetadata(randomUUID(), state.binding.serverInstanceId),
-        }),
-        metadata,
-        { deadline },
-        callback,
-      );
-    });
+    const captured = this.#capture();
+    this.#requireHandshake(captured.state.binding.serverInstanceId);
+    const response = await publicUnaryCall<RuntimeSnapshot>(
+      this.#authorization(captured.state.binding),
+      this.#deadlines.unaryMs,
+      () => {
+        this.#fence(captured);
+      },
+      (metadata, deadline, callback) => {
+        captured.state.wire.getSnapshot(
+          GetSnapshotRequest.fromPartial({
+            metadata: this.#requestMetadata(randomUUID(), captured.state.binding.serverInstanceId),
+          }),
+          metadata,
+          { deadline },
+          callback,
+        );
+      },
+    );
+    this.#fence(captured);
     return mapSnapshot(response);
   }
 
   public subscribeEvents(input: SubscribeEventsInput): AsyncIterable<RuntimeEventDto> {
-    const state = this.#current();
-    this.#requireHandshake(state.binding.serverInstanceId);
+    const captured = this.#capture();
+    this.#requireHandshake(captured.state.binding.serverInstanceId);
     const afterRevision = requireNonNegativeRevision("afterRevision", input.afterRevision);
-    const stream = state.wire.subscribeEvents(
+    const stream = captured.state.wire.subscribeEvents(
       SubscribeEventsRequest.fromPartial({
-        metadata: this.#requestMetadata(randomUUID(), state.binding.serverInstanceId),
+        metadata: this.#requestMetadata(randomUUID(), captured.state.binding.serverInstanceId),
         afterRevision,
       }),
-      this.#authorization(state.binding),
+      this.#authorization(captured.state.binding),
       {},
     );
-    return eventIterable(stream, input.signal, afterRevision);
+    return eventIterable(stream, input.signal, afterRevision, () => {
+      this.#fence(captured);
+    });
   }
 
   public replaceBinding(binding: EpochBinding): void {
     this.#assertOpen();
+    if (binding.scopeId !== this.#expectedScopeId) {
+      throw clientError("protocol", "SCOPE_MISMATCH", "replacement binding scope does not match");
+    }
+    const replacement = createTransport(binding);
     const previous = this.#state;
-    this.#state = createTransport(binding);
+    this.#bindingGeneration += 1;
+    this.#state = replacement;
     this.#handshakenEpoch = null;
     previous.wire.close();
   }
@@ -178,19 +207,20 @@ export class DefaultAgentClient implements AgentClient {
     command: WireCommand,
     commandId: string,
     expectedServerInstanceId: string,
+    expectedGeneration: number,
   ): Promise<CommandReceiptDto> {
     for (let attempt = 0; attempt < this.#deadlines.commandAttempts; attempt += 1) {
       const state = this.#current();
-      if (state.binding.serverInstanceId !== expectedServerInstanceId) {
-        throw staleEpoch(expectedServerInstanceId, state.binding.serverInstanceId);
-      }
+      this.#fenceExpected(expectedGeneration, expectedServerInstanceId);
       try {
-        const response = await this.#unary<CommandResponse>(
-          state,
+        const response = await unaryCall<CommandResponse>(
+          this.#authorization(state.binding),
+          this.#deadlines.unaryMs,
           (metadata, callDeadline, callback) => {
             command.invoke(state.wire, metadata, callDeadline, callback);
           },
         );
+        this.#fenceExpected(expectedGeneration, expectedServerInstanceId);
         if (
           response.protocolVersion !== PROTOCOL_VERSION ||
           response.commandId !== commandId ||
@@ -200,10 +230,7 @@ export class DefaultAgentClient implements AgentClient {
         }
         return { commandId, accepted: true };
       } catch (error: unknown) {
-        const currentEpoch = this.#state.binding.serverInstanceId;
-        if (currentEpoch !== expectedServerInstanceId) {
-          throw staleEpoch(expectedServerInstanceId, currentEpoch);
-        }
+        this.#fenceExpected(expectedGeneration, expectedServerInstanceId);
         if (
           !(error instanceof TransportFailure) ||
           !isRetryableTransportError(error.serviceError) ||
@@ -215,26 +242,6 @@ export class DefaultAgentClient implements AgentClient {
       }
     }
     throw clientError("unavailable", "DISCONNECTED", "agent command failed");
-  }
-
-  #unary<T>(
-    state: TransportState,
-    invoke: (
-      metadata: Metadata,
-      deadline: Date,
-      callback: (error: ServiceError | null, response: T) => void,
-    ) => void,
-  ): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      invoke(
-        this.#authorization(state.binding),
-        deadline(this.#deadlines.unaryMs),
-        (error, response) => {
-          if (error !== null) reject(new TransportFailure(error));
-          else resolve(response);
-        },
-      );
-    });
   }
 
   #authorization(binding: EpochBinding): Metadata {
@@ -252,30 +259,6 @@ export class DefaultAgentClient implements AgentClient {
     });
   }
 
-  #validateHandshake(response: HandshakeResponse, binding: EpochBinding): void {
-    if (response.protocolVersion !== PROTOCOL_VERSION) {
-      throw clientError(
-        "protocol",
-        "INCOMPATIBLE_VERSION",
-        "server protocol version is incompatible",
-      );
-    }
-    if (response.serverInstanceId !== binding.serverInstanceId) {
-      throw clientError(
-        "protocol",
-        "SERVER_INSTANCE_MISMATCH",
-        "server instance does not match discovery",
-        {
-          expectedServerInstanceId: binding.serverInstanceId,
-          actualServerInstanceId: response.serverInstanceId,
-        },
-      );
-    }
-    if (response.scopeFingerprint !== binding.scopeId) {
-      throw clientError("protocol", "SCOPE_MISMATCH", "server scope does not match discovery");
-    }
-  }
-
   #requireHandshake(epoch: string): void {
     if (this.#handshakenEpoch !== epoch) {
       throw clientError(
@@ -289,6 +272,21 @@ export class DefaultAgentClient implements AgentClient {
   #current(): TransportState {
     this.#assertOpen();
     return this.#state;
+  }
+
+  #capture(): CapturedTransport {
+    return { state: this.#current(), generation: this.#bindingGeneration };
+  }
+
+  #fence(captured: CapturedTransport): void {
+    this.#fenceExpected(captured.generation, captured.state.binding.serverInstanceId);
+  }
+
+  #fenceExpected(expectedGeneration: number, expectedEpoch: string): void {
+    const actualEpoch = this.#state.binding.serverInstanceId;
+    if (this.#bindingGeneration !== expectedGeneration || actualEpoch !== expectedEpoch) {
+      throw staleEpoch(expectedEpoch, actualEpoch);
+    }
   }
 
   #assertOpen(): void {

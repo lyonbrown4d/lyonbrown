@@ -127,23 +127,51 @@ export function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-export async function* eventIterable(
+export function eventIterable(
   stream: ClientReadableStream<RuntimeEvent>,
   signal: AbortSignal | undefined,
   afterRevision: bigint,
-): AsyncGenerator<RuntimeEventDto> {
+  fence: () => void,
+): AsyncIterable<RuntimeEventDto> {
+  const terminal: { error?: Error } = {};
+  const captureError = (error: Error): void => {
+    terminal.error = error;
+  };
+  stream.on("error", captureError);
   const cancel = (): void => {
     stream.cancel();
   };
   if (signal?.aborted === true) {
     stream.cancel();
-    throw clientError("cancelled", "CANCELLED", "event subscription was cancelled");
+  } else {
+    signal?.addEventListener("abort", cancel, { once: true });
   }
-  signal?.addEventListener("abort", cancel, { once: true });
+  return {
+    [Symbol.asyncIterator]: () =>
+      iterateEvents(stream, signal, cancel, afterRevision, fence, terminal, captureError),
+  };
+}
+
+async function* iterateEvents(
+  stream: ClientReadableStream<RuntimeEvent>,
+  signal: AbortSignal | undefined,
+  cancel: () => void,
+  afterRevision: bigint,
+  fence: () => void,
+  terminal: { error?: Error },
+  captureError: (error: Error) => void,
+): AsyncGenerator<RuntimeEventDto> {
   let revision = afterRevision;
   try {
+    if (signal?.aborted === true) {
+      throw clientError("cancelled", "CANCELLED", "event subscription was cancelled");
+    }
+    if (terminal.error !== undefined) {
+      throw terminal.error;
+    }
     const events = stream as unknown as AsyncIterable<RuntimeEvent>;
     for await (const wire of events) {
+      fence();
       const event = mapEvent(wire);
       if (event.revision <= revision) {
         throw clientError("protocol", "REVISION_MISMATCH", "event revisions are not increasing", {
@@ -152,12 +180,15 @@ export async function* eventIterable(
         });
       }
       revision = event.revision;
+      fence();
       yield event;
     }
   } catch (error: unknown) {
+    fence();
     throw publicError(isServiceError(error) ? new TransportFailure(error) : error);
   } finally {
     signal?.removeEventListener("abort", cancel);
+    stream.removeListener("error", captureError);
     stream.cancel();
   }
 }

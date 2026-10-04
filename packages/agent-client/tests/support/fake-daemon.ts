@@ -44,6 +44,9 @@ export interface FakeOptions {
     callback: sendUnaryData<CommandResponse>,
   ) => void;
   readonly subscribe?: AgentServiceServer["subscribeEvents"];
+  readonly health?: AgentServiceServer["health"];
+  readonly handshake?: AgentServiceServer["handshake"];
+  readonly getSnapshot?: AgentServiceServer["getSnapshot"];
   readonly snapshot?: RuntimeSnapshot;
 }
 
@@ -124,18 +127,22 @@ export async function spawnDaemon(options: FakeOptions = {}): Promise<FakeDaemon
     authorizationHeaders.push(metadataValue(call.metadata, "authorization"));
   };
   const implementation: AgentServiceServer = {
-    health: (call, callback) => {
-      recordAuthorization(call);
-      callback(null, {
-        $type: "lyonbrown.agent.v1.HealthResponse",
-        protocolVersion: PROTOCOL_VERSION,
-        status: HealthStatus.HEALTH_STATUS_SERVING,
-      });
-    },
-    handshake: (call, callback) => {
-      recordAuthorization(call);
-      callback(null, handshake);
-    },
+    health:
+      options.health ??
+      ((call, callback) => {
+        recordAuthorization(call);
+        callback(null, {
+          $type: "lyonbrown.agent.v1.HealthResponse",
+          protocolVersion: PROTOCOL_VERSION,
+          status: HealthStatus.HEALTH_STATUS_SERVING,
+        });
+      }),
+    handshake:
+      options.handshake ??
+      ((call, callback) => {
+        recordAuthorization(call);
+        callback(null, handshake);
+      }),
     startTurn: (call, callback) => {
       if (options.startTurn !== undefined) {
         calls.push(record(call));
@@ -166,10 +173,12 @@ export async function spawnDaemon(options: FakeOptions = {}): Promise<FakeDaemon
     cancelModelDownload: (call, callback) => {
       accept("cancel-model-download", call, callback);
     },
-    getSnapshot: (call, callback) => {
-      recordAuthorization(call);
-      callback(null, snapshot);
-    },
+    getSnapshot:
+      options.getSnapshot ??
+      ((call, callback) => {
+        recordAuthorization(call);
+        callback(null, snapshot);
+      }),
     subscribeEvents:
       options.subscribe ??
       ((call) => {
@@ -203,11 +212,11 @@ export async function spawnDaemon(options: FakeOptions = {}): Promise<FakeDaemon
   return daemon;
 }
 
-export function bindingFor(daemon: FakeDaemon): EpochBinding {
+export function bindingFor(daemon: FakeDaemon, scopeId = SCOPE): EpochBinding {
   const descriptor = createDiscoveryDescriptor({
     endpoint: daemon.endpoint,
     pid: process.pid,
-    scopeId: SCOPE,
+    scopeId,
     serverInstanceId: daemon.serverInstanceId,
     token: SecretToken.parse(daemon.token),
   });
