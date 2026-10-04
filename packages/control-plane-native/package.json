@@ -26,6 +26,7 @@
   "dependencies": {
     "@lyonbrown/event-store": "workspace:*",
     "@lyonbrown/local-control-plane": "workspace:*",
+    "@lyonbrown/local-model": "workspace:*",
     "koffi": "3.3.2"
   },
   "devDependencies": {
