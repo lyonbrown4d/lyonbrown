@@ -48,7 +48,6 @@ describe("daemon startup coordination", () => {
       scopeId: fixture.scope.scopeId,
     });
     expect(Object.keys(fixture.spawner.calls[0] ?? {})).not.toContain("token");
-    expect(fixture.spawner.signals[0]?.aborted).toBe(false);
     expect(fixture.discovery.leaseHeld).toBe(false);
   });
 

@@ -38,15 +38,17 @@ export interface DaemonExit {
   readonly exitCode: number | null;
 }
 
-export interface SpawnedDaemon {
+export interface SpawnAttempt {
   readonly exited: Promise<DaemonExit>;
+  /** Fulfills only after the attempt can no longer commit or own a daemon process. */
+  readonly retired: Promise<void>;
   /** Retire a startup attempt without acting on unrelated stale descriptors or processes. */
   abandon(signal: AbortSignal): Promise<void>;
 }
 
 export interface ProcessSpawner {
-  /** Must not commit a new spawn after cancellation; late handles are abandoned by the caller. */
-  spawn(request: SpawnAgentdRequest, signal: AbortSignal): Promise<SpawnedDaemon>;
+  /** Return the attempt handle synchronously before any background process commit is possible. */
+  begin(request: SpawnAgentdRequest): SpawnAttempt;
 }
 
 export interface AgentClientFactory {

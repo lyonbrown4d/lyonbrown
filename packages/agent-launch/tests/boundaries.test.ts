@@ -4,7 +4,7 @@ import type {
   DiscoveredDaemonCapability,
   DiscoveryClient,
   ProcessSpawner,
-  SpawnedDaemon,
+  SpawnAttempt,
   StartupLease,
 } from "../src/types.js";
 import { describe, expect, test } from "vitest";
@@ -92,15 +92,26 @@ describe("stage cancellation and deadlines", () => {
     ).rejects.toMatchObject({ code: "STARTUP_TIMEOUT" });
   });
 
-  test("cancels a pending spawn after the startup lease is acquired", async () => {
+  test("cancels an active spawn attempt after the startup lease is acquired", async () => {
     const controller = new AbortController();
     const discovery = new FakeDiscovery();
+    let retire!: () => void;
+    const retired = new Promise<void>((resolve) => {
+      retire = resolve;
+    });
     const spawner: ProcessSpawner = {
-      spawn: () => {
+      begin: (): SpawnAttempt => {
         queueMicrotask(() => {
           controller.abort();
         });
-        return pending();
+        return {
+          exited: pending(),
+          retired,
+          abandon: () => {
+            retire();
+            return Promise.resolve();
+          },
+        };
       },
     };
     const clock = new ManualClock();
@@ -109,23 +120,29 @@ describe("stage cancellation and deadlines", () => {
     await expect(
       launcherWith(discovery, spawner, clock, sleeper).connect({ signal: controller.signal }),
     ).rejects.toMatchObject({ code: "CANCELLED" });
+    await drainMicrotasks();
     expect(discovery.leaseHeld).toBe(false);
   });
 
-  test("times out a pending spawn and releases the startup lease", async () => {
+  test("times out attempt readiness and releases after confirmed retirement", async () => {
     const discovery = new FakeDiscovery();
     const clock = new ManualClock();
     const sleeper = new AdvancingSleeper(clock);
     const spawner: ProcessSpawner = {
-      spawn: () => {
+      begin: (): SpawnAttempt => {
         sleeper.resolveDeadlineSleeps = true;
-        return pending();
+        return {
+          exited: pending(),
+          retired: Promise.resolve(),
+          abandon: () => Promise.resolve(),
+        };
       },
     };
 
     await expect(launcherWith(discovery, spawner, clock, sleeper).connect()).rejects.toMatchObject({
       code: "READINESS_TIMEOUT",
     });
+    await drainMicrotasks();
     expect(discovery.leaseHeld).toBe(false);
   });
 
@@ -195,50 +212,6 @@ describe("stage cancellation and deadlines", () => {
     expect(acquisitionSignal?.aborted).toBe(true);
     expect(released).toBe(true);
   });
-
-  test.each(["timeout", "abort"] as const)(
-    "abandons a spawn that resolves after %s",
-    async (mode) => {
-      const controller = new AbortController();
-      const discovery = new FakeDiscovery();
-      const spawned = deferred<SpawnedDaemon>();
-      let spawnSignal: AbortSignal | undefined;
-      let abandoned = false;
-      const spawner: ProcessSpawner = {
-        spawn: (_request, signal?: AbortSignal) => {
-          spawnSignal = signal;
-          if (mode === "abort") {
-            queueMicrotask(() => {
-              controller.abort();
-            });
-          }
-          return spawned.promise;
-        },
-      };
-      const clock = new ManualClock();
-      const sleeper = new AdvancingSleeper(clock);
-      if (mode === "timeout") sleeper.resolveDeadlineSleepCalls.add(5);
-      const connection = launcherWith(discovery, spawner, clock, sleeper).connect({
-        signal: controller.signal,
-      });
-
-      await expect(connection).rejects.toMatchObject({
-        code: mode === "timeout" ? "READINESS_TIMEOUT" : "CANCELLED",
-      });
-      spawned.resolve({
-        exited: pending(),
-        abandon: () => {
-          abandoned = true;
-          return Promise.resolve();
-        },
-      } as SpawnedDaemon & { abandon(): Promise<void> });
-      await drainMicrotasks();
-
-      expect(spawnSignal?.aborted).toBe(true);
-      expect(abandoned).toBe(true);
-      expect(discovery.leaseHeld).toBe(false);
-    },
-  );
 
   test("keeps native capability and ports out of enumerable launcher state", () => {
     const discovery = new FakeDiscovery();

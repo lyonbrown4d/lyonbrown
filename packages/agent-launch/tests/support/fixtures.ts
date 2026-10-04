@@ -18,12 +18,11 @@ import type {
   DiscoveredDaemonCapability,
   DiscoveryClient,
   DiscoveryContext,
-  ProcessSpawner,
   Sleeper,
-  SpawnAgentdRequest,
-  SpawnedDaemon,
   StartupLease,
 } from "../../src/types.js";
+
+export { FakeSpawner } from "./fake-spawner.js";
 
 export const WORKSPACE = process.platform === "win32" ? "C:\\workspace" : "/workspace";
 export const CONFIG = "runtime-config-v1";
@@ -258,30 +257,6 @@ export class FakeDiscovery implements DiscoveryClient {
         void _releaseSignal;
         if (!released) this.leaseHeld = false;
         released = true;
-        return Promise.resolve();
-      },
-    });
-  }
-}
-
-export class FakeSpawner implements ProcessSpawner {
-  public calls: SpawnAgentdRequest[] = [];
-  public signals: AbortSignal[] = [];
-  public candidateToPublish: Candidate | null = null;
-  public exit = new Promise<{ readonly exitCode: number | null }>(() => undefined);
-  public failure: unknown;
-
-  public constructor(private readonly discovery: FakeDiscovery) {}
-
-  public spawn(request: SpawnAgentdRequest, _signal: AbortSignal): Promise<SpawnedDaemon> {
-    this.calls.push(request);
-    this.signals.push(_signal);
-    if (this.failure !== undefined) return rejectUnknown(this.failure);
-    if (this.candidateToPublish) this.discovery.candidate = this.candidateToPublish;
-    return Promise.resolve({
-      exited: this.exit,
-      abandon: (_abandonSignal: AbortSignal) => {
-        void _abandonSignal;
         return Promise.resolve();
       },
     });

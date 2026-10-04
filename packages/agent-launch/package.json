@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./composition": {
+      "types": "./dist/composition.d.ts",
+      "import": "./dist/composition.js"
     }
   },
   "files": [
@@ -19,6 +23,7 @@
   },
   "scripts": {
     "lint": "eslint src tests",
+    "pretypecheck": "pnpm build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --coverage",
     "build": "tsc -p tsconfig.build.json"

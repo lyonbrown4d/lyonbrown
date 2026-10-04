@@ -2,6 +2,7 @@ import { deriveScope, type ScopeIdentity } from "@lyonbrown/local-control-plane"
 import { validateOptions, type NormalizedConfiguration } from "./configuration.js";
 import { DaemonProbe } from "./daemon-probe.js";
 import { isAgentLaunchError, launchError } from "./errors.js";
+import { SpawnQuarantine } from "./spawn-quarantine.js";
 import { StageRunner } from "./stage-runner.js";
 import type {
   AgentLaunchConnection,
@@ -10,7 +11,7 @@ import type {
   CreateAgentLauncherOptions,
   DaemonExit,
   DiscoveryContext,
-  SpawnedDaemon,
+  SpawnAttempt,
   StartupLease,
 } from "./types.js";
 
@@ -18,6 +19,7 @@ export class DefaultAgentLauncher implements AgentLauncher {
   readonly #configuration: NormalizedConfiguration;
   readonly #options: CreateAgentLauncherOptions;
   readonly #probe: DaemonProbe;
+  readonly #quarantine: SpawnQuarantine;
   readonly #stages: StageRunner;
 
   public constructor(options: CreateAgentLauncherOptions) {
@@ -30,6 +32,7 @@ export class DefaultAgentLauncher implements AgentLauncher {
       this.#configuration.cleanupMs,
     );
     this.#probe = new DaemonProbe(options, this.#stages);
+    this.#quarantine = new SpawnQuarantine(this.#stages);
   }
 
   public async connect(input: ConnectAgentInput = {}): Promise<AgentLaunchConnection> {
@@ -72,7 +75,8 @@ export class DefaultAgentLauncher implements AgentLauncher {
   ): Promise<AgentLaunchConnection> {
     let outcome:
       | { readonly kind: "ready"; readonly connection: AgentLaunchConnection }
-      | { readonly kind: "failed"; readonly error: unknown };
+      | { readonly kind: "failed"; readonly error: unknown }
+      | { readonly kind: "quarantined"; readonly error: unknown };
     try {
       const existing = await this.#probe.probe(context, deadline, "READINESS_TIMEOUT", signal);
       if (existing.kind === "ready") {
@@ -82,20 +86,22 @@ export class DefaultAgentLauncher implements AgentLauncher {
         };
       } else {
         this.#stages.throwIfExpired(deadline, "READINESS_TIMEOUT");
-        const spawned = await this.#spawn(context.scope, deadline, signal);
+        const attempt = this.#beginSpawn(context.scope);
         try {
           outcome = {
             kind: "ready",
-            connection: await this.#waitForReadiness(context, deadline, spawned, signal),
+            connection: await this.#waitForReadiness(context, deadline, attempt, signal),
           };
         } catch (error: unknown) {
-          await this.#abandonQuietly(spawned);
-          throw error;
+          this.#quarantine.start(lease, attempt);
+          await this.#abandonQuietly(attempt);
+          outcome = { kind: "quarantined", error };
         }
       }
     } catch (error: unknown) {
       outcome = { kind: "failed", error };
     }
+    if (outcome.kind === "quarantined") throw outcome.error;
     try {
       await this.#releaseLease(lease);
     } catch (error: unknown) {
@@ -109,10 +115,10 @@ export class DefaultAgentLauncher implements AgentLauncher {
   async #waitForReadiness(
     context: DiscoveryContext,
     deadline: number,
-    spawned: SpawnedDaemon,
+    attempt: SpawnAttempt,
     signal?: AbortSignal,
   ): Promise<AgentLaunchConnection> {
-    const exit = this.#observeExit(spawned);
+    const exit = this.#observeExit(attempt);
     for (;;) {
       this.#stages.throwIfAborted(signal);
       this.#stages.throwIfExpired(deadline, "READINESS_TIMEOUT");
@@ -181,27 +187,13 @@ export class DefaultAgentLauncher implements AgentLauncher {
     }
   }
 
-  async #spawn(
-    scope: ScopeIdentity,
-    deadline: number,
-    signal?: AbortSignal,
-  ): Promise<SpawnedDaemon> {
+  #beginSpawn(scope: ScopeIdentity): SpawnAttempt {
     try {
-      return await this.#stages.waitFor(
-        (operationSignal) =>
-          this.#options.ports.spawner.spawn(
-            {
-              canonicalWorkspace: scope.canonicalWorkspace,
-              effectiveConfigFingerprint: this.#options.effectiveConfigFingerprint,
-              scopeId: scope.scopeId,
-            },
-            operationSignal,
-          ),
-        deadline,
-        "READINESS_TIMEOUT",
-        signal,
-        (lateSpawned, cleanupSignal) => this.#abandonSpawned(lateSpawned, cleanupSignal),
-      );
+      return this.#options.ports.spawner.begin({
+        canonicalWorkspace: scope.canonicalWorkspace,
+        effectiveConfigFingerprint: this.#options.effectiveConfigFingerprint,
+        scopeId: scope.scopeId,
+      });
     } catch (error: unknown) {
       if (isAgentLaunchError(error)) throw error;
       throw launchError("unavailable", "SPAWN_FAILED", "daemon process could not be started");
@@ -225,12 +217,12 @@ export class DefaultAgentLauncher implements AgentLauncher {
   }
 
   #observeExit(
-    spawned: SpawnedDaemon,
+    attempt: SpawnAttempt,
   ): Promise<
     { readonly kind: "exit"; readonly exit: DaemonExit } | { readonly kind: "exit-failed" }
   > {
     try {
-      return Promise.resolve(spawned.exited).then(
+      return Promise.resolve(attempt.exited).then(
         (exit) => ({ kind: "exit" as const, exit }),
         () => ({ kind: "exit-failed" as const }),
       );
@@ -248,12 +240,12 @@ export class DefaultAgentLauncher implements AgentLauncher {
     await lease.release(signal);
   }
 
-  async #abandonQuietly(spawned: SpawnedDaemon): Promise<void> {
-    await this.#stages.cleanup((cleanupSignal) => this.#abandonSpawned(spawned, cleanupSignal));
+  async #abandonQuietly(attempt: SpawnAttempt): Promise<void> {
+    await this.#stages.cleanup((cleanupSignal) => this.#abandonAttempt(attempt, cleanupSignal));
   }
 
-  async #abandonSpawned(spawned: SpawnedDaemon, signal: AbortSignal): Promise<void> {
-    await spawned.abandon(signal);
+  async #abandonAttempt(attempt: SpawnAttempt, signal: AbortSignal): Promise<void> {
+    await attempt.abandon(signal);
   }
 }
 
