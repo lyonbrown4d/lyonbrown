@@ -8,6 +8,9 @@
     "node": ">=24.15.0 <25",
     "pnpm": "10.33.4"
   },
+  "config": {
+    "nodeLlamaCppPostinstall": "skip"
+  },
   "scripts": {
     "preflight": "tsx scripts/preflight.ts",
     "dependencies:build": "pnpm --filter \"./packages/**\" --recursive --workspace-concurrency=1 run build",

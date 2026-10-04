@@ -13,4 +13,5 @@ ignoredBuiltDependencies:
   - "@bufbuild/buf"
   - better-sqlite3
   - koffi
+  - node-llama-cpp
   - protobufjs
