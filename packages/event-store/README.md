@@ -1,8 +1,7 @@
 # @lyonbrown/event-store
 
 Daemon-only, append-only SQLite event log for Lyonbrown. EventStore is the durable source of truth;
-clients and Electron renderers must consume daemon projections over gRPC and must never import this
-package.
+clients must consume daemon projections over gRPC and must never import this package.
 
 ## Contract
 
@@ -73,22 +72,21 @@ not use arbitrary substring matching. Ordinary fields such as `value`, `tokenUsa
 and `publicKey` remain valid. Add a reviewed domain mapping rather than weakening the codec when a
 new event legitimately collides with a denied name.
 
-## Native addon and Electron packaging
+## Native addon and daemon packaging
 
 `better-sqlite3` is a native addon whose package includes N-API prebuilt binaries for the supported
 targets. The repository pins the exact dependency version and deliberately blocks its implicit
 `node-gyp rebuild`; installation must load the packaged prebuild and must not require a C++ toolchain
 on the user's machine. CI must verify the current platform/architecture prebuild and test every
 release target under Node 24.15.x. A missing target prebuild is a release-build failure, not a reason
-to fall back to compiling on the user's machine. Keep this package and `better-sqlite3` external to
-Electron renderer/preload and desktop bundler graphs: only the daemon artifact may load the addon.
+to fall back to compiling on the user's machine. Keep this package and `better-sqlite3` outside the
+TUI dependency graph: only the daemon artifact may load the addon.
 
 The package compiles ESM JavaScript and declarations with `tsc`. Native binaries are not copied into
 `dist`; the daemon packager must preserve `better-sqlite3` as an external runtime dependency and
-include its `.node` binary for the target platform and architecture. When the desktop distributes
-the daemon, the `.node` binary must remain outside ASAR (for example via `asarUnpack` or an external
-daemon resource). Every packaged daemon artifact needs a smoke test covering database open, WAL,
-bigint round-trip, migration, and clean shutdown on each target OS and architecture.
+include its `.node` binary for the target platform and architecture. Every packaged daemon artifact
+needs a smoke test covering database open, WAL, bigint round-trip, migration, and clean shutdown on
+each target OS and architecture.
 
 ## Integrity scan performance
 

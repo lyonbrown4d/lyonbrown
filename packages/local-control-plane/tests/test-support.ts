@@ -24,8 +24,8 @@ export class FakePlatformSecurity implements PlatformControlPlaneSecurity {
     platform: "posix",
     directoryOpen: "dirfd-openat-O_NOFOLLOW",
     ownerProtection: "current-uid-owner-mode",
-    workspaceIdentity: "rust-dev-ino",
-    kernelLock: "rust-compatible-file-lock",
+    workspaceIdentity: "native-dev-ino-v1",
+    kernelLock: "kernel-file-lock-v1",
   } as const;
   readonly identities = new Map<string, ResolvedWorkspaceIdentity>();
   readonly directories = new Map<string, DirectoryState>();

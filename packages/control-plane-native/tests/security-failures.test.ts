@@ -123,12 +123,10 @@ describe("Windows security failures", () => {
   ])("rejects unusable descriptor control (%i, %i)", (result, control, code) => {
     mockSecurityInfo();
     vi.spyOn(api, "EqualSid").mockImplementation(() => 1);
-    vi.spyOn(api, "GetSecurityDescriptorControl").mockImplementation(
-      (...arguments_: unknown[]) => {
-        (arguments_[1] as unknown[])[0] = control;
-        return result;
-      },
-    );
+    vi.spyOn(api, "GetSecurityDescriptorControl").mockImplementation((...arguments_: unknown[]) => {
+      (arguments_[1] as unknown[])[0] = control;
+      return result;
+    });
     vi.spyOn(api, "GetLastError").mockImplementation(() => 87);
     expect(() => {
       verifyPrivateObject(123n, user, false);

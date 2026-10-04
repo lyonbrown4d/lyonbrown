@@ -5,15 +5,15 @@ Generated TypeScript message, client, and server contracts for
 
 ## Contract ownership
 
-During the migration, `proto/agent/v1/*.proto` is an intentionally duplicated
-copy of the Rust oracle in `crates/agent-protocol/proto/agent/v1`. Tests compare
-normalized source bytes and generated descriptor sets so either copy changing
-alone fails immediately. RPC names, package/service names, field tags, enum
-numbers, optional presence, and oneof presence are compatibility boundaries.
+`proto/agent/v1/*.proto` is the single source of truth. RPC names,
+package/service names, field tags, enum numbers, optional presence, and oneof
+presence are compatibility boundaries.
 
-At P6, after Rust parity and cutover acceptance are complete, the Node proto
-directory becomes the single source of truth and the temporary Rust copy can be
-removed with the Rust implementation.
+`tests/fixtures/wire-schema-v1.json` records SHA-256 digests of the
+newline-normalized schema source. Tests also assert the complete service method
+list and compatibility-sensitive field and enum numbers. An intentional wire
+change must be reviewed as a protocol version change, regenerate committed
+TypeScript, and update the versioned fixture in the same commit.
 
 ## Generation
 

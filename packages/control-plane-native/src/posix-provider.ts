@@ -6,8 +6,8 @@ export function createFailClosedPosixSecurity(): PlatformControlPlaneSecurity {
       platform: "posix",
       directoryOpen: "dirfd-openat-O_NOFOLLOW",
       ownerProtection: "current-uid-owner-mode",
-      workspaceIdentity: "rust-dev-ino",
-      kernelLock: "rust-compatible-file-lock",
+      workspaceIdentity: "native-dev-ino-v1",
+      kernelLock: "kernel-file-lock-v1",
     },
     workspaceIdentity() {
       return Promise.resolve({ ok: false, code: "io" });

@@ -48,10 +48,10 @@ function toIdentity(vector: IdentityVector) {
   }
 }
 
-describe("Rust workspace identity parity", () => {
-  it("consumes the Rust-owned fixed vectors", async () => {
+describe("workspace identity wire stability", () => {
+  it("consumes the versioned fixed vectors", async () => {
     const fixturePath = fileURLToPath(
-      new URL("./fixtures/rust-workspace-identity-vectors.json", import.meta.url),
+      new URL("./fixtures/workspace-identity-vectors.json", import.meta.url),
     );
     const vectors = JSON.parse(await readFile(fixturePath, "utf8")) as IdentityVector[];
     for (const vector of vectors) {

@@ -31,15 +31,15 @@ describe("native platform security boundary", () => {
         platform: "windows",
         directoryOpen: "FILE_FLAG_OPEN_REPARSE_POINT",
         ownerProtection: "current-user-only-dacl",
-        workspaceIdentity: "rust-file-id",
-        kernelLock: "rust-compatible-file-lock",
+        workspaceIdentity: "native-file-id-v1",
+        kernelLock: "kernel-file-lock-v1",
       },
       {
         platform: "posix",
         directoryOpen: "dirfd-openat-O_NOFOLLOW",
         ownerProtection: "current-uid-owner-mode",
-        workspaceIdentity: "rust-dev-ino",
-        kernelLock: "rust-compatible-file-lock",
+        workspaceIdentity: "native-dev-ino-v1",
+        kernelLock: "kernel-file-lock-v1",
       },
     ];
     expect(contracts.map(({ platform }) => platform)).toEqual(["windows", "posix"]);

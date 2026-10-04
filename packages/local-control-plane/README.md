@@ -6,17 +6,16 @@ package is independent of Pi, gRPC-generated types, SQLite, and all UI code.
 ## Responsibilities
 
 - resolve an absolute native canonical workspace path together with its
-  Rust-compatible filesystem identity, then derive a stable scope ID from that
+  versioned filesystem identity, then derive a stable scope ID from that
   identity plus the effective runtime configuration fingerprint;
-- create and strictly parse the versioned discovery descriptor shared with the
-  Rust behavior oracle;
+- create and strictly parse the versioned discovery descriptor;
 - generate a new 32-byte bearer token and UUID server epoch for every endpoint;
 - delegate descriptor reads, random same-directory temporary publication,
   cleanup, and atomic replacement to an anchored native directory handle;
 - reject unexpected fields, duplicate JSON keys, ambiguous endpoints, and
   descriptors above 4 KiB;
-- delegate distinct startup and daemon-lifetime leases to OS kernel file
-  locks compatible with the Rust oracle;
+- delegate distinct startup and daemon-lifetime leases to versioned OS kernel
+  file-lock semantics;
 - bind commands to immutable discovery epochs and fence them both when queued
   and when executed.
 
@@ -46,24 +45,24 @@ Internal constructors require an unexported identity token before they touch a
 handle or register WeakMap state, so `prototype.constructor` cannot mint a
 capability around attacker-controlled handles.
 
-The production Node-API adapter is not implemented yet and is an explicit
-agentd completion gate. Its Windows implementation must:
+The production native adapter is an explicit agentd completion gate. Its
+Windows implementation must:
 
 1. create protected, current-user-only DACLs with inheritance disabled;
 2. verify current-user owner and DACL identity on directories and files;
 3. open paths with `FILE_FLAG_OPEN_REPARSE_POINT` and reject every reparse
    point;
-4. obtain the same high-resolution volume/file ID as Rust's `file-id` crate;
+4. obtain the high-resolution volume/file identity defined by
+   `native-file-id-v1`;
 5. retain an anchored directory handle for every relative read, temporary file,
    atomic replacement, and lock operation.
 
 Its POSIX implementation must retain a verified `dirfd`, traverse and open via
 `openat` with `O_NOFOLLOW`, verify owner and mode on the opened object, publish
-with same-directory `renameat`, and use `flock`/`fcntl` kernel locks compatible
-with Rust `std::fs::File::try_lock`. Bigint `dev`/`ino` may be used only on a
-platform proven by parity tests to match Rust. Windows Node `stat` values are
-not accepted as substitutes for volume/file ID. Scope framing targets the same
-64-bit Rust builds as the shipped daemon, so `usize` lengths are encoded as
+with same-directory `renameat`, and use `flock`/`fcntl` kernel locks defined
+by `kernel-file-lock-v1`. Bigint `dev`/`ino` may be used only on a platform
+covered by identity stability tests. Windows Node `stat` values are not
+accepted as substitutes for volume/file ID. Scope framing v1 encodes lengths as
 eight-byte little-endian values.
 
 Neither adapter may shell out, re-resolve an anchored parent path, weaken

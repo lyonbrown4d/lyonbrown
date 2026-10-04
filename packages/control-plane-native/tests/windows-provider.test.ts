@@ -252,7 +252,7 @@ describe.runIf(windows)("Windows native control plane", () => {
     });
   });
 
-  it("matches a stable Rust workspace identity for aliases of one directory", async () => {
+  it("matches a stable workspace identity for aliases of one directory", async () => {
     const root = await temporaryRoot();
     const workspace = join(root, "workspace");
     await mkdir(workspace);
@@ -265,7 +265,7 @@ describe.runIf(windows)("Windows native control plane", () => {
     expect(first.canonicalWorkspace).toMatch(/^\\\\\?\\/u);
   });
 
-  it("follows a final junction for Rust-compatible workspace identity", async () => {
+  it("follows a final junction for the versioned workspace identity", async () => {
     const root = await temporaryRoot();
     const workspace = join(root, "workspace");
     const alias = join(root, "workspace-alias");

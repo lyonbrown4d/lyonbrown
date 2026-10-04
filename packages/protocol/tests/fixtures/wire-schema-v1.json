@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "normalizedSourceSha256": {
+    "agent.proto": "21ed041a63f71b0af451136c19c347c1d6b11fe4c525981547c0a46a03778dd2",
+    "commands.proto": "db27ad305c286887138624eab2d74c088c332e5aa17ce8da99df0ec79f25ea84",
+    "snapshot.proto": "b2bdb1f9d32410169599e04f6c4f5871e8b420f908b9223ae6be4552ac4c7049"
+  }
+}

@@ -59,15 +59,15 @@ export type PlatformSecurityContract =
       readonly platform: "windows";
       readonly directoryOpen: "FILE_FLAG_OPEN_REPARSE_POINT";
       readonly ownerProtection: "current-user-only-dacl";
-      readonly workspaceIdentity: "rust-file-id";
-      readonly kernelLock: "rust-compatible-file-lock";
+      readonly workspaceIdentity: "native-file-id-v1";
+      readonly kernelLock: "kernel-file-lock-v1";
     }
   | {
       readonly platform: "posix";
       readonly directoryOpen: "dirfd-openat-O_NOFOLLOW";
       readonly ownerProtection: "current-uid-owner-mode";
-      readonly workspaceIdentity: "rust-dev-ino";
-      readonly kernelLock: "rust-compatible-file-lock";
+      readonly workspaceIdentity: "native-dev-ino-v1";
+      readonly kernelLock: "kernel-file-lock-v1";
     };
 
 /** Native boundary: implementations must anchor all operations to verified handles. */

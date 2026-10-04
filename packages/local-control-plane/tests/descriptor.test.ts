@@ -51,7 +51,7 @@ describe("SecretToken", () => {
 });
 
 describe("discovery descriptor", () => {
-  it("reads the canonical Rust-oracle wire field names", () => {
+  it("reads the canonical versioned wire field names", () => {
     const token = SecretToken.generate().exposeForTransport();
     const wire = JSON.stringify({
       schema_version: 1,

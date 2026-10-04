@@ -9,8 +9,8 @@ export function createWindowsSecurity(): PlatformControlPlaneSecurity {
       platform: "windows",
       directoryOpen: "FILE_FLAG_OPEN_REPARSE_POINT",
       ownerProtection: "current-user-only-dacl",
-      workspaceIdentity: "rust-file-id",
-      kernelLock: "rust-compatible-file-lock",
+      workspaceIdentity: "native-file-id-v1",
+      kernelLock: "kernel-file-lock-v1",
     },
     workspaceIdentity(path) {
       return capture(() => workspaceIdentity(path));

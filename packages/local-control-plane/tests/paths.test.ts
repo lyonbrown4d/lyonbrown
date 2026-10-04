@@ -4,7 +4,7 @@ import { deriveScopedDaemonPaths } from "../src/index.js";
 import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.js";
 
 describe("scoped daemon paths", () => {
-  it("derives the Rust workspace cache layout and runtime scope from one native identity", async () => {
+  it("derives the stable workspace cache layout and runtime scope from one native identity", async () => {
     const security = new FakePlatformSecurity();
     security.setIdentity("C:\\Alias", INODE_IDENTITY, "C:\\Canonical\\Agent");
 

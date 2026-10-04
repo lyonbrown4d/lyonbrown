@@ -1,6 +1,6 @@
 # @lyonbrown/agent-client
 
-Authenticated gRPC client boundary shared by the Lyonbrown TUI and GUI.
+Authenticated gRPC client boundary used by the Lyonbrown TUI.
 
 The public API accepts an `EpochBinding` produced by `@lyonbrown/local-control-plane`; it does not
 accept raw endpoint/token pairs. Every RPC carries the binding's bearer credential. A handshake must
