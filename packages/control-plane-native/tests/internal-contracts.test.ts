@@ -49,7 +49,10 @@ describe("Windows handle boundary", () => {
     expect(() => {
       handle.close();
     }).toThrow(
-      expect.objectContaining({ failureCode: "io", message: "native control-plane operation failed" }),
+      expect.objectContaining({
+        failureCode: "io",
+        message: "native control-plane operation failed",
+      }),
     );
     expect(() => {
       handle.close();

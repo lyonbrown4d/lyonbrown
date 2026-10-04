@@ -102,6 +102,21 @@ export const api = {
     koffi.out(koffi.pointer("uint16_t")),
     koffi.out(koffi.pointer("uint32_t")),
   ]),
+  GetSecurityDescriptorDacl: stdcall(advapi32, "GetSecurityDescriptorDacl", "int32_t", [
+    POINTER,
+    koffi.out(koffi.pointer("int32_t")),
+    koffi.out(koffi.pointer(POINTER)),
+    koffi.out(koffi.pointer("int32_t")),
+  ]),
+  SetSecurityInfo: stdcall(advapi32, "SetSecurityInfo", "uint32_t", [
+    HANDLE,
+    "uint32_t",
+    "uint32_t",
+    POINTER,
+    POINTER,
+    POINTER,
+    POINTER,
+  ]),
   GetAclInformation: stdcall(advapi32, "GetAclInformation", "int32_t", [
     POINTER,
     koffi.out(koffi.pointer(ACL_SIZE_INFORMATION)),

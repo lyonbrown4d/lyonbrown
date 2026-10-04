@@ -43,7 +43,18 @@ export function workspaceIdentity(path: string): ResolvedWorkspaceIdentity {
   }
 }
 
-function lowResolutionIdentity(handle: OwnedHandle): ResolvedWorkspaceIdentity["identity"] {
+export function fileIdentity(handle: OwnedHandle): string {
+  const info = Buffer.alloc(24);
+  if (api.GetFileInformationByHandleEx(handle.borrow(), FILE_INFO.id, info, info.length)) {
+    return `${info.readBigUInt64LE(0).toString(16)}:${info.subarray(8, 24).toString("hex")}`;
+  }
+  const low = lowResolutionIdentity(handle);
+  return `${low.volumeSerialNumber.toString(16)}:${low.fileIndex.toString(16)}`;
+}
+
+function lowResolutionIdentity(
+  handle: OwnedHandle,
+): Extract<ResolvedWorkspaceIdentity["identity"], { readonly kind: "windows-low-res" }> {
   const info = Buffer.alloc(52);
   if (!api.GetFileInformationByHandle(handle.borrow(), info)) throw failureForLastError();
   return {

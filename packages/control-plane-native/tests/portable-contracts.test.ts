@@ -2,9 +2,8 @@ import { describe, expect, it } from "vitest";
 import { createFailClosedPosixSecurity } from "../src/posix-provider.js";
 import { capture, NativeFailure } from "../src/result.js";
 
-type SecurityFactory = ReturnType<typeof createFailClosedPosixSecurity> extends infer Security
-  ? () => Security
-  : never;
+type SecurityFactory =
+  ReturnType<typeof createFailClosedPosixSecurity> extends infer Security ? () => Security : never;
 
 interface PlatformModule {
   selectPlatformSecurity?: (

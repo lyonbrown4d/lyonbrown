@@ -153,9 +153,8 @@ describe.runIf(process.platform === "win32")("Windows native I/O failure cleanup
   it("matches Rust low-resolution identity when FileIdInfo is unavailable", async () => {
     const value = await context();
     const nativeInformation = api.GetFileInformationByHandleEx;
-    vi.spyOn(api, "GetFileInformationByHandleEx").mockImplementation(
-      (...arguments_: unknown[]) =>
-        Number(arguments_[1]) === 18 ? 0 : nativeInformation(...arguments_),
+    vi.spyOn(api, "GetFileInformationByHandleEx").mockImplementation((...arguments_: unknown[]) =>
+      Number(arguments_[1]) === 18 ? 0 : nativeInformation(...arguments_),
     );
     const mutableApi = api as unknown as Record<string, unknown>;
     const previous = mutableApi.GetFileInformationByHandle;

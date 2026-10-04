@@ -10,12 +10,7 @@ export function testPlan(platform: NodeJS.Platform): TestPlan {
     return { coverageInclude: ["src/**/*.ts"], include: ["tests/**/*.test.ts"] };
   }
   return {
-    coverageInclude: [
-      "src/index.ts",
-      "src/platform.ts",
-      "src/posix-provider.ts",
-      "src/result.ts",
-    ],
+    coverageInclude: ["src/index.ts", "src/platform.ts", "src/posix-provider.ts", "src/result.ts"],
     include: [
       "tests/package-policy.test.ts",
       "tests/portable-contracts.test.ts",

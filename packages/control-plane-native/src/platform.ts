@@ -1,5 +1,10 @@
 import type { PlatformControlPlaneSecurity } from "@lyonbrown/local-control-plane/native-adapter";
+import {
+  createPortablePathVerifier,
+  type PathSecurityVerifier,
+} from "@lyonbrown/event-store/path-verifier";
 import { createFailClosedPosixSecurity } from "./posix-provider.js";
+import type { WindowsEventStoreVerifierOptions } from "./windows/store-verifier.js";
 
 type SecurityFactory = () => PlatformControlPlaneSecurity;
 
@@ -34,6 +39,19 @@ const windowsFactory = await selectWindowsFactory(
   unavailableWindows,
 );
 
+const windowsStoreVerifierFactory =
+  process.platform === "win32"
+    ? (await import("./windows/store-verifier.js")).createWindowsEventStorePathVerifier
+    : undefined;
+
 export function createPlatformSecurity(): PlatformControlPlaneSecurity {
   return selectPlatformSecurity(process.platform, windowsFactory, createFailClosedPosixSecurity);
+}
+
+export function createPlatformEventStorePathVerifier(
+  options: WindowsEventStoreVerifierOptions = {},
+): PathSecurityVerifier {
+  if (process.platform !== "win32") return createPortablePathVerifier();
+  if (!windowsStoreVerifierFactory) throw new Error("Windows native provider is unavailable");
+  return windowsStoreVerifierFactory(options);
 }

@@ -137,6 +137,9 @@ importers:
 
   packages/control-plane-native:
     dependencies:
+      '@lyonbrown/event-store':
+        specifier: workspace:*
+        version: link:../event-store
       '@lyonbrown/local-control-plane':
         specifier: workspace:*
         version: link:../local-control-plane
