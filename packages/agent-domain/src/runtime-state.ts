@@ -3,6 +3,7 @@ import type { SessionId } from "./identifiers.js";
 import { incrementRevision, type Revision } from "./revision.js";
 import type { AgentRuntimeEvent, RuntimeUsage } from "./runtime-events.js";
 import type { RuntimeJsonValue } from "./runtime-json.js";
+import { checkedAssistantBytes, checkedUsageAdd } from "./runtime-state-budgets.js";
 
 export type AgentRuntimePhase =
   | "uninitialized"
@@ -42,6 +43,7 @@ export interface AgentRuntimeState {
   readonly turns: readonly RuntimeTurnState[];
   readonly tools: readonly RuntimeToolState[];
   readonly usage: RuntimeUsage;
+  readonly assistantTextBytes: number;
   readonly lastError?: RuntimeFailure;
   readonly outcomeUnknown: boolean;
 }
@@ -61,6 +63,7 @@ export function createInitialAgentRuntimeState(sessionId: SessionId): AgentRunti
     turns: [],
     tools: [],
     usage: ZERO_USAGE,
+    assistantTextBytes: 0,
     outcomeUnknown: false,
   });
 }
@@ -103,6 +106,14 @@ export function reduceAgentRuntimeEvent(
       },
     );
   }
+  if (
+    input.event.type === "user_message_submitted" &&
+    (state.phase === "running" || state.tools.some((tool) => tool.status === "running"))
+  ) {
+    throw domainError("failed_precondition", "Runtime session has unresolved work", {
+      reason: "unresolved_runtime_work",
+    });
+  }
   return applyEvent(state, input.revision, input.event);
 }
 
@@ -129,20 +140,27 @@ function applyEvent(
       return updateCurrentTurn(state, revision, "running", { phase: "running" });
     case "turn_started":
       return updateCurrentTurn(state, revision, "running", { phase: "running", turn: event.turn });
-    case "assistant_text_delta":
-      return updateLastTurn(state, revision, (turn) => ({
-        ...turn,
-        status: "running",
-        assistantText: `${turn.assistantText}${event.delta}`,
-      }));
+    case "assistant_text_delta": {
+      const assistantTextBytes = checkedAssistantBytes(state.assistantTextBytes, event.delta);
+      return updateLastTurn(
+        state,
+        revision,
+        (turn) => ({
+          ...turn,
+          status: "running",
+          assistantText: `${turn.assistantText}${event.delta}`,
+        }),
+        { assistantTextBytes },
+      );
+    }
     case "usage_recorded":
       return freezeState({
         ...state,
         revision,
         usage: Object.freeze({
-          inputTokens: state.usage.inputTokens + event.inputTokens,
-          outputTokens: state.usage.outputTokens + event.outputTokens,
-          totalTokens: state.usage.totalTokens + event.totalTokens,
+          inputTokens: checkedUsageAdd(state.usage.inputTokens, event.inputTokens),
+          outputTokens: checkedUsageAdd(state.usage.outputTokens, event.outputTokens),
+          totalTokens: checkedUsageAdd(state.usage.totalTokens, event.totalTokens),
         }),
       });
     case "turn_completed":
@@ -223,7 +241,7 @@ function updateLastTurn(
   state: AgentRuntimeState,
   revision: Revision,
   update: (turn: RuntimeTurnState) => RuntimeTurnState,
-  changes: Partial<Pick<AgentRuntimeState, "phase" | "lastError">> = {},
+  changes: Partial<Pick<AgentRuntimeState, "assistantTextBytes" | "phase" | "lastError">> = {},
 ): AgentRuntimeState {
   const index = state.turns.length - 1;
   if (index < 0) return freezeState({ ...state, ...changes, revision });

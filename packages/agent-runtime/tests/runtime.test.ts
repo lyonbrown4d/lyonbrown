@@ -3,7 +3,7 @@ import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
 import { createAgentRuntime } from "../src/index.js";
-import { CapturingKernelFactory, sequentialEventIds } from "./support.js";
+import { CapturingKernelFactory, runtimeEventStore, sequentialEventIds } from "./support.js";
 
 describe("agent runtime", () => {
   test("publishes only after append commits and keeps only the latest pending snapshot", async () => {
@@ -25,7 +25,7 @@ describe("agent runtime", () => {
     const kernel = new CapturingKernelFactory();
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-feed"),
-      eventStore,
+      eventStore: runtimeEventStore(eventStore),
       createKernelSession: kernel.create,
       createEventId: sequentialEventIds(),
     });
@@ -70,7 +70,7 @@ describe("agent runtime", () => {
     const kernel = new CapturingKernelFactory();
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-serial"),
-      eventStore,
+      eventStore: runtimeEventStore(eventStore),
       createKernelSession: kernel.create,
       createEventId: sequentialEventIds(),
     });
@@ -108,7 +108,7 @@ describe("agent runtime", () => {
     };
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-fatal"),
-      eventStore,
+      eventStore: runtimeEventStore(eventStore),
       createKernelSession: kernel.create,
       createEventId: sequentialEventIds(),
     });
@@ -148,7 +148,7 @@ describe("agent runtime", () => {
     };
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-unknown"),
-      eventStore: store,
+      eventStore: runtimeEventStore(store),
       createKernelSession: kernel.create,
       createEventId: sequentialEventIds(),
     });
@@ -170,7 +170,7 @@ describe("agent runtime", () => {
     const kernel = new CapturingKernelFactory();
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-dispose"),
-      eventStore: store,
+      eventStore: runtimeEventStore(store),
       createKernelSession: kernel.create,
       createEventId: sequentialEventIds(),
     });
@@ -186,13 +186,44 @@ describe("agent runtime", () => {
     store.close();
   });
 
+  test("closes feeds even when kernel disposal fails", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    const runtime = await createAgentRuntime({
+      sessionId: asSessionId("session-dispose-failure"),
+      eventStore: runtimeEventStore(store),
+      createEventId: sequentialEventIds(),
+      createKernelSession: () => ({
+        startTurn: () => Promise.resolve(),
+        steer: () => undefined,
+        followUp: () => undefined,
+        cancel: () => undefined,
+        subscribe: () => () => undefined,
+        dispose: () => {
+          throw new Error("raw kernel secret");
+        },
+      }),
+    });
+    const feed = runtime.snapshots();
+    await feed.next();
+    expect(() => {
+      runtime.dispose();
+    }).toThrow(
+      expect.objectContaining({ code: "KERNEL_FAILURE", message: "Kernel session failed" }),
+    );
+    await expect(feed.next()).resolves.toEqual({ value: undefined, done: true });
+    expect(() => {
+      runtime.dispose();
+    }).not.toThrow();
+    store.close();
+  });
+
   test("bounds turn concurrency and delegates live controls", async () => {
     const store = openEventStore({ testOnlyMemory: true });
     const calls: string[] = [];
     let release: (() => void) | undefined;
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-controls"),
-      eventStore: store,
+      eventStore: runtimeEventStore(store),
       createEventId: sequentialEventIds(),
       createKernelSession: () => ({
         startTurn: () =>

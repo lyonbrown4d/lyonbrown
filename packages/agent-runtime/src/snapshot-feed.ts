@@ -38,6 +38,20 @@ export class LatestSnapshotFeed implements RuntimeSnapshotFeed {
     });
   }
 
+  return(): Promise<IteratorResult<AgentRuntimeState>> {
+    this.close();
+    return Promise.resolve({ value: undefined, done: true });
+  }
+
+  throw(error?: unknown): Promise<IteratorResult<AgentRuntimeState>> {
+    this.close();
+    return Promise.reject(
+      error instanceof Error
+        ? error
+        : runtimeError("RUNTIME_DISPOSED", "Snapshot feed was stopped by its consumer"),
+    );
+  }
+
   publish(snapshot: AgentRuntimeState): void {
     if (this.#closed) return;
     const pending = this.#pendingRead;

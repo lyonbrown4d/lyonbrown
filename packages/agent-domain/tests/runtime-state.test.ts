@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 
 import {
+  MAX_AGENT_RUNTIME_ASSISTANT_BYTES,
   asRevision,
   asSessionId,
   createInitialAgentRuntimeState,
@@ -121,5 +122,71 @@ describe("agent runtime reducer", () => {
     });
 
     expect(() => apply(state, 3n, { type: "run_started", sessionId })).toThrow(/terminal/u);
+  });
+
+  test("does not let a new user message erase an unresolved running tool", () => {
+    let state = createInitialAgentRuntimeState(sessionId);
+    state = apply(state, 1n, { type: "session_opened", sessionId });
+    state = apply(state, 2n, { type: "run_started", sessionId });
+    state = apply(state, 3n, {
+      type: "tool_started",
+      sessionId,
+      callId: "call-pending",
+      toolName: "write_file",
+      argumentsPreview: {},
+    });
+
+    expect(() =>
+      apply(state, 4n, {
+        type: "user_message_submitted",
+        sessionId,
+        text: "erase the pending tool",
+      }),
+    ).toThrow(/unresolved/u);
+    expect(state.tools).toEqual([
+      expect.objectContaining({ callId: "call-pending", status: "running" }),
+    ]);
+  });
+
+  test("bounds cumulative assistant text bytes across deltas", () => {
+    let state = createInitialAgentRuntimeState(sessionId);
+    state = apply(state, 1n, { type: "session_opened", sessionId });
+    state = apply(state, 2n, {
+      type: "user_message_submitted",
+      sessionId,
+      text: "question",
+    });
+    state = apply(state, 3n, {
+      type: "assistant_text_delta",
+      sessionId,
+      delta: "a".repeat(MAX_AGENT_RUNTIME_ASSISTANT_BYTES),
+    });
+
+    expect(() => apply(state, 4n, { type: "assistant_text_delta", sessionId, delta: "b" })).toThrow(
+      /assistant text/u,
+    );
+    expect(state.assistantTextBytes).toBe(MAX_AGENT_RUNTIME_ASSISTANT_BYTES);
+  });
+
+  test("rejects usage totals that overflow safe integers", () => {
+    let state = createInitialAgentRuntimeState(sessionId);
+    state = apply(state, 1n, { type: "session_opened", sessionId });
+    state = apply(state, 2n, {
+      type: "usage_recorded",
+      sessionId,
+      inputTokens: Number.MAX_SAFE_INTEGER,
+      outputTokens: 0,
+      totalTokens: Number.MAX_SAFE_INTEGER,
+    });
+
+    expect(() =>
+      apply(state, 3n, {
+        type: "usage_recorded",
+        sessionId,
+        inputTokens: 1,
+        outputTokens: 0,
+        totalTokens: 1,
+      }),
+    ).toThrow(/usage/u);
   });
 });

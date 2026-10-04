@@ -1,8 +1,7 @@
 import type { AgentRuntimeState, SessionId } from "@lyonbrown/agent-domain";
-import type { EventStore } from "@lyonbrown/event-store";
 import type { KernelEventSink, KernelSession } from "@lyonbrown/kernel-pi";
 
-export type RuntimeEventStorePort = Pick<EventStore, "append" | "currentRevision" | "load">;
+import type { RuntimeEventStorePort } from "./event-store-port.js";
 
 export interface KernelSessionFactoryInput {
   readonly sessionId: string;
@@ -19,11 +18,12 @@ export interface CreateAgentRuntimeOptions {
   readonly createKernelSession: KernelSessionFactory;
   readonly createEventId?: () => string;
   readonly now?: () => string;
-  readonly maxRecoveryEvents?: number;
 }
 
 export interface RuntimeSnapshotFeed extends AsyncIterableIterator<AgentRuntimeState> {
   close(): void;
+  return(): Promise<IteratorResult<AgentRuntimeState>>;
+  throw(error?: unknown): Promise<IteratorResult<AgentRuntimeState>>;
 }
 
 export interface AgentRuntime {

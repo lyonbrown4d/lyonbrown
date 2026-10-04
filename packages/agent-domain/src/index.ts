@@ -51,7 +51,12 @@ export {
   type AgentRuntimeEvent,
   type RuntimeUsage,
 } from "./runtime-events.js";
-export type { RuntimeJsonPrimitive, RuntimeJsonValue } from "./runtime-json.js";
+export {
+  RUNTIME_JSON_MAX_STRING_BYTES,
+  RUNTIME_JSON_MAX_TOTAL_STRING_BYTES,
+  type RuntimeJsonPrimitive,
+  type RuntimeJsonValue,
+} from "./runtime-json.js";
 export {
   createInitialAgentRuntimeState,
   reduceAgentRuntimeEvent,
@@ -62,3 +67,4 @@ export {
   type RuntimeTurnState,
   type VersionedAgentRuntimeEvent,
 } from "./runtime-state.js";
+export { MAX_AGENT_RUNTIME_ASSISTANT_BYTES } from "./runtime-state-budgets.js";

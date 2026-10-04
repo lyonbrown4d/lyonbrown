@@ -8,7 +8,7 @@ import {
 
 import { runtimeError, type AgentRuntimeError } from "./errors.js";
 import { applyStoredEvent } from "./recovery.js";
-import type { RuntimeEventStorePort } from "./types.js";
+import type { RuntimeEventStorePort } from "./event-store-port.js";
 
 export interface RuntimeEventWriterOptions {
   readonly sessionId: SessionId;

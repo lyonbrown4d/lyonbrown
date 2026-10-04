@@ -92,9 +92,16 @@ class DefaultAgentRuntime implements AgentRuntime {
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    this.#kernel.dispose();
-    for (const feed of this.feeds) feed.close();
-    this.feeds.clear();
+    let disposeFailed = false;
+    try {
+      this.#kernel.dispose();
+    } catch {
+      disposeFailed = true;
+    } finally {
+      for (const feed of this.feeds) feed.close();
+      this.feeds.clear();
+    }
+    if (disposeFailed) throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
   }
 
   #appendKernelEvent(event: KernelEvent): Promise<void> {
@@ -109,6 +116,13 @@ class DefaultAgentRuntime implements AgentRuntime {
     if (this.writer.state.outcomeUnknown) {
       throw runtimeError("TERMINAL_SESSION", "Runtime session has an uncertain tool outcome");
     }
+    if (
+      !this.#running &&
+      (this.writer.state.phase === "running" ||
+        this.writer.state.tools.some((tool) => tool.status === "running"))
+    ) {
+      throw runtimeError("TERMINAL_SESSION", "Runtime session has unresolved work");
+    }
   }
 
   #assertUsable(): void {
@@ -119,11 +133,7 @@ class DefaultAgentRuntime implements AgentRuntime {
 export async function createAgentRuntime(
   options: CreateAgentRuntimeOptions,
 ): Promise<AgentRuntime> {
-  const state = await recoverRuntimeState(
-    options.sessionId,
-    options.eventStore,
-    options.maxRecoveryEvents,
-  );
+  const state = await recoverRuntimeState(options.sessionId, options.eventStore);
   const feeds = new Set<LatestSnapshotFeed>();
   const writer = new RuntimeEventWriter({
     sessionId: options.sessionId,

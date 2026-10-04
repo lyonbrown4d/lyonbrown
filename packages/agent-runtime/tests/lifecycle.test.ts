@@ -3,14 +3,19 @@ import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
 import { createAgentRuntime } from "../src/index.js";
-import { CapturingKernelFactory, eventTypes, sequentialEventIds } from "./support.js";
+import {
+  CapturingKernelFactory,
+  eventTypes,
+  runtimeEventStore,
+  sequentialEventIds,
+} from "./support.js";
 
 describe("agent runtime lifecycle", () => {
   test("uses secure default event identifiers and timestamps", async () => {
     const store = openEventStore({ testOnlyMemory: true });
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-defaults"),
-      eventStore: store,
+      eventStore: runtimeEventStore(store),
       createKernelSession: new CapturingKernelFactory().create,
     });
     const [opened] = await store.load("session-defaults", { afterRevision: 0n, limit: 1 });
@@ -25,7 +30,7 @@ describe("agent runtime lifecycle", () => {
     const kernel = new CapturingKernelFactory();
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-open"),
-      eventStore: store,
+      eventStore: runtimeEventStore(store),
       createKernelSession: kernel.create,
       createEventId: sequentialEventIds(),
     });
@@ -41,7 +46,7 @@ describe("agent runtime lifecycle", () => {
     let opened = false;
     const runtime = await createAgentRuntime({
       sessionId: asSessionId("session-before-kernel"),
-      eventStore: {
+      eventStore: runtimeEventStore({
         currentRevision: store.currentRevision.bind(store),
         load: store.load.bind(store),
         append: async (...args: Parameters<typeof store.append>) => {
@@ -49,7 +54,7 @@ describe("agent runtime lifecycle", () => {
           if (result[0]?.type === "session_opened") opened = true;
           return result;
         },
-      },
+      }),
       createKernelSession: (input) => {
         expect(opened).toBe(true);
         return new CapturingKernelFactory().create(input);
@@ -65,7 +70,7 @@ describe("agent runtime lifecycle", () => {
     const firstKernel = new CapturingKernelFactory();
     const first = await createAgentRuntime({
       sessionId: asSessionId("session-recover"),
-      eventStore: store,
+      eventStore: runtimeEventStore(store),
       createKernelSession: firstKernel.create,
       createEventId: sequentialEventIds("first"),
     });
@@ -79,7 +84,7 @@ describe("agent runtime lifecycle", () => {
     first.dispose();
     const recovered = await createAgentRuntime({
       sessionId: asSessionId("session-recover"),
-      eventStore: store,
+      eventStore: runtimeEventStore(store),
       createKernelSession: new CapturingKernelFactory().create,
       createEventId: sequentialEventIds("second"),
     });
@@ -89,6 +94,47 @@ describe("agent runtime lifecycle", () => {
       (await eventTypes(store, "session-recover")).filter((type) => type === "session_opened"),
     ).toHaveLength(1);
     recovered.dispose();
+    store.close();
+  });
+
+  test("rejects a new turn after recovering an unresolved running tool", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    const sessionId = asSessionId("session-unresolved-recovery");
+    const events = [
+      { type: "session_opened", sessionId },
+      { type: "user_message_submitted", sessionId, text: "change it" },
+      { type: "run_started", sessionId },
+      {
+        type: "tool_started",
+        sessionId,
+        callId: "call-pending",
+        toolName: "write_file",
+        argumentsPreview: { path: "README.md" },
+      },
+    ] as const;
+    await store.append(
+      sessionId,
+      0n,
+      events.map((event, index) => ({
+        eventId: `recovery-${String(index)}`,
+        type: event.type,
+        payload: event,
+      })),
+    );
+    const kernel = new CapturingKernelFactory();
+    const runtime = await createAgentRuntime({
+      sessionId,
+      eventStore: runtimeEventStore(store),
+      createKernelSession: kernel.create,
+      createEventId: sequentialEventIds("new"),
+    });
+
+    await expect(runtime.startTurn("must not clear pending tool")).rejects.toMatchObject({
+      code: "TERMINAL_SESSION",
+    });
+    expect(kernel.starts).toEqual([]);
+    expect(await eventTypes(store, sessionId)).toEqual(events.map((event) => event.type));
+    runtime.dispose();
     store.close();
   });
 });

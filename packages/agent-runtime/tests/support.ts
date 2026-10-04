@@ -1,6 +1,12 @@
 import type { EventStore } from "@lyonbrown/event-store";
 import type { KernelEvent, KernelEventSink, KernelSession } from "@lyonbrown/kernel-pi";
 
+import {
+  createRuntimeEventStorePort,
+  type RuntimeEventStorePort,
+  type RuntimeEventStoreSource,
+} from "../src/index.js";
+
 export class CapturingKernelFactory {
   sink: KernelEventSink | undefined;
   readonly starts: string[] = [];
@@ -30,6 +36,10 @@ export class CapturingKernelFactory {
 export function sequentialEventIds(prefix = "event"): () => string {
   let next = 0;
   return () => `${prefix}-${String(++next)}`;
+}
+
+export function runtimeEventStore(store: RuntimeEventStoreSource): RuntimeEventStorePort {
+  return createRuntimeEventStorePort(store);
 }
 
 export async function eventTypes(store: EventStore, sessionId: string): Promise<readonly string[]> {

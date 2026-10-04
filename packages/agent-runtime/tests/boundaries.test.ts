@@ -9,9 +9,9 @@ import type { KernelEvent } from "@lyonbrown/kernel-pi";
 import { describe, expect, test } from "vitest";
 
 import { mapKernelEvent } from "../src/kernel-events.js";
+import { createRuntimeEventPage, type RuntimeEventStorePort } from "../src/event-store-port.js";
 import { recoverRuntimeState } from "../src/recovery.js";
 import { LatestSnapshotFeed } from "../src/snapshot-feed.js";
-import type { RuntimeEventStorePort } from "../src/types.js";
 
 const sessionId = asSessionId("session-boundary");
 
@@ -114,17 +114,20 @@ describe("latest snapshot feed", () => {
     await expect(feed.next()).resolves.toEqual({ value: undefined, done: true });
     expect(closes).toBe(1);
   });
+
+  test("return and throw both close the iterator exactly once", async () => {
+    let closes = 0;
+    const feed = new LatestSnapshotFeed(createInitialAgentRuntimeState(sessionId), () => {
+      closes += 1;
+    });
+    await expect(feed.return()).resolves.toEqual({ value: undefined, done: true });
+    await expect(feed.throw(new Error("consumer stopped"))).rejects.toThrow("consumer stopped");
+    await expect(feed.next()).resolves.toEqual({ value: undefined, done: true });
+    expect(closes).toBe(1);
+  });
 });
 
 describe("recovery boundary", () => {
-  test("rejects invalid recovery budgets before doing I/O", async () => {
-    const store = throwingStore();
-    await expect(recoverRuntimeState(sessionId, store, 0)).rejects.toBeInstanceOf(RangeError);
-    await expect(recoverRuntimeState(sessionId, store, 1_000_001)).rejects.toBeInstanceOf(
-      RangeError,
-    );
-  });
-
   test("fails closed when revision lookup or page loading fails", async () => {
     await expect(recoverRuntimeState(sessionId, throwingStore())).rejects.toMatchObject({
       code: "EVENT_STREAM_CORRUPT",
@@ -132,7 +135,8 @@ describe("recovery boundary", () => {
     await expect(
       recoverRuntimeState(sessionId, {
         currentRevision: () => Promise.resolve(1n),
-        load: () => Promise.resolve([]),
+        loadPage: (_sessionId, options) =>
+          Promise.resolve(createRuntimeEventPage([], options.limit)),
         append: () => Promise.resolve([]),
       }),
     ).rejects.toMatchObject({ code: "EVENT_STREAM_CORRUPT" });
@@ -150,7 +154,8 @@ describe("recovery boundary", () => {
     await expect(
       recoverRuntimeState(sessionId, {
         currentRevision: () => Promise.resolve(1n),
-        load: () => Promise.resolve([event]),
+        loadPage: (_sessionId, options) =>
+          Promise.resolve(createRuntimeEventPage([event], options.limit)),
         append: () => Promise.resolve([]),
       }),
     ).rejects.toMatchObject({ code: "EVENT_STREAM_CORRUPT" });
@@ -165,7 +170,8 @@ describe("recovery boundary", () => {
     await expect(
       recoverRuntimeState(sessionId, {
         currentRevision: () => Promise.resolve(1n),
-        load: () => Promise.resolve(hostile),
+        loadPage: (_sessionId, options) =>
+          Promise.resolve(createRuntimeEventPage(hostile, options.limit)),
         append: () => Promise.resolve([]),
       }),
     ).rejects.toMatchObject({
@@ -178,7 +184,7 @@ describe("recovery boundary", () => {
 function throwingStore(): RuntimeEventStorePort {
   return {
     currentRevision: () => Promise.reject(new Error("raw storage detail")),
-    load: () => Promise.reject(new Error("raw storage detail")),
+    loadPage: () => Promise.reject(new Error("raw storage detail")),
     append: () => Promise.reject(new Error("raw storage detail")),
   };
 }

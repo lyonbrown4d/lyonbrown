@@ -8,7 +8,7 @@ import {
 import { expect, test } from "vitest";
 
 import { createAgentRuntime } from "../src/index.js";
-import { eventTypes, sequentialEventIds } from "./support.js";
+import { eventTypes, runtimeEventStore, sequentialEventIds } from "./support.js";
 
 const budget = {
   maxInputBytes: 4_096,
@@ -36,7 +36,7 @@ test("runs the real Pi kernel through the durable runtime adapter", async () => 
   const store = openEventStore({ testOnlyMemory: true });
   const runtime = await createAgentRuntime({
     sessionId: asSessionId("session-pi"),
-    eventStore: store,
+    eventStore: runtimeEventStore(store),
     createEventId: sequentialEventIds(),
     createKernelSession: ({ sessionId, eventSink }) =>
       createPiKernelSession({

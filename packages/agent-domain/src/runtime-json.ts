@@ -12,11 +12,14 @@ export type RuntimeJsonValue =
 const MAX_DEPTH = 32;
 const MAX_NODES = 8_192;
 const MAX_ENTRIES = 2_048;
+export const RUNTIME_JSON_MAX_STRING_BYTES = 64 * 1_024;
+export const RUNTIME_JSON_MAX_TOTAL_STRING_BYTES = 256 * 1_024;
 const DANGEROUS_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 
 interface CopyState {
   readonly ancestors: WeakSet<object>;
   nodes: number;
+  stringBytes: number;
 }
 
 function invalid(reason: string): never {
@@ -27,7 +30,7 @@ function invalid(reason: string): never {
 }
 
 export function copyRuntimeJson(value: unknown): RuntimeJsonValue {
-  return copyValue(value, { ancestors: new WeakSet(), nodes: 0 }, 0);
+  return copyValue(value, { ancestors: new WeakSet(), nodes: 0, stringBytes: 0 }, 0);
 }
 
 function copyValue(value: unknown, state: CopyState, depth: number): RuntimeJsonValue {
@@ -38,6 +41,7 @@ function copyValue(value: unknown, state: CopyState, depth: number): RuntimeJson
   if (value === null || typeof value === "boolean") return value;
   if (typeof value === "string") {
     if (!isWellFormedString(value)) return invalid("ill_formed_unicode");
+    chargeStringBytes(value, state);
     return value;
   }
   if (typeof value === "number") {
@@ -91,6 +95,7 @@ function copyObject(value: object, state: CopyState, depth: number): RuntimeJson
   >;
   for (const key of keys as string[]) {
     if (DANGEROUS_KEYS.has(key) || !isWellFormedString(key)) return invalid("dangerous_json_key");
+    chargeStringBytes(key, state);
     const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
     if (descriptor === undefined || !("value" in descriptor) || !descriptor.enumerable) {
       return invalid("accessor_json_property");
@@ -98,4 +103,21 @@ function copyObject(value: object, state: CopyState, depth: number): RuntimeJson
     result[key] = copyValue(descriptor.value as unknown, state, depth + 1);
   }
   return Object.freeze(result);
+}
+
+function chargeStringBytes(value: string, state: CopyState): void {
+  const bytes = Buffer.byteLength(value, "utf8");
+  if (bytes > RUNTIME_JSON_MAX_STRING_BYTES) {
+    throw domainError("resource_exhausted", "Runtime JSON string bytes exceed the limit", {
+      resource: "runtime_json_string_bytes",
+      limitBytes: RUNTIME_JSON_MAX_STRING_BYTES,
+    });
+  }
+  if (bytes > RUNTIME_JSON_MAX_TOTAL_STRING_BYTES - state.stringBytes) {
+    throw domainError("resource_exhausted", "Runtime JSON total string bytes exceed the limit", {
+      resource: "runtime_json_total_string_bytes",
+      limitBytes: RUNTIME_JSON_MAX_TOTAL_STRING_BYTES,
+    });
+  }
+  state.stringBytes += bytes;
 }
