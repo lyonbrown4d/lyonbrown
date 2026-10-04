@@ -10,25 +10,34 @@ import type {
 } from "../types.js";
 import { DEFAULT_PRESET } from "./catalog.js";
 import type { DownloadArtifact, LocalModelIo, LlamaEngineAdapter } from "./contracts.js";
+import { cloneStatus, statusFor, validProgress } from "./status.js";
 
 interface ActiveOperation {
   readonly id: string;
   readonly controller: AbortController;
 }
 
+interface ActiveLoad {
+  readonly controller: AbortController;
+  readonly task: Promise<LocalModelLoadResult>;
+}
+
+const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;
+
 export const createLocalModelManager = (
   io: LocalModelIo,
   engine: LlamaEngineAdapter,
   operationId: () => string = randomUUID,
-): LocalModelService => new LocalModelManager(io, engine, operationId);
+  shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
+): LocalModelService => new LocalModelManager(io, engine, operationId, shutdownTimeoutMs);
 
 class LocalModelManager implements LocalModelService {
   private current: LocalModelStatus;
   private active: ActiveOperation | undefined;
   private readonly inspectionController = new AbortController();
   private readonly inspectionTask: Promise<void>;
-  private operationTask: Promise<void> | undefined;
-  private readonly loadTasks = new Set<Promise<LocalModelLoadResult>>();
+  private readonly operationTasks = new Set<Promise<void>>();
+  private readonly loadTasks = new Set<ActiveLoad>();
   private disposeTask: Promise<void> | undefined;
   private disposed = false;
   private readonly listeners = new Set<(status: LocalModelStatus) => void>();
@@ -37,6 +46,7 @@ class LocalModelManager implements LocalModelService {
     private readonly io: LocalModelIo,
     private readonly engine: LlamaEngineAdapter,
     private readonly operationId: () => string,
+    private readonly shutdownTimeoutMs: number,
   ) {
     this.current = statusFor("checking");
     this.inspectionTask = this.inspectInitialCache();
@@ -63,7 +73,12 @@ class LocalModelManager implements LocalModelService {
     const controller = new AbortController();
     this.active = { id, controller };
     this.publish(statusFor("waiting-for-lock", id, 0, DEFAULT_PRESET.expectedDownloadBytes));
-    this.operationTask = this.runDownload(id, controller);
+    const task = this.runDownload(id, controller);
+    this.operationTasks.add(task);
+    void task.then(
+      () => this.operationTasks.delete(task),
+      () => this.operationTasks.delete(task),
+    );
     return { kind: "started", operationId: id };
   }
 
@@ -82,12 +97,14 @@ class LocalModelManager implements LocalModelService {
     if (this.disposed) return { kind: "unavailable", code: "service_disposed" } as const;
     if (this.current.phase === "checking") return { kind: "checking" } as const;
     if (this.current.phase !== "ready") return { kind: "setup-required" } as const;
-    const task = this.loadReady();
-    this.loadTasks.add(task);
+    const controller = new AbortController();
+    const task = this.loadReady(controller.signal);
+    const activeLoad = { controller, task };
+    this.loadTasks.add(activeLoad);
     try {
       return await task;
     } finally {
-      this.loadTasks.delete(task);
+      this.loadTasks.delete(activeLoad);
     }
   }
 
@@ -96,6 +113,9 @@ class LocalModelManager implements LocalModelService {
     this.disposed = true;
     this.inspectionController.abort(new Error("local_model_service_disposed"));
     this.active?.controller.abort(new Error("local_model_service_disposed"));
+    for (const load of this.loadTasks) {
+      load.controller.abort(new Error("local_model_service_disposed"));
+    }
     this.disposeTask = this.joinBackgroundTasks();
     return this.disposeTask;
   }
@@ -120,15 +140,18 @@ class LocalModelManager implements LocalModelService {
   }
 
   private async joinBackgroundTasks(): Promise<void> {
-    const tasks: Promise<unknown>[] = [this.inspectionTask, ...this.loadTasks];
-    if (this.operationTask !== undefined) tasks.push(this.operationTask);
-    await Promise.allSettled(tasks);
+    const tasks: Promise<unknown>[] = [
+      this.inspectionTask,
+      ...this.operationTasks,
+      ...[...this.loadTasks].map(({ task }) => task),
+    ];
+    await waitForTasks(tasks, this.shutdownTimeoutMs);
     this.listeners.clear();
   }
 
-  private async loadReady(): Promise<LocalModelLoadResult> {
+  private async loadReady(signal: AbortSignal): Promise<LocalModelLoadResult> {
     try {
-      const lease = await this.engine.loadDefault();
+      const lease = await this.engine.loadDefault(signal);
       if (this.disposed) {
         try {
           await lease.dispose();
@@ -141,7 +164,7 @@ class LocalModelManager implements LocalModelService {
     } catch {
       return {
         kind: "unavailable",
-        code: this.disposed ? "service_disposed" : "native_runtime_unavailable",
+        code: this.disposed || signal.aborted ? "service_disposed" : "native_runtime_unavailable",
       };
     }
   }
@@ -230,39 +253,15 @@ class LocalModelManager implements LocalModelService {
   }
 }
 
-const statusFor = (
-  phase: LocalModelStatus["phase"],
-  operationId: string | null = null,
-  downloadedBytes = 0,
-  totalBytes: number | null = null,
-  failure: LocalModelStatus["failure"] = null,
-): LocalModelStatus => ({
-  model: DEFAULT_LOCAL_MODEL,
-  phase,
-  operationId,
-  downloadedBytes,
-  totalBytes,
-  failure,
-  allowedActions:
-    phase === "setup-required"
-      ? ["download"]
-      : phase === "waiting-for-lock" || phase === "downloading" || phase === "verifying"
-        ? ["cancel"]
-        : phase === "failed" || phase === "cancelled"
-          ? ["retry"]
-          : [],
-});
-
-const validProgress = (downloaded: number, total: number | null): boolean =>
-  Number.isSafeInteger(downloaded) &&
-  downloaded >= 0 &&
-  downloaded <= DEFAULT_PRESET.maxBytes &&
-  (total === null ||
-    (Number.isSafeInteger(total) && total >= downloaded && total <= DEFAULT_PRESET.maxBytes));
-
-const cloneStatus = (status: LocalModelStatus): LocalModelStatus => ({
-  ...status,
-  model: { ...status.model },
-  failure: status.failure === null ? null : { ...status.failure },
-  allowedActions: [...status.allowedActions],
-});
+const waitForTasks = async (
+  tasks: readonly Promise<unknown>[],
+  timeoutMs: number,
+): Promise<void> => {
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, Math.max(0, timeoutMs));
+    void Promise.allSettled(tasks).then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+};

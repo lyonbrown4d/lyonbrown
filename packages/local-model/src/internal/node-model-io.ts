@@ -100,6 +100,15 @@ export class NodeModelIo implements LocalModelIo {
     await mkdir(this.modelsDirectory, { recursive: true });
     const stagingDirectory = join(this.modelsDirectory, `.staging-${randomUUID()}`);
     await mkdir(stagingDirectory, { recursive: false });
+    const controller = new AbortController();
+    const forwardAbort = () => {
+      controller.abort(request.signal.reason);
+    };
+    if (request.signal.aborted) forwardAbort();
+    else request.signal.addEventListener("abort", forwardAbort, { once: true });
+    let boundaryFailure = false;
+    let previousDownloadedBytes = 0;
+    let previousTotalBytes = 0;
     try {
       const downloader = await this.api.createModelDownloader({
         modelUri: MODEL_DOWNLOAD_URI,
@@ -110,10 +119,28 @@ export class NodeModelIo implements LocalModelIo {
         deleteTempFileOnCancel: true,
         parallelDownloads: 4,
         onProgress: ({ downloadedSize, totalSize }) => {
+          if (
+            boundaryFailure ||
+            !validDownloadProgress(
+              downloadedSize,
+              totalSize,
+              previousDownloadedBytes,
+              previousTotalBytes,
+              preset.maxBytes,
+            )
+          ) {
+            boundaryFailure = true;
+            controller.abort(new Error("model_download_limits_exceeded"));
+            return;
+          }
+          previousDownloadedBytes = downloadedSize;
+          previousTotalBytes = totalSize;
           request.onProgress({ downloadedBytes: downloadedSize, totalBytes: totalSize });
         },
       });
-      const filePath = resolve(await downloader.download({ signal: request.signal }));
+      const filePath = resolve(await downloader.download({ signal: controller.signal }));
+      this.throwIfAborted(controller.signal);
+      this.throwIfAborted(request.signal);
       const expectedPath = resolve(stagingDirectory, preset.filename);
       if (filePath !== expectedPath) throw new Error("model_download_target_invalid");
       const artifact = Object.freeze({ operationId: request.operationId, token: Symbol() });
@@ -126,6 +153,8 @@ export class NodeModelIo implements LocalModelIo {
     } catch (error) {
       await rm(stagingDirectory, { recursive: true, force: true });
       throw error;
+    } finally {
+      request.signal.removeEventListener("abort", forwardAbort);
     }
   }
 
@@ -188,3 +217,19 @@ const isNotFound = (error: unknown): boolean =>
 
 const isLockContended = (error: unknown): boolean =>
   typeof error === "object" && error !== null && "code" in error && error.code === "ELOCKED";
+
+const validDownloadProgress = (
+  downloadedBytes: number,
+  totalBytes: number,
+  previousDownloadedBytes: number,
+  previousTotalBytes: number,
+  maxBytes: number,
+): boolean =>
+  Number.isSafeInteger(downloadedBytes) &&
+  Number.isSafeInteger(totalBytes) &&
+  downloadedBytes >= previousDownloadedBytes &&
+  totalBytes >= previousTotalBytes &&
+  downloadedBytes >= 0 &&
+  totalBytes >= downloadedBytes &&
+  downloadedBytes <= maxBytes &&
+  totalBytes <= maxBytes;

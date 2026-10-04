@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { LocalModelPhase, LocalModelService } from "../src/index.js";
 import { createLocalModelManager } from "../src/internal/manager.js";
-import { artifact, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.js";
+import { artifact, Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.js";
 
 describe("explicit background download lifecycle", () => {
   it("starts only on command and publishes bounded progress", async () => {
@@ -163,6 +163,60 @@ describe("explicit background download lifecycle", () => {
     expect(service.startDownload()).toEqual({ kind: "disposed" });
   });
 
+  it("joins an older operation when a failure listener synchronously retries", async () => {
+    const ids = ["op-old", "op-new"];
+    const oldCleanup = new Deferred<void>();
+    const oldRelease = new Deferred<void>();
+    const io = new FakeModelIo();
+    io.verify = (downloadedArtifact) => {
+      io.verifyCalls += 1;
+      return downloadedArtifact.operationId === "op-old"
+        ? Promise.reject(new Error("first attempt failed"))
+        : Promise.resolve(111);
+    };
+    io.cleanup = async (downloadedArtifact) => {
+      io.cleanupCalls += 1;
+      if (downloadedArtifact?.operationId === "op-old") await oldCleanup.promise;
+    };
+    let lockSequence = 0;
+    io.acquireInstallLock = () => {
+      io.lockCalls += 1;
+      lockSequence += 1;
+      const sequence = lockSequence;
+      return Promise.resolve({
+        release: async () => {
+          io.lockReleaseCalls += 1;
+          if (sequence === 1) await oldRelease.promise;
+        },
+      });
+    };
+    const service = await createMissingService(io, () => ids.shift() ?? "unexpected");
+    service.subscribe((status) => {
+      if (status.phase === "failed") service.startDownload();
+    });
+
+    service.startDownload();
+    await waitForPhase(service, "downloading");
+    io.downloads[0]?.completion.resolve(artifact("op-old"));
+    await waitForOperation(service, "op-new");
+    expect(service.status().operationId).toBe("op-new");
+
+    const disposal = service.dispose();
+    io.downloads[1]?.completion.reject(new Error("cancelled"));
+    let disposalFinished = false;
+    void disposal.then(() => {
+      disposalFinished = true;
+    });
+    await flushTasks();
+    expect(disposalFinished).toBe(false);
+
+    oldCleanup.resolve();
+    await flushTasks();
+    expect(disposalFinished).toBe(false);
+    oldRelease.resolve();
+    await expect(disposal).resolves.toBeUndefined();
+  });
+
   it("rechecks the verified cache after acquiring the process lock", async () => {
     const io = new FakeModelIo();
     const service = await createMissingService(io, () => "op-1");
@@ -187,6 +241,14 @@ const waitForPhase = async (
     await flushTasks();
   }
   throw new Error(`phase did not reach ${expected}`);
+};
+
+const waitForOperation = async (service: LocalModelService, operationId: string): Promise<void> => {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (service.status().operationId === operationId) return;
+    await flushTasks();
+  }
+  throw new Error(`operation did not reach ${operationId}`);
 };
 
 const createMissingService = async (

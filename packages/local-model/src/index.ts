@@ -1,4 +1,3 @@
-export { createDefaultLocalModelService } from "./factory.js";
 export { DEFAULT_LOCAL_MODEL } from "./public-model.js";
 export type {
   CancelModelDownloadResult,

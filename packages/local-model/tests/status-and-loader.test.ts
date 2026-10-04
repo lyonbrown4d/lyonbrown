@@ -174,6 +174,10 @@ describe("llama runtime loading", () => {
     });
     await flushTasks();
     expect(disposalFinished).toBe(false);
+    const firstSignal = engine.loadDefault.mock.calls[0]?.[0] as AbortSignal | undefined;
+    const secondSignal = engine.loadDefault.mock.calls[1]?.[0] as AbortSignal | undefined;
+    expect(firstSignal?.aborted).toBe(true);
+    expect(secondSignal?.aborted).toBe(true);
 
     first.resolve({ dispose: firstDispose });
     second.resolve({ dispose: secondDispose });
@@ -190,5 +194,31 @@ describe("llama runtime loading", () => {
     expect(firstDispose).toHaveBeenCalledOnce();
     expect(secondDispose).toHaveBeenCalledOnce();
     expect(engine.loadDefault).toHaveBeenCalledTimes(2);
+  });
+
+  it("bounds shutdown while still fencing and disposing a load that resolves late", async () => {
+    const io = new FakeModelIo();
+    io.installed = true;
+    const lateLease = new Deferred<{ dispose(): Promise<void> }>();
+    const leaseDispose = vi.fn(() => Promise.resolve());
+    const engine = {
+      loadDefault: vi.fn((signal: AbortSignal) => {
+        void signal;
+        return lateLease.promise;
+      }),
+    };
+    const service = createLocalModelManager(io, engine, () => "unused", 10);
+    await flushTasks();
+
+    const load = service.load();
+    await expect(service.dispose()).resolves.toBeUndefined();
+    expect(engine.loadDefault.mock.calls[0]?.[0].aborted).toBe(true);
+
+    lateLease.resolve({ dispose: leaseDispose });
+    await expect(load).resolves.toEqual({
+      kind: "unavailable",
+      code: "service_disposed",
+    });
+    expect(leaseDispose).toHaveBeenCalledOnce();
   });
 });

@@ -6,6 +6,17 @@ const packageRoot = new URL("../", import.meta.url);
 const repositoryRoot = new URL("../../../", import.meta.url);
 
 describe("node-llama-cpp supply-chain policy", () => {
+  it("keeps the root entry path-free and requires an explicit secure composition capability", async () => {
+    const rootEntry = await readFile(new URL("src/index.ts", packageRoot), "utf8");
+    const manifest = JSON.parse(await readFile(new URL("package.json", packageRoot), "utf8")) as {
+      exports?: Record<string, unknown>;
+    };
+
+    expect(rootEntry).not.toContain("createDefaultLocalModelService");
+    expect(rootEntry).not.toContain("factory");
+    expect(manifest.exports?.["./composition"]).toBeDefined();
+  });
+
   it("pins node-llama-cpp as a required runtime dependency", async () => {
     const manifest = JSON.parse(await readFile(new URL("package.json", packageRoot), "utf8")) as {
       dependencies?: Record<string, string>;
@@ -31,5 +42,14 @@ describe("node-llama-cpp supply-chain policy", () => {
 
     expect(lockfile).toContain("'@node-llama-cpp/win-x64@3.22.1':");
     expect(lockfile).toContain("node-llama-cpp@3.22.1");
+  });
+
+  it("keeps an explicit build-never Windows prebuild smoke", async () => {
+    const smoke = await readFile(new URL("scripts/prebuild-smoke.ts", packageRoot), "utf8");
+
+    expect(smoke).toContain('build: "never"');
+    expect(smoke).toContain("skipDownload: true");
+    expect(smoke).toContain("usePrebuiltBinaries: true");
+    expect(smoke).toContain("dryRun: true");
   });
 });

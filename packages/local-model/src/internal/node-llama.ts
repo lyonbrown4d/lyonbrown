@@ -7,7 +7,7 @@ interface LoadedModel {
 }
 
 interface LoadedLlama {
-  loadModel(options: { modelPath: string }): Promise<LoadedModel>;
+  loadModel(options: { modelPath: string; loadSignal: AbortSignal }): Promise<LoadedModel>;
   dispose?(): Promise<void>;
 }
 
@@ -24,7 +24,7 @@ export const createNodeLlamaEngine = (
   modelPath: string,
   api: NodeLlamaApi = { getLlama },
 ): LlamaEngineAdapter => ({
-  async loadDefault(): Promise<LlamaLease> {
+  async loadDefault(signal: AbortSignal): Promise<LlamaLease> {
     const llama = await api.getLlama({
       build: "never",
       skipDownload: true,
@@ -32,7 +32,7 @@ export const createNodeLlamaEngine = (
       progressLogs: false,
     });
     try {
-      const model = await llama.loadModel({ modelPath });
+      const model = await llama.loadModel({ modelPath, loadSignal: signal });
       let disposed = false;
       return {
         async dispose(): Promise<void> {

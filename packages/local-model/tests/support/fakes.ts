@@ -117,7 +117,8 @@ export class FakeLlamaEngine implements LlamaEngineAdapter {
   error: Error | undefined;
   readonly lease: LlamaLease = { dispose: () => Promise.resolve() };
 
-  loadDefault(): Promise<LlamaLease> {
+  loadDefault(signal: AbortSignal): Promise<LlamaLease> {
+    void signal;
     this.loadCalls += 1;
     if (this.error !== undefined) return Promise.reject(this.error);
     return Promise.resolve(this.lease);

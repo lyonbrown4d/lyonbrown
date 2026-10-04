@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,14 +19,16 @@ afterEach(async () => {
 describe("node-llama-cpp production boundary", () => {
   it("loads only official prebuilds and forbids source downloads and compilation fallback", async () => {
     const dispose = vi.fn(() => Promise.resolve());
+    const loadModel = vi.fn(() => Promise.resolve({ dispose }));
     const getLlama = vi.fn(() =>
       Promise.resolve({
-        loadModel: vi.fn(() => Promise.resolve({ dispose })),
+        loadModel,
       }),
     );
     const engine = createNodeLlamaEngine("C:\\trusted\\Qwen.gguf", { getLlama });
 
-    const lease = await engine.loadDefault();
+    const loadController = new AbortController();
+    const lease = await engine.loadDefault(loadController.signal);
 
     expect(getLlama).toHaveBeenCalledWith({
       build: "never",
@@ -35,6 +37,9 @@ describe("node-llama-cpp production boundary", () => {
       progressLogs: false,
     });
     expect(getLlama.mock.results[0]?.value).toBeInstanceOf(Promise);
+    expect(loadModel).toHaveBeenCalledWith(
+      expect.objectContaining({ loadSignal: loadController.signal }),
+    );
     await lease.dispose();
     expect(dispose).toHaveBeenCalledOnce();
   });
@@ -48,7 +53,9 @@ describe("node-llama-cpp production boundary", () => {
           dispose: disposeLlama,
         }),
     });
-    await expect(engine.loadDefault()).rejects.toThrow("native path leak");
+    await expect(engine.loadDefault(new AbortController().signal)).rejects.toThrow(
+      "native path leak",
+    );
     expect(disposeLlama).toHaveBeenCalledOnce();
 
     const failingLease = await createNodeLlamaEngine("C:\\trusted\\Qwen.gguf", {
@@ -60,7 +67,7 @@ describe("node-llama-cpp production boundary", () => {
             }),
           dispose: disposeLlama,
         }),
-    }).loadDefault();
+    }).loadDefault(new AbortController().signal);
     await expect(failingLease.dispose()).rejects.toThrow("native_runtime_dispose_failed");
   });
 });
@@ -107,6 +114,108 @@ describe("model I/O adapter", () => {
     await expect(
       firstIo.acquireInstallLock(DEFAULT_PRESET, alreadyCancelled.signal),
     ).rejects.toThrow("model_download_cancelled");
+  });
+
+  it("recovers a stale process lock", async () => {
+    const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
+    temporaryDirectories.push(root);
+    const target = join(root, `.${DEFAULT_PRESET.id}.install`);
+    await writeFile(target, "");
+    const staleDirectory = `${target}.lock`;
+    await mkdir(staleDirectory);
+    const staleTime = new Date(Date.now() - 60_000);
+    await utimes(staleDirectory, staleTime, staleTime);
+    const io = new NodeModelIo(root, { createModelDownloader: vi.fn() });
+
+    const lease = await io.acquireInstallLock(DEFAULT_PRESET, new AbortController().signal);
+
+    await lease.release();
+  });
+
+  it.each([
+    { downloadedSize: -1, totalSize: 10 },
+    { downloadedSize: Number.NaN, totalSize: 10 },
+    { downloadedSize: 11, totalSize: 10 },
+    { downloadedSize: 1025, totalSize: 1025 },
+    { downloadedSize: 1, totalSize: Number.MAX_SAFE_INTEGER + 1 },
+  ])("actively aborts invalid downloader progress %#", async (invalidProgress) => {
+    const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
+    temporaryDirectories.push(root);
+    let continuedAfterInvalidProgress = false;
+    const io = new NodeModelIo(root, {
+      createModelDownloader: (options) =>
+        Promise.resolve({
+          download: ({ signal } = {}) => {
+            options.onProgress(invalidProgress);
+            continuedAfterInvalidProgress = signal?.aborted !== true;
+            return signal?.aborted
+              ? Promise.reject(new Error("aborted at I/O boundary"))
+              : Promise.resolve(join(options.dirPath, options.fileName));
+          },
+        }),
+    });
+    const preset = { ...DEFAULT_PRESET, maxBytes: 1024 } as const;
+
+    await expect(
+      io.download(preset, {
+        operationId: "op-invalid-progress",
+        signal: new AbortController().signal,
+        onProgress: vi.fn(),
+      }),
+    ).rejects.toThrow();
+    expect(continuedAfterInvalidProgress).toBe(false);
+  });
+
+  it("aborts when downloader progress moves backwards", async () => {
+    const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
+    temporaryDirectories.push(root);
+    let abortedBeforeContinuing = false;
+    const io = new NodeModelIo(root, {
+      createModelDownloader: (options) =>
+        Promise.resolve({
+          download: ({ signal } = {}) => {
+            options.onProgress({ downloadedSize: 8, totalSize: 10 });
+            options.onProgress({ downloadedSize: 7, totalSize: 10 });
+            abortedBeforeContinuing = signal?.aborted === true;
+            return Promise.reject(new Error("stopped"));
+          },
+        }),
+    });
+
+    await expect(
+      io.download(DEFAULT_PRESET, {
+        operationId: "op-regression",
+        signal: new AbortController().signal,
+        onProgress: vi.fn(),
+      }),
+    ).rejects.toThrow();
+    expect(abortedBeforeContinuing).toBe(true);
+  });
+
+  it("aborts when downloader total bytes move backwards", async () => {
+    const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
+    temporaryDirectories.push(root);
+    let abortedBeforeContinuing = false;
+    const io = new NodeModelIo(root, {
+      createModelDownloader: (options) =>
+        Promise.resolve({
+          download: ({ signal } = {}) => {
+            options.onProgress({ downloadedSize: 7, totalSize: 10 });
+            options.onProgress({ downloadedSize: 7, totalSize: 9 });
+            abortedBeforeContinuing = signal?.aborted === true;
+            return Promise.reject(new Error("stopped"));
+          },
+        }),
+    });
+
+    await expect(
+      io.download(DEFAULT_PRESET, {
+        operationId: "op-total-regression",
+        signal: new AbortController().signal,
+        onProgress: vi.fn(),
+      }),
+    ).rejects.toThrow();
+    expect(abortedBeforeContinuing).toBe(true);
   });
 
   it("uses only the pinned source and activates a verified staged fixture", async () => {

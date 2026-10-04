@@ -46,5 +46,5 @@ export interface LlamaLease {
 }
 
 export interface LlamaEngineAdapter {
-  loadDefault(): Promise<LlamaLease>;
+  loadDefault(signal: AbortSignal): Promise<LlamaLease>;
 }
