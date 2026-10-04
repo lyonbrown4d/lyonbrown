@@ -159,6 +159,12 @@ describe("resource accounting", () => {
         validateBudget({ ...limits, [key]: 1.5 });
       }).toThrow(`${key} must be`);
     }
+    expect(() => {
+      validateBudget({ ...limits, maxSecretCount: 0 });
+    }).toThrow("maxSecretCount must be");
+    expect(() => {
+      validateBudget({ ...limits, maxSecretBytes: 1.5 });
+    }).toThrow("maxSecretBytes must be");
   });
 
   test("counts turns, steps, input, and cumulative output", () => {

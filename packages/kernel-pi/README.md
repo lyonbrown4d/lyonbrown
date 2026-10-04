@@ -17,6 +17,8 @@ security policy, durable event boundary, resource budgets, and public API.
 - Sink errors are fatal and sticky for the session; subscriber errors are isolated from persistence. If an
   effect may have happened but its terminal event cannot be persisted, the public result is the typed
   `TOOL_OUTCOME_UNKNOWN` fatal and no later completed/failed terminal event is fabricated.
+- `TOOL_OUTCOME_UNKNOWN` and durable terminal inconsistencies permanently fence that session. Later turns,
+  steering, and follow-ups are rejected without model or tool calls; recovery requires creating a new session.
 - Pi is explicitly configured with `toolExecution: "sequential"`. A tool is also marked sequential and never
   replayable, preserving Lyonbrown's current ordering and side-effect policy.
 
@@ -40,6 +42,11 @@ Errors thrown by model, tool, approval, secret, and persistence integrations are
 properties are never inspected for public diagnostics. Only frozen errors created by the kernel's private
 factory retain a typed code and bounded message; every other value maps to a fixed, non-sensitive error.
 
+Client event listeners are isolated from the durable sink through per-subscriber ordered queues. Dispatch does
+not block execution; queue overflow, rejection, or timeout produces a typed internal diagnostic and removes the
+subscriber. Unsubscribe, cancellation, and `dispose()` release queued delivery work. Listener events are not a
+replacement for the EventStore.
+
 Tool access is default-deny:
 
 1. The tool must exist in the injected registry.
@@ -51,7 +58,8 @@ Tool access is default-deny:
    registered in both raw and output-normalized forms and never enter events or model-visible tool results.
    Variants are deduplicated and replaced longest-first, so overlapping secrets cannot leave suffixes. Empty
    raw secrets or secrets that normalize to empty are rejected before `execute`; malformed Unicode is
-   normalized and redacted consistently with every output surface.
+   normalized and redacted consistently with every output surface. Registered patterns are cached in sorted
+   order and bounded by `maxSecretCount` (default 128) and `maxSecretBytes` (default 64 KiB).
 6. Tool execution has one bounded timeout and no automatic retry. After `tool_started`, cancellation, timeout,
    a non-cooperative promise, or a missing durable result emits `tool_outcome_unknown` where possible and
    returns a fatal outcome for the outer runtime to reconcile.
@@ -83,6 +91,8 @@ const session = createPiKernelSession({
     maxCollectionEntries: 4_096,
     maxValueNodes: 32_768,
     toolTimeoutMs: 30_000,
+    maxSecretCount: 128,
+    maxSecretBytes: 65_536,
   },
 });
 

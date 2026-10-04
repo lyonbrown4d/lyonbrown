@@ -3,6 +3,7 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 
 import { BudgetTracker, validateBudget } from "./budget.js";
 import { kernelError, toPublicKernelError, type KernelRuntimeError } from "./errors.js";
+import { ListenerDispatcher } from "./listener-dispatcher.js";
 import { createPiStreamFunction } from "./pi-bridge.js";
 import { createPiModel, normalizeModelDescriptor } from "./pi-conversion.js";
 import { SecretRedactor } from "./redaction.js";
@@ -18,14 +19,17 @@ import type {
 } from "./types.js";
 
 export class PiKernelSession implements KernelSession {
-  readonly #listeners = new Set<KernelEventListener>();
   readonly #agent: Agent;
+  readonly #unsubscribeAgent: () => void;
+  readonly #listeners = new ListenerDispatcher({ maxPendingEvents: 64, timeoutMs: 1_000 });
   readonly #activeTools = new Set<string>();
   #tracker: BudgetTracker;
   #fatalError: KernelRuntimeError | undefined;
+  #terminalFatal: KernelRuntimeError | undefined;
   #sinkFatal: KernelRuntimeError | undefined;
   #running = false;
   #cancelled = false;
+  #disposed = false;
   #turn = 0;
 
   constructor(private readonly options: PiKernelSessionOptions) {
@@ -41,7 +45,10 @@ export class PiKernelSession implements KernelSession {
     const registeredTools = normalizeTools(listRegisteredTools(options), options);
     const toolByName = new Map(registeredTools.map((tool) => [tool.name, tool]));
     this.#tracker = new BudgetTracker(options.budget);
-    const redactor = new SecretRedactor();
+    const redactor = new SecretRedactor({
+      maxSecretCount: options.budget.maxSecretCount ?? 128,
+      maxSecretBytes: options.budget.maxSecretBytes ?? 65_536,
+    });
     const toolExecutor = new ToolExecutor(
       options,
       () => this.#tracker,
@@ -77,12 +84,14 @@ export class PiKernelSession implements KernelSession {
       followUpMode: "one-at-a-time",
       sessionId: options.sessionId,
     });
-    this.#agent.subscribe((event) => this.handlePiEvent(event));
+    this.#unsubscribeAgent = this.#agent.subscribe((event) => this.handlePiEvent(event));
   }
 
   async startTurn(input: string, options?: { readonly signal?: AbortSignal }): Promise<void> {
     options?.signal?.throwIfAborted();
-    if (this.#sinkFatal) throw this.#sinkFatal;
+    this.assertUsable();
+    const terminal = this.sessionTerminalError();
+    if (terminal) throw terminal;
     if (this.#running) throw kernelError("SESSION_BUSY", "A turn is already active");
     this.#tracker = new BudgetTracker(this.options.budget);
     this.#fatalError = undefined;
@@ -111,23 +120,33 @@ export class PiKernelSession implements KernelSession {
   }
 
   steer(input: string): void {
+    this.assertControlAvailable();
     const safeInput = this.safeControlInput(input);
     this.#agent.steer({ role: "user", content: safeInput, timestamp: Date.now() });
   }
 
   followUp(input: string): void {
+    this.assertControlAvailable();
     const safeInput = this.safeControlInput(input);
     this.#agent.followUp({ role: "user", content: safeInput, timestamp: Date.now() });
   }
 
   cancel(): void {
     this.#cancelled = true;
+    this.#listeners.cancelPending();
     this.#agent.abort();
   }
 
   subscribe(listener: KernelEventListener): () => void {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
+    return this.#listeners.subscribe(listener);
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.cancel();
+    this.#disposed = true;
+    this.#unsubscribeAgent();
+    this.#listeners.dispose();
   }
 
   private safeControlInput(input: string): string {
@@ -137,12 +156,27 @@ export class PiKernelSession implements KernelSession {
   }
 
   private currentFatalError(): KernelRuntimeError | undefined {
-    return this.#sinkFatal ?? this.#fatalError;
+    return this.sessionTerminalError() ?? this.#fatalError;
   }
 
   private markFatal(error: KernelRuntimeError): void {
-    this.#fatalError ??= error;
+    if (error.code === "TOOL_OUTCOME_UNKNOWN") this.#terminalFatal ??= error;
+    else this.#fatalError ??= error;
     this.#agent.abort();
+  }
+
+  private sessionTerminalError(): KernelRuntimeError | undefined {
+    return this.#sinkFatal ?? this.#terminalFatal;
+  }
+
+  private assertUsable(): void {
+    if (this.#disposed) throw kernelError("SESSION_DISPOSED", "Kernel session is disposed");
+  }
+
+  private assertControlAvailable(): void {
+    this.assertUsable();
+    const terminal = this.sessionTerminalError();
+    if (terminal) throw terminal;
   }
 
   private async emit(event: KernelEvent): Promise<void> {
@@ -170,13 +204,7 @@ export class PiKernelSession implements KernelSession {
     ) {
       this.#activeTools.delete(event.callId);
     }
-    for (const listener of [...this.#listeners]) {
-      try {
-        await listener(event);
-      } catch {
-        this.#listeners.delete(listener);
-      }
-    }
+    this.#listeners.dispatch(event);
   }
 
   private async handlePiEvent(event: AgentEvent): Promise<void> {
@@ -186,12 +214,13 @@ export class PiKernelSession implements KernelSession {
     }
     if (event.type === "agent_end") {
       if (this.#sinkFatal) return;
-      if (this.#fatalError) {
+      const fatal = this.#terminalFatal ?? this.#fatalError;
+      if (fatal) {
         await this.emit({
           type: "run_failed",
           sessionId: this.options.sessionId,
-          code: this.#fatalError.code,
-          message: this.#fatalError.message,
+          code: fatal.code,
+          message: fatal.message,
         });
       } else if (this.#cancelled) {
         await this.emit({ type: "run_cancelled", sessionId: this.options.sessionId });
@@ -201,6 +230,7 @@ export class PiKernelSession implements KernelSession {
       return;
     }
     if (event.type === "turn_start") {
+      if (this.currentFatalError()) return;
       try {
         const turn = this.#tracker.turn();
         await this.emit({ type: "turn_started", turn });
@@ -211,7 +241,7 @@ export class PiKernelSession implements KernelSession {
       return;
     }
     if (event.type === "turn_end") {
-      if (this.#fatalError || this.#sinkFatal) return;
+      if (this.currentFatalError()) return;
       const message = event.message as AssistantMessage;
       await this.emit({
         type: "usage",
@@ -227,8 +257,7 @@ export class PiKernelSession implements KernelSession {
     if (
       event.type === "message_update" &&
       event.assistantMessageEvent.type === "text_delta" &&
-      !this.#fatalError &&
-      !this.#sinkFatal
+      !this.currentFatalError()
     ) {
       await this.emit({
         type: "text_delta",

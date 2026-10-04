@@ -9,8 +9,31 @@ import {
 } from "./sanitization.js";
 import type { KernelJsonValue } from "./types.js";
 
+export interface SecretRedactorOptions {
+  readonly maxSecretCount: number;
+  readonly maxSecretBytes: number;
+}
+
+const DEFAULT_LIMITS: SecretRedactorOptions = {
+  maxSecretCount: 128,
+  maxSecretBytes: 65_536,
+};
+
 export class SecretRedactor {
   readonly #secrets = new Set<string>();
+  #sortedSecrets: readonly string[] = [];
+  #secretBytes = 0;
+
+  constructor(private readonly options: SecretRedactorOptions = DEFAULT_LIMITS) {
+    if (
+      !Number.isSafeInteger(options.maxSecretCount) ||
+      options.maxSecretCount <= 0 ||
+      !Number.isSafeInteger(options.maxSecretBytes) ||
+      options.maxSecretBytes <= 0
+    ) {
+      throw new TypeError("Secret redaction limits must be positive safe integers");
+    }
+  }
 
   add(secret: string): void {
     const normalized = sanitizeText(secret);
@@ -20,13 +43,25 @@ export class SecretRedactor {
         "Secret value cannot be empty after normalization",
       );
     }
-    this.#secrets.add(secret);
-    this.#secrets.add(normalized);
+    const additions = [...new Set([secret, normalized])].filter(
+      (candidate) => !this.#secrets.has(candidate),
+    );
+    const addedBytes = additions.reduce((total, candidate) => total + utf8Bytes(candidate), 0);
+    if (
+      additions.length > this.options.maxSecretCount - this.#secrets.size ||
+      addedBytes > this.options.maxSecretBytes - this.#secretBytes
+    ) {
+      throw kernelError("INPUT_BUDGET_EXCEEDED", "Secret redaction resource budget exceeded");
+    }
+    if (additions.length === 0) return;
+    for (const candidate of additions) this.#secrets.add(candidate);
+    this.#secretBytes += addedBytes;
+    this.#sortedSecrets = [...this.#secrets].sort(compareSecrets);
   }
 
   text(value: string): string {
     let output = sanitizeText(value);
-    for (const secret of [...this.#secrets].sort(compareSecrets)) {
+    for (const secret of this.#sortedSecrets) {
       output = output.replaceAll(secret, "[REDACTED]");
     }
     return output;

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 import { SecretRedactor } from "../src/redaction.js";
 import { boundedSummary, sanitizeJson, utf8Bytes } from "../src/sanitization.js";
@@ -46,6 +46,39 @@ describe("normalized secret redaction", () => {
     expect(() => {
       redactor.add("\u001b[31m\u202E\u0001");
     }).toThrow("Secret value cannot be empty");
+  });
+
+  test("bounds unique normalized patterns by count and aggregate bytes", () => {
+    const byCount = new SecretRedactor({ maxSecretCount: 2, maxSecretBytes: 64 });
+    byCount.add("one");
+    byCount.add("one");
+    byCount.add("two");
+    expect(() => {
+      byCount.add("three");
+    }).toThrow(expect.objectContaining({ code: "INPUT_BUDGET_EXCEEDED" }));
+
+    const byBytes = new SecretRedactor({ maxSecretCount: 8, maxSecretBytes: 7 });
+    byBytes.add("1234");
+    expect(() => {
+      byBytes.add("5678");
+    }).toThrow(expect.objectContaining({ code: "INPUT_BUDGET_EXCEEDED" }));
+  });
+
+  test("rebuilds sorted patterns only when registration changes", () => {
+    const sort = vi.spyOn(Array.prototype, "sort");
+    try {
+      const redactor = new SecretRedactor({ maxSecretCount: 8, maxSecretBytes: 64 });
+      redactor.add("short");
+      redactor.add("longer-secret");
+      const afterRegistration = sort.mock.calls.length;
+      redactor.text("longer-secret short");
+      redactor.text("short");
+      expect(sort).toHaveBeenCalledTimes(afterRegistration);
+      redactor.add("short");
+      expect(sort).toHaveBeenCalledTimes(afterRegistration);
+    } finally {
+      sort.mockRestore();
+    }
   });
 });
 

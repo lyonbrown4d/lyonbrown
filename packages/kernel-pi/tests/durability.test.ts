@@ -99,9 +99,16 @@ describe("durable tool outcomes", () => {
         : Promise.resolve();
     };
 
-    await expect(
-      createPiKernelSession(createOptions(model, createTool(execute), append)).startTurn("run"),
-    ).rejects.toMatchObject({ code: "EVENT_SINK_UNAVAILABLE" });
+    const session = createPiKernelSession(createOptions(model, createTool(execute), append));
+    await expect(session.startTurn("run")).rejects.toMatchObject({
+      code: "EVENT_SINK_UNAVAILABLE",
+    });
+    await expect(session.startTurn("must reject")).rejects.toMatchObject({
+      code: "EVENT_SINK_UNAVAILABLE",
+    });
+    expect(() => {
+      session.followUp("must reject");
+    }).toThrow(expect.objectContaining({ code: "EVENT_SINK_UNAVAILABLE" }));
 
     expect(execute).not.toHaveBeenCalled();
     expect(attempted).not.toContain("tool_failed");
@@ -127,6 +134,58 @@ describe("durable tool outcomes", () => {
     expect(execute).toHaveBeenCalledOnce();
     expect(attempted).not.toContain("tool_failed");
     expect(attempted).not.toContain("run_completed");
+  });
+
+  test("keeps an uncertain outcome terminal for the entire session", async () => {
+    const model = new ToolThenStopModel();
+    const execute = vi.fn(() => Promise.resolve({ content: "effect complete" }));
+    const session = createPiKernelSession(
+      createOptions(model, createTool(execute), (event) =>
+        event.type === "tool_succeeded"
+          ? Promise.reject(new Error("terminal durability failure"))
+          : Promise.resolve(),
+      ),
+    );
+
+    await expect(session.startTurn("run")).rejects.toMatchObject({
+      code: "TOOL_OUTCOME_UNKNOWN",
+    });
+    const modelCalls = model.calls;
+    const toolCalls = execute.mock.calls.length;
+
+    await expect(session.startTurn("must reject")).rejects.toMatchObject({
+      code: "TOOL_OUTCOME_UNKNOWN",
+    });
+    expect(() => {
+      session.steer("must reject");
+    }).toThrow(expect.objectContaining({ code: "TOOL_OUTCOME_UNKNOWN" }));
+    expect(() => {
+      session.followUp("must reject");
+    }).toThrow(expect.objectContaining({ code: "TOOL_OUTCOME_UNKNOWN" }));
+    expect(model.calls).toBe(modelCalls);
+    expect(execute).toHaveBeenCalledTimes(toolCalls);
+  });
+
+  test("clears ordinary transient run failures before the next run", async () => {
+    let calls = 0;
+    const model: KernelModelAdapter = {
+      model: { provider: "offline", id: "transient" },
+      async *stream() {
+        await Promise.resolve();
+        calls += 1;
+        if (calls === 1) throw new Error("temporary provider failure");
+        yield { type: "done", reason: "stop" };
+      },
+    };
+    const execute = vi.fn(() => Promise.resolve({ content: "unused" }));
+    const session = createPiKernelSession(
+      createOptions(model, createTool(execute), () => Promise.resolve()),
+    );
+
+    await expect(session.startTurn("first")).rejects.toMatchObject({ code: "MODEL_ERROR" });
+    await expect(session.startTurn("second")).resolves.toBeUndefined();
+    expect(calls).toBe(2);
+    expect(execute).not.toHaveBeenCalled();
   });
 
   test("keeps a pre-intent tool failure sink error distinct from an unknown outcome", async () => {
@@ -185,9 +244,21 @@ describe("durable tool outcomes", () => {
     );
 
     await expect(session.startTurn("run")).rejects.toMatchObject({ code: "TOOL_OUTCOME_UNKNOWN" });
+    await expect(session.startTurn("must reject")).rejects.toMatchObject({
+      code: "TOOL_OUTCOME_UNKNOWN",
+    });
     expect(events).toContainEqual(
       expect.objectContaining({ type: "tool_outcome_unknown", code: "TOOL_TIMEOUT" }),
     );
+    expect(events).toContainEqual(
+      expect.objectContaining({ type: "run_failed", code: "TOOL_OUTCOME_UNKNOWN" }),
+    );
+    const unknownIndex = events.findIndex((event) => event.type === "tool_outcome_unknown");
+    expect(unknownIndex).toBeGreaterThanOrEqual(0);
+    expect(events.slice(unknownIndex + 1).map((event) => event.type)).toEqual(["run_failed"]);
+    expect(events.some((event) => event.type === "usage")).toBe(false);
+    expect(events.some((event) => event.type === "turn_completed")).toBe(false);
+    expect(events.some((event) => event.type === "run_completed")).toBe(false);
     expect(events.some((event) => event.type === "tool_failed")).toBe(false);
     complete?.({ content: "late success" });
     await Promise.resolve();

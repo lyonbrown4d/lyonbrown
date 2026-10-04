@@ -133,6 +133,8 @@ export interface KernelResourceBudget {
   readonly maxCollectionEntries: number;
   readonly maxValueNodes: number;
   readonly toolTimeoutMs: number;
+  readonly maxSecretCount?: number;
+  readonly maxSecretBytes?: number;
 }
 
 export type KernelEvent =
@@ -194,6 +196,7 @@ export interface KernelSession {
   followUp(input: string): void;
   cancel(): void;
   subscribe(listener: KernelEventListener): () => void;
+  dispose(): void;
 }
 
 export interface PiKernelSessionOptions {

@@ -2,7 +2,7 @@ import { kernelError } from "./errors.js";
 import { assertByteLimit } from "./sanitization.js";
 import type { KernelResourceBudget } from "./types.js";
 
-const BUDGET_KEYS: readonly (keyof KernelResourceBudget)[] = [
+const BUDGET_KEYS = [
   "maxInputBytes",
   "maxTurns",
   "maxSteps",
@@ -13,13 +13,19 @@ const BUDGET_KEYS: readonly (keyof KernelResourceBudget)[] = [
   "maxCollectionEntries",
   "maxValueNodes",
   "toolTimeoutMs",
-];
+] as const satisfies readonly (keyof KernelResourceBudget)[];
 
 export function validateBudget(budget: KernelResourceBudget): void {
   for (const key of BUDGET_KEYS) {
     const value = budget[key];
     if (!Number.isSafeInteger(value) || value <= 0) {
       throw new TypeError(`${key} must be a positive safe integer`);
+    }
+  }
+  for (const key of ["maxSecretCount", "maxSecretBytes"] as const) {
+    const value = budget[key];
+    if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
+      throw new TypeError(`${key} must be a positive safe integer when provided`);
     }
   }
 }

@@ -99,6 +99,10 @@ describe("Pi kernel integration", () => {
 
     await session.startTurn("hi");
 
+    await vi.waitFor(() => {
+      expect(subscribed).toHaveLength(events.length);
+    });
+
     expect(events.filter((event) => event.type === "text_delta")).toEqual([
       { type: "text_delta", delta: "he" },
       { type: "text_delta", delta: "llo" },
