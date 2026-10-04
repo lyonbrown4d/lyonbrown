@@ -1,143 +1,57 @@
 # Configuration Reference
 
-Lyonbrown uses `config-rs` to layer TOML, YAML, JSON, JSON5, RON, and INI. Precedence from lowest to highest is: built-in defaults, `~/.agent/config.toml`, workspace `agent.toml`, a `--config` file, `LYONBROWN_` environment variables, and CLI flags. Nested environment keys use double underscores, for example `LYONBROWN_MODEL__PROVIDER=ollama`. Workspace profile, model routing, provider endpoints, remote credentials, approval, and storage settings are rejected by default; pass `--trust-workspace-config` after reviewing the workspace configuration.
+> Status: the Node/TypeScript configuration loader is not connected to the production entry point yet. This page records accepted boundaries and the target contract; it does not claim that example configuration is currently executable.
 
-## Ollama
+## Configuration ownership
 
-```toml
-[model]
-provider = "ollama"
-model = "qwen3.8-27b:q3-claude"
-max_tokens = 2048
+Only `agentd` parses and freezes configuration. TUI and GUI clients may send protocol-defined user choices, but they do not read provider secrets, select storage paths, or construct separate runtimes. The daemon hashes normalized effective configuration into `effective_config_fingerprint`; together with workspace filesystem identity, it determines the local daemon scope.
 
-[ollama]
-endpoint = "http://127.0.0.1:11434"
-```
+Discovery, startup and lifetime locks, EventStore, and Runtime within one scope must use the same frozen configuration. A configuration change establishes a new authenticated epoch instead of mutating an old Runtime's security boundary in place.
 
-Run `agent` to open the workspace chat TUI; `agent .` is the explicit equivalent.
-There are no `ask`, `chat`, `sessions`, or `resume` compatibility subcommands.
-The TUI and GUI connect to `agentd` through the same authenticated gRPC
-contract. Only `agentd` constructs the Kernel and owns Runtime state.
+## Entry-point behavior
 
-## Remote models and fallback
+`agent` opens the workspace chat TUI by default; `agent .` is the explicit form. The product will not restore `chat`, `ask`, `sessions`, or `resume` compatibility subcommands. TUI and GUI connect to `agentd` over authenticated gRPC. Only the daemon creates the Kernel and owns Runtime state.
 
-Configure an API-key reference, never a plaintext key. `env:` reads a process environment variable; `file:` reads `~/.agent/secrets/<name>`. The provider resolves the reference when it sends a request.
+Model inspection or download cannot block client startup. An unavailable daemon produces connection state; a missing model produces setup state. Only an explicit user action may start a background model download.
 
-```toml
-[model]
-provider = "ollama"
+## Accepted precedence and trust rules
 
-[anthropic]
-enabled = true
-endpoint = "https://api.anthropic.com"
-api_key_ref = "env:ANTHROPIC_API_KEY"
+The Node loader must use deterministic precedence and complete schema validation and normalization before computing the fingerprint:
 
-[openai]
-enabled = true
-endpoint = "https://api.openai.com/v1"
-api_key_ref = "env:OPENAI_API_KEY"
-```
+1. secure built-in defaults;
+2. current-user configuration;
+3. an explicitly selected configuration file;
+4. allow-listed `LYONBROWN_` environment mappings;
+5. explicit CLI overrides.
 
-Remote providers are disabled by default. Set `model.provider = "anthropic"` or `"openai"` to select one directly. Alternatively, keep a local provider selected and enable a remote provider: if a local Worker encounters a timeout or HTTP 5xx while opening the stream or before its first output, the Kernel can retry once on a remote Frontier model. Automatic fallback applies only to Public context; tool results and Confidential/Secret context are not sent remotely through fallback. Explicitly selecting a remote provider remains the user's data-boundary decision. HTTP 401/429 and failures after model output do not trigger fallback.
+Workspace configuration is not trusted by default. Provider endpoints, model routing, MCP commands, approval policy, storage paths, and remote-send policy require separate authorization rather than one broad switch. Unknown fields, NULs, relative security roots, paths that cannot be normalized, and conflicting settings fail closed.
 
-A repository's `agent.toml` can select profiles, providers, and service endpoints. The CLI rejects workspace profile, model, approval-policy, and storage settings by default; pass `--trust-workspace-config` to load them, and only when you trust that repository configuration.
+The parser, schema library, and file format remain an implementation decision. Until the loader and migration tooling exist, the product does not promise the old Rust `config-rs` set of TOML, YAML, JSON5, RON, and INI formats.
 
-## Tool approval
+## Default local model
 
-```toml
-[approval]
-approve_all = false
-deny_all = false
-timeout_seconds = 300
-```
+The default provider is daemon-owned llama.cpp and the default preset is `qwen3-1.7b-q4_k_m`. `node-llama-cpp` is a required dependency, but only verified prebuilt native binaries shipped with the artifact are allowed; there is no runtime source-build fallback.
 
-Interactive approvals deny after 300 seconds by default. Set `approval.timeout_seconds` to another positive value when needed. Client disconnects, mismatched response IDs, and timeouts all fail closed. The TUI defaults to Deny once, and `Enter` activates that safe action.
+A missing model does not trigger download. The daemon checks its secure cache in the background and projects `ModelSetupRequired`; the user can explicitly start, retry, or cancel a download. URL, digest, and destination come from the daemon's built-in catalog and cannot be configured by a client. See [Local Models and Task Routing](local-models-routing.md).
 
-## MCP tools
+## Secrets, remote providers, and MCP
 
-```toml
-[mcp.servers.files]
-command = "C:/path/to/mcp-server.exe"
-args = ["--stdio"]
-```
+Credentials are SecretRef values resolved only when a remote request is sent. They must never enter discovery, logs, Snapshots, the event database, or process arguments. Remote providers are disabled by default. Automatic fallback is limited to explicitly permitted Public data and cannot send Secret or Confidential content or tool results.
 
-`agentd` connects to configured stdio servers and registers tools as
-`mcp.files.<tool>`. MCP tools have Execute risk by default and use the common
-approval, 60-second timeout, and output-redaction path. MCP commands in
-workspace `agent.toml` are rejected by default; after reviewing the workspace,
-use `agent --trust-workspace-mcp`. Model settings and MCP commands use separate
-trust flags. Global and explicit `--config` MCP configuration is treated as
-user-trusted. Prefer an explicit executable path.
+The daemon owns MCP server commands and applies a separate trust decision. Workspace-provided executable paths, arguments, and environment need review. Tool calls still use the common risk classification, approval, timeout, cancellation, and output-redaction path.
 
-## Session storage and resume
+## Storage and paths
 
-SQLite WAL storage is enabled by default at `~/.agent/agent.db` and is owned by
-`agentd`. Session listing and resume are client interactions over gRPC, not
-direct-storage or legacy CLI subcommand paths. To disable storage or choose
-another path:
+The daemon exclusively owns a SQLite WAL EventStore. Its path derives from workspace identity and configuration scope; clients cannot provide an arbitrary database path. On Windows, a native provider must validate current-user owner/DACL state, reject reparse points, and hold stable handles for the database and WAL/SHM lifecycle. Production startup fails closed without that capability.
 
-```toml
-[storage]
-enabled = true
-path = "./.agent/session.db"
-```
+An event is accepted only after database commit. During recovery, a tool call that started without a durable outcome is marked outcome unknown and is never replayed automatically.
 
-Relative storage paths resolve from the workspace. `LYONBROWN_STORAGE__ENABLED=false` and `LYONBROWN_STORAGE__PATH` are the environment equivalents. Event writes return success only after database commit. On resume, completed tool results are retained, while started calls without a recorded result are marked as having an unknown outcome and are not automatically replayed. In the TUI, the first Ctrl-C cancels the current turn and the second forces it to stop. On the normal conversation surface, Escape does not quit; use Ctrl-D or `/quit` for an explicit exit. During Model Setup, Escape follows the interaction design: it exits from `Required`, `Failed`, or `Cancelled`, and cancels an active phase only when `Cancel` is allowed.
+## Current release blockers
 
-## Daemon-owned llama.cpp
+- a versioned Node configuration schema, normalization, and fingerprint implementation;
+- separate trust UX for user and workspace configuration;
+- SecretRef backends plus log/error redaction verification;
+- native secure model-cache storage and stable file anchoring;
+- configuration migration, diagnostics, and bilingual error messages.
 
-The llama.cpp provider is the default provider and a default `agentd` feature.
-The daemon loads GGUF directly in process, with no separate HTTP inference
-service or inference subprocess. The `cuda` and `vulkan` features are optional;
-a minimal `agentd --no-default-features` build excludes it. Clients never load
-the GGUF and never fall back to an embedded Kernel.
-
-```toml
-[model]
-provider = "llamacpp"
-model = "qwen-local"
-max_tokens = 1024
-thinking = false
-
-[llamacpp]
-model_path = "models/qwen.gguf"
-context_size = 8192
-max_output_tokens = 2048
-batch_size = 512
-threads = 8
-batch_threads = 8
-gpu_layers = 0
-temperature = 0.7
-seed = 0
-```
-
-Relative model paths are resolved from the workspace.
-`LYONBROWN_LLAMACPP__MODEL_PATH` is the equivalent environment setting.
-`model.thinking` defaults to `false`; for Qwen3 templates the provider applies
-the official `/no_think` control before rendering. When `model_path` is omitted,
-`agentd` checks the verified cache for the default
-`qwen3-1.7b-q4_k_m`. If it is absent, the Runtime enters
-`ModelSetupRequired`; opening a client does not start a download. The daemon
-provides explicit background `StartModelDownload`/`CancelModelDownload` RPCs
-and publishes progress on the unified `RuntimeSnapshot` stream. TUI and GUI now
-expose the shared bilingual Download, Retry, Cancel, progress, and failure
-controls over those RPCs; neither client implements its own downloader.
-A missing configured `model_path` does not offer managed download. See
-[Local Models and Task Routing](local-models-routing.md).
-Native Windows builds require MSVC, the Windows SDK, CMake/Ninja, and an LLVM
-`libclang` discoverable by the bindings generator; set `LIBCLANG_PATH` when
-necessary.
-
-```powershell
-.\scripts\build-windows.ps1
-.\target\debug\agent.exe --config agent.toml .
-```
-
-The build script repairs interrupted llama.cpp CMake generation in place and
-does not clean or recreate `target` by default. It produces the sibling
-`agent.exe` and `agentd.exe`; running
-`cargo run -p agent-cli` alone is not a complete C/S development launch.
-
-Selecting `llamacpp` in a daemon built without the feature produces an explicit
-error instead of falling back to an external service. For real-model acceptance,
-set `LYONBROWN_GGUF_MODEL` and run the provider's ignored live smoke test.
+Until these are complete, the `apps/agentd` production entry point remains fail closed and does not present a hard-coded fingerprint as releasable configuration.

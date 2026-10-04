@@ -1,107 +1,53 @@
 # Local Models and Task Routing
 
-## Daemon-owned llama.cpp by default
+## The Node daemon owns llama.cpp by default
 
-`agentd` enables the `llama-cpp` capability by default, and the default
-`model.provider` is `llamacpp`. The daemon loads the GGUF in its own process and
-is the only owner of model, Kernel, tool, and session state. The TUI and GUI are
-authenticated gRPC clients; neither client loads a model or keeps an embedded
-Runtime fallback. Ollama and remote providers remain explicit configuration
-choices. A daemon built with `--no-default-features` reports a clear error when
-`llamacpp` is selected.
+Lyonbrown has one product architecture: `agentd` owns the runtime, models, tools, MCP connections, and sessions. The TUI and GUI are authenticated gRPC clients. They do not load GGUF files and there is no embedded Runtime fallback.
 
-When `[llamacpp].model_path` is configured, `agentd` uses that GGUF directly.
-If the configured path is absent or is not a regular file, the same structured
-`ModelSetupRequired` phase is published instead of terminating before discovery.
-Without a path, the default preset is `qwen3-1.7b-q4_k_m` (about 1.1 GB), and
-the daemon checks the verified local cache. If the model is absent, the Runtime
-enters the structured `ModelSetupRequired` phase instead of downloading during
-startup. The client can still enter its UI, but submission stays unavailable
-until model setup is resolved. Set `[model].model` to another built-in preset ID
-to override the default:
+The Node implementation uses an exactly pinned `node-llama-cpp` as a required product dependency. Release artifacts use only verified prebuilt native binaries. Runtime options set `build: "never"` and `skipDownload: true`, preventing first launch from silently compiling llama.cpp or fetching a native component. A missing or incompatible binary produces a structured unavailable state.
 
-| Preset                        | Download | Minimum available RAM | File                     |
-| ----------------------------- | -------: | --------------------: | ------------------------ |
-| `qwen3-0.6b-q8_0`             |  0.64 GB |                 2 GiB | `Qwen3-0.6B-Q8_0.gguf`   |
-| `qwen3-1.7b-q4_k_m` (default) |  1.11 GB |                 4 GiB | `Qwen3-1.7B-Q4_K_M.gguf` |
-| `qwen3-4b-q4_k_m`             |  2.50 GB |                 8 GiB | `Qwen3-4B-Q4_K_M.gguf`   |
-| `qwen3-8b-q4_k_m`             |  5.03 GB |                14 GiB | `Qwen3-8B-Q4_K_M.gguf`   |
+There is currently one built-in managed preset, and it is the default:
 
-The memory guard uses available memory reported by the operating system at startup, not total physical RAM, and VRAM is not a separate input. If available RAM is below the selected preset's threshold, startup fails instead of silently changing the user's choice.
+| Field                    | Value                                                              |
+| ------------------------ | ------------------------------------------------------------------ |
+| Preset                   | `qwen3-1.7b-q4_k_m`                                                |
+| File                     | `Qwen3-1.7B-Q4_K_M.gguf`                                           |
+| Expected download        | about 1.11 GB                                                      |
+| Minimum available memory | 4 GiB                                                              |
+| Source revision          | `7fb011e9aee6e4dc7adf8430df9ea8de6a466aa3`                         |
+| SHA-256                  | `228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f` |
 
-## Model setup and background download
+Both revision and digest are pinned in code; the catalog does not use `main`. A fixed resolve URL avoids depending on `X-Repo-Commit` from Hugging Face URI metadata resolution. Adding or upgrading a preset requires code review, a new digest, memory-threshold validation, and a real-model smoke test. A client cannot provide an arbitrary URL, destination, or digest.
 
-No client or daemon starts a network transfer merely because `agent` or the GUI
-was opened. A configured GGUF or a verified cache entry can be used immediately;
-otherwise `agentd` publishes `ModelSetupRequired` over the normal gRPC state
-stream.
+## Non-blocking startup and explicit download
 
-Daemon-side background download is implemented, but it starts only after an
-explicit unary `StartModelDownload` call. Startup and simply entering a UI
-never initiate network traffic. Cancellation uses unary
-`CancelModelDownload`; progress and results use the existing single versioned
-`RuntimeSnapshot` stream rather than a model-specific stream. TUI and GUI now
-provide the same explicit Download, Retry, and Cancel controls over those
-Snapshot/RPCs; neither implements a downloader. Both surfaces support English
-and Simplified Chinese, remain usable while the daemon job runs, keep failures
-visible, and disable actions when their Snapshot is stale. The GUI setup card
-sits between the conversation and Composer, and its Runtime rail mirrors the
-actual phase and progress.
+Opening the TUI/GUI or starting the daemon never starts a model download. Cache inspection runs in the background, so the UI can immediately show connection and setup state. A missing model disables model-dependent turn submission, but the user can still inspect state, change configuration, or leave.
 
-The managed-model Snapshot carries its source, phase, allowed actions, byte
-progress, failure, and `operation_id`. Phases include `WaitingForLock`,
-`Checking`, `Downloading`, `Verifying`, `Installing`, `Activating`, `Ready`,
-`Cancelled`, and `Failed`. The job belongs to the daemon, so closing a client
-does not cancel it. Cancel must reference the current operation; a stale
-operation ID cannot affect a newer job. Cancellation returns TooLate after
-`Installing` begins. A failure permits Retry. It is not called resume because
-partial transfers are not resumed.
+Only an explicit user action starts a download. The daemon projects these phases:
 
-Clients can request only the built-in preset ID selected by current
-configuration. They cannot supply a URL, destination, or digest. A missing
-explicitly configured `model_path` has configured-path provenance and does not
-offer Download. The managed-download integrity contract is:
+`checking → setup-required → waiting-for-lock → downloading → verifying → installing → ready`
 
-1. Verify that an existing cache entry is a regular file and its SHA-256 matches the built-in catalog; reuse it if valid.
-2. Check remote metadata before transfer and count every streamed chunk, so missing or misleading `Content-Length` headers cannot bypass the preset's hard byte limit.
-3. Compute SHA-256 after download; remove staging and fail on mismatch.
-4. Write staging on the same filesystem and atomically persist it as the final GGUF; validate it again on later startups.
+Cancellation and failure use `cancelled` and `failed`. Every operation receives a new `operation_id`; a stale ID cannot cancel a newer job. Cancellation is too late once atomic installation starts. The daemon owns the job, so closing one client does not implicitly cancel it. Progress and results use the existing versioned `RuntimeSnapshot`; TUI and GUI do not implement downloaders.
 
-Downloading remains optional: a user can leave setup without a
-network request. A corrupt or mismatched cache entry is not loaded, and checksum
-failure never falls back to an unverified file. The current catalog uses
-`revision = "main"` while pinning acceptable content by SHA-256. If upstream
-replaces a file, the catalog digest must be reviewed and updated in code.
+## Security and integrity boundary
 
-After installation, the in-process `agentd` epoch supervisor builds a
-replacement Runtime. The old control plane remains online while it builds. The
-supervisor starts the new endpoint and atomically publishes its descriptor
-before retiring the old endpoint. Address, token, and server UUID rotate while
-scope, PID, and the lifetime lock remain stable. Clients reconnect and
-resynchronize from a Snapshot. A build or transition failure keeps the old
-control plane available and publishes a retryable failure instead of exposing
-a partially initialized Runtime.
+Production composition must inject a native secure-model storage capability that provides:
 
-## Native Windows prerequisites
+- current-user-only directories and files, rejecting junctions, symlinks/reparse points, and identity drift;
+- unpredictable same-filesystem staging and immediate cancellation at the byte ceiling;
+- fixed SHA-256 validation before atomic activation;
+- a stable file anchor from digest verification until `node-llama-cpp` finishes loading, preventing writes, deletion, or replacement;
+- a kernel-observable cross-process install lock, followed by cache rechecking;
+- cancellation and bounded shutdown for inspection, download, and model-load tasks, including disposal of late native leases.
 
-A Windows CPU build needs:
+Production must fail closed when this capability is absent; it must not fall back to ordinary `homedir()` path operations. Model paths, download URLs, digests, native handles, and underlying `node-llama-cpp` objects do not belong in the public gRPC or UI contract.
 
-- Visual Studio Build Tools with the MSVC C++ toolchain and Windows SDK;
-- CMake and Ninja;
-- LLVM/Clang with `libclang.dll` discoverable by the bindings generator; set `LIBCLANG_PATH` when needed.
+## Current implementation status
 
-The repository provides `./scripts/build-windows.ps1`. It discovers Visual Studio and LLVM and sets `LIBCLANG_PATH` plus the Ninja CMake generator only for the current process; it does not write global `CC` or `CXX`. The wrapper detects interrupted `llama-cpp-sys-2` build directories that contain `CMakeCache.txt` but no generated Ninja or Visual Studio project, then reruns CMake generation in place from the locked dependency's trusted source. By default it neither cleans nor recreates the shared `target` directory. Use that script for the default workspace build, including the sibling `agent` and `agentd` executables. Enable the `cuda` or `vulkan` feature for those backends and also install the matching SDK, driver, and toolchain prerequisites. `gpu_layers = 0` still selects the CPU path.
+`packages/local-model` is completing the managed preset, background inspection/download, cross-process locking, digest validation, atomic activation, and native-load lifecycle. It becomes a releasable default-model path only after its native secure-storage adapter is connected to the `agentd` composition root and passes a real-GGUF test.
+
+Until then, the states and interactions in this document are the accepted product contract, not a claim that the current Node `agentd` entry point can already run local inference. The Rust implementation remains a migration-time behavior oracle, not a compatibility runtime.
 
 ## Typed task routing
 
-Routing does not ask a control model for a free-form plan. `TaskRouter` accepts a typed `StepContext` and returns `Complexity::{Low, Medium, High}`. The context also carries tool/JSON capability requirements, previous-step count, escalation state, data classification, and any provider/model explicitly selected by the user. The Scheduler then uses those fields to filter capability, privacy, and cost constraints and choose a Control, Worker, or Frontier tier.
-
-The daemon-owned Qwen3 model can also serve as `ModelTaskRouter`. It receives a request with `temperature = 0`, at most 8 tokens, and thinking disabled, and may return only `LOW`, `MEDIUM`, or `HIGH`. If inference fails or the output is invalid, the Scheduler logs a warning and uses its deterministic heuristic classifier, keeping the router from becoming a single point of failure. “Typed” here means a Rust interface and a finite enum result, not an arbitrary JSON-schema decision API.
-
-The current llama.cpp Rust API does not expose chat-template keyword arguments, so `thinking = false` appends Qwen3's official `/no_think` directive to the last user message before template rendering. Tool use follows a bounded `<tool_call>{...}</tool_call>` text protocol. The Provider accepts only one declared tool with object arguments that pass its JSON Schema, then converts it into a typed `ModelEvent::ToolCall`; ordinary answers remain text events.
-
-## Why Laya is not yet a standard llama.cpp provider
-
-Laya targets low-latency typed decisions such as choice, score, and noul rather than standard autoregressive chat completion. The current community GGUF conversion contains only the ModernBERT backbone; its decision head and configuration remain in a separate `safetensors` file and must execute outside llama.cpp. Lyonbrown's generic `LlamaCppProvider`, by contrast, expects a GGUF with usable `tokenizer.chat_template` metadata and produces a stream of text tokens.
-
-Loading Laya's backbone in llama.cpp therefore does not satisfy Lyonbrown's `ModelProvider` contract. Laya is a better candidate for a dedicated `TaskRouter`/typed-decision adapter with separate validation for the head, tokenizer, schema, calibration, and backend parity. Until that exists, it is not presented as a standard llama.cpp provider. See [laya.cpp](https://github.com/lkarlslund/laya.cpp) and the [community GGUF architecture notes](https://huggingface.co/fr0stbit3/laya-gguf).
+Task routing lives in the daemon. Its input is typed step context covering capabilities, privacy, budget, and explicit user selection; its output is a finite complexity/model tier rather than a free-form plan. The default Qwen3 routing and tool-call adapter still need to be completed in the Node Kernel/model adapter and verified through deterministic domain events. A routing failure must have an explicit fallback and cannot make the control model a single point of failure.
