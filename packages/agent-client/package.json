@@ -1,0 +1,37 @@
+{
+  "name": "@lyonbrown/agent-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.15.0 <25",
+    "pnpm": "10.33.4"
+  },
+  "scripts": {
+    "lint": "eslint src tests",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "1.14.5",
+    "@lyonbrown/local-control-plane": "workspace:*",
+    "@lyonbrown/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "4.1.11",
+    "eslint": "9.39.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}
