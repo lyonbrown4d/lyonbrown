@@ -25,6 +25,8 @@ export type { DaemonLease } from "./locks.js";
 export type { NativeControlPlaneProvider } from "./platform-security.js";
 export { openSecureRunDirectory } from "./run-directory.js";
 export type { SecureRunDirectory } from "./run-directory.js";
+export { deriveScopedDaemonPaths } from "./paths.js";
+export type { ScopedDaemonPaths } from "./paths.js";
 export { deriveScope } from "./scope.js";
 export type { ScopeIdentity } from "./scope.js";
 export { SecretToken, verifySecretToken } from "./token.js";
