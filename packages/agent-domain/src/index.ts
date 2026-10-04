@@ -46,3 +46,19 @@ export {
   type ReplayKey,
 } from "./replay.js";
 export { MAX_TEXT_BYTES, validateText } from "./text.js";
+export {
+  parseAgentRuntimeEvent,
+  type AgentRuntimeEvent,
+  type RuntimeUsage,
+} from "./runtime-events.js";
+export type { RuntimeJsonPrimitive, RuntimeJsonValue } from "./runtime-json.js";
+export {
+  createInitialAgentRuntimeState,
+  reduceAgentRuntimeEvent,
+  type AgentRuntimePhase,
+  type AgentRuntimeState,
+  type RuntimeFailure,
+  type RuntimeToolState,
+  type RuntimeTurnState,
+  type VersionedAgentRuntimeEvent,
+} from "./runtime-state.js";

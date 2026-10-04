@@ -97,6 +97,22 @@ importers:
 
   packages/agent-domain: {}
 
+  packages/agent-runtime:
+    dependencies:
+      '@lyonbrown/agent-domain':
+        specifier: workspace:*
+        version: link:../agent-domain
+      '@lyonbrown/event-store':
+        specifier: workspace:*
+        version: link:../event-store
+      '@lyonbrown/kernel-pi':
+        specifier: workspace:*
+        version: link:../kernel-pi
+    devDependencies:
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+
   packages/event-store:
     dependencies:
       better-sqlite3:
