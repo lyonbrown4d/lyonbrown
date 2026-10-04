@@ -153,6 +153,54 @@ describe.runIf(windows)("Windows native control plane", () => {
     await secondDirectory.close();
   });
 
+  it("prevents lock-file rename, deletion, and ABA replacement while leased", async () => {
+    const root = await temporaryRoot();
+    const path = join(root, "run");
+    const lockPath = join(path, "agentd.lock");
+    const movedPath = join(path, "agentd.moved.lock");
+    const provider = createControlPlaneNativeProvider();
+    const firstDirectory = await openSecureRunDirectory(path, provider);
+    const secondDirectory = await openSecureRunDirectory(path, provider);
+    const first = await acquireLifecycleLock(firstDirectory);
+    let second: Awaited<ReturnType<typeof acquireLifecycleLock>> = null;
+    let renameFailed = false;
+    let deleteFailed = false;
+    let recreateFailed = false;
+    try {
+      try {
+        await rename(lockPath, movedPath);
+      } catch {
+        renameFailed = true;
+      }
+      try {
+        await rm(lockPath);
+      } catch {
+        deleteFailed = true;
+      }
+      try {
+        await writeFile(lockPath, "replacement", { flag: "wx" });
+      } catch {
+        recreateFailed = true;
+      }
+      second = await acquireLifecycleLock(secondDirectory);
+      expect(renameFailed).toBe(true);
+      expect(deleteFailed).toBe(true);
+      expect(recreateFailed).toBe(true);
+      expect(second).toBeNull();
+    } finally {
+      await second?.release();
+      await first?.release();
+      await firstDirectory.close();
+      await secondDirectory.close();
+    }
+
+    const afterReleaseDirectory = await openSecureRunDirectory(path, provider);
+    const afterRelease = await acquireLifecycleLock(afterReleaseDirectory);
+    expect(afterRelease).not.toBeNull();
+    await afterRelease?.release();
+    await afterReleaseDirectory.close();
+  });
+
   it("rejects an insecure descriptor swapped into a protected directory", async () => {
     const root = await temporaryRoot();
     const path = join(root, "run");
@@ -213,5 +261,18 @@ describe.runIf(windows)("Windows native control plane", () => {
     const second = await deriveScope(join(root, "workspace"), "fixture", provider, "win32");
     expect(first.scopeId).toBe(second.scopeId);
     expect(first.canonicalWorkspace).toMatch(/^\\\\\?\\/u);
+  });
+
+  it("follows a final junction for Rust-compatible workspace identity", async () => {
+    const root = await temporaryRoot();
+    const workspace = join(root, "workspace");
+    const alias = join(root, "workspace-alias");
+    await mkdir(workspace);
+    await symlink(workspace, alias, "junction");
+    const provider = createControlPlaneNativeProvider();
+
+    const target = await deriveScope(workspace, "fixture", provider, "win32");
+    const throughAlias = await deriveScope(alias, "fixture", provider, "win32");
+    expect(throughAlias).toEqual(target);
   });
 });

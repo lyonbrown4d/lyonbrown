@@ -87,6 +87,16 @@ export function openDirectory(path: string, anchor: boolean): OwnedHandle {
   );
 }
 
+export function openWorkspaceDirectory(path: string): OwnedHandle {
+  return createFile(
+    path,
+    0,
+    SHARE.read | SHARE.write | SHARE.delete,
+    CREATION.openExisting,
+    FLAGS.backupSemantics,
+  );
+}
+
 export function openRegularFile(path: string, access: number, share: number): OwnedHandle {
   return createFile(
     path,

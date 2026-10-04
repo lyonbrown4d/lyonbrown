@@ -140,11 +140,44 @@ describe.runIf(process.platform === "win32")("Windows native I/O failure cleanup
         }
         return 0;
       });
+    const lowResolution = vi.spyOn(api, "GetFileInformationByHandle").mockImplementation(() => 0);
     expect(() => workspaceIdentity(value.path)).toThrow();
     information.mockRestore();
+    lowResolution.mockRestore();
 
     const canonical = vi.spyOn(api, "GetFinalPathNameByHandleW").mockImplementation(() => 0);
     expect(() => workspaceIdentity(value.path)).toThrow();
     canonical.mockRestore();
+  });
+
+  it("matches Rust low-resolution identity when FileIdInfo is unavailable", async () => {
+    const value = await context();
+    const nativeInformation = api.GetFileInformationByHandleEx;
+    vi.spyOn(api, "GetFileInformationByHandleEx").mockImplementation(
+      (...arguments_: unknown[]) =>
+        Number(arguments_[1]) === 18 ? 0 : nativeInformation(...arguments_),
+    );
+    const mutableApi = api as unknown as Record<string, unknown>;
+    const previous = mutableApi.GetFileInformationByHandle;
+    mutableApi.GetFileInformationByHandle = vi.fn((...arguments_: unknown[]) => {
+      const output = arguments_[1] as Buffer;
+      output.writeUInt32LE(0x1234_5678, 28);
+      output.writeUInt32LE(0x1122_3344, 44);
+      output.writeUInt32LE(0x5566_7788, 48);
+      return 1;
+    });
+    try {
+      expect(workspaceIdentity(value.path)).toEqual({
+        canonicalPath: value.canonical,
+        identity: {
+          kind: "windows-low-res",
+          volumeSerialNumber: 0x1234_5678n,
+          fileIndex: 0x1122_3344_5566_7788n,
+        },
+      });
+    } finally {
+      if (previous === undefined) delete mutableApi.GetFileInformationByHandle;
+      else mutableApi.GetFileInformationByHandle = previous;
+    }
   });
 });

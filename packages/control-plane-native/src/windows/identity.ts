@@ -1,7 +1,7 @@
 import type { ResolvedWorkspaceIdentity } from "@lyonbrown/local-control-plane/native-adapter";
 import { api } from "./api.js";
 import { FILE_INFO } from "./constants.js";
-import { failureForLastError, openDirectory, validateObjectType } from "./handles.js";
+import { failureForLastError, openWorkspaceDirectory, validateObjectType } from "./handles.js";
 import type { OwnedHandle } from "./handles.js";
 
 export function canonicalPath(handle: OwnedHandle): string {
@@ -18,22 +18,37 @@ function fileIdFromLittleEndian(bytes: Buffer): bigint {
 }
 
 export function workspaceIdentity(path: string): ResolvedWorkspaceIdentity {
-  const handle = openDirectory(path, false);
+  const handle = openWorkspaceDirectory(path);
   try {
     validateObjectType(handle, "directory");
     const info = Buffer.alloc(24);
-    if (!api.GetFileInformationByHandleEx(handle.borrow(), FILE_INFO.id, info, info.length)) {
-      throw failureForLastError();
-    }
+    const identity = api.GetFileInformationByHandleEx(
+      handle.borrow(),
+      FILE_INFO.id,
+      info,
+      info.length,
+    )
+      ? {
+          kind: "windows-high-res" as const,
+          volumeSerialNumber: info.readBigUInt64LE(0),
+          fileId: fileIdFromLittleEndian(info.subarray(8, 24)),
+        }
+      : lowResolutionIdentity(handle);
     return {
       canonicalPath: canonicalPath(handle),
-      identity: {
-        kind: "windows-high-res",
-        volumeSerialNumber: info.readBigUInt64LE(0),
-        fileId: fileIdFromLittleEndian(info.subarray(8, 24)),
-      },
+      identity,
     };
   } finally {
     handle.close();
   }
+}
+
+function lowResolutionIdentity(handle: OwnedHandle): ResolvedWorkspaceIdentity["identity"] {
+  const info = Buffer.alloc(52);
+  if (!api.GetFileInformationByHandle(handle.borrow(), info)) throw failureForLastError();
+  return {
+    kind: "windows-low-res",
+    volumeSerialNumber: BigInt(info.readUInt32LE(28)),
+    fileIndex: (BigInt(info.readUInt32LE(44)) << 32n) | BigInt(info.readUInt32LE(48)),
+  };
 }

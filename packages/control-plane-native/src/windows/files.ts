@@ -179,7 +179,7 @@ export function tryLock(path: string): KernelFileLock | null {
     createFile(
       path,
       ACCESS.genericRead | ACCESS.genericWrite | ACCESS.readControl,
-      SHARE.read | SHARE.write | SHARE.delete,
+      SHARE.read | SHARE.write,
       CREATION.openAlways,
       ATTRIBUTES.normal | FLAGS.openReparsePoint,
       security,

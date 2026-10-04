@@ -12,4 +12,5 @@ ignoredBuiltDependencies:
   - "@google/genai"
   - "@bufbuild/buf"
   - better-sqlite3
+  - koffi
   - protobufjs

@@ -119,6 +119,10 @@ export const api = {
     POINTER,
     "uint32_t",
   ]),
+  GetFileInformationByHandle: stdcall(kernel32, "GetFileInformationByHandle", "int32_t", [
+    HANDLE,
+    POINTER,
+  ]),
   GetFinalPathNameByHandleW: stdcall(kernel32, "GetFinalPathNameByHandleW", "uint32_t", [
     HANDLE,
     POINTER,
