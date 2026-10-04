@@ -13,6 +13,17 @@ class ControlledCall extends EventEmitter implements SnapshotWriteCall {
   public readonly end = vi.fn();
 }
 
+function eventsAfterAbort(observe: (signal: AbortSignal) => void) {
+  return async function* events(signal: AbortSignal): AsyncIterable<RuntimeEvent> {
+    observe(signal);
+    await new Promise<void>((resolve) => {
+      if (signal.aborted) resolve();
+      else signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+    yield RuntimeEvent.create({ revision: 1n });
+  };
+}
+
 describe("pumpSnapshotStream", () => {
   it("waits for each write callback before pulling the next event", async () => {
     const call = new ControlledCall();
@@ -60,6 +71,42 @@ describe("pumpSnapshotStream", () => {
     call.emit("cancelled");
     await pumping;
     expect(observedSignal?.aborted).toBe(true);
+    expect(call.end).not.toHaveBeenCalled();
+  });
+
+  it("propagates a pre-triggered shutdown before waiting for the first source event", async () => {
+    const call = new ControlledCall();
+    const shutdown = new AbortController();
+    shutdown.abort();
+    let observedSignal: AbortSignal | undefined;
+
+    await pumpSnapshotStream(
+      call,
+      eventsAfterAbort((signal) => {
+        observedSignal = signal;
+      }),
+      shutdown.signal,
+    );
+
+    expect(observedSignal?.aborted).toBe(true);
+    expect(call.write).not.toHaveBeenCalled();
+    expect(call.end).not.toHaveBeenCalled();
+  });
+
+  it("propagates a pre-cancelled call before waiting for the first source event", async () => {
+    const call = new ControlledCall();
+    call.cancelled = true;
+    let observedSignal: AbortSignal | undefined;
+
+    await pumpSnapshotStream(
+      call,
+      eventsAfterAbort((signal) => {
+        observedSignal = signal;
+      }),
+    );
+
+    expect(observedSignal?.aborted).toBe(true);
+    expect(call.write).not.toHaveBeenCalled();
     expect(call.end).not.toHaveBeenCalled();
   });
 });

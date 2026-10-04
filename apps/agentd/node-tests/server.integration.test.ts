@@ -17,6 +17,7 @@ import {
   MAX_GRPC_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   QueueFollowUpRequest,
+  RequestMetadata,
   RuntimeEvent,
   StartTurnRequest,
   SteerCurrentTurnRequest,
@@ -210,6 +211,37 @@ describe("agentd gRPC server", () => {
     release();
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
     expect(host.execute).toHaveBeenCalledOnce();
+  });
+
+  it("keeps NUL-containing client and command ids in distinct replay domains", async () => {
+    const state = await start();
+    const metadata = authorization(state.token);
+    const firstMetadata = RequestMetadata.create({
+      protocolVersion: PROTOCOL_VERSION,
+      clientInstanceId: "a",
+      commandId: "b\0c",
+      expectedServerInstanceId: SERVER_INSTANCE_ID,
+    });
+    const secondMetadata = RequestMetadata.create({
+      protocolVersion: PROTOCOL_VERSION,
+      clientInstanceId: "a\0b",
+      commandId: "c",
+      expectedServerInstanceId: SERVER_INSTANCE_ID,
+    });
+
+    const first = await startTurn(
+      state.client,
+      StartTurnRequest.create({ metadata: firstMetadata, text: "first" }),
+      metadata,
+    );
+    const second = await startTurn(
+      state.client,
+      StartTurnRequest.create({ metadata: secondMetadata, text: "second" }),
+      metadata,
+    );
+
+    expect([first.commandId, second.commandId]).toEqual(["b\0c", "c"]);
+    expect(state.host.execute).toHaveBeenCalledTimes(2);
   });
 
   it("cancels the host subscription when the client cancels", async () => {

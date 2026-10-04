@@ -80,7 +80,7 @@ function unary<Request, Response>(
 }
 
 function replayKey(metadata: RequestMetadata): string {
-  return `${metadata.clientInstanceId}\0${metadata.commandId}`;
+  return JSON.stringify([metadata.clientInstanceId, metadata.commandId]);
 }
 
 export function createAgentService(options: CreateAgentServiceOptions): AgentServiceServer {

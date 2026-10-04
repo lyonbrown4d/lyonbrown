@@ -45,6 +45,7 @@ export async function pumpSnapshotStream(
   };
   call.once("cancelled", cancel);
   shutdownSignal?.addEventListener("abort", cancel, { once: true });
+  if (call.cancelled || shutdownSignal?.aborted === true) cancel();
   try {
     const events = typeof source === "function" ? source(controller.signal) : source;
     for await (const event of events) {
