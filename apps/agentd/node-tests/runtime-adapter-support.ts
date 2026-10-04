@@ -127,7 +127,8 @@ export class FakeAgentRuntime implements AgentRuntime {
     this.cancelCalls += 1;
   }
 
-  dispose(): void {
+  dispose(): Promise<void> {
     this.disposeCalls += 1;
+    return Promise.resolve();
   }
 }

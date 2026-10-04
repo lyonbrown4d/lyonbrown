@@ -69,14 +69,15 @@ describe("agent runtime reducer", () => {
       text: "change it",
     });
     state = apply(state, 3n, { type: "run_started", sessionId });
-    state = apply(state, 4n, {
+    state = apply(state, 4n, { type: "turn_started", sessionId, turn: 1 });
+    state = apply(state, 5n, {
       type: "tool_started",
       sessionId,
       callId: "call-1",
       toolName: "write_file",
       argumentsPreview: { path: "README.md" },
     });
-    state = apply(state, 5n, {
+    state = apply(state, 6n, {
       type: "tool_outcome_unknown",
       sessionId,
       callId: "call-1",
@@ -87,6 +88,10 @@ describe("agent runtime reducer", () => {
 
     expect(state.phase).toBe("failed_terminal");
     expect(state.outcomeUnknown).toBe(true);
+    expect(state.turns[0]).toMatchObject({
+      status: "failed",
+      activities: [{ status: "failed" }],
+    });
     expect(state.tools).toEqual([
       expect.objectContaining({ callId: "call-1", status: "outcome_unknown" }),
     ]);
@@ -113,6 +118,12 @@ describe("agent runtime reducer", () => {
     let state = createInitialAgentRuntimeState(sessionId);
     state = apply(state, 1n, { type: "session_opened", sessionId });
     state = apply(state, 2n, {
+      type: "user_message_submitted",
+      sessionId,
+      text: "change it",
+    });
+    state = apply(state, 3n, { type: "run_started", sessionId });
+    state = apply(state, 4n, {
       type: "tool_outcome_unknown",
       sessionId,
       callId: "call-1",
@@ -121,14 +132,19 @@ describe("agent runtime reducer", () => {
       message: "unknown",
     });
 
-    expect(() => apply(state, 3n, { type: "run_started", sessionId })).toThrow(/terminal/u);
+    expect(() => apply(state, 5n, { type: "run_started", sessionId })).toThrow(/terminal/u);
   });
 
   test("does not let a new user message erase an unresolved running tool", () => {
     let state = createInitialAgentRuntimeState(sessionId);
     state = apply(state, 1n, { type: "session_opened", sessionId });
-    state = apply(state, 2n, { type: "run_started", sessionId });
-    state = apply(state, 3n, {
+    state = apply(state, 2n, {
+      type: "user_message_submitted",
+      sessionId,
+      text: "change it",
+    });
+    state = apply(state, 3n, { type: "run_started", sessionId });
+    state = apply(state, 4n, {
       type: "tool_started",
       sessionId,
       callId: "call-pending",
@@ -137,7 +153,7 @@ describe("agent runtime reducer", () => {
     });
 
     expect(() =>
-      apply(state, 4n, {
+      apply(state, 5n, {
         type: "user_message_submitted",
         sessionId,
         text: "erase the pending tool",

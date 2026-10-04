@@ -178,6 +178,8 @@ function activityPhase(
   switch (activity.status) {
     case "completed":
       return ActivityPhase.ACTIVITY_PHASE_COMPLETED;
+    case "failed":
+      return ActivityPhase.ACTIVITY_PHASE_FAILED;
     case "running":
       if (tools.some((tool) => tool.state === ToolActivityState.TOOL_ACTIVITY_STATE_RUNNING)) {
         return ActivityPhase.ACTIVITY_PHASE_RUNNING_TOOL;

@@ -7,6 +7,7 @@ import {
 } from "@lyonbrown/agent-domain";
 import type { KernelEvent } from "@lyonbrown/kernel-pi";
 
+import { RuntimeBackgroundTasks } from "./background-tasks.js";
 import { runtimeError } from "./errors.js";
 import { RuntimeEventWriter } from "./event-writer.js";
 import { mapKernelEvent } from "./kernel-events.js";
@@ -16,8 +17,10 @@ import type { AgentRuntime, CreateAgentRuntimeOptions, RuntimeSnapshotFeed } fro
 
 class DefaultAgentRuntime implements AgentRuntime {
   readonly #kernel: ReturnType<CreateAgentRuntimeOptions["createKernelSession"]>;
+  readonly #background = new RuntimeBackgroundTasks();
   #running = false;
   #disposed = false;
+  #disposePromise: Promise<void> | undefined;
 
   constructor(
     private readonly options: CreateAgentRuntimeOptions,
@@ -57,11 +60,14 @@ class DefaultAgentRuntime implements AgentRuntime {
           text,
         }),
       );
-      this.#launchKernel(text, options);
     } catch {
       this.#running = false;
       if (this.writer.fatal !== undefined) throw this.writer.fatal;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
+    }
+    if (this.#disposed || !this.#launchKernel(text, options)) {
+      this.#running = false;
+      throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
     }
   }
 
@@ -78,7 +84,12 @@ class DefaultAgentRuntime implements AgentRuntime {
           text,
         }),
       );
-      this.#kernel.steer(text);
+      if (this.#disposed) return;
+      try {
+        this.#kernel.steer(text);
+      } catch {
+        this.#superviseKernelFailure();
+      }
     } catch {
       if (this.writer.fatal !== undefined) throw this.writer.fatal;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
@@ -112,19 +123,11 @@ class DefaultAgentRuntime implements AgentRuntime {
     }
   }
 
-  dispose(): void {
-    if (this.#disposed) return;
+  dispose(): Promise<void> {
+    if (this.#disposePromise !== undefined) return this.#disposePromise;
     this.#disposed = true;
-    let disposeFailed = false;
-    try {
-      this.#kernel.dispose();
-    } catch {
-      disposeFailed = true;
-    } finally {
-      for (const feed of this.feeds) feed.close();
-      this.feeds.clear();
-    }
-    if (disposeFailed) throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
+    this.#disposePromise = this.#disposeResources();
+    return this.#disposePromise;
   }
 
   #appendKernelEvent(event: KernelEvent): Promise<void> {
@@ -133,19 +136,26 @@ class DefaultAgentRuntime implements AgentRuntime {
     return this.writer.append(mapKernelEvent(this.options.sessionId, event));
   }
 
-  #launchKernel(input: string, options?: { readonly signal?: AbortSignal }): void {
-    void this.#runKernel(input, options);
+  #launchKernel(input: string, options?: { readonly signal?: AbortSignal }): boolean {
+    return this.#background.track((lifecycleSignal) =>
+      this.#runKernel(input, combineSignal(options?.signal, lifecycleSignal)),
+    );
   }
 
-  async #runKernel(input: string, options?: { readonly signal?: AbortSignal }): Promise<void> {
+  async #runKernel(input: string, signal: AbortSignal): Promise<void> {
+    if (this.#disposed) return;
     try {
-      await this.#kernel.startTurn(input, options);
+      await this.#kernel.startTurn(input, { signal });
     } catch {
       await this.#recordKernelFailure();
     } finally {
       this.#running = false;
       this.#resumeQueuedFollowUps();
     }
+  }
+
+  #superviseKernelFailure(): void {
+    this.#background.track(async () => this.#recordKernelFailure());
   }
 
   async #recordKernelFailure(): Promise<void> {
@@ -182,7 +192,7 @@ class DefaultAgentRuntime implements AgentRuntime {
     const status = this.writer.state.turns.at(-1)?.status;
     if (status === "submitted" || status === "running") return;
     this.#running = true;
-    void this.#claimFollowUp(text);
+    if (!this.#background.track(async () => this.#claimFollowUp(text))) this.#running = false;
   }
 
   async #claimFollowUp(text: string): Promise<void> {
@@ -198,7 +208,7 @@ class DefaultAgentRuntime implements AgentRuntime {
       this.#running = false;
       return;
     }
-    this.#launchKernel(text);
+    if (this.#disposed || !this.#launchKernel(text)) this.#running = false;
   }
 
   resumeQueuedFollowUps(): void {
@@ -213,16 +223,47 @@ class DefaultAgentRuntime implements AgentRuntime {
     }
     if (
       !this.#running &&
-      (this.writer.state.phase === "running" ||
+      (isUnresolvedTurn(this.writer.state) ||
+        this.writer.state.phase === "running" ||
         this.writer.state.tools.some((tool) => tool.status === "running"))
     ) {
       throw runtimeError("TERMINAL_SESSION", "Runtime session has unresolved work");
     }
   }
 
+  async #disposeResources(): Promise<void> {
+    let failed = false;
+    try {
+      failed = await this.#background.close({
+        cancel: () => {
+          this.#kernel.cancel();
+        },
+        dispose: () => {
+          this.#kernel.dispose();
+        },
+        cancelActive: this.#running,
+      });
+    } finally {
+      for (const feed of this.feeds) feed.close();
+      this.feeds.clear();
+    }
+    if (failed) throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
+  }
+
   #assertUsable(): void {
     if (this.#disposed) throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
   }
+}
+
+function combineSignal(userSignal: AbortSignal | undefined, lifecycleSignal: AbortSignal) {
+  return userSignal === undefined
+    ? lifecycleSignal
+    : AbortSignal.any([userSignal, lifecycleSignal]);
+}
+
+function isUnresolvedTurn(state: AgentRuntimeState): boolean {
+  const status = state.turns.at(-1)?.status;
+  return status === "submitted" || status === "running";
 }
 
 export async function createAgentRuntime(

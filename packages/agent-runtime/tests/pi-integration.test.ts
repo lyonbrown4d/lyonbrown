@@ -69,6 +69,6 @@ test("runs the real Pi kernel through the durable runtime adapter", async () => 
     "turn_completed",
     "run_completed",
   ]);
-  runtime.dispose();
+  await runtime.dispose();
   store.close();
 });

@@ -16,7 +16,7 @@ describe("supervised runtime commands", () => {
     });
 
     await expect(runtime.steer("focus")).rejects.toMatchObject({ code: "TERMINAL_SESSION" });
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -50,7 +50,7 @@ describe("supervised runtime commands", () => {
 
     releaseKernel?.();
     await expect.poll(() => runtime.snapshot().phase).toBe("completed");
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -72,7 +72,7 @@ describe("supervised runtime commands", () => {
       lastError: { code: "KERNEL_FAILURE", message: "Kernel session failed" },
     });
     expect(runtime.snapshot().lastError?.message).not.toContain("raw model secret");
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -104,7 +104,7 @@ describe("supervised runtime commands", () => {
     await expect(runtime.startTurn("second")).rejects.toMatchObject({ code: "SESSION_BUSY" });
     release?.();
     await first;
-    runtime.dispose();
+    await runtime.dispose();
     base.close();
   });
 
@@ -156,7 +156,7 @@ describe("supervised runtime commands", () => {
       queuedFollowUps: [],
       turns: [{ userText: "first" }, { userText: "second", status: "completed" }],
     });
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -188,17 +188,53 @@ describe("supervised runtime commands", () => {
       }),
     });
     await runtime.startTurn("question");
-    await expect(runtime.steer("focus")).rejects.toMatchObject({
-      code: "KERNEL_FAILURE",
-      message: "Kernel session failed",
-    });
+    await expect(runtime.steer("focus")).resolves.toBeUndefined();
     rejectWrites = true;
     await expect(runtime.followUp("later")).rejects.toMatchObject({
       code: "EVENT_SINK_UNAVAILABLE",
       message: "Durable runtime event sink unavailable",
     });
     release?.();
-    runtime.dispose();
+    await runtime.dispose();
     base.close();
+  });
+
+  test("accepts durable steering and supervises a later kernel delivery failure", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    const sessionId = asSessionId("session-steering-delivery-failure");
+    let release: (() => void) | undefined;
+    const runtime = await createAgentRuntime({
+      sessionId,
+      eventStore: runtimeEventStore(store),
+      createEventId: sequentialEventIds(),
+      createKernelSession: ({ eventSink }) => ({
+        async startTurn() {
+          await eventSink.append({ type: "run_started", sessionId });
+          await new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        },
+        steer: () => {
+          throw new Error("raw delivery secret");
+        },
+        followUp: () => undefined,
+        cancel: () => undefined,
+        subscribe: () => () => undefined,
+        dispose: () => undefined,
+      }),
+    });
+
+    await runtime.startTurn("question");
+    await expect.poll(() => runtime.snapshot().phase).toBe("running");
+    await expect(runtime.steer("focus")).resolves.toBeUndefined();
+    await expect.poll(() => runtime.snapshot().phase).toBe("failed");
+    expect(runtime.snapshot()).toMatchObject({
+      turns: [{ steering: ["focus"], status: "failed" }],
+      lastError: { code: "KERNEL_FAILURE", message: "Kernel session failed" },
+    });
+    expect(runtime.snapshot().lastError?.message).not.toContain("raw delivery secret");
+    release?.();
+    await runtime.dispose();
+    store.close();
   });
 });

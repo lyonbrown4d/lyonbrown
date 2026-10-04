@@ -68,6 +68,7 @@ export function applyRuntimeEvent(
     case "run_cancelled":
       return updateCurrentTurn(state, revision, "cancelled", { phase: "cancelled" });
     case "tool_started":
+      assertActiveTurn(state);
       return addTool(state, revision, {
         callId: event.callId,
         toolName: event.toolName,
@@ -75,6 +76,7 @@ export function applyRuntimeEvent(
         argumentsPreview: event.argumentsPreview,
       });
     case "tool_succeeded":
+      assertActiveTurn(state);
       return updateTool(state, revision, event.callId, {
         toolName: event.toolName,
         status: "succeeded",
@@ -82,22 +84,33 @@ export function applyRuntimeEvent(
         ...(event.details === undefined ? {} : { details: event.details }),
       });
     case "tool_failed":
+      assertActiveTurn(state);
       return updateTool(state, revision, event.callId, {
         toolName: event.toolName,
         status: "failed",
         error: freezeFailure(event),
       });
-    case "tool_outcome_unknown":
-      return freezeState({
-        ...updateTool(state, revision, event.callId, {
-          toolName: event.toolName,
-          status: "outcome_unknown",
-          error: freezeFailure(event),
-        }),
-        phase: "failed_terminal",
-        lastError: freezeFailure(event),
-        outcomeUnknown: true,
+    case "tool_outcome_unknown": {
+      assertActiveTurn(state);
+      const withTool = updateTool(state, revision, event.callId, {
+        toolName: event.toolName,
+        status: "outcome_unknown",
+        error: freezeFailure(event),
       });
+      return updateLastTurn(
+        withTool,
+        revision,
+        (turn) => ({
+          ...updateLastActivity(turn, (activity) => ({ ...activity, status: "failed" })),
+          status: "failed",
+        }),
+        {
+          phase: "failed_terminal",
+          lastError: freezeFailure(event),
+          outcomeUnknown: true,
+        },
+      );
+    }
     case "run_failed": {
       const failure = freezeFailure(event);
       return updateCurrentTurn(state, revision, "failed", {
@@ -149,6 +162,10 @@ function assertFollowUpCanStart(state: AgentRuntimeState, text: string): void {
       reason: "follow_up_queue_mismatch",
     });
   }
+}
+
+function assertActiveTurn(state: AgentRuntimeState): void {
+  if (!hasActiveTurn(state)) throw noActiveTurn();
 }
 
 function noActiveTurn() {

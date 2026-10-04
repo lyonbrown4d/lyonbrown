@@ -71,7 +71,7 @@ describe("agent runtime cancellation boundary", () => {
     } catch (error) {
       caught = error;
     }
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
 
     expect(caught === failure).toBe(false);

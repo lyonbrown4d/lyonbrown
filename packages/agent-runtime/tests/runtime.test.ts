@@ -47,7 +47,7 @@ describe("agent runtime", () => {
       done: false,
     });
     feed.close();
-    runtime.dispose();
+    await runtime.dispose();
     base.close();
   });
 
@@ -89,7 +89,7 @@ describe("agent runtime", () => {
       revision: 4n,
       usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
     });
-    runtime.dispose();
+    await runtime.dispose();
     base.close();
   });
 
@@ -123,7 +123,7 @@ describe("agent runtime", () => {
       code: "EVENT_SINK_UNAVAILABLE",
     });
     expect(kernel.starts).toEqual([]);
-    runtime.dispose();
+    await runtime.dispose();
     base.close();
   });
 
@@ -162,7 +162,7 @@ describe("agent runtime", () => {
     await expect(runtime.startTurn("must reject")).rejects.toMatchObject({
       code: "TERMINAL_SESSION",
     });
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -177,7 +177,7 @@ describe("agent runtime", () => {
     });
     const feed = runtime.snapshots();
     await feed.next();
-    runtime.dispose();
+    await runtime.dispose();
 
     await expect(feed.next()).resolves.toEqual({ value: undefined, done: true });
     await expect(runtime.startTurn("no")).rejects.toMatchObject({ code: "RUNTIME_DISPOSED" });
@@ -204,15 +204,12 @@ describe("agent runtime", () => {
     });
     const feed = runtime.snapshots();
     await feed.next();
-    expect(() => {
-      runtime.dispose();
-    }).toThrow(
-      expect.objectContaining({ code: "KERNEL_FAILURE", message: "Kernel session failed" }),
-    );
+    await expect(runtime.dispose()).rejects.toMatchObject({
+      code: "KERNEL_FAILURE",
+      message: "Kernel session failed",
+    });
     await expect(feed.next()).resolves.toEqual({ value: undefined, done: true });
-    expect(() => {
-      runtime.dispose();
-    }).not.toThrow();
+    await expect(runtime.dispose()).rejects.toMatchObject({ code: "KERNEL_FAILURE" });
     store.close();
   });
 
@@ -261,7 +258,7 @@ describe("agent runtime", () => {
     await expect(runtime.startTurn("aborted", { signal: aborted.signal })).rejects.toMatchObject({
       name: "AbortError",
     });
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 });

@@ -33,5 +33,5 @@ export interface AgentRuntime {
   steer(input: string): Promise<void>;
   followUp(input: string): Promise<void>;
   cancel(): void;
-  dispose(): void;
+  dispose(): Promise<void>;
 }

@@ -100,7 +100,7 @@ test("StartTurn persists domain events before the adapter streams the projected 
 
   controller.abort();
   await iterator.return?.();
-  runtime.dispose();
+  await runtime.dispose();
   store.close();
 });
 
@@ -144,7 +144,7 @@ test("StartTurn returns its receipt before a blocked kernel finishes", async () 
 
   release?.();
   await expect.poll(() => runtime.snapshot().phase).toBe("completed");
-  runtime.dispose();
+  await runtime.dispose();
   store.close();
 });
 
@@ -177,7 +177,7 @@ test("a recovered unresolved tool rejects a new start without invoking the repla
   });
   await first.startTurn("build");
   await expect.poll(() => first.snapshot().tools.at(-1)?.status).toBe("running");
-  first.dispose();
+  await first.dispose();
 
   let replacementStarts = 0;
   const recovered = await createAgentRuntime({
@@ -203,6 +203,6 @@ test("a recovered unresolved tool rejects a new start without invoking the repla
   });
   expect(replacementStarts).toBe(0);
 
-  recovered.dispose();
+  await recovered.dispose();
   store.close();
 });

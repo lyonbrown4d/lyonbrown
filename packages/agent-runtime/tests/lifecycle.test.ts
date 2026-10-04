@@ -21,7 +21,7 @@ describe("agent runtime lifecycle", () => {
     const [opened] = await store.load("session-defaults", { afterRevision: 0n, limit: 1 });
     expect(opened?.eventId).toMatch(/^[0-9a-f-]{36}$/u);
     expect(Number.isNaN(Date.parse(opened?.occurredAt ?? ""))).toBe(false);
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -36,7 +36,7 @@ describe("agent runtime lifecycle", () => {
     });
     expect(runtime.snapshot()).toMatchObject({ phase: "ready", revision: 1n });
     expect(await eventTypes(store, "session-open")).toEqual(["session_opened"]);
-    runtime.dispose();
+    await runtime.dispose();
     expect(store.diagnostics().schemaVersion).toBeGreaterThan(0);
     store.close();
   });
@@ -61,7 +61,7 @@ describe("agent runtime lifecycle", () => {
       },
       createEventId: sequentialEventIds(),
     });
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -99,7 +99,7 @@ describe("agent runtime lifecycle", () => {
     await first.startTurn("persisted question");
     await expect.poll(() => first.snapshot().phase).toBe("completed");
     const expected = first.snapshot();
-    first.dispose();
+    await first.dispose();
     const recovered = await createAgentRuntime({
       sessionId: asSessionId("session-recover"),
       eventStore: runtimeEventStore(store),
@@ -111,7 +111,7 @@ describe("agent runtime lifecycle", () => {
     expect(
       (await eventTypes(store, "session-recover")).filter((type) => type === "session_opened"),
     ).toHaveLength(1);
-    recovered.dispose();
+    await recovered.dispose();
     store.close();
   });
 
@@ -169,7 +169,7 @@ describe("agent runtime lifecycle", () => {
       "run_started",
       "run_completed",
     ]);
-    runtime.dispose();
+    await runtime.dispose();
     store.close();
   });
 
@@ -218,7 +218,58 @@ describe("agent runtime lifecycle", () => {
     expect(kernel.starts).toEqual([]);
     expect(replacementCancel).not.toHaveBeenCalled();
     expect(await eventTypes(store, sessionId)).toEqual(events.map((event) => event.type));
-    runtime.dispose();
+    await runtime.dispose();
+    store.close();
+  });
+
+  test("recovers an uncertain tool outcome from the terminal event alone", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    const sessionId = asSessionId("session-unknown-tail");
+    const events = [
+      { type: "session_opened", sessionId },
+      { type: "user_message_submitted", sessionId, text: "change it" },
+      { type: "run_started", sessionId },
+      { type: "turn_started", sessionId, turn: 1 },
+      {
+        type: "tool_started",
+        sessionId,
+        callId: "call-unknown",
+        toolName: "write_file",
+        argumentsPreview: {},
+      },
+      {
+        type: "tool_outcome_unknown",
+        sessionId,
+        callId: "call-unknown",
+        toolName: "write_file",
+        code: "TOOL_TIMEOUT",
+        message: "Tool outcome is unknown",
+      },
+    ] as const;
+    await store.append(
+      sessionId,
+      0n,
+      events.map((event, index) => ({
+        eventId: `unknown-${String(index)}`,
+        type: event.type,
+        payload: event,
+      })),
+    );
+
+    const runtime = await createAgentRuntime({
+      sessionId,
+      eventStore: runtimeEventStore(store),
+      createEventId: sequentialEventIds("replacement"),
+      createKernelSession: new CapturingKernelFactory().create,
+    });
+
+    expect(runtime.snapshot()).toMatchObject({
+      phase: "failed_terminal",
+      outcomeUnknown: true,
+      turns: [{ status: "failed", activities: [{ status: "failed" }] }],
+    });
+    expect(await eventTypes(store, sessionId)).toEqual(events.map((event) => event.type));
+    await runtime.dispose();
     store.close();
   });
 });

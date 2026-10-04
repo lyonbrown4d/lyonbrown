@@ -14,7 +14,7 @@ import {
 } from "./runtime-state-types.js";
 
 type StateChanges = Partial<
-  Pick<AgentRuntimeState, "assistantTextBytes" | "phase" | "lastError" | "usage">
+  Pick<AgentRuntimeState, "assistantTextBytes" | "outcomeUnknown" | "phase" | "lastError" | "usage">
 >;
 
 export function appendTurn(

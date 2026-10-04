@@ -30,7 +30,7 @@ export interface RuntimeToolState {
 export interface RuntimeActivityState {
   readonly turn: number;
   readonly assistantText: string;
-  readonly status: "running" | "completed";
+  readonly status: "running" | "completed" | "failed";
   readonly usage: RuntimeUsage;
   readonly tools: readonly RuntimeToolState[];
 }

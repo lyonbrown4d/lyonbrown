@@ -1,6 +1,10 @@
+import { isDeepStrictEqual } from "node:util";
+
 import {
   assertIdentifier,
+  incrementRevision,
   parseAgentRuntimeEvent,
+  reduceAgentRuntimeEvent,
   type AgentRuntimeEvent,
   type AgentRuntimeState,
   type SessionId,
@@ -37,29 +41,31 @@ export class RuntimeEventWriter {
   }
 
   append(input: AgentRuntimeEvent): Promise<void> {
-    let resolveResult: (() => void) | undefined;
-    let rejectResult: ((error: AgentRuntimeError) => void) | undefined;
-    const result = new Promise<void>((resolve, reject: (error: AgentRuntimeError) => void) => {
-      resolveResult = resolve;
-      rejectResult = reject;
-    });
-    this.#tail = this.#tail.then(async () => {
-      try {
-        await this.#appendOne(parseAgentRuntimeEvent(input));
-        resolveResult?.();
-      } catch {
-        const fatal = this.#fatal ?? this.#markFatal();
-        rejectResult?.(fatal);
-      }
-    });
-    return result;
+    let event: AgentRuntimeEvent;
+    try {
+      event = parseAgentRuntimeEvent(input);
+    } catch (error: unknown) {
+      return Promise.reject(
+        error instanceof Error
+          ? error
+          : runtimeError("EVENT_STREAM_CORRUPT", "Durable runtime event stream is invalid"),
+      );
+    }
+    const operation = this.#tail.then(() => this.#appendOne(event));
+    this.#tail = operation.catch(() => undefined);
+    return operation;
   }
 
   async #appendOne(event: AgentRuntimeEvent): Promise<void> {
     if (this.#fatal !== undefined) throw this.#fatal;
-    const eventId = assertIdentifier(this.options.createEventId(), "eventId");
+    const candidate = reduceAgentRuntimeEvent(this.#state, {
+      revision: incrementRevision(this.#state.revision),
+      event,
+    });
+    let eventId: string;
     let stored;
     try {
+      eventId = assertIdentifier(this.options.createEventId(), "eventId");
       stored = await this.options.eventStore.append(this.options.sessionId, this.#state.revision, [
         {
           eventId,
@@ -72,11 +78,14 @@ export class RuntimeEventWriter {
       throw this.#markFatal();
     }
     if (stored.length !== 1 || stored[0]?.eventId !== eventId) throw this.#markFatal();
+    let recoveredCandidate: AgentRuntimeState;
     try {
-      this.#state = applyStoredEvent(this.#state, stored[0], this.options.sessionId);
+      recoveredCandidate = applyStoredEvent(this.#state, stored[0], this.options.sessionId);
     } catch {
       throw this.#markFatal();
     }
+    if (!isDeepStrictEqual(candidate, recoveredCandidate)) throw this.#markFatal();
+    this.#state = candidate;
     this.options.publish(this.#state);
   }
 
