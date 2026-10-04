@@ -4,23 +4,4 @@ export type {
   AgentLaunchErrorDetails,
   AgentLaunchErrorKind,
 } from "./errors.js";
-export { createAgentLauncher } from "./launcher.js";
-export type {
-  AgentClientFactory,
-  AgentLaunchConnection,
-  AgentLaunchDeadlines,
-  AgentLauncher,
-  AgentLaunchPorts,
-  Clock,
-  ConnectAgentInput,
-  CreateAgentLauncherOptions,
-  DaemonExit,
-  DiscoveredDaemonCapability,
-  DiscoveryClient,
-  DiscoveryContext,
-  ProcessSpawner,
-  Sleeper,
-  SpawnAgentdRequest,
-  SpawnedDaemon,
-  StartupLease,
-} from "./types.js";
+export type { AgentLaunchConnection, AgentLauncher, ConnectAgentInput } from "./public-types.js";

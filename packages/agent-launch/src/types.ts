@@ -1,5 +1,6 @@
-import type { AgentClient, ClientDeadlines, RuntimeSnapshotDto } from "@lyonbrown/agent-client";
+import type { AgentClient, ClientDeadlines } from "@lyonbrown/agent-client";
 import type { NativeControlPlaneProvider, ScopeIdentity } from "@lyonbrown/local-control-plane";
+export type { AgentLaunchConnection, AgentLauncher, ConnectAgentInput } from "./public-types.js";
 
 /** Capability whose implementation privately retains authenticated connection material. */
 export interface DiscoveredDaemonCapability {
@@ -13,12 +14,18 @@ export interface DiscoveryContext {
 }
 
 export interface StartupLease {
-  release(): Promise<void>;
+  /** Release must observe cancellation and must remain safe if completion is reported late. */
+  release(signal: AbortSignal): Promise<void>;
 }
 
 export interface DiscoveryClient {
-  read(context: DiscoveryContext): Promise<DiscoveredDaemonCapability | null>;
-  tryAcquireStartupLease(context: DiscoveryContext): Promise<StartupLease | null>;
+  /** A cancelled read must not publish a new descriptor after it settles. */
+  read(context: DiscoveryContext, signal: AbortSignal): Promise<DiscoveredDaemonCapability | null>;
+  /** A lease returned after cancellation is fenced by the caller and released exactly once. */
+  tryAcquireStartupLease(
+    context: DiscoveryContext,
+    signal: AbortSignal,
+  ): Promise<StartupLease | null>;
 }
 
 export interface SpawnAgentdRequest {
@@ -33,10 +40,13 @@ export interface DaemonExit {
 
 export interface SpawnedDaemon {
   readonly exited: Promise<DaemonExit>;
+  /** Retire a startup attempt without acting on unrelated stale descriptors or processes. */
+  abandon(signal: AbortSignal): Promise<void>;
 }
 
 export interface ProcessSpawner {
-  spawn(request: SpawnAgentdRequest): Promise<SpawnedDaemon>;
+  /** Must not commit a new spawn after cancellation; late handles are abandoned by the caller. */
+  spawn(request: SpawnAgentdRequest, signal: AbortSignal): Promise<SpawnedDaemon>;
 }
 
 export interface AgentClientFactory {
@@ -65,6 +75,7 @@ export interface AgentLaunchPorts {
 export interface AgentLaunchDeadlines {
   readonly startupMs?: number;
   readonly pollIntervalMs?: number;
+  readonly cleanupMs?: number;
   readonly client?: ClientDeadlines;
 }
 
@@ -78,21 +89,4 @@ export interface CreateAgentLauncherOptions {
     readonly name: string;
     readonly version: string;
   };
-}
-
-export interface ConnectAgentInput {
-  readonly autoStart?: boolean;
-  readonly signal?: AbortSignal;
-}
-
-export interface AgentLaunchConnection {
-  readonly client: AgentClient;
-  readonly serverInstanceId: string;
-  readonly scopeId: string;
-  readonly snapshot: RuntimeSnapshotDto;
-  readonly source: "reused" | "spawned";
-}
-
-export interface AgentLauncher {
-  connect(input?: ConnectAgentInput): Promise<AgentLaunchConnection>;
 }

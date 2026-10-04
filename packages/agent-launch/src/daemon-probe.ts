@@ -91,10 +91,11 @@ export class DaemonProbe {
     let handshake;
     try {
       handshake = await this.stages.waitFor(
-        client.handshake({
-          clientName: this.options.client.name,
-          clientVersion: this.options.client.version,
-        }),
+        () =>
+          client.handshake({
+            clientName: this.options.client.name,
+            clientVersion: this.options.client.version,
+          }),
         deadline,
         timeoutCode,
         signal,
@@ -116,7 +117,12 @@ export class DaemonProbe {
     try {
       return {
         kind: "ready",
-        snapshot: await this.stages.waitFor(client.getSnapshot(), deadline, timeoutCode, signal),
+        snapshot: await this.stages.waitFor(
+          () => client.getSnapshot(),
+          deadline,
+          timeoutCode,
+          signal,
+        ),
       };
     } catch (error: unknown) {
       return this.#mapClientFailure(error);
@@ -125,20 +131,23 @@ export class DaemonProbe {
 
   #mapClientFailure(error: unknown): { readonly kind: "unavailable" } {
     if (isAgentLaunchError(error)) throw error;
-    let clientError: AgentClientError | undefined;
+    let code: string | undefined;
     try {
-      if (error instanceof AgentClientError) clientError = error;
+      if (error instanceof AgentClientError) {
+        const candidate: unknown = error.code;
+        if (typeof candidate === "string") code = candidate;
+      }
     } catch {
       throw launchError("unavailable", "CLIENT_FAILED", "daemon client operation failed");
     }
-    if (clientError?.code === "AUTHENTICATION_FAILED") {
+    if (code === "AUTHENTICATION_FAILED") {
       throw launchError("authentication", "AUTHENTICATION_FAILED", "daemon authentication failed");
     }
     if (
-      clientError?.code === "DISCONNECTED" ||
-      clientError?.code === "TIMEOUT" ||
-      clientError?.code === "STALE_SERVER_EPOCH" ||
-      clientError?.code === "CANCELLED"
+      code === "DISCONNECTED" ||
+      code === "TIMEOUT" ||
+      code === "STALE_SERVER_EPOCH" ||
+      code === "CANCELLED"
     ) {
       return { kind: "unavailable" };
     }
@@ -159,7 +168,7 @@ export class DaemonProbe {
   ): Promise<DiscoveredDaemonCapability | null> {
     try {
       return await this.stages.waitFor(
-        this.options.ports.discovery.read(context),
+        (operationSignal) => this.options.ports.discovery.read(context, operationSignal),
         deadline,
         timeoutCode,
         signal,
@@ -187,10 +196,6 @@ export class DaemonProbe {
   }
 
   async #closeQuietly(client: AgentClient): Promise<void> {
-    try {
-      await client.close();
-    } catch {
-      // A failed cleanup must not expose adapter error data.
-    }
+    await this.stages.cleanup(() => client.close());
   }
 }

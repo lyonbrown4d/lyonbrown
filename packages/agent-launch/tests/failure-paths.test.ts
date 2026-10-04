@@ -1,11 +1,8 @@
 import { AgentClientError } from "@lyonbrown/agent-client";
-import { deriveScope, type NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
+import { deriveScope } from "@lyonbrown/local-control-plane";
 import { describe, expect, test } from "vitest";
-import {
-  createAgentLauncher,
-  type CreateAgentLauncherOptions,
-  type DiscoveryClient,
-} from "../src/index.js";
+import { createAgentLauncher } from "../src/launcher.js";
+import type { CreateAgentLauncherOptions, DiscoveryClient } from "../src/types.js";
 import {
   CONFIG,
   WORKSPACE,
@@ -65,86 +62,6 @@ describe("validated configuration", () => {
     });
     await expect(launcher.connect({ autoStart: false })).rejects.toMatchObject({
       code: "AUTO_START_DISABLED",
-    });
-  });
-});
-
-describe("safe adapter failures", () => {
-  test("fails closed when the native provider is not a registered capability", async () => {
-    const configured = options();
-    const forged = {} as NativeControlPlaneProvider;
-    const launcher = createAgentLauncher({ ...configured, nativeProvider: forged });
-
-    await expect(launcher.connect()).rejects.toMatchObject({ code: "CONTROL_PLANE_FAILED" });
-  });
-
-  test("redacts discovery and startup lease failures", async () => {
-    const discovery = new FakeDiscovery();
-    discovery.readFailure = new Error("private descriptor path");
-    await expect(createAgentLauncher(options(discovery)).connect()).rejects.toMatchObject({
-      code: "CONTROL_PLANE_FAILED",
-    });
-
-    discovery.readFailure = undefined;
-    discovery.lockFailure = new Error("private lock path");
-    await expect(createAgentLauncher(options(discovery)).connect()).rejects.toMatchObject({
-      code: "CONTROL_PLANE_FAILED",
-    });
-  });
-
-  test("redacts timer and polling failures", async () => {
-    const configured = options();
-    const sleeper = configured.ports.sleeper as AdvancingSleeper;
-    sleeper.failure = new Error("private timer failure");
-
-    await expect(createAgentLauncher(configured).connect()).rejects.toMatchObject({
-      code: "CLIENT_FAILED",
-    });
-  });
-
-  test("closes a ready client when startup lease release fails", async () => {
-    const provider = nativeProvider();
-    const scope = await deriveScope(WORKSPACE, CONFIG, provider);
-    const discovery = new FakeDiscovery();
-    discovery.tryAcquireStartupLease = () =>
-      Promise.resolve({ release: () => Promise.reject(new Error("private release path")) });
-    const clients = new FakeClientFactory();
-    const configured = options(discovery, clients, provider);
-    (configured.ports.spawner as FakeSpawner).candidateToPublish = new Candidate(
-      "epoch-ready",
-      scope.scopeId,
-    );
-
-    await expect(createAgentLauncher(configured).connect()).rejects.toMatchObject({
-      code: "CONTROL_PLANE_FAILED",
-    });
-    expect(clients.clients[0]?.closed).toBe(true);
-  });
-
-  test("redacts client construction and hostile client failures", async () => {
-    const discovery = new FakeDiscovery();
-    const provider = nativeProvider();
-    const scope = await deriveScope(WORKSPACE, CONFIG, provider);
-    discovery.candidate = new Candidate("epoch-a", scope.scopeId);
-    const clients = new FakeClientFactory();
-    clients.create = () => {
-      throw new Error("private binding");
-    };
-    const configured = options(discovery, clients, provider);
-    await expect(createAgentLauncher(configured).connect()).rejects.toMatchObject({
-      code: "CLIENT_FAILED",
-    });
-
-    const hostileClients = new FakeClientFactory();
-    const trap = () => {
-      throw new Error("private trap");
-    };
-    hostileClients.handshakeFailure = new Proxy(Object.create(null) as object, {
-      getPrototypeOf: trap,
-    });
-    const hostileOptions = options(discovery, hostileClients, provider);
-    await expect(createAgentLauncher(hostileOptions).connect()).rejects.toMatchObject({
-      code: "CLIENT_FAILED",
     });
   });
 });

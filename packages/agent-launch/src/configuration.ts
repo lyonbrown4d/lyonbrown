@@ -3,10 +3,12 @@ import type { AgentLaunchDeadlines, CreateAgentLauncherOptions } from "./types.j
 
 const DEFAULT_STARTUP_MS = 30_000;
 const DEFAULT_POLL_INTERVAL_MS = 25;
+const DEFAULT_CLEANUP_MS = 1_000;
 
 export interface NormalizedConfiguration {
   readonly startupMs: number;
   readonly pollIntervalMs: number;
+  readonly cleanupMs: number;
 }
 
 function positiveInteger(value: number, name: string): number {
@@ -34,5 +36,10 @@ export function validateOptions(options: CreateAgentLauncherOptions): Normalized
     deadlines.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
     "pollIntervalMs",
   );
-  return Object.freeze({ startupMs, pollIntervalMs: Math.min(startupMs, pollIntervalMs) });
+  const cleanupMs = positiveInteger(deadlines.cleanupMs ?? DEFAULT_CLEANUP_MS, "cleanupMs");
+  return Object.freeze({
+    startupMs,
+    pollIntervalMs: Math.min(startupMs, pollIntervalMs),
+    cleanupMs,
+  });
 }

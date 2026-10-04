@@ -2,12 +2,14 @@ import { launchError } from "./errors.js";
 import type { Clock, Sleeper } from "./types.js";
 
 export type TimeoutCode = "STARTUP_TIMEOUT" | "READINESS_TIMEOUT";
+export type DiscardValue<T> = (value: T, signal: AbortSignal) => Promise<void>;
 
 export class StageRunner {
   public constructor(
     private readonly clock: Clock,
     private readonly sleeper: Sleeper,
     private readonly pollIntervalMs: number,
+    private readonly cleanupMs: number,
   ) {}
 
   public now(): number {
@@ -39,39 +41,84 @@ export class StageRunner {
   }
 
   public async waitFor<T>(
-    operation: Promise<T>,
+    start: (signal: AbortSignal) => Promise<T>,
     deadline: number,
     code: TimeoutCode,
     signal?: AbortSignal,
+    discard?: DiscardValue<T>,
   ): Promise<T> {
     this.throwIfAborted(signal);
     const remaining = deadline - this.clock.now();
     if (remaining <= 0) this.throwIfExpired(deadline, code);
+    const operationController = new AbortController();
     const timerController = new AbortController();
-    const abortTimer = () => {
+    let accepted = false;
+    const abortStage = () => {
+      if (!accepted) operationController.abort();
       timerController.abort();
     };
-    signal?.addEventListener("abort", abortTimer, { once: true });
+    signal?.addEventListener("abort", abortStage, { once: true });
+    const operation = this.#start(start, operationController.signal);
     const task = operation.then(
       (value) => ({ kind: "value" as const, value }),
       (error: unknown) => ({ kind: "error" as const, error }),
     );
-    const timer = this.sleeper.sleep(remaining, timerController.signal).then(
+    const timer = this.#start(
+      (timerSignal) => this.sleeper.sleep(remaining, timerSignal),
+      timerController.signal,
+    ).then(
       () => ({ kind: "timeout" as const }),
       () => ({ kind: "timer-error" as const }),
     );
     try {
       const outcome = await Promise.race([task, timer]);
       this.throwIfAborted(signal);
-      if (outcome.kind === "value") return outcome.value;
+      if (outcome.kind === "value") {
+        accepted = true;
+        return outcome.value;
+      }
       if (outcome.kind === "error") throw outcome.error;
       if (outcome.kind === "timer-error") {
         throw launchError("unavailable", "CLIENT_FAILED", "deadline timer failed");
       }
       throw launchError("unavailable", code, "daemon startup timed out");
     } finally {
-      signal?.removeEventListener("abort", abortTimer);
+      signal?.removeEventListener("abort", abortStage);
+      if (!accepted) operationController.abort();
+      timerController.abort();
+      if (!accepted && discard) {
+        void operation.then(
+          (value) => this.cleanup((cleanupSignal) => discard(value, cleanupSignal)),
+          () => undefined,
+        );
+      }
+    }
+  }
+
+  public async cleanup(start: (signal: AbortSignal) => Promise<void>): Promise<boolean> {
+    const cleanupController = new AbortController();
+    const timerController = new AbortController();
+    const task = this.#start(start, cleanupController.signal).then(
+      () => ({ kind: "settled" as const }),
+      () => ({ kind: "failed" as const }),
+    );
+    const timer = this.#start(
+      (timerSignal) => this.sleeper.sleep(this.cleanupMs, timerSignal),
+      timerController.signal,
+    ).then(
+      () => ({ kind: "timeout" as const }),
+      () => ({ kind: "timer-failed" as const }),
+    );
+    try {
+      const outcome = await Promise.race([task, timer]);
+      return outcome.kind === "settled";
+    } finally {
+      cleanupController.abort();
       timerController.abort();
     }
+  }
+
+  async #start<T>(start: (signal: AbortSignal) => Promise<T>, signal: AbortSignal): Promise<T> {
+    return await start(signal);
   }
 }

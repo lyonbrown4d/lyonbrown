@@ -1,6 +1,7 @@
 import { deriveScope } from "@lyonbrown/local-control-plane";
 import { describe, expect, test } from "vitest";
-import { AgentLaunchError, createAgentLauncher } from "../src/index.js";
+import { AgentLaunchError } from "../src/errors.js";
+import { createAgentLauncher } from "../src/launcher.js";
 import {
   CONFIG,
   WORKSPACE,
@@ -47,6 +48,7 @@ describe("daemon startup coordination", () => {
       scopeId: fixture.scope.scopeId,
     });
     expect(Object.keys(fixture.spawner.calls[0] ?? {})).not.toContain("token");
+    expect(fixture.spawner.signals[0]?.aborted).toBe(false);
     expect(fixture.discovery.leaseHeld).toBe(false);
   });
 
@@ -85,6 +87,39 @@ describe("daemon startup coordination", () => {
     expect(error).toMatchObject({ code: "DAEMON_EXITED", details: { exitCode: 78 } });
     expect(error).not.toHaveProperty("cause");
     expect(fixture.discovery.leaseHeld).toBe(false);
+  });
+
+  test("maps a rejected daemon exit observation to a typed safe error", async () => {
+    const fixture = await setup();
+    fixture.spawner.exit = new Promise((_, reject) => {
+      queueMicrotask(() => {
+        reject(new Error("raw exit observer secret"));
+      });
+    });
+
+    const error = await fixture.launcher.connect().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AgentLaunchError);
+    expect(error).toMatchObject({ code: "DAEMON_EXITED" });
+    expect(String(error)).not.toContain("secret");
+    expect(error).not.toHaveProperty("cause");
+  });
+
+  test("guards hostile daemon exit fields", async () => {
+    const fixture = await setup();
+    const hostileExit = new Proxy(Object.create(null) as { readonly exitCode: number | null }, {
+      get() {
+        throw new Error("raw exit getter secret");
+      },
+    });
+    fixture.spawner.exit = Promise.resolve(hostileExit);
+
+    const error = await fixture.launcher.connect().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AgentLaunchError);
+    expect(error).toMatchObject({ code: "DAEMON_EXITED" });
+    expect(String(error)).not.toContain("secret");
+    expect(error).not.toHaveProperty("cause");
   });
 
   test("times out, releases the startup lease, and does not kill a stale process", async () => {

@@ -27,6 +27,7 @@ export class DefaultAgentLauncher implements AgentLauncher {
       options.ports.clock,
       options.ports.sleeper,
       this.#configuration.pollIntervalMs,
+      this.#configuration.cleanupMs,
     );
     this.#probe = new DaemonProbe(options, this.#stages);
   }
@@ -82,10 +83,15 @@ export class DefaultAgentLauncher implements AgentLauncher {
       } else {
         this.#stages.throwIfExpired(deadline, "READINESS_TIMEOUT");
         const spawned = await this.#spawn(context.scope, deadline, signal);
-        outcome = {
-          kind: "ready",
-          connection: await this.#waitForReadiness(context, deadline, spawned, signal),
-        };
+        try {
+          outcome = {
+            kind: "ready",
+            connection: await this.#waitForReadiness(context, deadline, spawned, signal),
+          };
+        } catch (error: unknown) {
+          await this.#abandonQuietly(spawned);
+          throw error;
+        }
       }
     } catch (error: unknown) {
       outcome = { kind: "failed", error };
@@ -106,29 +112,32 @@ export class DefaultAgentLauncher implements AgentLauncher {
     spawned: SpawnedDaemon,
     signal?: AbortSignal,
   ): Promise<AgentLaunchConnection> {
+    const exit = this.#observeExit(spawned);
     for (;;) {
       this.#stages.throwIfAborted(signal);
       this.#stages.throwIfExpired(deadline, "READINESS_TIMEOUT");
       const ready = await this.#probe.probe(context, deadline, "READINESS_TIMEOUT", signal);
       if (ready.kind === "ready") return { ...ready.connection, source: "spawned" };
       const outcome = await Promise.race([
-        spawned.exited.then((exit) => ({ kind: "exit" as const, exit })),
+        exit,
         this.#stages
           .poll(deadline, "READINESS_TIMEOUT", signal)
           .then(() => ({ kind: "poll" as const })),
       ]);
       if (outcome.kind === "exit") this.#throwDaemonExit(outcome.exit);
+      if (outcome.kind === "exit-failed") this.#throwDaemonExit(undefined);
     }
   }
 
   async #deriveScope(deadline: number, signal?: AbortSignal): Promise<ScopeIdentity> {
     try {
       return await this.#stages.waitFor(
-        deriveScope(
-          this.#options.workspace,
-          this.#options.effectiveConfigFingerprint,
-          this.#options.nativeProvider,
-        ),
+        () =>
+          deriveScope(
+            this.#options.workspace,
+            this.#options.effectiveConfigFingerprint,
+            this.#options.nativeProvider,
+          ),
         deadline,
         "STARTUP_TIMEOUT",
         signal,
@@ -150,10 +159,12 @@ export class DefaultAgentLauncher implements AgentLauncher {
   ): Promise<StartupLease | null> {
     try {
       return await this.#stages.waitFor(
-        this.#options.ports.discovery.tryAcquireStartupLease(context),
+        (operationSignal) =>
+          this.#options.ports.discovery.tryAcquireStartupLease(context, operationSignal),
         deadline,
         "STARTUP_TIMEOUT",
         signal,
+        (lateLease, cleanupSignal) => this.#releaseLateLease(lateLease, cleanupSignal),
       );
     } catch (error: unknown) {
       if (isAgentLaunchError(error)) throw error;
@@ -162,9 +173,10 @@ export class DefaultAgentLauncher implements AgentLauncher {
   }
 
   async #releaseLease(lease: StartupLease): Promise<void> {
-    try {
-      await lease.release();
-    } catch {
+    const released = await this.#stages.cleanup((cleanupSignal) =>
+      this.#releaseLeaseOperation(lease, cleanupSignal),
+    );
+    if (!released) {
       throw launchError("unavailable", "CONTROL_PLANE_FAILED", "startup lease release failed");
     }
   }
@@ -176,14 +188,19 @@ export class DefaultAgentLauncher implements AgentLauncher {
   ): Promise<SpawnedDaemon> {
     try {
       return await this.#stages.waitFor(
-        this.#options.ports.spawner.spawn({
-          canonicalWorkspace: scope.canonicalWorkspace,
-          effectiveConfigFingerprint: this.#options.effectiveConfigFingerprint,
-          scopeId: scope.scopeId,
-        }),
+        (operationSignal) =>
+          this.#options.ports.spawner.spawn(
+            {
+              canonicalWorkspace: scope.canonicalWorkspace,
+              effectiveConfigFingerprint: this.#options.effectiveConfigFingerprint,
+              scopeId: scope.scopeId,
+            },
+            operationSignal,
+          ),
         deadline,
         "READINESS_TIMEOUT",
         signal,
+        (lateSpawned, cleanupSignal) => this.#abandonSpawned(lateSpawned, cleanupSignal),
       );
     } catch (error: unknown) {
       if (isAgentLaunchError(error)) throw error;
@@ -191,17 +208,52 @@ export class DefaultAgentLauncher implements AgentLauncher {
     }
   }
 
-  #throwDaemonExit(exit: DaemonExit): never {
-    const details = exit.exitCode === null ? undefined : { exitCode: exit.exitCode };
+  #throwDaemonExit(exit: DaemonExit | undefined): never {
+    let exitCode: unknown;
+    try {
+      exitCode = exit?.exitCode;
+    } catch {
+      exitCode = undefined;
+    }
+    const details =
+      typeof exitCode === "number" && Number.isSafeInteger(exitCode) ? { exitCode } : undefined;
     throw launchError("unavailable", "DAEMON_EXITED", "daemon exited before readiness", details);
   }
 
   async #closeQuietly(connectionClient: AgentLaunchConnection["client"]): Promise<void> {
+    await this.#stages.cleanup(() => connectionClient.close());
+  }
+
+  #observeExit(
+    spawned: SpawnedDaemon,
+  ): Promise<
+    { readonly kind: "exit"; readonly exit: DaemonExit } | { readonly kind: "exit-failed" }
+  > {
     try {
-      await connectionClient.close();
+      return Promise.resolve(spawned.exited).then(
+        (exit) => ({ kind: "exit" as const, exit }),
+        () => ({ kind: "exit-failed" as const }),
+      );
     } catch {
-      // The lease error remains the safe public failure.
+      return Promise.resolve({ kind: "exit-failed" as const });
     }
+  }
+
+  async #releaseLateLease(lease: StartupLease | null, signal: AbortSignal): Promise<void> {
+    if (!lease) return;
+    await this.#releaseLeaseOperation(lease, signal);
+  }
+
+  async #releaseLeaseOperation(lease: StartupLease, signal: AbortSignal): Promise<void> {
+    await lease.release(signal);
+  }
+
+  async #abandonQuietly(spawned: SpawnedDaemon): Promise<void> {
+    await this.#stages.cleanup((cleanupSignal) => this.#abandonSpawned(spawned, cleanupSignal));
+  }
+
+  async #abandonSpawned(spawned: SpawnedDaemon, signal: AbortSignal): Promise<void> {
+    await spawned.abandon(signal);
   }
 }
 
