@@ -47,6 +47,9 @@ importers:
       '@grpc/grpc-js':
         specifier: 1.14.5
         version: 1.14.5
+      '@lyonbrown/agent-runtime':
+        specifier: workspace:*
+        version: link:../../packages/agent-runtime
       '@lyonbrown/local-control-plane':
         specifier: workspace:*
         version: link:../../packages/local-control-plane
@@ -54,6 +57,15 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
     devDependencies:
+      '@lyonbrown/agent-domain':
+        specifier: workspace:*
+        version: link:../../packages/agent-domain
+      '@lyonbrown/event-store':
+        specifier: workspace:*
+        version: link:../../packages/event-store
+      '@lyonbrown/kernel-pi':
+        specifier: workspace:*
+        version: link:../../packages/kernel-pi
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
