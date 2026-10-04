@@ -5,12 +5,12 @@ import {
   validateText,
   type RequestMetadata,
 } from "@lyonbrown/protocol";
-import { epochMismatchStatus } from "./status.js";
+import { epochMismatchStatus, trustedStatus } from "./status.js";
 
 const SCOPE_FINGERPRINT = /^[a-f0-9]{64}$/u;
 
 function invalidArgument(message: string): ServerErrorResponse {
-  return Object.assign(new Error(message), { code: status.INVALID_ARGUMENT, details: message });
+  return trustedStatus(status.INVALID_ARGUMENT, message);
 }
 
 export function validateServerIdentity(serverInstanceId: string, scopeFingerprint: string): void {
@@ -22,7 +22,7 @@ export function requireMetadata(metadata: RequestMetadata | undefined): RequestM
   if (metadata === undefined) throw invalidArgument("metadata is required");
   if (metadata.protocolVersion !== PROTOCOL_VERSION) {
     const message = `unsupported protocol_version ${String(metadata.protocolVersion)}; server supports protocol_version ${String(PROTOCOL_VERSION)}`;
-    throw Object.assign(new Error(message), { code: status.FAILED_PRECONDITION, details: message });
+    throw trustedStatus(status.FAILED_PRECONDITION, message);
   }
   if (!validateStringId(metadata.clientInstanceId).ok) {
     throw invalidArgument("client_instance_id is invalid");

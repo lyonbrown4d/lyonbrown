@@ -30,9 +30,14 @@ import {
   type RuntimeSnapshot,
 } from "@lyonbrown/protocol";
 import { commandFingerprint } from "./fingerprint.js";
-import { ReplayCache, ReplayCapacityError, ReplayConflictError } from "./replay-cache.js";
+import { ReplayCache, isReplayCapacityError, isReplayConflict } from "./replay-cache.js";
 import type { RuntimeCommand, RuntimeHost } from "./runtime-host.js";
-import { runtimeFailureStatus, unsupportedStatus } from "./status.js";
+import {
+  runtimeFailureStatus,
+  statusAtBoundary,
+  trustedStatus,
+  unsupportedStatus,
+} from "./status.js";
 import { pumpSnapshotStream } from "./stream.js";
 import {
   requireBoundedText,
@@ -54,11 +59,7 @@ export interface CreateAgentServiceOptions {
 }
 
 function internalStatus(error: unknown): ServerErrorResponse {
-  if (typeof error === "object" && error !== null && "code" in error) {
-    return error as ServerErrorResponse;
-  }
-  const message = "internal daemon error";
-  return Object.assign(new Error(message), { code: status.INTERNAL, details: message });
+  return statusAtBoundary(error);
 }
 
 function unary<Request, Response>(
@@ -106,11 +107,11 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
         });
       });
     } catch (error) {
-      if (error instanceof ReplayConflictError) {
-        throw Object.assign(error, { code: status.ALREADY_EXISTS, details: error.message });
+      if (isReplayConflict(error)) {
+        throw trustedStatus(status.ALREADY_EXISTS, error.message);
       }
-      if (error instanceof ReplayCapacityError) {
-        throw Object.assign(error, { code: status.RESOURCE_EXHAUSTED, details: error.message });
+      if (isReplayCapacityError(error)) {
+        throw trustedStatus(status.RESOURCE_EXHAUSTED, error.message);
       }
       throw error;
     }

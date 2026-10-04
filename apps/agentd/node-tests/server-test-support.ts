@@ -1,13 +1,14 @@
-import { Metadata, type ClientUnaryCall, type ServiceError } from "@grpc/grpc-js";
-import type { SecretToken } from "@lyonbrown/local-control-plane";
+import { Metadata, credentials, type ClientUnaryCall, type ServiceError } from "@grpc/grpc-js";
+import { SecretToken } from "@lyonbrown/local-control-plane";
 import {
   CommandErrorDetail,
+  GRPC_CHANNEL_OPTIONS,
   PROTOCOL_VERSION,
   RequestMetadata,
   RuntimeEvent,
   RuntimeSnapshot,
+  AgentServiceClient,
   bearerAuthorization,
-  type AgentServiceClient,
   type CommandResponse,
   type ForceStopRequest,
   type HealthRequest,
@@ -16,6 +17,7 @@ import {
 } from "@lyonbrown/protocol";
 import { vi } from "vitest";
 import type { RuntimeCommand, RuntimeHost, RuntimeResult } from "../node-src/runtime-host.js";
+import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.js";
 
 export const SERVER_INSTANCE_ID = "018f47d6-7c12-7b19-a0b6-ff87748f42bc";
 export const SCOPE_FINGERPRINT = "a".repeat(64);
@@ -54,6 +56,39 @@ export class FakeHost implements RuntimeHost {
   public capabilities(): readonly string[] {
     return ["runtime.test.v1"];
   }
+}
+
+export interface TestServerState {
+  readonly address: string;
+  readonly client: AgentServiceClient;
+  readonly host: FakeHost;
+  readonly running: RunningAgentdServer;
+  readonly token: SecretToken;
+  close(): Promise<void>;
+}
+
+export async function startTestServer(host = new FakeHost()): Promise<TestServerState> {
+  const token = SecretToken.generate();
+  const running = await startAgentdServer({
+    host,
+    token,
+    serverInstanceId: SERVER_INSTANCE_ID,
+    scopeFingerprint: SCOPE_FINGERPRINT,
+  });
+  const client = new AgentServiceClient(running.address, credentials.createInsecure(), {
+    ...GRPC_CHANNEL_OPTIONS,
+  });
+  return {
+    address: running.address,
+    client,
+    host,
+    running,
+    token,
+    async close() {
+      client.close();
+      await running.close();
+    },
+  };
 }
 
 export function authorization(token: SecretToken): Metadata {

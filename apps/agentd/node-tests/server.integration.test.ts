@@ -5,14 +5,11 @@ import {
   type ClientReadableStream,
   type ServiceError,
 } from "@grpc/grpc-js";
-import { SecretToken } from "@lyonbrown/local-control-plane";
 import {
   AgentServiceClient,
   AgentServiceService,
-  CancelModelDownloadRequest,
   CancelTurnRequest,
   CommandErrorCode,
-  ForceStopRequest,
   GetSnapshotRequest,
   GRPC_CHANNEL_OPTIONS,
   HandshakeRequest,
@@ -20,56 +17,39 @@ import {
   MAX_GRPC_MESSAGE_BYTES,
   PROTOCOL_VERSION,
   QueueFollowUpRequest,
-  RespondApprovalRequest,
   RuntimeEvent,
-  SelectSessionModelRequest,
-  StartModelDownloadRequest,
   StartTurnRequest,
   SteerCurrentTurnRequest,
-  UnsupportedCommand,
   type HandshakeResponse,
   type RuntimeSnapshot,
 } from "@lyonbrown/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAgentService } from "../node-src/service.js";
-import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.js";
 import type { RuntimeResult } from "../node-src/runtime-host.js";
 import {
   FakeHost,
   SCOPE_FINGERPRINT,
   SERVER_INSTANCE_ID,
+  type TestServerState,
   authorization,
   detailFrom,
-  forceStop,
   health,
   invokeUnary,
   requestMetadata,
+  startTestServer,
   startTurn,
 } from "./server-test-support.js";
 
 describe("agentd gRPC server", () => {
-  let running: RunningAgentdServer | undefined;
-  let client: AgentServiceClient | undefined;
+  let state: TestServerState | undefined;
 
   afterEach(async () => {
-    client?.close();
-    await running?.close();
+    await state?.close();
   });
 
   async function start(host = new FakeHost()) {
-    const token = SecretToken.generate();
-    running = await startAgentdServer({
-      host,
-      token,
-      serverInstanceId: SERVER_INSTANCE_ID,
-      scopeFingerprint: SCOPE_FINGERPRINT,
-    });
-    client = new AgentServiceClient(
-      running.address,
-      credentials.createInsecure(),
-      GRPC_CHANNEL_OPTIONS,
-    );
-    return { address: running.address, client, host, token };
+    state = await startTestServer(host);
+    return state;
   }
 
   it("registers every proto RPC explicitly", () => {
@@ -230,80 +210,6 @@ describe("agentd gRPC server", () => {
     release();
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
     expect(host.execute).toHaveBeenCalledOnce();
-  });
-
-  it("returns typed Unsupported for commands outside the runtime port", async () => {
-    const state = await start();
-    const error = await forceStop(
-      state.client,
-      ForceStopRequest.create({ metadata: requestMetadata("unsupported") }),
-      authorization(state.token),
-    ).catch((caught: unknown) => caught);
-    expect(error).toMatchObject({ code: status.FAILED_PRECONDITION });
-    expect(detailFrom(error)).toMatchObject({
-      code: CommandErrorCode.COMMAND_ERROR_CODE_UNSUPPORTED,
-      context: {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_FORCE_STOP,
-      },
-    });
-    expect(state.host.execute).not.toHaveBeenCalled();
-  });
-
-  it("returns typed Unsupported from every deferred command RPC", async () => {
-    const state = await start();
-    const metadata = authorization(state.token);
-    const calls = [
-      invokeUnary((callback) =>
-        state.client.respondApproval(
-          RespondApprovalRequest.create({ metadata: requestMetadata("approval") }),
-          metadata,
-          callback,
-        ),
-      ),
-      invokeUnary((callback) =>
-        state.client.selectSessionModel(
-          SelectSessionModelRequest.create({ metadata: requestMetadata("model") }),
-          metadata,
-          callback,
-        ),
-      ),
-      invokeUnary((callback) =>
-        state.client.startModelDownload(
-          StartModelDownloadRequest.create({ metadata: requestMetadata("download") }),
-          metadata,
-          callback,
-        ),
-      ),
-      invokeUnary((callback) =>
-        state.client.cancelModelDownload(
-          CancelModelDownloadRequest.create({ metadata: requestMetadata("cancel-download") }),
-          metadata,
-          callback,
-        ),
-      ),
-    ];
-    const errors = await Promise.all(
-      calls.map(async (call) => call.catch((error: unknown) => error)),
-    );
-    expect(errors.map((error) => detailFrom(error).context)).toEqual([
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_RESPOND_APPROVAL,
-      },
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_SELECT_SESSION_MODEL,
-      },
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_START_MODEL_DOWNLOAD,
-      },
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_CANCEL_MODEL_DOWNLOAD,
-      },
-    ]);
   });
 
   it("cancels the host subscription when the client cancels", async () => {

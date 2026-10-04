@@ -4,6 +4,29 @@ import { CommandErrorCode, CommandErrorDetail, EpochMismatchDetail } from "@lyon
 import type { RuntimeFailure } from "./runtime-host.js";
 
 const DETAILS_KEY = "grpc-status-details-bin";
+const INTERNAL_MESSAGE = "internal daemon error";
+const TRUSTED_STATUSES = new WeakSet<object>();
+
+export function trustedStatus(
+  code: number,
+  message: string,
+  metadata?: Metadata,
+): ServerErrorResponse {
+  const error: ServerErrorResponse = Object.assign(new Error(message), {
+    code,
+    details: message,
+    ...(metadata === undefined ? {} : { metadata }),
+  });
+  TRUSTED_STATUSES.add(error);
+  return error;
+}
+
+export function statusAtBoundary(error: unknown): ServerErrorResponse {
+  if (typeof error === "object" && error !== null && TRUSTED_STATUSES.has(error)) {
+    return error as ServerErrorResponse;
+  }
+  return trustedStatus(status.INTERNAL, INTERNAL_MESSAGE);
+}
 
 export function typedCommandStatus(
   code: number,
@@ -14,7 +37,7 @@ export function typedCommandStatus(
   const metadata = new Metadata();
   const detail = CommandErrorDetail.create({ code: detailCode, context });
   metadata.set(DETAILS_KEY, Buffer.from(CommandErrorDetail.encode(detail).finish()));
-  return Object.assign(new Error(message), { code, details: message, metadata });
+  return trustedStatus(code, message, metadata);
 }
 
 export function epochMismatchStatus(expected: string, actual: string): ServerErrorResponse {

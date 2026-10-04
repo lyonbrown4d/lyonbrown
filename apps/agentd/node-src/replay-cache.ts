@@ -1,7 +1,11 @@
+const REPLAY_CONFLICTS = new WeakSet<object>();
+const REPLAY_CAPACITY_ERRORS = new WeakSet<object>();
+
 export class ReplayConflictError extends Error {
   public override readonly name = "ReplayConflictError";
   public constructor() {
     super("command_id was already used for a different command payload");
+    REPLAY_CONFLICTS.add(this);
   }
 }
 
@@ -9,7 +13,16 @@ export class ReplayCapacityError extends Error {
   public override readonly name = "ReplayCapacityError";
   public constructor() {
     super("command replay capacity is exhausted by in-flight commands");
+    REPLAY_CAPACITY_ERRORS.add(this);
   }
+}
+
+export function isReplayConflict(error: unknown): error is ReplayConflictError {
+  return typeof error === "object" && error !== null && REPLAY_CONFLICTS.has(error);
+}
+
+export function isReplayCapacityError(error: unknown): error is ReplayCapacityError {
+  return typeof error === "object" && error !== null && REPLAY_CAPACITY_ERRORS.has(error);
 }
 
 interface ReplayEntry<T> {
