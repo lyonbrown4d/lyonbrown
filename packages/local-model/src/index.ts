@@ -1,4 +1,4 @@
-export { DEFAULT_LOCAL_MODEL } from "./public-model.js";
+export { DEFAULT_LOCAL_MODEL } from "./public-model.ts";
 export type {
   CancelModelDownloadResult,
   LocalModelAction,
@@ -9,4 +9,4 @@ export type {
   LocalModelService,
   LocalModelStatus,
   StartModelDownloadResult,
-} from "./types.js";
+} from "./types.ts";

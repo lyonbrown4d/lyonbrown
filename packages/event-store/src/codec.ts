@@ -1,6 +1,6 @@
 import { isProxy } from "node:util/types";
 
-import { PayloadValidationError } from "./errors.js";
+import { PayloadValidationError } from "./errors.ts";
 
 export const MAX_EVENT_PAYLOAD_BYTES = 1024 * 1024;
 export const MAX_PAYLOAD_DEPTH = 64;

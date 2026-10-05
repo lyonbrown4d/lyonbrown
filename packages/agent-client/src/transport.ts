@@ -8,10 +8,10 @@ import {
   type RuntimeEvent,
 } from "@lyonbrown/protocol";
 
-import { AgentClientError, clientError } from "./errors.js";
-import { mapEvent } from "./snapshot.js";
-import { mapServiceError } from "./status-error.js";
-import type { CreateAgentClientOptions, RuntimeEventDto } from "./types.js";
+import { AgentClientError, clientError } from "./errors.ts";
+import { mapEvent } from "./snapshot.ts";
+import { mapServiceError } from "./status-error.ts";
+import type { CreateAgentClientOptions, RuntimeEventDto } from "./types.ts";
 
 export interface NormalizedDeadlines {
   readonly unaryMs: number;

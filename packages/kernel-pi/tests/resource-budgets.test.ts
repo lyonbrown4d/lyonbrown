@@ -7,8 +7,8 @@ import {
   type KernelModelStreamEvent,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.js";
-import { KernelRuntimeError } from "../src/errors.js";
+} from "../src/index.ts";
+import { KernelRuntimeError } from "../src/errors.ts";
 
 const baseBudget = {
   maxInputBytes: 1_024,

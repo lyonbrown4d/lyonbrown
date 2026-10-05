@@ -6,8 +6,9 @@
 
 1. 使用 Node.js 24 LTS 与仓库固定的 pnpm，不混用 npm、Yarn 或 Bun。依赖安装必须更新并提交 `pnpm-lock.yaml`，不得把 pnpm store/cache 重定向到仓库内。
 2. TypeScript 使用 ESM 与 `strict` 模式。不得在关键路径使用 `any` 或隐式 `any`；跨包只从公开入口导入。
-3. 统一使用 2 空格缩进，不使用 Tab。提交前运行根目录的格式、lint、类型、测试和构建门禁。
-4. 工具依赖放在 `devDependencies`；版本不得使用 `latest`、`*` 或 `~` 范围。复杂编排脚本放在 `scripts/*.ts`，通过 `tsx` 执行并使用 `zx` 管理子进程。
+3. TypeScript 源文件的相对导入必须使用 `.ts` 扩展名，不得使用 `.js` 指向 TypeScript 源；构建产物扩展名由 TypeScript `rewriteRelativeImportExtensions` 自动改写。
+4. 统一使用 2 空格缩进，不使用 Tab。提交前运行根目录的格式、lint、类型、测试和构建门禁。
+5. 工具依赖放在 `devDependencies`；版本不得使用 `latest`、`*` 或 `~` 范围。复杂编排脚本放在 `scripts/*.ts`，通过 `tsx` 执行并使用 `zx` 管理子进程。
 
 ## 结构与边界
 

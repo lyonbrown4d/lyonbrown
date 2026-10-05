@@ -1,7 +1,7 @@
 import type { AgentRuntimeState } from "@lyonbrown/agent-domain";
 
-import { runtimeError } from "./errors.js";
-import type { RuntimeSnapshotFeed } from "./types.js";
+import { runtimeError } from "./errors.ts";
+import type { RuntimeSnapshotFeed } from "./types.ts";
 
 type PendingRead = (result: IteratorResult<AgentRuntimeState>) => void;
 

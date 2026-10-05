@@ -7,17 +7,17 @@ import type {
   NativeInstallLockAnchor,
   NativeModelStagingFile,
   NativeModelStorageCapability,
-} from "../native-storage.js";
-import { MODEL_DOWNLOAD_URI } from "./catalog.js";
+} from "../native-storage.ts";
+import { MODEL_DOWNLOAD_URI } from "./catalog.ts";
 import type {
   DownloadArtifact,
   DownloadProgress,
   InstallLockLease,
   LocalModelIo,
   ModelPreset,
-} from "./contracts.js";
-import { verifyModelFile } from "./file-verification.js";
-import { DEFAULT_MODEL_IDENTITY } from "./model-identity.js";
+} from "./contracts.ts";
+import { verifyModelFile } from "./file-verification.ts";
+import { DEFAULT_MODEL_IDENTITY } from "./model-identity.ts";
 
 export interface ModelDownloaderApi {
   createModelDownloader(options: {

@@ -1,14 +1,14 @@
 import type Database from "better-sqlite3";
 
-import { decodeEventPayload, encodeEventPayload } from "./codec.js";
+import { decodeEventPayload, encodeEventPayload } from "./codec.ts";
 import {
   EventAlreadyExistsError,
   RevisionConflictError,
   RevisionExhaustedError,
   StorageBusyError,
-} from "./errors.js";
-import type { EventToAppend, StoredEvent } from "./types.js";
-import { MAX_BATCH_PAYLOAD_BYTES, MAX_SQLITE_INTEGER, validateAppend } from "./validation.js";
+} from "./errors.ts";
+import type { EventToAppend, StoredEvent } from "./types.ts";
+import { MAX_BATCH_PAYLOAD_BYTES, MAX_SQLITE_INTEGER, validateAppend } from "./validation.ts";
 
 interface RevisionRow {
   readonly current_revision: bigint;

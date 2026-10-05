@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveScopedDaemonPaths } from "../src/index.js";
-import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.js";
+import { deriveScopedDaemonPaths } from "../src/index.ts";
+import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.ts";
 
 describe("scoped daemon paths", () => {
   it("derives the stable workspace cache layout and runtime scope from one native identity", async () => {

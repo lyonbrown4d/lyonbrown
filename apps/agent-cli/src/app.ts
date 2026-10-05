@@ -1,7 +1,7 @@
 import type { AgentLauncher } from "@lyonbrown/agent-launch";
 
-import { AgentTuiController, createInitialFrame } from "./controller.js";
-import { createPiScreen, type PiScreen } from "./pi-screen.js";
+import { AgentTuiController, createInitialFrame } from "./controller.ts";
+import { createPiScreen, type PiScreen } from "./pi-screen.ts";
 
 export interface RunAgentTuiOptions {
   readonly launcher: AgentLauncher;

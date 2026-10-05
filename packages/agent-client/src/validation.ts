@@ -1,6 +1,6 @@
 import { validateStringId, validateText } from "@lyonbrown/protocol";
 
-import { clientError } from "./errors.js";
+import { clientError } from "./errors.ts";
 
 export function requireId(field: string, value: unknown): string {
   const result = validateStringId(value);

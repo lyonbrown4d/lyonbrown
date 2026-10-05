@@ -1,4 +1,4 @@
-import { domainError } from "./errors.js";
+import { domainError } from "./errors.ts";
 
 export const MAX_AGENT_RUNTIME_ASSISTANT_BYTES = 1024 * 1024;
 

@@ -9,7 +9,7 @@ import {
 import { RuntimePhase } from "@lyonbrown/protocol";
 import { expect, test } from "vitest";
 
-import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.js";
+import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.ts";
 
 test("StartTurn persists domain events before the adapter streams the projected snapshot", async () => {
   const store = openEventStore({ testOnlyMemory: true });

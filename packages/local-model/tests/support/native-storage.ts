@@ -8,7 +8,7 @@ import type {
   NativeModelIdentity,
   NativeModelStagingFile,
   NativeModelStorageCapability,
-} from "../../src/native-storage.js";
+} from "../../src/native-storage.ts";
 
 export class TestNativeModelStorage implements NativeModelStorageCapability {
   readonly identities: NativeModelIdentity[] = [];

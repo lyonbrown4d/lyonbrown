@@ -1,13 +1,13 @@
-import { kernelError } from "./errors.js";
-import { inspectOwnDataProperties } from "./inspection.js";
+import { kernelError } from "./errors.ts";
+import { inspectOwnDataProperties } from "./inspection.ts";
 import {
   boundedSummary,
   sanitizeJson,
   sanitizeText,
   utf8Bytes,
   type SanitizationLimits,
-} from "./sanitization.js";
-import type { KernelJsonValue } from "./types.js";
+} from "./sanitization.ts";
+import type { KernelJsonValue } from "./types.ts";
 
 export interface SecretRedactorOptions {
   readonly maxSecretCount: number;

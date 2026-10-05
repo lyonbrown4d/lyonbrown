@@ -1,6 +1,6 @@
 import { getLlama } from "node-llama-cpp";
 
-import type { LlamaEngineAdapter, LlamaLease } from "./contracts.js";
+import type { LlamaEngineAdapter, LlamaLease } from "./contracts.ts";
 
 interface LoadedModel {
   dispose(): Promise<void>;

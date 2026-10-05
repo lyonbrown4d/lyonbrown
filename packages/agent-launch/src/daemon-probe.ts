@@ -1,14 +1,14 @@
 import { AgentClientError, type AgentClient } from "@lyonbrown/agent-client";
 import type { ScopeIdentity } from "@lyonbrown/local-control-plane";
-import { isAgentLaunchError, launchError } from "./errors.js";
-import type { StageRunner } from "./stage-runner.js";
-import { type TimeoutCode } from "./stage-runner.js";
+import { isAgentLaunchError, launchError } from "./errors.ts";
+import type { StageRunner } from "./stage-runner.ts";
+import { type TimeoutCode } from "./stage-runner.ts";
 import type {
   AgentLaunchConnection,
   CreateAgentLauncherOptions,
   DiscoveredDaemonCapability,
   DiscoveryContext,
-} from "./types.js";
+} from "./types.ts";
 
 const MAX_EPOCH_TRANSITIONS = 8;
 

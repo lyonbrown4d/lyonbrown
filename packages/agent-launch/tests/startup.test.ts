@@ -1,7 +1,7 @@
 import { deriveScope } from "@lyonbrown/local-control-plane";
 import { describe, expect, test } from "vitest";
-import { AgentLaunchError } from "../src/errors.js";
-import { createAgentLauncher } from "../src/launcher.js";
+import { AgentLaunchError } from "../src/errors.ts";
+import { createAgentLauncher } from "../src/launcher.ts";
 import {
   CONFIG,
   WORKSPACE,
@@ -12,7 +12,7 @@ import {
   FakeSpawner,
   ManualClock,
   nativeProvider,
-} from "./support/fixtures.js";
+} from "./support/fixtures.ts";
 
 async function setup(startupMs = 100) {
   const provider = nativeProvider();

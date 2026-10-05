@@ -1,6 +1,6 @@
-import { api, pointerAddress, type Handle } from "./api.js";
-import { ACCESS, ATTRIBUTES, CREATION, ERRORS, FLAGS, SHARE } from "./constants.js";
-import { NativeFailure } from "../result.js";
+import { api, pointerAddress, type Handle } from "./api.ts";
+import { ACCESS, ATTRIBUTES, CREATION, ERRORS, FLAGS, SHARE } from "./constants.ts";
+import { NativeFailure } from "../result.ts";
 
 const INVALID_HANDLE = (1n << BigInt(process.arch === "ia32" ? 32 : 64)) - 1n;
 

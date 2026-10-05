@@ -1,4 +1,11 @@
-export const CI_GATES = ["preflight", "lint", "typecheck", "test", "build"] as const;
+export const CI_GATES = [
+  "preflight",
+  "scripts:verify",
+  "lint",
+  "typecheck",
+  "test",
+  "build",
+] as const;
 
 export type CiGate = (typeof CI_GATES)[number];
 export type GateRunner = (gate: CiGate) => Promise<void>;

@@ -6,7 +6,7 @@ import {
   type KernelModelAdapter,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 describe("secret pattern budgets", () => {
   test("fails with resource exhaustion before tool execution", async () => {

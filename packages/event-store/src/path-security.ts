@@ -1,8 +1,8 @@
 import { existsSync, lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { isAbsolute, join, normalize, parse, resolve, sep } from "node:path";
 
-import { InvalidStoreOptionsError, PathSecurityError } from "./errors.js";
-import type { PathSecurityVerifier } from "./types.js";
+import { InvalidStoreOptionsError, PathSecurityError } from "./errors.ts";
+import type { PathSecurityVerifier } from "./types.ts";
 
 const DATABASE_FILENAME = "lyonbrown.sqlite3";
 const GROUP_AND_OTHER_PERMISSIONS = 0o077;

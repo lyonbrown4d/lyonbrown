@@ -1,5 +1,5 @@
-import { launchError } from "./errors.js";
-import type { AgentLaunchDeadlines, CreateAgentLauncherOptions } from "./types.js";
+import { launchError } from "./errors.ts";
+import type { AgentLaunchDeadlines, CreateAgentLauncherOptions } from "./types.ts";
 
 const DEFAULT_STARTUP_MS = 30_000;
 const DEFAULT_POLL_INTERVAL_MS = 25;

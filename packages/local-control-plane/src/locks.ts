@@ -1,5 +1,5 @@
-import { invokePlatform, type KernelFileLock } from "./platform-security.js";
-import { resolveRunDirectoryHandle, type SecureRunDirectory } from "./run-directory.js";
+import { invokePlatform, type KernelFileLock } from "./platform-security.ts";
+import { resolveRunDirectoryHandle, type SecureRunDirectory } from "./run-directory.ts";
 
 export interface DaemonLease {
   readonly kind: "startup" | "lifetime";

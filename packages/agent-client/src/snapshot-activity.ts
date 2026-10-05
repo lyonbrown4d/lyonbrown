@@ -15,8 +15,8 @@ import {
   stopReason,
   toolState,
   turnStatus,
-} from "./snapshot-scalars.js";
-import { mapRouteSummary } from "./snapshot-model.js";
+} from "./snapshot-scalars.ts";
+import { mapRouteSummary } from "./snapshot-model.ts";
 import type {
   ActivitySnapshotDto,
   ApprovalSnapshotDto,
@@ -24,8 +24,8 @@ import type {
   ToolActivityDto,
   ToolPreviewDto,
   TurnSnapshotDto,
-} from "./types.js";
-import { protocolId, protocolText, requireJson, requiredField } from "./validation.js";
+} from "./types.ts";
+import { protocolId, protocolText, requireJson, requiredField } from "./validation.ts";
 
 export function mapTurn(value: TurnSnapshot): TurnSnapshotDto {
   return {

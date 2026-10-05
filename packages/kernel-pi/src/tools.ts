@@ -3,9 +3,9 @@ import type { JsonValue } from "@earendil-works/pi-ai";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
-import type { BudgetTracker } from "./budget.js";
-import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.js";
-import type { SecretRedactor } from "./redaction.js";
+import type { BudgetTracker } from "./budget.ts";
+import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.ts";
+import type { SecretRedactor } from "./redaction.ts";
 import {
   assertByteLimit,
   limitsFromBudget,
@@ -13,7 +13,7 @@ import {
   sanitizeJson,
   sanitizeText,
   type SanitizationLimits,
-} from "./sanitization.js";
+} from "./sanitization.ts";
 import {
   abortCode,
   createDeadlineSignal,
@@ -26,13 +26,13 @@ import {
   toExternalToolError,
   toSafePreExecutionError,
   toSafeToolError,
-} from "./tool-support.js";
+} from "./tool-support.ts";
 import type {
   KernelEvent,
   KernelJsonValue,
   KernelToolDefinition,
   PiKernelSessionOptions,
-} from "./types.js";
+} from "./types.ts";
 
 type EmitEvent = (event: KernelEvent) => Promise<void>;
 

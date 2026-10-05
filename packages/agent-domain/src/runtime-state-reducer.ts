@@ -1,7 +1,7 @@
-import { domainError } from "./errors.js";
-import type { Revision } from "./revision.js";
-import type { AgentRuntimeEvent, RuntimeUsage } from "./runtime-events.js";
-import { checkedAssistantBytes, checkedUsageAdd } from "./runtime-state-budgets.js";
+import { domainError } from "./errors.ts";
+import type { Revision } from "./revision.ts";
+import type { AgentRuntimeEvent, RuntimeUsage } from "./runtime-events.ts";
+import { checkedAssistantBytes, checkedUsageAdd } from "./runtime-state-budgets.ts";
 import {
   addTool,
   appendActivity,
@@ -12,9 +12,9 @@ import {
   updateLastActivity,
   updateLastTurn,
   updateTool,
-} from "./runtime-state-mutations.js";
-import type { AgentRuntimeState } from "./runtime-state-types.js";
-import { freezeFailure, freezeState } from "./runtime-state-types.js";
+} from "./runtime-state-mutations.ts";
+import type { AgentRuntimeState } from "./runtime-state-types.ts";
+import { freezeFailure, freezeState } from "./runtime-state-types.ts";
 
 export function applyRuntimeEvent(
   state: AgentRuntimeState,

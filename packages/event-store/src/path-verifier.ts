@@ -1,3 +1,3 @@
-export { PathSecurityError } from "./errors.js";
-export { createPortablePathVerifier } from "./path-security.js";
-export type { PathSecurityVerifier } from "./types.js";
+export { PathSecurityError } from "./errors.ts";
+export { createPortablePathVerifier } from "./path-security.ts";
+export type { PathSecurityVerifier } from "./types.ts";

@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../src/windows/api.js";
-import { SECURITY } from "../src/windows/constants.js";
+import { api } from "../src/windows/api.ts";
+import { SECURITY } from "../src/windows/constants.ts";
 import {
   currentUser,
   validateAccessAce,
   verifyPrivateObject,
   withPrivateSecurity,
-} from "../src/windows/security.js";
+} from "../src/windows/security.ts";
 
 const user = { sid: new Uint8Array([1, 2, 3]), sidString: "S-1-5-18" };
 

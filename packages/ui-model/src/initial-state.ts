@@ -1,4 +1,4 @@
-import type { UiModelState } from "./types.js";
+import type { UiModelState } from "./types.ts";
 
 export const DEFAULT_LOCALE = "en-US" as const;
 export const DEFAULT_THEME_ID = "hearth-teal" as const;

@@ -2,13 +2,13 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test, vi } from "vitest";
 
-import { createAgentRuntime } from "../src/index.js";
+import { createAgentRuntime } from "../src/index.ts";
 import {
   CapturingKernelFactory,
   eventTypes,
   runtimeEventStore,
   sequentialEventIds,
-} from "./support.js";
+} from "./support.ts";
 
 describe("agent runtime lifecycle", () => {
   test("uses secure default event identifiers and timestamps", async () => {

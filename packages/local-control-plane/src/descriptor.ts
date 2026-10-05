@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { TextDecoder } from "node:util";
 import { z } from "zod";
-import { validateLoopbackEndpoint } from "./endpoint.js";
-import { ControlPlaneError, controlPlaneError } from "./errors.js";
-import { rejectDuplicateTopLevelKeys } from "./json-keys.js";
-import { SecretToken } from "./token.js";
+import { validateLoopbackEndpoint } from "./endpoint.ts";
+import { ControlPlaneError, controlPlaneError } from "./errors.ts";
+import { rejectDuplicateTopLevelKeys } from "./json-keys.ts";
+import { SecretToken } from "./token.ts";
 
 export const MAX_DISCOVERY_BYTES = 4 * 1024;
 export const DISCOVERY_SCHEMA_VERSION = 1;

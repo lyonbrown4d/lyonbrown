@@ -20,9 +20,9 @@ import type {
   DiscoveryContext,
   Sleeper,
   StartupLease,
-} from "../../src/types.js";
+} from "../../src/types.ts";
 
-export { FakeSpawner } from "./fake-spawner.js";
+export { FakeSpawner } from "./fake-spawner.ts";
 
 export const WORKSPACE = process.platform === "win32" ? "C:\\workspace" : "/workspace";
 export const CONFIG = "runtime-config-v1";

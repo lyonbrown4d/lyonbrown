@@ -7,8 +7,8 @@ import {
   REPLAY_FINGERPRINT_MAX_ENCODED_BYTES,
   REPLAY_FINGERPRINT_MAX_NODES,
   canonicalEncode,
-} from "../src/index.js";
-import { captureError } from "./test-error.js";
+} from "../src/index.ts";
+import { captureError } from "./test-error.ts";
 
 function nestedArray(depth: number): unknown {
   let value: unknown = null;

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { NativeModelIdentity } from "@lyonbrown/local-model/composition";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createNativeModelStorageCapability } from "../src/index.js";
+import { createNativeModelStorageCapability } from "../src/index.ts";
 
 const windows = process.platform === "win32";
 const roots: string[] = [];

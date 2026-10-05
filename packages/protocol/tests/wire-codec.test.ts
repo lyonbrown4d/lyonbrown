@@ -8,7 +8,7 @@ import {
   ModelSelection,
   ModelSetupSnapshot,
   RuntimeEvent,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 describe("generated wire contracts", () => {
   it("round-trips uint64 values beyond Number.MAX_SAFE_INTEGER as bigint", () => {

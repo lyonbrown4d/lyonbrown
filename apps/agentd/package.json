@@ -24,6 +24,7 @@
   "dependencies": {
     "@grpc/grpc-js": "1.14.5",
     "@lyonbrown/agent-runtime": "workspace:*",
+    "@lyonbrown/control-plane-native": "workspace:*",
     "@lyonbrown/local-control-plane": "workspace:*",
     "@lyonbrown/protocol": "workspace:*"
   },

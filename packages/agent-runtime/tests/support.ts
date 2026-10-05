@@ -5,7 +5,7 @@ import {
   createRuntimeEventStorePort,
   type RuntimeEventStorePort,
   type RuntimeEventStoreSource,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 export class CapturingKernelFactory {
   sink: KernelEventSink | undefined;

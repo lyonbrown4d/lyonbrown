@@ -1,6 +1,6 @@
-import { DEFAULT_LOCAL_MODEL } from "../public-model.js";
-import type { LocalModelStatus } from "../types.js";
-import { DEFAULT_PRESET } from "./catalog.js";
+import { DEFAULT_LOCAL_MODEL } from "../public-model.ts";
+import type { LocalModelStatus } from "../types.ts";
+import { DEFAULT_PRESET } from "./catalog.ts";
 
 export const statusFor = (
   phase: LocalModelStatus["phase"],

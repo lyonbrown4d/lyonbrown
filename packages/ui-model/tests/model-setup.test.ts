@@ -10,7 +10,7 @@ import {
   type ModelSetupPhase,
   type ModelSetupState,
   type UiModelState,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 function setupFor(phase: ModelSetupPhase): ModelSetupState {
   if (phase === "Required" || phase === "Ready") {

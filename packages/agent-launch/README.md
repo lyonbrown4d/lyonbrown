@@ -7,6 +7,23 @@ embedded fallback.
 The controlled `@lyonbrown/agent-launch/composition` entry is only for trusted client composition
 roots. It receives the native control-plane capability plus consumer-owned discovery, startup-lease,
 process, clock, sleep, and authenticated client adapters.
+`createProductionAgentLauncher` supplies the standard adapters: it derives the run-directory path
+and delegates secure creation and opening entirely to the native provider, uses the native startup
+lock, retains discovery credentials in an opaque package-private capability, creates the
+authenticated gRPC client, and launches `agentd` with Node's argument-array `spawn` API
+(`shell: false`). The native provider remains an application composition dependency and is never
+selected implicitly by this package.
+
+The configured daemon command receives the following appended arguments after its fixed base
+arguments:
+
+```text
+--workspace <canonical-workspace>
+--effective-config-fingerprint <fingerprint>
+--scope-id <derived-scope-id>
+```
+
+The daemon must independently derive and verify the supplied scope before publishing discovery.
 Discovery returns an opaque capability whose implementation privately retains connection material.
 The exported client entry contains only connection input/result types and safe launch errors; it
 does not expose composition ports or construction details.

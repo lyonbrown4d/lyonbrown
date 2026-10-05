@@ -31,7 +31,7 @@ import {
   stopReason,
   toolState,
   turnStatus,
-} from "../src/snapshot-scalars.js";
+} from "../src/snapshot-scalars.ts";
 
 describe("snapshot semantic enum mapping", () => {
   it.each([

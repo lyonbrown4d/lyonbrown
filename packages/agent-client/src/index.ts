@@ -1,10 +1,10 @@
-export { createAgentClient } from "./factory.js";
-export { AgentClientError } from "./errors.js";
+export { createAgentClient } from "./factory.ts";
+export { AgentClientError } from "./errors.ts";
 export type {
   AgentClientErrorCode,
   AgentClientErrorDetails,
   AgentClientErrorKind,
-} from "./errors.js";
+} from "./errors.ts";
 export type {
   ActivitySnapshotDto,
   AgentClient,
@@ -38,4 +38,4 @@ export type {
   ToolPreviewDto,
   ToolResultDto,
   TurnSnapshotDto,
-} from "./types.js";
+} from "./types.ts";

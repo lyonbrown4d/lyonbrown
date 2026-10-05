@@ -1,4 +1,4 @@
-import { ControlPlaneError, controlPlaneError, type ControlPlaneOperation } from "./errors.js";
+import { ControlPlaneError, controlPlaneError, type ControlPlaneOperation } from "./errors.ts";
 
 export type PlatformFailureCode =
   | "access_denied"

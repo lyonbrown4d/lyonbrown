@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { SpawnQuarantine } from "../src/spawn-quarantine.js";
-import { StageRunner } from "../src/stage-runner.js";
-import type { SpawnAttempt, StartupLease } from "../src/types.js";
-import { AdvancingSleeper, ManualClock } from "./support/fixtures.js";
+import { SpawnQuarantine } from "../src/spawn-quarantine.ts";
+import { StageRunner } from "../src/stage-runner.ts";
+import type { SpawnAttempt, StartupLease } from "../src/types.ts";
+import { AdvancingSleeper, ManualClock } from "./support/fixtures.ts";
 
 function deferred<T>(): {
   readonly promise: Promise<T>;

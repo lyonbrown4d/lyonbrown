@@ -1,5 +1,5 @@
-import { kernelError, type KernelRuntimeError } from "./errors.js";
-import type { KernelEvent, KernelEventListener } from "./types.js";
+import { kernelError, type KernelRuntimeError } from "./errors.ts";
+import type { KernelEvent, KernelEventListener } from "./types.ts";
 
 export interface ListenerDispatcherOptions {
   readonly maxPendingEvents: number;

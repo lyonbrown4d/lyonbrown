@@ -5,7 +5,7 @@ import {
   PayloadValidationError,
   encodeEventPayload,
   openEventStore,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 describe("event-store input budgets", () => {
   it.each([

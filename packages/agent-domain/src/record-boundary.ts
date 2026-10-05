@@ -1,6 +1,6 @@
 import { types as nodeTypes } from "node:util";
 
-import { domainError } from "./errors.js";
+import { domainError } from "./errors.ts";
 
 const DANGEROUS_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 

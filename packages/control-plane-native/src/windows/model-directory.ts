@@ -1,17 +1,17 @@
 import { win32 } from "node:path";
 
-import { api } from "./api.js";
-import { ACCESS, CREATION, ERRORS, FLAGS, SHARE } from "./constants.js";
+import { api } from "./api.ts";
+import { ACCESS, CREATION, ERRORS, FLAGS, SHARE } from "./constants.ts";
 import {
   createFile,
   failureForLastError,
   openDirectory,
   validateObjectType,
   type OwnedHandle,
-} from "./handles.js";
-import { canonicalPath, fileIdentity } from "./identity.js";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.js";
-import { NativeFailure } from "../result.js";
+} from "./handles.ts";
+import { canonicalPath, fileIdentity } from "./identity.ts";
+import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.ts";
+import { NativeFailure } from "../result.ts";
 
 function wellFormed(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {

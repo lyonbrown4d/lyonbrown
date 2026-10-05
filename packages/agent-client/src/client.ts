@@ -16,11 +16,11 @@ import {
   type RuntimeSnapshot,
 } from "@lyonbrown/protocol";
 
-import { mapCommand, type WireCommand } from "./command.js";
-import { clientError } from "./errors.js";
-import { mapHandshake } from "./handshake.js";
-import { mapSnapshot } from "./snapshot.js";
-import { isRetryableTransportError } from "./status-error.js";
+import { mapCommand, type WireCommand } from "./command.ts";
+import { clientError } from "./errors.ts";
+import { mapHandshake } from "./handshake.ts";
+import { mapSnapshot } from "./snapshot.ts";
+import { isRetryableTransportError } from "./status-error.ts";
 import {
   TransportFailure,
   createTransport,
@@ -31,8 +31,8 @@ import {
   staleEpoch,
   type NormalizedDeadlines,
   type TransportState,
-} from "./transport.js";
-import { publicUnaryCall, unaryCall, type CapturedTransport } from "./unary.js";
+} from "./transport.ts";
+import { publicUnaryCall, unaryCall, type CapturedTransport } from "./unary.ts";
 import type {
   AgentClient,
   AgentCommand,
@@ -44,8 +44,8 @@ import type {
   RuntimeEventDto,
   RuntimeSnapshotDto,
   SubscribeEventsInput,
-} from "./types.js";
-import { requireId, requireNonNegativeRevision } from "./validation.js";
+} from "./types.ts";
+import { requireId, requireNonNegativeRevision } from "./validation.ts";
 
 export class DefaultAgentClient implements AgentClient {
   readonly #clientInstanceId: string;

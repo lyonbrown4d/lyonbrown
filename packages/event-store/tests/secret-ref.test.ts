@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PayloadValidationError, encodeEventPayload } from "../src/index.js";
+import { PayloadValidationError, encodeEventPayload } from "../src/index.ts";
 
 describe("SecretRef persistence boundary", () => {
   it.each([

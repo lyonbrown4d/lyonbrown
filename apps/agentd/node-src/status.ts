@@ -1,7 +1,7 @@
 import { Metadata, status, type ServerErrorResponse } from "@grpc/grpc-js";
 import type { UnsupportedCommand } from "@lyonbrown/protocol";
 import { CommandErrorCode, CommandErrorDetail, EpochMismatchDetail } from "@lyonbrown/protocol";
-import type { RuntimeFailure } from "./runtime-host.js";
+import type { RuntimeFailure } from "./runtime-host.ts";
 
 const DETAILS_KEY = "grpc-status-details-bin";
 const INTERNAL_MESSAGE = "internal daemon error";

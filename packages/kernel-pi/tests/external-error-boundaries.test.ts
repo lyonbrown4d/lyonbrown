@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { KernelRuntimeError, kernelError, toPublicKernelError } from "../src/errors.js";
+import { KernelRuntimeError, kernelError, toPublicKernelError } from "../src/errors.ts";
 import {
   createPiKernelSession,
   type KernelEvent,
@@ -8,7 +8,7 @@ import {
   type KernelModelStreamEvent,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const budget = {
   maxInputBytes: 1_024,

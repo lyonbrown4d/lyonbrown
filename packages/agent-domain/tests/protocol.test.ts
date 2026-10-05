@@ -9,8 +9,8 @@ import {
   createCommandReceipt,
   validateCommandMetadata,
   validateCommandReceipt,
-} from "../src/index.js";
-import { captureError } from "./test-error.js";
+} from "../src/index.ts";
+import { captureError } from "./test-error.ts";
 
 describe("command contracts", () => {
   const commandId = asCommandId("command-01");

@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { DomainError, domainError, type DomainErrorCode } from "../src/index.js";
+import { DomainError, domainError, type DomainErrorCode } from "../src/index.ts";
 
 describe("typed domain errors", () => {
   it("supports every transport-independent error code", () => {

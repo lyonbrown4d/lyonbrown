@@ -8,15 +8,15 @@ import type {
   NativeModelStorageCapability,
 } from "@lyonbrown/local-model/composition";
 
-import { fileIdentity } from "./identity.js";
-import type { OwnedHandle } from "./handles.js";
-import { WindowsInstallLockAnchor, WindowsModelStagingFile } from "./model-artifacts.js";
+import { fileIdentity } from "./identity.ts";
+import type { OwnedHandle } from "./handles.ts";
+import { WindowsInstallLockAnchor, WindowsModelStagingFile } from "./model-artifacts.ts";
 import {
   createPrivateChildDirectory,
   openModelsDirectory,
   validateModelsDirectory,
   type ModelDirectoryLease,
-} from "./model-directory.js";
+} from "./model-directory.ts";
 import {
   assertSameFile,
   createPrivateModelFile,
@@ -25,8 +25,8 @@ import {
   openInstalledModel,
   openOrCreatePrivateLockFile,
   type SharedFileLock,
-} from "./model-files.js";
-import { assertModelIdentity, assertOperationId, identityKey } from "./model-identity.js";
+} from "./model-files.ts";
+import { assertModelIdentity, assertOperationId, identityKey } from "./model-identity.ts";
 import {
   child,
   closeQuietly,
@@ -35,8 +35,8 @@ import {
   releaseQuietly,
   storageFailure,
   throwIfAborted,
-} from "./model-storage-shared.js";
-import { NativeFailure } from "../result.js";
+} from "./model-storage-shared.ts";
+import { NativeFailure } from "../result.ts";
 
 class ModelStorageCallbackFailure extends Error {
   public constructor(readonly callbackError: unknown) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PayloadValidationError, decodeEventPayload, encodeEventPayload } from "../src/index.js";
+import { PayloadValidationError, decodeEventPayload, encodeEventPayload } from "../src/index.ts";
 
 describe("event payload codec", () => {
   it("round-trips safe JSON without inheriting attacker-controlled prototypes", () => {

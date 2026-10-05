@@ -1,3 +1,3 @@
-import { generate, generatedOutputBase } from "./generation.js";
+import { generate, generatedOutputBase } from "./generation.ts";
 
 await generate(generatedOutputBase);

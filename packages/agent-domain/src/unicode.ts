@@ -1,4 +1,4 @@
-import { domainError } from "./errors.js";
+import { domainError } from "./errors.ts";
 
 interface WellFormedStringPrototype {
   isWellFormed(this: string): boolean;

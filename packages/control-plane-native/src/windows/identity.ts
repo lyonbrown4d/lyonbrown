@@ -1,8 +1,8 @@
 import type { ResolvedWorkspaceIdentity } from "@lyonbrown/local-control-plane/native-adapter";
-import { api } from "./api.js";
-import { FILE_INFO } from "./constants.js";
-import { failureForLastError, openWorkspaceDirectory, validateObjectType } from "./handles.js";
-import type { OwnedHandle } from "./handles.js";
+import { api } from "./api.ts";
+import { FILE_INFO } from "./constants.ts";
+import { failureForLastError, openWorkspaceDirectory, validateObjectType } from "./handles.ts";
+import type { OwnedHandle } from "./handles.ts";
 
 export function canonicalPath(handle: OwnedHandle): string {
   const required = Number(api.GetFinalPathNameByHandleW(handle.borrow(), null, 0, 0));

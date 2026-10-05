@@ -1,4 +1,4 @@
-import { CorruptEventStoreError } from "./errors.js";
+import { CorruptEventStoreError } from "./errors.ts";
 
 export const SCHEMA_VERSION = 2;
 

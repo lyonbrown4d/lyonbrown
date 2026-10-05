@@ -1,5 +1,5 @@
-export { DEFAULT_LOCALE, DEFAULT_THEME_ID, createInitialUiModelState } from "./initial-state.js";
-export { reduceUiModel } from "./reducer.js";
+export { DEFAULT_LOCALE, DEFAULT_THEME_ID, createInitialUiModelState } from "./initial-state.ts";
+export { reduceUiModel } from "./reducer.ts";
 export {
   getApprovalDisposition,
   getChatSubmitAvailability,
@@ -9,8 +9,8 @@ export {
   getModelSetupCancellation,
   getSendableApprovalDenyIntent,
   getSendableModelDownloadIntent,
-} from "./selectors.js";
-export { THEME_IDS } from "./types.js";
+} from "./selectors.ts";
+export { THEME_IDS } from "./types.ts";
 export type {
   ActivityItemDto,
   ActivitySelection,
@@ -39,4 +39,4 @@ export type {
   ThemeId,
   UiModelAction,
   UiModelState,
-} from "./types.js";
+} from "./types.ts";

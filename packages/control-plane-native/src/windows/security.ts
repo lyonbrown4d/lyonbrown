@@ -7,10 +7,10 @@ import {
   SECURITY_ATTRIBUTES,
   type Handle,
   type Pointer,
-} from "./api.js";
-import { SECURITY } from "./constants.js";
-import { failureForLastError, OwnedHandle } from "./handles.js";
-import { NativeFailure } from "../result.js";
+} from "./api.ts";
+import { SECURITY } from "./constants.ts";
+import { failureForLastError, OwnedHandle } from "./handles.ts";
+import { NativeFailure } from "../result.ts";
 
 interface CurrentUser {
   readonly sid: Uint8Array;

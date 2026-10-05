@@ -10,8 +10,8 @@ import {
 } from "@lyonbrown/event-store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createNativeEventStorePathVerifier } from "../src/index.js";
-import { api, type Handle } from "../src/windows/api.js";
+import { createNativeEventStorePathVerifier } from "../src/index.ts";
+import { api, type Handle } from "../src/windows/api.ts";
 
 const temporaryDirectories: string[] = [];
 const databaseClose = Object.getOwnPropertyDescriptor(Database.prototype, "close")?.value as (

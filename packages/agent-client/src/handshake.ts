@@ -1,9 +1,9 @@
 import type { EpochBinding } from "@lyonbrown/local-control-plane";
 import { PROTOCOL_VERSION, type HandshakeResponse } from "@lyonbrown/protocol";
 
-import { clientError } from "./errors.js";
-import type { HandshakeDto } from "./types.js";
-import { protocolId } from "./validation.js";
+import { clientError } from "./errors.ts";
+import type { HandshakeDto } from "./types.ts";
+import { protocolId } from "./validation.ts";
 
 export function mapHandshake(response: HandshakeResponse, binding: EpochBinding): HandshakeDto {
   if (response.protocolVersion !== PROTOCOL_VERSION) {

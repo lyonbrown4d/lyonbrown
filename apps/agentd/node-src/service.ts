@@ -29,23 +29,23 @@ import {
   type RequestMetadata,
   type RuntimeSnapshot,
 } from "@lyonbrown/protocol";
-import { commandFingerprint } from "./fingerprint.js";
-import { ReplayCache, isReplayCapacityError, isReplayConflict } from "./replay-cache.js";
-import type { RuntimeCommand, RuntimeHost } from "./runtime-host.js";
+import { commandFingerprint } from "./fingerprint.ts";
+import { ReplayCache, isReplayCapacityError, isReplayConflict } from "./replay-cache.ts";
+import type { RuntimeCommand, RuntimeHost } from "./runtime-host.ts";
 import {
   runtimeFailureStatus,
   statusAtBoundary,
   trustedStatus,
   unsupportedStatus,
-} from "./status.js";
-import { pumpSnapshotStream } from "./stream.js";
+} from "./status.ts";
+import { pumpSnapshotStream } from "./stream.ts";
 import {
   requireBoundedText,
   requireEpoch,
   requireMetadata,
   requireText,
   validateServerIdentity,
-} from "./validation.js";
+} from "./validation.ts";
 
 const DEFAULT_REPLAY_CAPACITY = 1_024;
 const SERVER_VERSION = "0.0.0";

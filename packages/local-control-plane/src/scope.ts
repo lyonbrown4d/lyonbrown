@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { isAbsolute, win32 } from "node:path";
-import { controlPlaneError } from "./errors.js";
+import { controlPlaneError } from "./errors.ts";
 import {
   invokePlatform,
   resolveNativeControlPlaneProvider,
   type NativeControlPlaneProvider,
   type WorkspaceIdentity,
-} from "./platform-security.js";
-import { isWellFormedText } from "./well-formed.js";
+} from "./platform-security.ts";
+import { isWellFormedText } from "./well-formed.ts";
 
 export interface ScopeIdentity {
   readonly canonicalWorkspace: string;

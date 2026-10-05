@@ -11,8 +11,8 @@ import {
   openEventStore,
   type EventAlreadyExistsError,
   type PathSecurityVerifier,
-} from "../src/index.js";
-import { prepareDatabasePath } from "../src/path-security.js";
+} from "../src/index.ts";
+import { prepareDatabasePath } from "../src/path-security.ts";
 
 const allow: PathSecurityVerifier = {
   verifyRequestedDataDirectory: () => undefined,

@@ -1,17 +1,17 @@
-import type { Revision } from "./revision.js";
+import type { Revision } from "./revision.ts";
 import type {
   AgentRuntimeState,
   RuntimeActivityState,
   RuntimeToolState,
   RuntimeTurnState,
-} from "./runtime-state-types.js";
+} from "./runtime-state-types.ts";
 import {
   ZERO_RUNTIME_USAGE,
   freezeActivity,
   freezeState,
   freezeTool,
   freezeTurn,
-} from "./runtime-state-types.js";
+} from "./runtime-state-types.ts";
 
 type StateChanges = Partial<
   Pick<AgentRuntimeState, "assistantTextBytes" | "outcomeUnknown" | "phase" | "lastError" | "usage">

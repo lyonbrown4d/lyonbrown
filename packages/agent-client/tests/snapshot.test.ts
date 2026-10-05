@@ -17,7 +17,7 @@ import {
 } from "@lyonbrown/protocol";
 import { describe, expect, it } from "vitest";
 
-import { mapSnapshot } from "../src/snapshot.js";
+import { mapSnapshot } from "../src/snapshot.ts";
 
 function fullSnapshot() {
   return RuntimeSnapshot.fromPartial({

@@ -7,7 +7,7 @@ import {
   type KernelModelStreamEvent,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const baseBudget = {
   maxInputBytes: 1_024,

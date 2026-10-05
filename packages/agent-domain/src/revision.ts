@@ -1,4 +1,4 @@
-import { domainError } from "./errors.js";
+import { domainError } from "./errors.ts";
 
 declare const revisionBrand: unique symbol;
 

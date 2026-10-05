@@ -1,4 +1,4 @@
-import type { RecoveredToolCall, RecoveredToolCallStatus, StoredEvent } from "./types.js";
+import type { RecoveredToolCall, RecoveredToolCallStatus, StoredEvent } from "./types.ts";
 
 interface MutableRecoveredToolCall {
   toolCallId: string;

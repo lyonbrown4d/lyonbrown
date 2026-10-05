@@ -1,8 +1,8 @@
 import type { Terminal } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 
-import { createPiScreen } from "../src/pi-screen.js";
-import { createInitialFrame } from "../src/controller.js";
+import { createPiScreen } from "../src/pi-screen.ts";
+import { createInitialFrame } from "../src/controller.ts";
 
 describe("Pi TUI screen", () => {
   it("uses TuiMainScreen focus propagation and preserves Chinese IME input", async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseInput } from "../src/commands.js";
+import { parseInput } from "../src/commands.ts";
 
 describe("TUI commands", () => {
   it("keeps ordinary multilingual text as chat input", () => {

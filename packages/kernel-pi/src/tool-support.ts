@@ -1,14 +1,14 @@
-import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.js";
-import { inspectOwnDataProperties } from "./inspection.js";
-import type { SecretRedactor } from "./redaction.js";
+import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.ts";
+import { inspectOwnDataProperties } from "./inspection.ts";
+import type { SecretRedactor } from "./redaction.ts";
 import {
   assertByteLimit,
   isSecretReference,
   jsonStringBudgetBytes,
   utf8Bytes,
   type SanitizationLimits,
-} from "./sanitization.js";
-import type { KernelJsonValue, KernelToolDefinition } from "./types.js";
+} from "./sanitization.ts";
+import type { KernelJsonValue, KernelToolDefinition } from "./types.ts";
 
 export function replaceSecretRefsForValidation(
   value: KernelJsonValue,

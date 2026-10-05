@@ -1,4 +1,4 @@
-import { controlPlaneError } from "./errors.js";
+import { controlPlaneError } from "./errors.ts";
 
 function skipWhitespace(text: string, start: number): number {
   let index = start;

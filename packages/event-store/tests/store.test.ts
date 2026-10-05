@@ -14,7 +14,7 @@ import {
   openEventStore,
   type PathSecurityVerifier,
   type RevisionConflictError,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const allowTestPath: PathSecurityVerifier = {
   verifyRequestedDataDirectory: () => undefined,

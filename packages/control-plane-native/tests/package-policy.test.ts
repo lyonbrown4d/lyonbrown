@@ -52,7 +52,7 @@ describe("native package policy", () => {
   });
 
   it("collects only portable tests and sources away from Windows", async () => {
-    const config = (await import("../vitest.config.js")) as {
+    const config = (await import("../vitest.config.ts")) as {
       testPlan?: (platform: NodeJS.Platform) => {
         coverageInclude: string[];
         include: string[];

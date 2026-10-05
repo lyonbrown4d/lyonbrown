@@ -1,10 +1,10 @@
 import type { Api, Message, Model, Usage } from "@earendil-works/pi-ai";
 import { types } from "node:util";
 
-import { kernelError } from "./errors.js";
-import { inspectOwnDataProperties } from "./inspection.js";
-import { sanitizeJson, sanitizeText, type SanitizationLimits } from "./sanitization.js";
-import type { KernelModelAdapter, KernelModelDescriptor, KernelModelMessage } from "./types.js";
+import { kernelError } from "./errors.ts";
+import { inspectOwnDataProperties } from "./inspection.ts";
+import { sanitizeJson, sanitizeText, type SanitizationLimits } from "./sanitization.ts";
+import type { KernelModelAdapter, KernelModelDescriptor, KernelModelMessage } from "./types.ts";
 
 export function normalizeModelDescriptor(
   adapter: KernelModelAdapter,

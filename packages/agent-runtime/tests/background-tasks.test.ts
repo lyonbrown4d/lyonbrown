@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { RuntimeBackgroundTasks } from "../src/background-tasks.js";
+import { RuntimeBackgroundTasks } from "../src/background-tasks.ts";
 
 describe("runtime background task supervisor", () => {
   test("removes rejected work and refuses new work after close", async () => {

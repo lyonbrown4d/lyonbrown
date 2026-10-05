@@ -1,9 +1,9 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { deriveScope } from "../src/index.js";
-import { deriveScopeFromIdentity, encodeWorkspaceIdentity } from "../src/scope.js";
-import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.js";
+import { deriveScope } from "../src/index.ts";
+import { deriveScopeFromIdentity, encodeWorkspaceIdentity } from "../src/scope.ts";
+import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.ts";
 
 interface IdentityVector {
   readonly name: string;

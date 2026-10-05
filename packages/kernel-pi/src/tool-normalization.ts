@@ -1,15 +1,15 @@
 import { types } from "node:util";
 
-import { kernelError } from "./errors.js";
-import { inspectOwnDataProperties, type InspectionFailure } from "./inspection.js";
+import { kernelError } from "./errors.ts";
+import { inspectOwnDataProperties, type InspectionFailure } from "./inspection.ts";
 import {
   assertByteLimit,
   limitsFromBudget,
   sanitizeBoundedText,
   sanitizeJson,
   type SanitizationLimits,
-} from "./sanitization.js";
-import type { KernelJsonValue, KernelToolDefinition, PiKernelSessionOptions } from "./types.js";
+} from "./sanitization.ts";
+import type { KernelJsonValue, KernelToolDefinition, PiKernelSessionOptions } from "./types.ts";
 
 export function normalizeTools(
   tools: readonly KernelToolDefinition[],

@@ -6,10 +6,10 @@ import {
   type KernelModelAdapter,
   type KernelModelStreamEvent,
   type PiKernelSessionOptions,
-} from "../src/index.js";
-import { inspectOwnDataProperties, type InspectionFailure } from "../src/inspection.js";
-import { sanitizeJson } from "../src/sanitization.js";
-import { normalizeTools } from "../src/tool-normalization.js";
+} from "../src/index.ts";
+import { inspectOwnDataProperties, type InspectionFailure } from "../src/inspection.ts";
+import { sanitizeJson } from "../src/sanitization.ts";
+import { normalizeTools } from "../src/tool-normalization.ts";
 
 const limits = {
   maxDepth: 4,

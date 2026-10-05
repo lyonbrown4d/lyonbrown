@@ -7,8 +7,8 @@ import {
 } from "@lyonbrown/kernel-pi";
 import { expect, test } from "vitest";
 
-import { createAgentRuntime } from "../src/index.js";
-import { eventTypes, runtimeEventStore, sequentialEventIds } from "./support.js";
+import { createAgentRuntime } from "../src/index.ts";
+import { eventTypes, runtimeEventStore, sequentialEventIds } from "./support.ts";
 
 const budget = {
   maxInputBytes: 4_096,

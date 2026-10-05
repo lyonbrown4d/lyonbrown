@@ -1,17 +1,17 @@
-import type { NativeModelStorageCapability } from "../native-storage.js";
-import type { LocalModelService } from "../types.js";
-import { DEFAULT_PRESET } from "./catalog.js";
-import type { LlamaEngineAdapter, LlamaLease } from "./contracts.js";
-import { verifyModelFile } from "./file-verification.js";
-import { createLocalModelManager } from "./manager.js";
-import { DEFAULT_MODEL_IDENTITY } from "./model-identity.js";
-import { createNodeLlamaEngine } from "./node-llama.js";
+import type { NativeModelStorageCapability } from "../native-storage.ts";
+import type { LocalModelService } from "../types.ts";
+import { DEFAULT_PRESET } from "./catalog.ts";
+import type { LlamaEngineAdapter, LlamaLease } from "./contracts.ts";
+import { verifyModelFile } from "./file-verification.ts";
+import { createLocalModelManager } from "./manager.ts";
+import { DEFAULT_MODEL_IDENTITY } from "./model-identity.ts";
+import { createNodeLlamaEngine } from "./node-llama.ts";
 import {
   NodeModelIo,
   type ModelDownloaderApi,
   type ModelFileVerifier,
   type ProcessLockAcquirer,
-} from "./node-model-io.js";
+} from "./node-model-io.ts";
 
 interface CompositionDependencies {
   readonly downloaderApi?: ModelDownloaderApi;

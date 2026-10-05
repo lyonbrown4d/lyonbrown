@@ -7,8 +7,8 @@ import {
   asCommandId,
   asSessionId,
   validateText,
-} from "../src/index.js";
-import { captureError } from "./test-error.js";
+} from "../src/index.ts";
+import { captureError } from "./test-error.ts";
 
 describe("opaque identifiers", () => {
   it("accepts non-UUID identifiers without trimming or rewriting them", () => {

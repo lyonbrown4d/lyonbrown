@@ -3,13 +3,13 @@ import {
   type DiscoveryDescriptor,
   parseDiscoveryDescriptor,
   serializeDiscoveryDescriptor,
-} from "./descriptor.js";
-import { controlPlaneError } from "./errors.js";
+} from "./descriptor.ts";
+import { controlPlaneError } from "./errors.ts";
 import {
   invokePlatform,
   type PlatformResult,
   type SecureDirectoryHandle,
-} from "./platform-security.js";
+} from "./platform-security.ts";
 
 const DISCOVERY_FILE = "agentd.json";
 const DISCOVERY_CONSTRUCTION_TOKEN = Object.freeze({});

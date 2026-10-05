@@ -9,7 +9,7 @@ plugins:
       - env=node
       - exportCommonSymbols=false
       - forceLong=bigint
-      - importSuffix=.js
+      - importSuffix=.ts
       - oneof=unions
       - outputJsonMethods=false
       - outputServices=grpc-js

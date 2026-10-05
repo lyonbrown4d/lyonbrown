@@ -1,4 +1,9 @@
-export { createAgentLauncher } from "./launcher.js";
+export { createAgentLauncher } from "./launcher.ts";
+export { AbortableSleeper, MonotonicClock, createProductionAgentLauncher } from "./production.ts";
+export type {
+  AgentdProcessConfiguration,
+  CreateProductionAgentLauncherOptions,
+} from "./production.ts";
 export type { NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
 export type {
   AgentClientFactory,
@@ -15,4 +20,4 @@ export type {
   SpawnAgentdRequest,
   SpawnAttempt,
   StartupLease,
-} from "./types.js";
+} from "./types.ts";

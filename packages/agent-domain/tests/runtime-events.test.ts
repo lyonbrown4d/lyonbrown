@@ -5,7 +5,7 @@ import {
   RUNTIME_JSON_MAX_TOTAL_STRING_BYTES,
   asSessionId,
   parseAgentRuntimeEvent,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 describe("runtime event boundary", () => {
   test("accepts a plain domain event and freezes nested values", () => {

@@ -2,7 +2,7 @@ import { Metadata, status, type ServiceError } from "@grpc/grpc-js";
 import { CommandErrorCode, CommandErrorDetail, UnsupportedCommand } from "@lyonbrown/protocol";
 import { describe, expect, it } from "vitest";
 
-import { isRetryableTransportError, mapServiceError } from "../src/status-error.js";
+import { isRetryableTransportError, mapServiceError } from "../src/status-error.ts";
 
 function serviceError(code: number, detail?: ReturnType<typeof CommandErrorDetail.fromPartial>) {
   const metadata = new Metadata();

@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 
-import { DEFAULT_LOCAL_MODEL } from "../public-model.js";
+import { DEFAULT_LOCAL_MODEL } from "../public-model.ts";
 import type {
   CancelModelDownloadResult,
   LocalModelLoadResult,
   LocalModelService,
   LocalModelStatus,
   StartModelDownloadResult,
-} from "../types.js";
-import { DEFAULT_PRESET } from "./catalog.js";
-import type { DownloadArtifact, LocalModelIo, LlamaEngineAdapter } from "./contracts.js";
-import { cloneStatus, statusFor, validProgress } from "./status.js";
+} from "../types.ts";
+import { DEFAULT_PRESET } from "./catalog.ts";
+import type { DownloadArtifact, LocalModelIo, LlamaEngineAdapter } from "./contracts.ts";
+import { cloneStatus, statusFor, validProgress } from "./status.ts";
 
 interface ActiveOperation {
   readonly id: string;

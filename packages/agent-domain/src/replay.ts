@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { types as nodeTypes } from "node:util";
 
-import { domainError } from "./errors.js";
-import { assertIdentifier, type ClientInstanceId, type CommandId } from "./identifiers.js";
-import { isWellFormedString } from "./unicode.js";
+import { domainError } from "./errors.ts";
+import { assertIdentifier, type ClientInstanceId, type CommandId } from "./identifiers.ts";
+import { isWellFormedString } from "./unicode.ts";
 
 declare const replayKeyBrand: unique symbol;
 declare const commandFingerprintBrand: unique symbol;

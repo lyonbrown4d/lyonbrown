@@ -6,12 +6,12 @@ import {
   type NativeModelIdentity,
   type NativeModelStagingFile,
   type NativeModelStorageCapability,
-} from "../src/composition.js";
-import { createComposedLocalModelService } from "../src/internal/composed-service.js";
-import { DEFAULT_PRESET } from "../src/internal/catalog.js";
-import { DEFAULT_MODEL_IDENTITY } from "../src/internal/model-identity.js";
-import type { LocalModelService } from "../src/types.js";
-import { Deferred, flushTasks } from "./support/fakes.js";
+} from "../src/composition.ts";
+import { createComposedLocalModelService } from "../src/internal/composed-service.ts";
+import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
+import { DEFAULT_MODEL_IDENTITY } from "../src/internal/model-identity.ts";
+import type { LocalModelService } from "../src/types.ts";
+import { Deferred, flushTasks } from "./support/fakes.ts";
 
 describe("secure local-model composition", () => {
   it("fails closed without a native secure capability", () => {

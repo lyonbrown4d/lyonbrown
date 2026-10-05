@@ -16,8 +16,8 @@ import {
   type StartTurnRequest,
 } from "@lyonbrown/protocol";
 import { vi } from "vitest";
-import type { RuntimeCommand, RuntimeHost, RuntimeResult } from "../node-src/runtime-host.js";
-import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.js";
+import type { RuntimeCommand, RuntimeHost, RuntimeResult } from "../node-src/runtime-host.ts";
+import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.ts";
 
 export const SERVER_INSTANCE_ID = "018f47d6-7c12-7b19-a0b6-ff87748f42bc";
 export const SCOPE_FINGERPRINT = "a".repeat(64);

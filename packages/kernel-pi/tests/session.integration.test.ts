@@ -7,7 +7,7 @@ import {
   type KernelModelRequest,
   type KernelModelStreamEvent,
   type KernelToolDefinition,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const budget = {
   maxInputBytes: 16_384,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { projectRemoteSnapshot } from "../src/projection.js";
-import { runtimeSnapshot } from "./support/runtime.js";
+import { projectRemoteSnapshot } from "../src/projection.ts";
+import { runtimeSnapshot } from "./support/runtime.ts";
 
 describe("runtime projection", () => {
   it("projects model download and activity state into the shared UI model", () => {

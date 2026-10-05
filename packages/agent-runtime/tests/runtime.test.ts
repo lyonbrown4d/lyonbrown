@@ -2,8 +2,8 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
-import { createAgentRuntime } from "../src/index.js";
-import { CapturingKernelFactory, runtimeEventStore, sequentialEventIds } from "./support.js";
+import { createAgentRuntime } from "../src/index.ts";
+import { CapturingKernelFactory, runtimeEventStore, sequentialEventIds } from "./support.ts";
 
 describe("agent runtime", () => {
   test("publishes only after append commits and keeps only the latest pending snapshot", async () => {

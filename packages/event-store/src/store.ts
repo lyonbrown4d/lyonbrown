@@ -3,27 +3,27 @@ import { isAbsolute } from "node:path";
 
 import Database from "better-sqlite3";
 
-import { appendEvents } from "./append.js";
+import { appendEvents } from "./append.ts";
 import {
   CorruptEventStoreError,
   EventStoreClosedError,
   EventStoreError,
   InvalidStoreOptionsError,
   PathSecurityError,
-} from "./errors.js";
+} from "./errors.ts";
 import {
   validateEventRows,
   validateSessionIntegrity,
   type RuntimeEventRow,
   type SessionIntegrityRow,
-} from "./integrity.js";
+} from "./integrity.ts";
 import {
   defaultPathVerifier,
   prepareDatabasePath,
   reverifyDatabasePath,
   verifyDatabaseSidecars,
-} from "./path-security.js";
-import { migrate, SCHEMA_VERSION } from "./schema.js";
+} from "./path-security.ts";
+import { migrate, SCHEMA_VERSION } from "./schema.ts";
 import type {
   EventStore,
   EventToAppend,
@@ -34,8 +34,8 @@ import type {
   SessionMetadata,
   StoredEvent,
   StoreDiagnostics,
-} from "./types.js";
-import { validateList, validateLoad } from "./validation.js";
+} from "./types.ts";
+import { validateList, validateLoad } from "./validation.ts";
 
 const SESSION_INTEGRITY_SELECT = `
   SELECT s.session_id, s.current_revision, s.created_at, s.updated_at,

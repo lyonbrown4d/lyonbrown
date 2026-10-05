@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { ROOT_TASK_COMMANDS, runWorkspaceTask } from "../workspace-task-lib.js";
+import { ROOT_TASK_COMMANDS, runWorkspaceTask } from "../workspace-task-lib.ts";
 
 describe("workspace task orchestration", () => {
   test("scopes root tests to the canonical scripts test directory", () => {

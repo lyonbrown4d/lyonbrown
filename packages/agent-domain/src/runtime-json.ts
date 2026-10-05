@@ -1,7 +1,7 @@
 import { types as nodeTypes } from "node:util";
 
-import { domainError } from "./errors.js";
-import { isWellFormedString } from "./unicode.js";
+import { domainError } from "./errors.ts";
+import { isWellFormedString } from "./unicode.ts";
 
 export type RuntimeJsonPrimitive = null | boolean | number | string;
 export type RuntimeJsonValue =

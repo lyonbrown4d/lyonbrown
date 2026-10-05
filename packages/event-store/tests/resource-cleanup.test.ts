@@ -10,7 +10,7 @@ import {
   PathSecurityError,
   openEventStore,
   type PathSecurityVerifier,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const directories: string[] = [];
 const databaseClose = Object.getOwnPropertyDescriptor(Database.prototype, "close")?.value as (

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { LocalModelPhase, LocalModelService } from "../src/index.js";
-import { DEFAULT_PRESET } from "../src/internal/catalog.js";
-import { createLocalModelManager } from "../src/internal/manager.js";
-import { artifact, Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.js";
+import type { LocalModelPhase, LocalModelService } from "../src/index.ts";
+import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
+import { createLocalModelManager } from "../src/internal/manager.ts";
+import { artifact, Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.ts";
 
 describe("explicit background download lifecycle", () => {
   it("starts only on command and publishes bounded progress", async () => {

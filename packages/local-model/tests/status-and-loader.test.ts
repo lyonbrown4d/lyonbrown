@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_LOCAL_MODEL, type LocalModelService } from "../src/index.js";
-import { createLocalModelManager } from "../src/internal/manager.js";
-import { Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.js";
+import { DEFAULT_LOCAL_MODEL, type LocalModelService } from "../src/index.ts";
+import { createLocalModelManager } from "../src/internal/manager.ts";
+import { Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.ts";
 
 describe("default local model status", () => {
   it("returns immediately in checking while cache verification runs in the background", async () => {

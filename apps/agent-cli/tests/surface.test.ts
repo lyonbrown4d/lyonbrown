@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { THEME_IDS, createInitialUiModelState } from "@lyonbrown/ui-model";
 
-import { renderFrame } from "../src/surface.js";
-import { THEMES } from "../src/themes.js";
-import { runtimeSnapshot } from "./support/runtime.js";
+import { renderFrame } from "../src/surface.ts";
+import { THEMES } from "../src/themes.ts";
+import { runtimeSnapshot } from "./support/runtime.ts";
 
 describe("TUI surface", () => {
   it("defines the six selectable palettes with a Claude Code leaning default", () => {

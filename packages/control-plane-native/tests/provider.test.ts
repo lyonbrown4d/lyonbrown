@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createControlPlaneNativeProvider } from "../src/index.js";
+import { createControlPlaneNativeProvider } from "../src/index.ts";
 
 describe("control-plane native provider", () => {
   it("constructs an opaque provider on the host platform", () => {

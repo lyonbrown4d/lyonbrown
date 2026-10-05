@@ -1,4 +1,4 @@
-import { domainError } from "./errors.js";
+import { domainError } from "./errors.ts";
 import {
   asClientInstanceId,
   asCommandId,
@@ -6,8 +6,8 @@ import {
   type ClientInstanceId,
   type CommandId,
   type ServerInstanceId,
-} from "./identifiers.js";
-import { readDataRecord, requireDataField } from "./record-boundary.js";
+} from "./identifiers.ts";
+import { readDataRecord, requireDataField } from "./record-boundary.ts";
 
 export const PROTOCOL_VERSION = 1;
 

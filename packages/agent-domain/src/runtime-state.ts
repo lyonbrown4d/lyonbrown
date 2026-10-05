@@ -1,11 +1,11 @@
-import { domainError } from "./errors.js";
-import type { SessionId } from "./identifiers.js";
-import { incrementRevision, type Revision } from "./revision.js";
-import type { AgentRuntimeEvent } from "./runtime-events.js";
-import { hasActiveTurn } from "./runtime-state-mutations.js";
-import { applyRuntimeEvent } from "./runtime-state-reducer.js";
-import type { AgentRuntimeState } from "./runtime-state-types.js";
-import { ZERO_RUNTIME_USAGE, freezeState } from "./runtime-state-types.js";
+import { domainError } from "./errors.ts";
+import type { SessionId } from "./identifiers.ts";
+import { incrementRevision, type Revision } from "./revision.ts";
+import type { AgentRuntimeEvent } from "./runtime-events.ts";
+import { hasActiveTurn } from "./runtime-state-mutations.ts";
+import { applyRuntimeEvent } from "./runtime-state-reducer.ts";
+import type { AgentRuntimeState } from "./runtime-state-types.ts";
+import { ZERO_RUNTIME_USAGE, freezeState } from "./runtime-state-types.ts";
 
 export type {
   AgentRuntimePhase,
@@ -14,7 +14,7 @@ export type {
   RuntimeFailure,
   RuntimeToolState,
   RuntimeTurnState,
-} from "./runtime-state-types.js";
+} from "./runtime-state-types.ts";
 
 export interface VersionedAgentRuntimeEvent {
   readonly revision: Revision;

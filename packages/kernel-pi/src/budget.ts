@@ -1,6 +1,6 @@
-import { kernelError } from "./errors.js";
-import { assertByteLimit } from "./sanitization.js";
-import type { KernelResourceBudget } from "./types.js";
+import { kernelError } from "./errors.ts";
+import { assertByteLimit } from "./sanitization.ts";
+import type { KernelResourceBudget } from "./types.ts";
 
 const BUDGET_KEYS = [
   "maxInputBytes",

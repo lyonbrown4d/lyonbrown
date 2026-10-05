@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { recoverToolCalls, type StoredEvent } from "../src/index.js";
+import { recoverToolCalls, type StoredEvent } from "../src/index.ts";
 
 function event(revision: bigint, type: string, payload: unknown): StoredEvent {
   return {

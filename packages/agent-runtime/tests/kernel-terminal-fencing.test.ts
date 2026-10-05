@@ -2,8 +2,8 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
-import { createAgentRuntime } from "../src/index.js";
-import { eventTypes, runtimeEventStore, sequentialEventIds } from "./support.js";
+import { createAgentRuntime } from "../src/index.ts";
+import { eventTypes, runtimeEventStore, sequentialEventIds } from "./support.ts";
 
 describe("kernel terminal event fencing", () => {
   test("keeps a supervised steering failure terminal when the old kernel completes late", async () => {

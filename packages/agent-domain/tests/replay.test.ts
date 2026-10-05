@@ -6,8 +6,8 @@ import {
   canonicalEncode,
   commandFingerprint,
   createReplayKey,
-} from "../src/index.js";
-import { captureError } from "./test-error.js";
+} from "../src/index.ts";
+import { captureError } from "./test-error.ts";
 
 describe("replay keys", () => {
   it("is an unambiguous tuple of client and command identifiers", () => {

@@ -1,16 +1,16 @@
-import { api } from "./api.js";
-import { ACCESS, ATTRIBUTES, CREATION, FLAGS, LOCK, SHARE } from "./constants.js";
-import { disposeOnClose } from "./files.js";
-import { createFile, failureForLastError, OwnedHandle, validateObjectType } from "./handles.js";
-import { openRegularFile } from "./handles.js";
-import { fileIdentity } from "./identity.js";
+import { api } from "./api.ts";
+import { ACCESS, ATTRIBUTES, CREATION, FLAGS, LOCK, SHARE } from "./constants.ts";
+import { disposeOnClose } from "./files.ts";
+import { createFile, failureForLastError, OwnedHandle, validateObjectType } from "./handles.ts";
+import { openRegularFile } from "./handles.ts";
+import { fileIdentity } from "./identity.ts";
 import {
   currentUser,
   verifyPrivateInheritedFile,
   verifyPrivateObject,
   withPrivateSecurity,
-} from "./security.js";
-import { NativeFailure } from "../result.js";
+} from "./security.ts";
+import { NativeFailure } from "../result.ts";
 
 function overlapped(): object {
   return { Internal: 0, InternalHigh: 0, Offset: 0, OffsetHigh: 0, hEvent: null };

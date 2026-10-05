@@ -1,7 +1,7 @@
 import { $, usePowerShell } from "zx";
 
-import { runCiGate } from "./ci-gate-lib.js";
-import { configureZxPlatform } from "./zx-platform.js";
+import { runCiGate } from "./ci-gate-lib.ts";
+import { configureZxPlatform } from "./zx-platform.ts";
 
 configureZxPlatform(process.platform, usePowerShell);
 

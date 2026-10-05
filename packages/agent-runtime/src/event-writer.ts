@@ -10,9 +10,9 @@ import {
   type SessionId,
 } from "@lyonbrown/agent-domain";
 
-import { runtimeError, type AgentRuntimeError } from "./errors.js";
-import { applyStoredEvent } from "./recovery.js";
-import type { RuntimeEventStorePort } from "./event-store-port.js";
+import { runtimeError, type AgentRuntimeError } from "./errors.ts";
+import { applyStoredEvent } from "./recovery.ts";
+import type { RuntimeEventStorePort } from "./event-store-port.ts";
 
 export interface RuntimeEventWriterOptions {
   readonly sessionId: SessionId;

@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { SecretRedactor } from "../src/redaction.js";
-import { boundedSummary, sanitizeJson, utf8Bytes } from "../src/sanitization.js";
+import { SecretRedactor } from "../src/redaction.ts";
+import { boundedSummary, sanitizeJson, utf8Bytes } from "../src/sanitization.ts";
 
 const limits = {
   maxDepth: 3,

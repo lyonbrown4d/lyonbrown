@@ -9,7 +9,7 @@ import {
   type KernelResourceBudget,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const budget: KernelResourceBudget = {
   maxInputBytes: 4_096,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createFailClosedPosixSecurity } from "../src/posix-provider.js";
-import { capture, NativeFailure } from "../src/result.js";
+import { createFailClosedPosixSecurity } from "../src/posix-provider.ts";
+import { capture, NativeFailure } from "../src/result.ts";
 
 type SecurityFactory =
   ReturnType<typeof createFailClosedPosixSecurity> extends infer Security ? () => Security : never;
@@ -33,7 +33,7 @@ describe("fail-closed platform behavior", () => {
   });
 
   it("selects injected Windows and POSIX providers without native coupling", async () => {
-    const module = (await import("../src/platform.js")) as PlatformModule;
+    const module = (await import("../src/platform.ts")) as PlatformModule;
     const windowsSecurity = createFailClosedPosixSecurity();
     const posixSecurity = createFailClosedPosixSecurity();
     const windows = () => windowsSecurity;
@@ -44,7 +44,7 @@ describe("fail-closed platform behavior", () => {
   });
 
   it("loads the Windows factory only for Windows", async () => {
-    const module = (await import("../src/platform.js")) as PlatformModule;
+    const module = (await import("../src/platform.ts")) as PlatformModule;
     const windows = () => createFailClosedPosixSecurity();
     const unavailable = () => createFailClosedPosixSecurity();
 

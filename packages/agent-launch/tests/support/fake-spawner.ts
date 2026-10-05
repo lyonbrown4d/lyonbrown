@@ -1,5 +1,5 @@
-import type { ProcessSpawner, SpawnAgentdRequest, SpawnAttempt } from "../../src/types.js";
-import type { Candidate, FakeDiscovery } from "./fixtures.js";
+import type { ProcessSpawner, SpawnAgentdRequest, SpawnAttempt } from "../../src/types.ts";
+import type { Candidate, FakeDiscovery } from "./fixtures.ts";
 
 function rejectUnknown<T>(value: unknown): Promise<T> {
   return Promise.resolve().then(() => {

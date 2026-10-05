@@ -6,17 +6,17 @@ import {
   RequestMetadata,
 } from "@lyonbrown/protocol";
 import { describe, expect, it } from "vitest";
-import { commandFingerprint } from "../node-src/fingerprint.js";
-import { ReplayCache, ReplayCapacityError } from "../node-src/replay-cache.js";
-import type { RuntimeFailure } from "../node-src/runtime-host.js";
-import { runtimeFailureStatus } from "../node-src/status.js";
+import { commandFingerprint } from "../node-src/fingerprint.ts";
+import { ReplayCache, ReplayCapacityError } from "../node-src/replay-cache.ts";
+import type { RuntimeFailure } from "../node-src/runtime-host.ts";
+import { runtimeFailureStatus } from "../node-src/status.ts";
 import {
   requireBoundedText,
   requireEpoch,
   requireMetadata,
   requireText,
   validateServerIdentity,
-} from "../node-src/validation.js";
+} from "../node-src/validation.ts";
 
 function decodeStatusDetail(error: ReturnType<typeof runtimeFailureStatus>): CommandErrorDetail {
   const raw = error.metadata?.get("grpc-status-details-bin")[0];

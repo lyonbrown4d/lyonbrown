@@ -1,5 +1,5 @@
-import type { NativeModelIdentity } from "../native-storage.js";
-import { DEFAULT_PRESET } from "./catalog.js";
+import type { NativeModelIdentity } from "../native-storage.ts";
+import { DEFAULT_PRESET } from "./catalog.ts";
 
 export const DEFAULT_MODEL_IDENTITY: NativeModelIdentity = Object.freeze({
   modelId: DEFAULT_PRESET.id,

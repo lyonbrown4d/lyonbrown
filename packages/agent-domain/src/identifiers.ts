@@ -1,5 +1,5 @@
-import { domainError } from "./errors.js";
-import { assertWellFormedString } from "./unicode.js";
+import { domainError } from "./errors.ts";
+import { assertWellFormedString } from "./unicode.ts";
 
 declare const sessionIdBrand: unique symbol;
 declare const turnIdBrand: unique symbol;

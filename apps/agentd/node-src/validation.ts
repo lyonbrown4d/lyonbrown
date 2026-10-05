@@ -5,7 +5,7 @@ import {
   validateText,
   type RequestMetadata,
 } from "@lyonbrown/protocol";
-import { epochMismatchStatus, trustedStatus } from "./status.js";
+import { epochMismatchStatus, trustedStatus } from "./status.ts";
 
 const SCOPE_FINGERPRINT = /^[a-f0-9]{64}$/u;
 

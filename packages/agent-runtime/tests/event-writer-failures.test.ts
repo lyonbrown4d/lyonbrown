@@ -2,8 +2,8 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
-import { createAgentRuntime } from "../src/index.js";
-import { eventTypes, runtimeEventStore } from "./support.js";
+import { createAgentRuntime } from "../src/index.ts";
+import { eventTypes, runtimeEventStore } from "./support.ts";
 
 describe("runtime event writer local failures", () => {
   test.each(["event id", "clock"] as const)(

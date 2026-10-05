@@ -1,5 +1,5 @@
-import { launchError } from "./errors.js";
-import type { Clock, Sleeper } from "./types.js";
+import { launchError } from "./errors.ts";
+import type { Clock, Sleeper } from "./types.ts";
 
 export type TimeoutCode = "STARTUP_TIMEOUT" | "READINESS_TIMEOUT";
 export type DiscardValue<T> = (value: T, signal: AbortSignal) => Promise<void>;

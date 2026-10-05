@@ -5,7 +5,7 @@ import {
   type KernelModelAdapter,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const model: KernelModelAdapter = {
   model: { provider: "offline", id: "metadata-hardening" },

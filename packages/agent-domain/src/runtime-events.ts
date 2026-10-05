@@ -1,9 +1,9 @@
 import { types as nodeTypes } from "node:util";
 
-import { domainError } from "./errors.js";
-import { asSessionId, assertIdentifier, type SessionId } from "./identifiers.js";
-import { copyRuntimeJson, type RuntimeJsonValue } from "./runtime-json.js";
-import { validateText } from "./text.js";
+import { domainError } from "./errors.ts";
+import { asSessionId, assertIdentifier, type SessionId } from "./identifiers.ts";
+import { copyRuntimeJson, type RuntimeJsonValue } from "./runtime-json.ts";
+import { validateText } from "./text.ts";
 
 interface RuntimeEventBase {
   readonly sessionId: SessionId;

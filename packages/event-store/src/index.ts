@@ -9,16 +9,16 @@ export {
   RevisionConflictError,
   RevisionExhaustedError,
   StorageBusyError,
-} from "./errors.js";
+} from "./errors.ts";
 export {
   MAX_EVENT_PAYLOAD_BYTES,
   MAX_PAYLOAD_DEPTH,
   MAX_PAYLOAD_NODES,
   decodeEventPayload,
   encodeEventPayload,
-} from "./codec.js";
-export { recoverToolCalls } from "./recovery.js";
-export { openEventStore } from "./store.js";
+} from "./codec.ts";
+export { recoverToolCalls } from "./recovery.ts";
+export { openEventStore } from "./store.ts";
 export type {
   EventStore,
   EventToAppend,
@@ -31,4 +31,4 @@ export type {
   SessionMetadata,
   StoredEvent,
   StoreDiagnostics,
-} from "./types.js";
+} from "./types.ts";

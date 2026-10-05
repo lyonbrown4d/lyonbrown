@@ -3,14 +3,16 @@ import type {
   AgentCommand,
   RuntimeEventDto,
   RuntimeSnapshotDto,
+  SubscribeEventsInput,
 } from "@lyonbrown/agent-client";
 import type { AgentLaunchConnection, AgentLauncher } from "@lyonbrown/agent-launch";
 
-import { runtimeSnapshot } from "./runtime.js";
+import { runtimeSnapshot } from "./runtime.ts";
 
 export class FakeAgentClient implements AgentClient {
   public readonly commands: AgentCommand[] = [];
   public readonly events = new PushEvents();
+  public readonly subscriptions: SubscribeEventsInput[] = [];
   public closeCount = 0;
 
   public async health() {
@@ -36,7 +38,8 @@ export class FakeAgentClient implements AgentClient {
     return runtimeSnapshot();
   }
 
-  public subscribeEvents(): AsyncIterable<RuntimeEventDto> {
+  public subscribeEvents(input: SubscribeEventsInput): AsyncIterable<RuntimeEventDto> {
+    this.subscriptions.push(input);
     return this.events;
   }
 
@@ -86,6 +89,10 @@ export class PushEvents implements AsyncIterable<RuntimeEventDto> {
 
   public fail(reason: unknown): void {
     for (const waiter of this.waiters.splice(0)) waiter.reject(reason);
+  }
+
+  public complete(): void {
+    for (const waiter of this.waiters.splice(0)) waiter.resolve({ done: true, value: undefined });
   }
 
   public [Symbol.asyncIterator](): AsyncIterator<RuntimeEventDto> {

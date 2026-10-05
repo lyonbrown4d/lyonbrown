@@ -8,7 +8,7 @@ import type {
   RouteSummary,
 } from "@lyonbrown/protocol";
 
-import { clientError } from "./errors.js";
+import { clientError } from "./errors.ts";
 import {
   disabledReason,
   modelAction,
@@ -16,7 +16,7 @@ import {
   modelSetupPhase,
   modelSource,
   modelTier,
-} from "./snapshot-scalars.js";
+} from "./snapshot-scalars.ts";
 import type {
   ModelCatalogDto,
   ModelOptionDto,
@@ -25,8 +25,8 @@ import type {
   ModelSelectionDto,
   ModelSetupDto,
   RouteSummaryDto,
-} from "./types.js";
-import { protocolId, protocolText, requiredField } from "./validation.js";
+} from "./types.ts";
+import { protocolId, protocolText, requiredField } from "./validation.ts";
 
 export function mapSelection(value: ModelSelection | undefined): ModelSelectionDto {
   const selection = requiredField("model_selection", value).selection;

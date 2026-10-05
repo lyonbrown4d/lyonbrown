@@ -4,10 +4,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_PRESET } from "../src/internal/catalog.js";
-import { createNodeLlamaEngine } from "../src/internal/node-llama.js";
-import { NodeModelIo } from "../src/internal/node-model-io.js";
-import { TestNativeModelStorage } from "./support/native-storage.js";
+import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
+import { createNodeLlamaEngine } from "../src/internal/node-llama.ts";
+import { NodeModelIo } from "../src/internal/node-model-io.ts";
+import { TestNativeModelStorage } from "./support/native-storage.ts";
 
 const temporaryDirectories: string[] = [];
 

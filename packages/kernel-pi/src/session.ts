@@ -1,22 +1,22 @@
 import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 
-import { BudgetTracker, validateBudget } from "./budget.js";
-import { kernelError, toPublicKernelError, type KernelRuntimeError } from "./errors.js";
-import { ListenerDispatcher } from "./listener-dispatcher.js";
-import { createPiStreamFunction } from "./pi-bridge.js";
-import { createPiModel, normalizeModelDescriptor } from "./pi-conversion.js";
-import { SecretRedactor } from "./redaction.js";
-import { limitsFromBudget, sanitizeBoundedText, sanitizeText } from "./sanitization.js";
-import { normalizeTools } from "./tool-normalization.js";
-import { ToolExecutor } from "./tools.js";
+import { BudgetTracker, validateBudget } from "./budget.ts";
+import { kernelError, toPublicKernelError, type KernelRuntimeError } from "./errors.ts";
+import { ListenerDispatcher } from "./listener-dispatcher.ts";
+import { createPiStreamFunction } from "./pi-bridge.ts";
+import { createPiModel, normalizeModelDescriptor } from "./pi-conversion.ts";
+import { SecretRedactor } from "./redaction.ts";
+import { limitsFromBudget, sanitizeBoundedText, sanitizeText } from "./sanitization.ts";
+import { normalizeTools } from "./tool-normalization.ts";
+import { ToolExecutor } from "./tools.ts";
 import type {
   KernelEvent,
   KernelEventListener,
   KernelSession,
   KernelToolDefinition,
   PiKernelSessionOptions,
-} from "./types.js";
+} from "./types.ts";
 
 export class PiKernelSession implements KernelSession {
   readonly #agent: Agent;

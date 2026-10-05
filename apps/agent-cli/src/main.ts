@@ -3,8 +3,8 @@
 import { pathToFileURL } from "node:url";
 import type { AgentLauncher } from "@lyonbrown/agent-launch";
 
-import { runAgentTui } from "./app.js";
-import { HELP_TEXT, VERSION, parseCliArgs } from "./cli.js";
+import { runAgentTui } from "./app.ts";
+import { HELP_TEXT, VERSION, parseCliArgs } from "./cli.ts";
 
 export interface MainDependencies {
   readonly launcher: AgentLauncher;
@@ -23,10 +23,9 @@ export async function main(
     process.stdout.write(`${VERSION}\n`);
     return;
   }
-  if (dependencies === undefined) {
-    throw new Error("SECURE_AGENT_LAUNCHER_REQUIRED");
-  }
-  await runAgentTui(dependencies);
+  const resolvedDependencies =
+    dependencies ?? (await import("./production.ts")).createProductionMainDependencies();
+  await runAgentTui(resolvedDependencies);
 }
 
 const entryUrl = process.argv[1] === undefined ? undefined : pathToFileURL(process.argv[1]).href;

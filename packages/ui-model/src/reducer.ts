@@ -1,5 +1,5 @@
-import type { ApprovalState, UiModelAction, UiModelState } from "./types.js";
-import { getFreshCurrentServerInstanceId } from "./epoch.js";
+import type { ApprovalState, UiModelAction, UiModelState } from "./types.ts";
+import { getFreshCurrentServerInstanceId } from "./epoch.ts";
 
 function failClosedApproval(
   approval: ApprovalState | null,

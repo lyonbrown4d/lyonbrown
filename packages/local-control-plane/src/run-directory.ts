@@ -1,11 +1,11 @@
-import { createDiscoveryClient, type DiscoveryClient } from "./discovery-store.js";
-import { controlPlaneError, type ControlPlaneOperation } from "./errors.js";
+import { createDiscoveryClient, type DiscoveryClient } from "./discovery-store.ts";
+import { controlPlaneError, type ControlPlaneOperation } from "./errors.ts";
 import {
   invokePlatform,
   resolveNativeControlPlaneProvider,
   type NativeControlPlaneProvider,
   type SecureDirectoryHandle,
-} from "./platform-security.js";
+} from "./platform-security.ts";
 
 declare const secureRunDirectoryBrand: unique symbol;
 const RUN_DIRECTORY_CONSTRUCTION_TOKEN = Object.freeze({});

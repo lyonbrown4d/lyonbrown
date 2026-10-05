@@ -1,9 +1,9 @@
 import { deriveScope, type ScopeIdentity } from "@lyonbrown/local-control-plane";
-import { validateOptions, type NormalizedConfiguration } from "./configuration.js";
-import { DaemonProbe } from "./daemon-probe.js";
-import { isAgentLaunchError, launchError } from "./errors.js";
-import { SpawnQuarantine } from "./spawn-quarantine.js";
-import { StageRunner } from "./stage-runner.js";
+import { validateOptions, type NormalizedConfiguration } from "./configuration.ts";
+import { DaemonProbe } from "./daemon-probe.ts";
+import { isAgentLaunchError, launchError } from "./errors.ts";
+import { SpawnQuarantine } from "./spawn-quarantine.ts";
+import { StageRunner } from "./stage-runner.ts";
 import type {
   AgentLaunchConnection,
   AgentLauncher,
@@ -13,7 +13,7 @@ import type {
   DiscoveryContext,
   SpawnAttempt,
   StartupLease,
-} from "./types.js";
+} from "./types.ts";
 
 export class DefaultAgentLauncher implements AgentLauncher {
   readonly #configuration: NormalizedConfiguration;

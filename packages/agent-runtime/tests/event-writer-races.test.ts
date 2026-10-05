@@ -2,13 +2,13 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
-import { createAgentRuntime } from "../src/index.js";
+import { createAgentRuntime } from "../src/index.ts";
 import {
   CapturingKernelFactory,
   eventTypes,
   runtimeEventStore,
   sequentialEventIds,
-} from "./support.js";
+} from "./support.ts";
 
 describe("runtime event writer races", () => {
   test("rejects late steering without poisoning a concurrent durable follow-up", async () => {

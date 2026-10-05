@@ -2,11 +2,11 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../src/windows/api.js";
-import { atomicReplace, readPrivateFile, tryLock } from "../src/windows/files.js";
-import { openDirectory, type OwnedHandle } from "../src/windows/handles.js";
-import { canonicalPath, workspaceIdentity } from "../src/windows/identity.js";
-import { openSecureDirectory } from "../src/windows/directory.js";
+import { api } from "../src/windows/api.ts";
+import { atomicReplace, readPrivateFile, tryLock } from "../src/windows/files.ts";
+import { openDirectory, type OwnedHandle } from "../src/windows/handles.ts";
+import { canonicalPath, workspaceIdentity } from "../src/windows/identity.ts";
+import { openSecureDirectory } from "../src/windows/directory.ts";
 
 interface Context {
   readonly root: string;

@@ -4,14 +4,14 @@ import type {
   PlatformResult,
   SecureDirectoryHandle,
 } from "@lyonbrown/local-control-plane/native-adapter";
-import { api } from "./api.js";
-import { ERRORS } from "./constants.js";
-import { atomicReplace, readPrivateFile, tryLock } from "./files.js";
-import { failureForLastError, openDirectory, validateObjectType } from "./handles.js";
-import type { OwnedHandle } from "./handles.js";
-import { canonicalPath } from "./identity.js";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.js";
-import { capture, NativeFailure } from "../result.js";
+import { api } from "./api.ts";
+import { ERRORS } from "./constants.ts";
+import { atomicReplace, readPrivateFile, tryLock } from "./files.ts";
+import { failureForLastError, openDirectory, validateObjectType } from "./handles.ts";
+import type { OwnedHandle } from "./handles.ts";
+import { canonicalPath } from "./identity.ts";
+import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.ts";
+import { capture, NativeFailure } from "../result.ts";
 
 function closeAll(handles: readonly OwnedHandle[]): NativeFailure | undefined {
   let failure: NativeFailure | undefined;

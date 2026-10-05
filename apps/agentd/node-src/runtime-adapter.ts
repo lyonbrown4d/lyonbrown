@@ -1,8 +1,8 @@
 import { AgentRuntimeError, type AgentRuntime } from "@lyonbrown/agent-runtime";
 import { PROTOCOL_VERSION, RuntimeEvent, type RuntimeSnapshot } from "@lyonbrown/protocol";
 
-import type { RuntimeCommand, RuntimeFailure, RuntimeHost, RuntimeResult } from "./runtime-host.js";
-import { assertProtocolRevision, projectRuntimeSnapshot } from "./runtime-adapter-projection.js";
+import type { RuntimeCommand, RuntimeFailure, RuntimeHost, RuntimeResult } from "./runtime-host.ts";
+import { assertProtocolRevision, projectRuntimeSnapshot } from "./runtime-adapter-projection.ts";
 
 const NO_CAPABILITIES = Object.freeze([]) as readonly string[];
 const OK = Object.freeze({ ok: true }) as RuntimeResult;

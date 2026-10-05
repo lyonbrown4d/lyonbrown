@@ -1,5 +1,5 @@
-import type { StageRunner } from "./stage-runner.js";
-import type { SpawnAttempt, StartupLease } from "./types.js";
+import type { StageRunner } from "./stage-runner.ts";
+import type { SpawnAttempt, StartupLease } from "./types.ts";
 
 interface QuarantineEntry {
   readonly lease: StartupLease;

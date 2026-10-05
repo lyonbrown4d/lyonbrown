@@ -3,11 +3,11 @@ import type {
   NativeModelStagingFile,
 } from "@lyonbrown/local-model/composition";
 
-import { SHARE } from "./constants.js";
-import { atomicReplaceOpenFile, disposeOnClose } from "./files.js";
-import type { OwnedHandle } from "./handles.js";
-import { fileIdentity } from "./identity.js";
-import type { ModelDirectoryLease } from "./model-directory.js";
+import { SHARE } from "./constants.ts";
+import { atomicReplaceOpenFile, disposeOnClose } from "./files.ts";
+import type { OwnedHandle } from "./handles.ts";
+import { fileIdentity } from "./identity.ts";
+import type { ModelDirectoryLease } from "./model-directory.ts";
 import {
   assertSameFile,
   deleteStagedModelIfPresent,
@@ -18,14 +18,14 @@ import {
   openStagedModel,
   reopenModelFile,
   type SharedFileLock,
-} from "./model-files.js";
+} from "./model-files.ts";
 import {
   closeQuietly,
   promiseFrom,
   releaseQuietly,
   storageFailure,
-} from "./model-storage-shared.js";
-import { NativeFailure } from "../result.js";
+} from "./model-storage-shared.ts";
+import { NativeFailure } from "../result.ts";
 
 export class WindowsInstallLockAnchor implements NativeInstallLockAnchor {
   #releaseStarted = false;

@@ -1,7 +1,7 @@
-import type { SessionId } from "./identifiers.js";
-import type { Revision } from "./revision.js";
-import type { RuntimeUsage } from "./runtime-events.js";
-import type { RuntimeJsonValue } from "./runtime-json.js";
+import type { SessionId } from "./identifiers.ts";
+import type { Revision } from "./revision.ts";
+import type { RuntimeUsage } from "./runtime-events.ts";
+import type { RuntimeJsonValue } from "./runtime-json.ts";
 
 export type AgentRuntimePhase =
   | "uninitialized"

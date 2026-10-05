@@ -13,12 +13,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { PathSecurityError, openEventStore, type PathSecurityVerifier } from "../src/index.js";
+import { PathSecurityError, openEventStore, type PathSecurityVerifier } from "../src/index.ts";
 import {
   assertSecurePosixDirectoryMetadata,
   assertSecurePosixFileMetadata,
   createPortablePathVerifier,
-} from "../src/path-security.js";
+} from "../src/path-security.ts";
 
 const directories: string[] = [];
 

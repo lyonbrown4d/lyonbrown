@@ -1,6 +1,6 @@
-import { createComposedLocalModelService } from "./internal/composed-service.js";
-import type { NativeModelStorageCapability } from "./native-storage.js";
-import type { LocalModelService } from "./types.js";
+import { createComposedLocalModelService } from "./internal/composed-service.ts";
+import type { NativeModelStorageCapability } from "./native-storage.ts";
+import type { LocalModelService } from "./types.ts";
 
 export type {
   NativeInstalledFileResult,
@@ -8,7 +8,7 @@ export type {
   NativeModelIdentity,
   NativeModelStagingFile,
   NativeModelStorageCapability,
-} from "./native-storage.js";
+} from "./native-storage.ts";
 
 export const createLocalModelService = (
   capability: NativeModelStorageCapability,

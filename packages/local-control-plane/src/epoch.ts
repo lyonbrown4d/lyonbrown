@@ -1,4 +1,4 @@
-import type { DiscoveryDescriptor } from "./descriptor.js";
+import type { DiscoveryDescriptor } from "./descriptor.ts";
 
 export interface EpochBinding {
   readonly endpoint: string;

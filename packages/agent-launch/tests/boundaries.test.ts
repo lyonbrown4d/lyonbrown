@@ -1,12 +1,12 @@
-import * as publicApi from "../src/index.js";
-import { createAgentLauncher } from "../src/launcher.js";
+import * as publicApi from "../src/index.ts";
+import { createAgentLauncher } from "../src/launcher.ts";
 import type {
   DiscoveredDaemonCapability,
   DiscoveryClient,
   ProcessSpawner,
   SpawnAttempt,
   StartupLease,
-} from "../src/types.js";
+} from "../src/types.ts";
 import { describe, expect, test } from "vitest";
 import {
   CONFIG,
@@ -17,7 +17,7 @@ import {
   FakeSpawner,
   ManualClock,
   nativeProvider,
-} from "./support/fixtures.js";
+} from "./support/fixtures.ts";
 
 function pending<T>(): Promise<T> {
   return new Promise<T>(() => undefined);

@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { RuntimeEvent } from "@lyonbrown/protocol";
 import { describe, expect, it, vi } from "vitest";
-import { pumpSnapshotStream, type SnapshotWriteCall } from "../node-src/stream.js";
+import { pumpSnapshotStream, type SnapshotWriteCall } from "../node-src/stream.ts";
 
 class ControlledCall extends EventEmitter implements SnapshotWriteCall {
   public cancelled = false;

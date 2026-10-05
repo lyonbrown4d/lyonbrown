@@ -6,7 +6,7 @@ import {
   type KernelModelAdapter,
   type KernelModelRequest,
   type PiKernelSessionOptions,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 describe("session listener isolation", () => {
   test("does not let a hung listener block a run or cancellation", async () => {

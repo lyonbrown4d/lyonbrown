@@ -2,7 +2,7 @@ import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { runBufWithZx, protocolPackageRoot } from "./generation.js";
+import { runBufWithZx, protocolPackageRoot } from "./generation.ts";
 
 const FORMAT_TIMEOUT_MS = 30_000;
 

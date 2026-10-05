@@ -1,7 +1,7 @@
-export { AgentLaunchError } from "./errors.js";
+export { AgentLaunchError } from "./errors.ts";
 export type {
   AgentLaunchErrorCode,
   AgentLaunchErrorDetails,
   AgentLaunchErrorKind,
-} from "./errors.js";
-export type { AgentLaunchConnection, AgentLauncher, ConnectAgentInput } from "./public-types.js";
+} from "./errors.ts";
+export type { AgentLaunchConnection, AgentLauncher, ConnectAgentInput } from "./public-types.ts";

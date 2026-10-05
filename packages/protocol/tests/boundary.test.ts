@@ -13,7 +13,7 @@ import {
   bearerAuthorization,
   validateStringId,
   validateText,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 describe("protocol constants", () => {
   it("matches the version, grpc message limit, and metadata names", () => {

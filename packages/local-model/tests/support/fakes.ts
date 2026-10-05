@@ -5,7 +5,7 @@ import type {
   LlamaEngineAdapter,
   LlamaLease,
   ModelPreset,
-} from "../../src/internal/contracts.js";
+} from "../../src/internal/contracts.ts";
 
 export class Deferred<T> {
   readonly promise: Promise<T>;

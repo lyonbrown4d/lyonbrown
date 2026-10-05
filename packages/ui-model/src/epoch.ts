@@ -1,4 +1,4 @@
-import type { UiModelState } from "./types.js";
+import type { UiModelState } from "./types.ts";
 
 export function getFreshCurrentServerInstanceId(state: UiModelState): string | null {
   const { remote } = state;

@@ -12,8 +12,8 @@ import {
   assertPnpmVersion,
   inspectRepository,
   type PnpmRunner,
-} from "../preflight-lib.js";
-import { configureZxPlatform } from "../zx-platform.js";
+} from "../preflight-lib.ts";
+import { configureZxPlatform } from "../zx-platform.ts";
 
 const temporaryDirectories: string[] = [];
 const TEST_COMMAND_TIMEOUT_MS = 30_000;

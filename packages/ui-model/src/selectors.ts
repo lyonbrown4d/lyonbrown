@@ -7,8 +7,8 @@ import type {
   ModelDownloadIntent,
   ModelSetupCancellation,
   UiModelState,
-} from "./types.js";
-import { getFreshCurrentServerInstanceId } from "./epoch.js";
+} from "./types.ts";
+import { getFreshCurrentServerInstanceId } from "./epoch.ts";
 
 export function getConnectionFreshness(state: UiModelState): ConnectionFreshness {
   switch (state.remote.connection) {

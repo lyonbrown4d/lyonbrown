@@ -2,8 +2,8 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
-import { createAgentRuntime } from "../src/index.js";
-import { runtimeEventStore, sequentialEventIds } from "./support.js";
+import { createAgentRuntime } from "../src/index.ts";
+import { runtimeEventStore, sequentialEventIds } from "./support.ts";
 
 const RAW_CANCEL_SECRET = "raw cancel secret";
 

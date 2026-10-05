@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat } from "node:fs/promises";
 
-import type { ModelPreset } from "./contracts.js";
+import type { ModelPreset } from "./contracts.ts";
 
 export const verifyModelFile = async (
   filePath: string,

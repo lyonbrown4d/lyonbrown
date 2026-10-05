@@ -1,13 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { BudgetTracker, validateBudget } from "../src/budget.js";
-import { KernelRuntimeError } from "../src/errors.js";
+import { BudgetTracker, validateBudget } from "../src/budget.ts";
+import { KernelRuntimeError } from "../src/errors.ts";
 import {
   createPiKernelSession,
   type KernelModelAdapter,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.js";
+} from "../src/index.ts";
 import {
   assertByteLimit,
   isSecretReference,
@@ -15,8 +15,8 @@ import {
   sanitizeJson,
   sanitizeText,
   utf8Bytes,
-} from "../src/sanitization.js";
-import { SecretRedactor } from "../src/redaction.js";
+} from "../src/sanitization.ts";
+import { SecretRedactor } from "../src/redaction.ts";
 
 const valueLimits = {
   maxDepth: 2,

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { CI_GATES, runCiGate } from "../ci-gate-lib.js";
+import { CI_GATES, runCiGate } from "../ci-gate-lib.ts";
 
 describe("CI gate orchestration", () => {
   test("runs every gate in the required order", async () => {
@@ -11,7 +11,7 @@ describe("CI gate orchestration", () => {
       return Promise.resolve();
     });
 
-    expect(calls).toEqual(["preflight", "lint", "typecheck", "test", "build"]);
+    expect(calls).toEqual(["preflight", "scripts:verify", "lint", "typecheck", "test", "build"]);
     expect(calls).toEqual(CI_GATES);
   });
 
@@ -25,6 +25,11 @@ describe("CI gate orchestration", () => {
     });
 
     await expect(runCiGate(runner)).rejects.toBe(failure);
-    expect(runner.mock.calls.map(([gate]) => gate)).toEqual(["preflight", "lint", "typecheck"]);
+    expect(runner.mock.calls.map(([gate]) => gate)).toEqual([
+      "preflight",
+      "scripts:verify",
+      "lint",
+      "typecheck",
+    ]);
   });
 });

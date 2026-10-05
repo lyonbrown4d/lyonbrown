@@ -1,8 +1,8 @@
 import type { NativeModelIdentity } from "@lyonbrown/local-model/composition";
 
-import type { OwnedHandle } from "./handles.js";
-import type { SharedFileLock } from "./model-files.js";
-import { identityKey } from "./model-identity.js";
+import type { OwnedHandle } from "./handles.ts";
+import type { SharedFileLock } from "./model-files.ts";
+import { identityKey } from "./model-identity.ts";
 
 const PUBLIC_STORAGE_ERRORS = new Set([
   "native_model_identity_invalid",

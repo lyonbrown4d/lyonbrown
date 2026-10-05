@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { NativeFailure } from "../src/result.js";
-import { api } from "../src/windows/api.js";
-import { ERRORS } from "../src/windows/constants.js";
-import { openSecureDirectory } from "../src/windows/directory.js";
+import { NativeFailure } from "../src/result.ts";
+import { api } from "../src/windows/api.ts";
+import { ERRORS } from "../src/windows/constants.ts";
+import { openSecureDirectory } from "../src/windows/directory.ts";
 import {
   failureForLastError,
   failureForNtStatus,
   OwnedHandle,
   validateObjectType,
-} from "../src/windows/handles.js";
+} from "../src/windows/handles.ts";
 
 describe("Windows handle boundary", () => {
   it.runIf(process.platform === "win32")("rejects non-canonical run-directory input", () => {

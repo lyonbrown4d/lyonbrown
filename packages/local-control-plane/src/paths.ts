@@ -1,15 +1,15 @@
 import { isAbsolute, join, win32 } from "node:path";
 
-import { controlPlaneError } from "./errors.js";
+import { controlPlaneError } from "./errors.ts";
 import {
   invokePlatform,
   resolveNativeControlPlaneProvider,
   type NativeControlPlaneProvider,
   type ResolvedWorkspaceIdentity,
   type WorkspaceIdentity,
-} from "./platform-security.js";
-import { deriveScopeFromIdentity, encodeWorkspaceIdentity } from "./scope.js";
-import { isWellFormedText } from "./well-formed.js";
+} from "./platform-security.ts";
+import { deriveScopeFromIdentity, encodeWorkspaceIdentity } from "./scope.ts";
+import { isWellFormedText } from "./well-formed.ts";
 
 export interface ScopedDaemonPaths {
   readonly canonicalWorkspace: string;

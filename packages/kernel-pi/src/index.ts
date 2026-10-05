@@ -1,5 +1,5 @@
-export { KernelRuntimeError, type KernelErrorCode } from "./errors.js";
-export { createPiKernelSession, PiKernelSession } from "./session.js";
+export { KernelRuntimeError, type KernelErrorCode } from "./errors.ts";
+export { createPiKernelSession, PiKernelSession } from "./session.ts";
 export type {
   KernelApprovalGate,
   KernelApprovalRequest,
@@ -25,4 +25,4 @@ export type {
   KernelToolRisk,
   KernelUsage,
   PiKernelSessionOptions,
-} from "./types.js";
+} from "./types.ts";

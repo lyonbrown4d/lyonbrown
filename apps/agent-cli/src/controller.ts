@@ -8,9 +8,11 @@ import {
   type UiModelAction,
   type UiModelState,
 } from "@lyonbrown/ui-model";
+import type { Subscription } from "rxjs";
 
-import { parseInput, type ParsedInput } from "./commands.js";
-import { projectRemoteSnapshot } from "./projection.js";
+import { parseInput, type ParsedInput } from "./commands.ts";
+import { projectRemoteSnapshot } from "./projection.ts";
+import { observeRuntimeSnapshots } from "./runtime-snapshot-stream.ts";
 
 export interface AgentTuiFrame {
   readonly ui: UiModelState;
@@ -38,7 +40,8 @@ export function createInitialFrame(): AgentTuiFrame {
 export class AgentTuiController {
   private frame = createInitialFrame();
   private client: AgentClient | null = null;
-  private subscription: AbortController | null = null;
+  private eventAbort: AbortController | null = null;
+  private eventSubscription: Subscription | null = null;
   private generation = 0;
   private closed = false;
 
@@ -81,8 +84,10 @@ export class AgentTuiController {
     if (this.closed) return;
     this.closed = true;
     this.generation += 1;
-    this.subscription?.abort();
-    this.subscription = null;
+    this.eventAbort?.abort();
+    this.eventAbort = null;
+    this.eventSubscription?.unsubscribe();
+    this.eventSubscription = null;
     const client = this.client;
     this.client = null;
     if (client !== null) await client.close();
@@ -98,14 +103,24 @@ export class AgentTuiController {
       this.client = connection.client;
       this.dispatch({ type: "handshakeSucceeded", serverInstanceId: connection.serverInstanceId });
       this.acceptSnapshot(connection.serverInstanceId, connection.snapshot, generation);
-      this.subscription = new AbortController();
-      void this.consumeEvents(
+      const abort = new AbortController();
+      this.eventAbort = abort;
+      this.eventSubscription = observeRuntimeSnapshots(
         connection.client,
-        connection.serverInstanceId,
         connection.snapshot.revision,
-        generation,
-        this.subscription,
-      );
+        abort.signal,
+      ).subscribe({
+        next: (snapshot) => {
+          if (!this.isCurrent(generation) || abort.signal.aborted) return;
+          this.acceptSnapshot(connection.serverInstanceId, snapshot, generation);
+        },
+        complete: () => {
+          this.handleEventStreamTermination(generation, abort, "event stream ended");
+        },
+        error: () => {
+          this.handleEventStreamTermination(generation, abort, "event stream unavailable");
+        },
+      });
     } catch {
       if (this.isCurrent(generation)) {
         this.dispatch({ type: "connectionUnavailable", reason: "daemon unavailable" });
@@ -113,28 +128,13 @@ export class AgentTuiController {
     }
   }
 
-  private async consumeEvents(
-    client: AgentClient,
-    serverInstanceId: string,
-    afterRevision: bigint,
+  private handleEventStreamTermination(
     generation: number,
     abort: AbortController,
-  ): Promise<void> {
-    try {
-      for await (const event of client.subscribeEvents({
-        afterRevision,
-        signal: abort.signal,
-      })) {
-        if (!this.isCurrent(generation) || abort.signal.aborted) return;
-        this.acceptSnapshot(serverInstanceId, event.snapshot, generation);
-      }
-      if (this.isCurrent(generation) && !abort.signal.aborted) {
-        this.dispatch({ type: "connectionLost", reason: "event stream ended" });
-      }
-    } catch {
-      if (this.isCurrent(generation) && !abort.signal.aborted) {
-        this.dispatch({ type: "connectionLost", reason: "event stream unavailable" });
-      }
+    reason: string,
+  ): void {
+    if (this.isCurrent(generation) && !abort.signal.aborted) {
+      this.dispatch({ type: "connectionLost", reason });
     }
   }
 

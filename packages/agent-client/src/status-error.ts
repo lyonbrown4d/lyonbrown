@@ -1,7 +1,7 @@
 import { status, type ServiceError } from "@grpc/grpc-js";
 import { CommandErrorCode, CommandErrorDetail, UnsupportedCommand } from "@lyonbrown/protocol";
 
-import { clientError, type AgentClientError } from "./errors.js";
+import { clientError, type AgentClientError } from "./errors.ts";
 
 export function isRetryableTransportError(error: ServiceError): boolean {
   return error.code === status.UNAVAILABLE || error.code === status.DEADLINE_EXCEEDED;

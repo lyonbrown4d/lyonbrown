@@ -13,9 +13,9 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 
-import type { AgentTuiFrame } from "./controller.js";
-import { renderFrame } from "./surface.js";
-import { THEMES } from "./themes.js";
+import type { AgentTuiFrame } from "./controller.ts";
+import { renderFrame } from "./surface.ts";
+import { THEMES } from "./themes.ts";
 
 export interface PiScreenOptions {
   readonly terminal?: Terminal;

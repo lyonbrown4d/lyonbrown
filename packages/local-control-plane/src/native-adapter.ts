@@ -1,4 +1,4 @@
-export { createNativeControlPlaneProvider } from "./platform-security.js";
+export { createNativeControlPlaneProvider } from "./platform-security.ts";
 export type {
   KernelFileLock,
   NativeControlPlaneProvider,
@@ -9,4 +9,4 @@ export type {
   ResolvedWorkspaceIdentity,
   SecureDirectoryHandle,
   WorkspaceIdentity,
-} from "./platform-security.js";
+} from "./platform-security.ts";

@@ -5,8 +5,8 @@ import {
   ROOT_TASK_COMMANDS,
   runWorkspaceTask,
   type WorkspaceTask,
-} from "./workspace-task-lib.js";
-import { configureZxPlatform } from "./zx-platform.js";
+} from "./workspace-task-lib.ts";
+import { configureZxPlatform } from "./zx-platform.ts";
 
 configureZxPlatform(process.platform, usePowerShell);
 

@@ -17,7 +17,7 @@ import {
   invokeUnary,
   requestMetadata,
   startTestServer,
-} from "./server-test-support.js";
+} from "./server-test-support.ts";
 
 describe("deferred command RPCs", () => {
   const states: TestServerState[] = [];

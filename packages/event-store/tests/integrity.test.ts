@@ -5,7 +5,7 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CorruptEventStoreError, openEventStore, type PathSecurityVerifier } from "../src/index.js";
+import { CorruptEventStoreError, openEventStore, type PathSecurityVerifier } from "../src/index.ts";
 
 const allow: PathSecurityVerifier = {
   verifyRequestedDataDirectory: () => undefined,

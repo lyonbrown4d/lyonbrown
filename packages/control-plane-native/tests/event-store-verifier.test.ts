@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { openEventStore, PathSecurityError } from "@lyonbrown/event-store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createNativeEventStorePathVerifier } from "../src/index.js";
-import { api } from "../src/windows/api.js";
-import { ERRORS } from "../src/windows/constants.js";
+import { createNativeEventStorePathVerifier } from "../src/index.ts";
+import { api } from "../src/windows/api.ts";
+import { ERRORS } from "../src/windows/constants.ts";
 
 const temporaryDirectories: string[] = [];
 

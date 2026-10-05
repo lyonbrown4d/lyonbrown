@@ -1,9 +1,9 @@
 import { parseColor, styleText, truncateToWidth } from "@earendil-works/pi-tui";
 
-import type { AgentTuiFrame } from "./controller.js";
-import { labels } from "./locales.js";
-import { safeTerminalText } from "./text-safety.js";
-import { THEMES } from "./themes.js";
+import type { AgentTuiFrame } from "./controller.ts";
+import { labels } from "./locales.ts";
+import { safeTerminalText } from "./text-safety.ts";
+import { THEMES } from "./themes.ts";
 
 const COMMANDS = [
   "/language [en|zh]",

@@ -7,7 +7,7 @@ import {
   type CommandResponse,
 } from "@lyonbrown/protocol";
 import { afterAll, describe, expect, it } from "vitest";
-import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.js";
+import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.ts";
 import {
   FakeHost,
   SCOPE_FINGERPRINT,
@@ -15,7 +15,7 @@ import {
   allocateTestPort,
   authorization,
   requestMetadata,
-} from "./server-test-support.js";
+} from "./server-test-support.ts";
 
 interface HostileCase {
   readonly name: string;

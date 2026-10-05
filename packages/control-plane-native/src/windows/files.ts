@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import type { KernelFileLock, PlatformResult } from "@lyonbrown/local-control-plane/native-adapter";
-import { api, pointerAddress, pointerSize, type Handle } from "./api.js";
+import { api, pointerAddress, pointerSize, type Handle } from "./api.ts";
 import {
   ACCESS,
   ATTRIBUTES,
@@ -10,17 +10,17 @@ import {
   FLAGS,
   LOCK,
   SHARE,
-} from "./constants.js";
+} from "./constants.ts";
 import {
   createFile,
   failureForLastError,
   failureForNtStatus,
   openRegularFile,
   validateObjectType,
-} from "./handles.js";
-import type { OwnedHandle } from "./handles.js";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.js";
-import { capture, NativeFailure } from "../result.js";
+} from "./handles.ts";
+import type { OwnedHandle } from "./handles.ts";
+import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.ts";
+import { capture, NativeFailure } from "../result.ts";
 
 function childPath(canonicalDirectory: string, name: string): string {
   return `${canonicalDirectory}\\${name}`;

@@ -1,5 +1,5 @@
-import { domainError } from "./errors.js";
-import { assertWellFormedString } from "./unicode.js";
+import { domainError } from "./errors.ts";
+import { assertWellFormedString } from "./unicode.ts";
 
 export const MAX_TEXT_BYTES = 1024 * 1024;
 

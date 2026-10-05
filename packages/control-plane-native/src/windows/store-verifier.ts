@@ -2,8 +2,8 @@ import { win32 } from "node:path";
 
 import { PathSecurityError, type PathSecurityVerifier } from "@lyonbrown/event-store/path-verifier";
 
-import { api } from "./api.js";
-import { ACCESS, ATTRIBUTES, CREATION, ERRORS, FLAGS, SHARE } from "./constants.js";
+import { api } from "./api.ts";
+import { ACCESS, ATTRIBUTES, CREATION, ERRORS, FLAGS, SHARE } from "./constants.ts";
 import {
   createFile,
   failureForLastError,
@@ -11,10 +11,10 @@ import {
   openRegularFile,
   validateObjectType,
   type OwnedHandle,
-} from "./handles.js";
-import { fileIdentity } from "./identity.js";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.js";
-import { NativeFailure } from "../result.js";
+} from "./handles.ts";
+import { fileIdentity } from "./identity.ts";
+import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.ts";
+import { NativeFailure } from "../result.ts";
 
 const DATABASE_NAMES = new Set([
   "lyonbrown.sqlite3",

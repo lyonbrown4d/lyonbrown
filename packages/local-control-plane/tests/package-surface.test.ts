@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import * as publicApi from "../src/index.js";
-import * as nativeAdapterApi from "../src/native-adapter.js";
+import * as publicApi from "../src/index.ts";
+import * as nativeAdapterApi from "../src/native-adapter.ts";
 
 const execute = promisify(execFile);
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));

@@ -2,8 +2,8 @@ import type { AgentRuntimeState } from "@lyonbrown/agent-domain";
 import { ActivityPhase, RuntimePhase, ToolActivityState, TurnStatus } from "@lyonbrown/protocol";
 import { describe, expect, test } from "vitest";
 
-import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.js";
-import { FakeAgentRuntime, openedState, stateFrom } from "./runtime-adapter-support.js";
+import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.ts";
+import { FakeAgentRuntime, openedState, stateFrom } from "./runtime-adapter-support.ts";
 
 describe("runtime snapshot projection", () => {
   test("projects recovered terminal, usage, and tool state without inventing optional data", async () => {

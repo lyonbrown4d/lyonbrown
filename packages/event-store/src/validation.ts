@@ -1,5 +1,5 @@
-import { EventAlreadyExistsError } from "./errors.js";
-import type { EventToAppend, ListSessionsOptions, LoadOptions } from "./types.js";
+import { EventAlreadyExistsError } from "./errors.ts";
+import type { EventToAppend, ListSessionsOptions, LoadOptions } from "./types.ts";
 
 export const MAX_BATCH_EVENTS = 256;
 export const MAX_BATCH_PAYLOAD_BYTES = 4 * 1024 * 1024;

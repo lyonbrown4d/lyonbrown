@@ -5,7 +5,7 @@ import {
   createDiscoveryDescriptor,
   fenceEpochAtEnqueue,
   fenceEpochAtExecution,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const SCOPE_ID = "ef".repeat(32);
 

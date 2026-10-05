@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { AgentTuiController, type AgentTuiFrame } from "../src/controller.js";
-import { connection, FakeAgentClient, FakeLauncher } from "./support/fake-launcher.js";
-import { runtimeSnapshot } from "./support/runtime.js";
+import { AgentTuiController, type AgentTuiFrame } from "../src/controller.ts";
+import { connection, FakeAgentClient, FakeLauncher } from "./support/fake-launcher.ts";
+import { runtimeSnapshot } from "./support/runtime.ts";
 
 describe("AgentTuiController", () => {
   it("renders connecting before daemon discovery settles", () => {
@@ -74,7 +74,31 @@ describe("AgentTuiController", () => {
     await vi.waitFor(() => expect(frames.at(-1)?.snapshot?.revision).toBe(2n));
     client.events.fail(new Error("stream gone"));
 
-    await vi.waitFor(() => expect(frames.at(-1)?.ui.remote.connection).toBe("stale"));
+    await vi.waitFor(() => {
+      expect(frames.at(-1)?.ui.remote).toMatchObject({
+        connection: "stale",
+        unavailableReason: "event stream unavailable",
+      });
+    });
+  });
+
+  it("marks a naturally completed event stream stale", async () => {
+    const client = new FakeAgentClient();
+    const controller = new AgentTuiController({
+      launcher: new FakeLauncher(Promise.resolve(connection(client))),
+      render: () => undefined,
+    });
+    controller.open();
+    await vi.waitFor(() => expect(controller.currentFrame().ui.remote.connection).toBe("ready"));
+
+    client.events.complete();
+
+    await vi.waitFor(() => {
+      expect(controller.currentFrame().ui.remote).toMatchObject({
+        connection: "stale",
+        unavailableReason: "event stream ended",
+      });
+    });
   });
 
   it("atomically ignores a conflicting snapshot at the current revision", async () => {
@@ -128,6 +152,10 @@ describe("AgentTuiController", () => {
     await Promise.resolve();
 
     expect(client.closeCount).toBe(1);
+    expect(client.subscriptions).toHaveLength(1);
+    expect(client.subscriptions[0]?.afterRevision).toBe(1n);
+    expect(client.subscriptions[0]?.signal).toBeInstanceOf(AbortSignal);
+    expect(client.subscriptions[0]?.signal?.aborted).toBe(true);
     expect(frames).toHaveLength(count);
   });
 

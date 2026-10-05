@@ -7,7 +7,7 @@ import {
   createInitialAgentRuntimeState,
   reduceAgentRuntimeEvent,
   type AgentRuntimeEvent,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 const sessionId = asSessionId("session-runtime-state");
 

@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { controlPlaneError } from "./errors.js";
+import { controlPlaneError } from "./errors.ts";
 
 interface EndpointParts {
   readonly host: string;

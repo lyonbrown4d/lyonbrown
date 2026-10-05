@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { ListenerDispatcher } from "../src/listener-dispatcher.js";
-import type { KernelEvent } from "../src/types.js";
+import { ListenerDispatcher } from "../src/listener-dispatcher.ts";
+import type { KernelEvent } from "../src/types.ts";
 
 const event = (turn: number): KernelEvent => ({ type: "turn_started", turn });
 

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { configureZxPlatform } from "../zx-platform.js";
+import { configureZxPlatform } from "../zx-platform.ts";
 
 describe("zx platform configuration", () => {
   test("selects PowerShell on Windows", () => {

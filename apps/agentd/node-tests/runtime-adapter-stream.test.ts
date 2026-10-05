@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 
-import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.js";
-import { FakeAgentRuntime, openedState, stateFrom } from "./runtime-adapter-support.js";
+import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.ts";
+import { FakeAgentRuntime, openedState, stateFrom } from "./runtime-adapter-support.ts";
 
 test("streams only revisions after the cursor with matching outer and inner revisions", async () => {
   const initial = openedState();

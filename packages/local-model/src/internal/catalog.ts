@@ -1,4 +1,4 @@
-import type { ModelPreset } from "./contracts.js";
+import type { ModelPreset } from "./contracts.ts";
 
 const GIB = 1024 ** 3;
 

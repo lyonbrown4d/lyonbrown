@@ -1,16 +1,16 @@
-export { AgentRuntimeError, type AgentRuntimeErrorCode } from "./errors.js";
+export { AgentRuntimeError, type AgentRuntimeErrorCode } from "./errors.ts";
 export {
   createRuntimeEventPage,
   createRuntimeEventStorePort,
   type RuntimeEventPage,
   type RuntimeEventStorePort,
   type RuntimeEventStoreSource,
-} from "./event-store-port.js";
-export { createAgentRuntime } from "./runtime-factory.js";
+} from "./event-store-port.ts";
+export { createAgentRuntime } from "./runtime-factory.ts";
 export type {
   AgentRuntime,
   CreateAgentRuntimeOptions,
   KernelSessionFactory,
   KernelSessionFactoryInput,
   RuntimeSnapshotFeed,
-} from "./types.js";
+} from "./types.ts";

@@ -1,5 +1,5 @@
-import { DefaultAgentClient } from "./client.js";
-import type { AgentClient, CreateAgentClientOptions } from "./types.js";
+import { DefaultAgentClient } from "./client.ts";
+import type { AgentClient, CreateAgentClientOptions } from "./types.ts";
 
 export function createAgentClient(options: CreateAgentClientOptions): AgentClient {
   return new DefaultAgentClient(options);

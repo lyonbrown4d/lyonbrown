@@ -8,7 +8,7 @@ import {
   reduceUiModel,
   type RemoteSnapshot,
   type UiModelState,
-} from "../src/index.js";
+} from "../src/index.ts";
 
 function snapshot(
   serverInstanceId: string,
