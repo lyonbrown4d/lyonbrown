@@ -24,7 +24,7 @@ import {
   type HandshakeResponse,
   type RuntimeSnapshot,
 } from "@lyonbrown/protocol";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { createAgentService } from "../node-src/service.js";
 import type { RuntimeResult } from "../node-src/runtime-host.js";
 import {
@@ -42,14 +42,15 @@ import {
 } from "./server-test-support.js";
 
 describe("agentd gRPC server", () => {
-  let state: TestServerState | undefined;
+  const states: TestServerState[] = [];
 
-  afterEach(async () => {
-    await state?.close();
+  afterAll(async () => {
+    await Promise.all(states.map(async (state) => state.close()));
   });
 
   async function start(host = new FakeHost()) {
-    state = await startTestServer(host);
+    const state = await startTestServer(host);
+    states.push(state);
     return state;
   }
 

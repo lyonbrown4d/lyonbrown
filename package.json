@@ -14,6 +14,7 @@
   "scripts": {
     "preflight": "tsx scripts/preflight.ts",
     "dependencies:build": "pnpm --filter \"./packages/**\" --recursive --workspace-concurrency=1 run build",
+    "prelint": "pnpm --filter @lyonbrown/protocol generate",
     "lint": "tsx scripts/workspace-task.ts lint",
     "pretypecheck": "pnpm dependencies:build",
     "typecheck": "tsx scripts/workspace-task.ts typecheck",

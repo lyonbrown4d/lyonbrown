@@ -1,11 +1,11 @@
 import { Metadata, status } from "@grpc/grpc-js";
 import { CommandErrorCode, CommandErrorDetail } from "@lyonbrown/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { AgentClientError, createAgentClient, type AgentCommand } from "../src/index.js";
 import { bindingFor, clientFor, closeDaemons, spawnDaemon } from "./support/fake-daemon.js";
 
-afterEach(async () => {
+afterAll(async () => {
   await closeDaemons();
 });
 

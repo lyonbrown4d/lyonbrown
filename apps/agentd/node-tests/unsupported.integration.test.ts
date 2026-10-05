@@ -8,7 +8,7 @@ import {
   StartModelDownloadRequest,
   UnsupportedCommand,
 } from "@lyonbrown/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   type TestServerState,
   authorization,
@@ -20,14 +20,20 @@ import {
 } from "./server-test-support.js";
 
 describe("deferred command RPCs", () => {
-  let state: TestServerState | undefined;
+  const states: TestServerState[] = [];
 
-  afterEach(async () => {
-    await state?.close();
+  afterAll(async () => {
+    await Promise.all(states.map(async (state) => state.close()));
   });
 
+  async function start(): Promise<TestServerState> {
+    const state = await startTestServer();
+    states.push(state);
+    return state;
+  }
+
   it("returns typed Unsupported for ForceStop without reaching RuntimeHost", async () => {
-    state = await startTestServer();
+    const state = await start();
     const error = await forceStop(
       state.client,
       ForceStopRequest.create({ metadata: requestMetadata("unsupported") }),
@@ -45,7 +51,7 @@ describe("deferred command RPCs", () => {
   });
 
   it("returns the matching typed Unsupported variant from every deferred RPC", async () => {
-    state = await startTestServer();
+    const state = await start();
     const metadata = authorization(state.token);
     const client = state.client;
     const calls = [

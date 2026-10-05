@@ -29,6 +29,13 @@ import {
 import { createAgentClient, type AgentClient } from "../../src/index.js";
 
 const SCOPE = "a".repeat(64);
+const poolId = Number.parseInt(process.env.VITEST_POOL_ID ?? "1", 10);
+let nextTestPort = 32_000 + (Number.isSafeInteger(poolId) ? poolId : 1) * 200;
+
+function allocateTestPort(): number {
+  nextTestPort += 1;
+  return nextTestPort;
+}
 
 export interface RecordedCall {
   readonly authorization: string;
@@ -188,10 +195,14 @@ export async function spawnDaemon(options: FakeOptions = {}): Promise<FakeDaemon
   };
   server.addService(AgentServiceService, implementation);
   const port = await new Promise<number>((resolve, reject) => {
-    server.bindAsync("127.0.0.1:0", ServerCredentials.createInsecure(), (error, boundPort) => {
-      if (error !== null) reject(error);
-      else resolve(boundPort);
-    });
+    server.bindAsync(
+      `127.0.0.1:${String(allocateTestPort())}`,
+      ServerCredentials.createInsecure(),
+      (error, boundPort) => {
+        if (error !== null) reject(error);
+        else resolve(boundPort);
+      },
+    );
   });
   const daemon: FakeDaemon = {
     endpoint: `127.0.0.1:${String(port)}`,

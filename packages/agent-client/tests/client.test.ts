@@ -6,14 +6,14 @@ import {
   RuntimePhase,
   RuntimeSnapshot,
 } from "@lyonbrown/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import type { AgentCommand } from "../src/index.js";
 import { bindingFor, clientFor, closeDaemons, spawnDaemon } from "./support/fake-daemon.js";
 
 const SCOPE = "a".repeat(64);
 
-afterEach(async () => {
+afterAll(async () => {
   await closeDaemons();
 });
 

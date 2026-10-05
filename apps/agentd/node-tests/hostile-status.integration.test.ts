@@ -6,12 +6,13 @@ import {
   StartTurnRequest,
   type CommandResponse,
 } from "@lyonbrown/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.js";
 import {
   FakeHost,
   SCOPE_FINGERPRINT,
   SERVER_INSTANCE_ID,
+  allocateTestPort,
   authorization,
   requestMetadata,
 } from "./server-test-support.js";
@@ -69,12 +70,16 @@ const cases: readonly HostileCase[] = [
 ];
 
 describe("RuntimeHost error isolation", () => {
-  let running: RunningAgentdServer | undefined;
-  let client: AgentServiceClient | undefined;
+  const servers: { readonly running: RunningAgentdServer; readonly client: AgentServiceClient }[] =
+    [];
 
-  afterEach(async () => {
-    client?.close();
-    await running?.close();
+  afterAll(async () => {
+    await Promise.all(
+      servers.map(async ({ client, running }) => {
+        client.close();
+        await running.close();
+      }),
+    );
   });
 
   it.each(cases)(
@@ -84,18 +89,20 @@ describe("RuntimeHost error isolation", () => {
       const host = new FakeHost();
       host.execute.mockRejectedValue(create(accessed));
       const token = SecretToken.generate();
-      running = await startAgentdServer({
+      const running = await startAgentdServer({
         host,
         token,
         serverInstanceId: SERVER_INSTANCE_ID,
         scopeFingerprint: SCOPE_FINGERPRINT,
+        port: allocateTestPort(),
       });
-      client = new AgentServiceClient(running.address, credentials.createInsecure(), {
+      const client = new AgentServiceClient(running.address, credentials.createInsecure(), {
         ...GRPC_CHANNEL_OPTIONS,
       });
+      servers.push({ client, running });
 
       const error = await new Promise<ServiceError>((resolve, reject) => {
-        client?.startTurn(
+        client.startTurn(
           StartTurnRequest.create({ metadata: requestMetadata("hostile"), text: "hello" }),
           authorization(token),
           { deadline: Date.now() + 500 },

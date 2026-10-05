@@ -22,6 +22,7 @@ describe("protocol constants", () => {
     expect(MAX_STRING_ID_BYTES).toBe(128);
     expect(MAX_TEXT_BYTES).toBe(1024 * 1024);
     expect(GRPC_CHANNEL_OPTIONS).toEqual({
+      "grpc.enable_http_proxy": 0,
       "grpc.max_receive_message_length": 16 * 1024 * 1024,
       "grpc.max_send_message_length": 16 * 1024 * 1024,
     });

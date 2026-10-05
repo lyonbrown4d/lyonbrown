@@ -9,7 +9,7 @@ import { createAuthorizationInterceptor } from "./auth.js";
 import type { RuntimeHost } from "./runtime-host.js";
 import { createAgentService } from "./service.js";
 
-const LOOPBACK_BIND_ADDRESS = "127.0.0.1:0";
+const LOOPBACK_HOST = "127.0.0.1";
 
 export const AGENTD_SERVER_OPTIONS = Object.freeze({
   ...GRPC_CHANNEL_OPTIONS,
@@ -21,6 +21,7 @@ export interface StartAgentdServerOptions {
   readonly serverInstanceId: string;
   readonly scopeFingerprint: string;
   readonly replayCapacity?: number;
+  readonly port?: number;
 }
 
 export interface RunningAgentdServer {
@@ -29,12 +30,16 @@ export interface RunningAgentdServer {
   close(): Promise<void>;
 }
 
-function bind(server: Server): Promise<number> {
+function bind(server: Server, port: number): Promise<number> {
   return new Promise((resolve, reject) => {
-    server.bindAsync(LOOPBACK_BIND_ADDRESS, ServerCredentials.createInsecure(), (error, port) => {
-      if (error === null) resolve(port);
-      else reject(error);
-    });
+    server.bindAsync(
+      `${LOOPBACK_HOST}:${String(port)}`,
+      ServerCredentials.createInsecure(),
+      (error, boundPort) => {
+        if (error === null) resolve(boundPort);
+        else reject(error);
+      },
+    );
   });
 }
 
@@ -65,10 +70,10 @@ export async function startAgentdServer(
       shutdownSignal: shutdownController.signal,
     }),
   );
-  const port = await bind(server);
+  const port = await bind(server, options.port ?? 0);
   let closed = false;
   return Object.freeze({
-    address: `127.0.0.1:${String(port)}`,
+    address: `${LOOPBACK_HOST}:${String(port)}`,
     port,
     async close() {
       if (closed) return;

@@ -1,9 +1,15 @@
 import { api } from "./api.js";
 import { ACCESS, ATTRIBUTES, CREATION, FLAGS, LOCK, SHARE } from "./constants.js";
+import { disposeOnClose } from "./files.js";
 import { createFile, failureForLastError, OwnedHandle, validateObjectType } from "./handles.js";
 import { openRegularFile } from "./handles.js";
 import { fileIdentity } from "./identity.js";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.js";
+import {
+  currentUser,
+  verifyPrivateInheritedFile,
+  verifyPrivateObject,
+  withPrivateSecurity,
+} from "./security.js";
 import { NativeFailure } from "../result.js";
 
 function overlapped(): object {
@@ -33,7 +39,13 @@ export function lockShared(handle: OwnedHandle): SharedFileLock {
 
 function verifyFile(handle: OwnedHandle): void {
   validateObjectType(handle, "file");
-  verifyPrivateObject(handle.borrow(), currentUser(), false);
+  const user = currentUser();
+  try {
+    verifyPrivateObject(handle.borrow(), user, false);
+  } catch (error) {
+    if (!(error instanceof NativeFailure) || error.failureCode !== "insecure_acl") throw error;
+    verifyPrivateInheritedFile(handle.borrow(), user);
+  }
 }
 
 export function createPrivateModelFile(path: string): OwnedHandle {
@@ -125,6 +137,41 @@ export function openInstalledModel(path: string): OwnedHandle {
   } catch (error) {
     handle.close();
     throw error;
+  }
+}
+
+export function openStagedModel(path: string): OwnedHandle {
+  const handle = openRegularFile(
+    path,
+    ACCESS.genericRead | ACCESS.genericWrite | ACCESS.delete,
+    SHARE.read | SHARE.write,
+  );
+  try {
+    verifyFile(handle);
+    return handle;
+  } catch (error) {
+    handle.close();
+    throw error;
+  }
+}
+
+export function deleteStagedModelIfPresent(path: string): void {
+  let handle: OwnedHandle;
+  try {
+    handle = openRegularFile(
+      path,
+      ACCESS.genericRead | ACCESS.delete,
+      SHARE.read | SHARE.write | SHARE.delete,
+    );
+  } catch (error) {
+    if (error instanceof NativeFailure && error.failureCode === "not_found") return;
+    throw error;
+  }
+  try {
+    verifyFile(handle);
+    disposeOnClose(handle);
+  } finally {
+    handle.close();
   }
 }
 

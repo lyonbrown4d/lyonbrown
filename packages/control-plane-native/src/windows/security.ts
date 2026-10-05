@@ -94,7 +94,14 @@ export function validateAccessAce(
   sidMatches: boolean,
   inheritable: boolean,
 ): void {
-  const requiredFlags = inheritable ? 0x03 : 0;
+  validateAccessAceFlags(header, sidMatches, inheritable ? 0x03 : 0);
+}
+
+function validateAccessAceFlags(
+  header: Uint8Array,
+  sidMatches: boolean,
+  requiredFlags: number,
+): void {
   if (
     header.length < 8 ||
     header[0] !== SECURITY.accessAllowedAce ||
@@ -106,7 +113,7 @@ export function validateAccessAce(
   }
 }
 
-function verifyAcl(dacl: Pointer, user: CurrentUser, inheritable: boolean): void {
+function verifyAcl(dacl: Pointer, user: CurrentUser, requiredFlags: number): void {
   const size = { AceCount: 0, AclBytesInUse: 0, AclBytesFree: 0 };
   if (!api.GetAclInformation(dacl, size, koffi.sizeof("ACL_SIZE_INFORMATION"), 2)) {
     throw failureForLastError();
@@ -116,10 +123,19 @@ function verifyAcl(dacl: Pointer, user: CurrentUser, inheritable: boolean): void
   if (!api.GetAce(dacl, 0, output)) throw failureForLastError();
   const ace = output[0] as Pointer;
   const header = pointerBytes(ace, 8);
-  validateAccessAce(header, sameSid((pointerAddress(ace) + 8n) as Pointer, user.sid), inheritable);
+  validateAccessAceFlags(
+    header,
+    sameSid((pointerAddress(ace) + 8n) as Pointer, user.sid),
+    requiredFlags,
+  );
 }
 
-export function verifyPrivateObject(handle: Handle, user: CurrentUser, inheritable: boolean): void {
+function verifyPrivateAcl(
+  handle: Handle,
+  user: CurrentUser,
+  requiredFlags: number,
+  protectedDacl: boolean,
+): void {
   const owner: unknown[] = [null];
   const dacl: unknown[] = [null];
   const descriptor: unknown[] = [null];
@@ -145,11 +161,20 @@ export function verifyPrivateObject(handle: Handle, user: CurrentUser, inheritab
     if (!api.GetSecurityDescriptorControl(allocated, control, revision)) {
       throw failureForLastError();
     }
-    if ((Number(control[0]) & SECURITY.protectedDacl) === 0) {
+    const isProtected = (Number(control[0]) & SECURITY.protectedDacl) !== 0;
+    if (isProtected !== protectedDacl) {
       throw new NativeFailure("insecure_acl");
     }
-    verifyAcl(dacl[0] as Pointer, user, inheritable);
+    verifyAcl(dacl[0] as Pointer, user, requiredFlags);
   } finally {
     api.LocalFree(allocated);
   }
+}
+
+export function verifyPrivateObject(handle: Handle, user: CurrentUser, inheritable: boolean): void {
+  verifyPrivateAcl(handle, user, inheritable ? 0x03 : 0, true);
+}
+
+export function verifyPrivateInheritedFile(handle: Handle, user: CurrentUser): void {
+  verifyPrivateAcl(handle, user, 0x10, false);
 }

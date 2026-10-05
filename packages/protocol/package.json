@@ -16,13 +16,16 @@
   ],
   "scripts": {
     "generate": "tsx scripts/generate.ts",
-    "generate:check": "tsx scripts/check-generated.ts",
     "format": "prettier --write src/auth.ts src/boundary.ts src/index.ts \"scripts/**/*.ts\" \"tests/**/*.ts\" package.json \"tsconfig*.json\" vitest.config.ts README.md buf.yaml buf.gen.yaml && tsx scripts/proto-format.ts write",
     "format:check": "prettier --check src/auth.ts src/boundary.ts src/index.ts \"scripts/**/*.ts\" \"tests/**/*.ts\" package.json \"tsconfig*.json\" vitest.config.ts README.md buf.yaml buf.gen.yaml && tsx scripts/proto-format.ts check",
-    "lint": "pnpm format:check && tsx scripts/proto-lint.ts && eslint src/**/*.ts tests/**/*.ts scripts/**/*.ts",
+    "prelint": "pnpm generate",
+    "lint": "pnpm format:check && tsx scripts/proto-lint.ts && eslint src/auth.ts src/boundary.ts src/index.ts tests/**/*.ts scripts/**/*.ts",
+    "pretypecheck": "pnpm generate",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "pnpm generate:check && vitest run --coverage",
-    "build": "pnpm generate:check && tsc -p tsconfig.build.json"
+    "pretest": "pnpm generate",
+    "test": "vitest run --coverage",
+    "prebuild": "pnpm generate",
+    "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@bufbuild/protobuf": "2.16.0",

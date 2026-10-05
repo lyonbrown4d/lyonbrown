@@ -10,18 +10,18 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 - [FluxDI Composition Root](architecture/composition-root.md)
 - [TUI Visual and Interaction Baseline](design/tui-interaction-design.md)
 - [Node.js / TypeScript + Pi Migration Plan](plans/node-typescript-pi-migration.md)
-- [Migration Pause Checkpoint](plans/migration-status.md)
+- [Migration Progress](plans/migration-status.md)
 - [Configuration Reference](reference/configuration.md)
 - [Local Models and Task Routing](reference/local-models-routing.md)
 
 ## Current status
 
-Migration is paused. The target remains one C/S architecture in which `agentd`
-owns Runtime state and the TUI is an authenticated presentation client. GUI and
-Desktop are out of scope, and there is no embedded fallback.
+Migration is active on `main`. The repository is Node.js/TypeScript-only: the
+Node TUI and corrected Windows native model storage are integrated, while GUI,
+Desktop, embedded Runtime fallback, and Rust compatibility remain out of scope.
 
-The integrated branch is not yet an end-to-end runnable product. The Node TUI
-and Windows native model-storage changes are preserved on feature branches with
-known blockers and have not been merged. See the
-[Migration Pause Checkpoint](plans/migration-status.md) for exact commits,
-verification evidence, blockers, and the resume order.
+The product is not yet an end-to-end runnable checkpoint. Concrete launcher
+adapters, the complete `agentd` production composition, and an authenticated
+local daemon/TUI black-box flow are next. See
+[Migration Progress](plans/migration-status.md) for verification evidence and
+the implementation order.

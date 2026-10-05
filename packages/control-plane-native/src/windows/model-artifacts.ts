@@ -6,13 +6,16 @@ import type {
 import { SHARE } from "./constants.js";
 import { atomicReplaceOpenFile, disposeOnClose } from "./files.js";
 import type { OwnedHandle } from "./handles.js";
+import { fileIdentity } from "./identity.js";
 import type { ModelDirectoryLease } from "./model-directory.js";
 import {
   assertSameFile,
+  deleteStagedModelIfPresent,
   fileSize,
   flushModelFile,
   lockShared,
   openInstalledModel,
+  openStagedModel,
   reopenModelFile,
   type SharedFileLock,
 } from "./model-files.js";
@@ -73,13 +76,13 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
   public constructor(
     private readonly directory: ModelDirectoryLease,
     private readonly stagingDirectory: OwnedHandle,
-    private file: OwnedHandle,
+    private file: OwnedHandle | undefined,
     private readonly filePath: string,
     private readonly stagingPath: string,
     private readonly destinationPath: string,
     private readonly destinationName: string,
     private readonly maximumBytes: number,
-    private readonly initialIdentity: string,
+    private initialIdentity: string,
   ) {}
 
   public async withFilePath<T>(
@@ -90,15 +93,14 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
     }
     this.#callbackActive = true;
     try {
-      this.#validate();
-      return await use(this.filePath, this.stagingPath);
+      if (this.#state === "writable") this.#releasePlaceholder();
+      else this.#validate();
+      const value = await use(this.filePath, this.stagingPath);
+      if (this.#state === "writable") this.#adoptDownloadedFile();
+      else this.#validate();
+      return value;
     } finally {
       this.#callbackActive = false;
-      try {
-        this.#validate();
-      } finally {
-        if (this.#state === "writable") this.#seal();
-      }
     }
   }
 
@@ -125,11 +127,12 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
       if (this.#state === "writable") this.#seal();
       this.#validate();
       this.#validateExistingDestination();
-      flushModelFile(this.file);
-      atomicReplaceOpenFile(this.directory.handle, this.file, this.destinationName);
-      const transition = reopenModelFile(this.file, SHARE.read | SHARE.write | SHARE.delete);
+      const file = this.#file();
+      flushModelFile(file);
+      atomicReplaceOpenFile(this.directory.handle, file, this.destinationName);
+      const transition = reopenModelFile(file, SHARE.read | SHARE.write | SHARE.delete);
       this.#replaceAnchor(transition, lockShared(transition));
-      const installed = reopenModelFile(this.file, SHARE.read);
+      const installed = reopenModelFile(this.#file(), SHARE.read);
       this.#replaceAnchor(installed, lockShared(installed));
       this.#assertInstalledPath();
       this.#state = "activated";
@@ -139,7 +142,6 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
   }
 
   #cleanup(): void {
-    if (this.#state === "cleaned") return;
     const activated = this.#state === "activated";
     this.#state = "cleaned";
     let failure: unknown;
@@ -150,14 +152,21 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
     }
     if (!activated) {
       try {
-        disposeOnClose(this.file);
+        const file = this.file;
+        if (file !== undefined) disposeOnClose(file);
       } catch (error) {
         failure ??= error;
       }
     }
     const operations = [
       () => {
-        this.file.close();
+        this.file?.close();
+      },
+      () => {
+        deleteStagedModelIfPresent(this.filePath);
+      },
+      () => {
+        deleteStagedModelIfPresent(`${this.filePath}.ipull`);
       },
       () => {
         disposeOnClose(this.stagingDirectory);
@@ -180,13 +189,35 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
   }
 
   #seal(): void {
-    this.#lock = lockShared(this.file);
+    this.#lock = lockShared(this.#file());
     this.#state = "sealed";
   }
 
   #validate(): void {
-    assertSameFile(this.file, this.initialIdentity);
-    fileSize(this.file, this.maximumBytes);
+    const file = this.#file();
+    assertSameFile(file, this.initialIdentity);
+    fileSize(file, this.maximumBytes);
+  }
+
+  #releasePlaceholder(): void {
+    const file = this.#file();
+    disposeOnClose(file);
+    file.close();
+    this.file = undefined;
+  }
+
+  #adoptDownloadedFile(): void {
+    const file = openStagedModel(this.filePath);
+    try {
+      this.file = file;
+      this.initialIdentity = fileIdentity(file);
+      this.#validate();
+      this.#seal();
+    } catch (error) {
+      this.file = undefined;
+      closeQuietly(file);
+      throw error;
+    }
   }
 
   #validateExistingDestination(): void {
@@ -212,6 +243,7 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
   }
 
   #replaceAnchor(next: OwnedHandle, nextLock: SharedFileLock): void {
+    const current = this.#file();
     let failure: unknown;
     try {
       this.#lock?.release();
@@ -219,7 +251,7 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
       failure = error;
     }
     try {
-      this.file.close();
+      current.close();
     } catch (error) {
       failure ??= error;
     }
@@ -229,6 +261,12 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
       throw storageFailure(failure);
     }
     this.file = next;
+    this.initialIdentity = fileIdentity(next);
     this.#lock = nextLock;
+  }
+
+  #file(): OwnedHandle {
+    if (this.file === undefined) throw new Error("native_model_storage_failed");
+    return this.file;
   }
 }

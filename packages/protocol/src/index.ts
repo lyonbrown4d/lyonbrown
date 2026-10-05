@@ -10,6 +10,7 @@ export const PROTOCOL_VERSION = 1;
 export const MAX_GRPC_MESSAGE_BYTES = 16 * 1024 * 1024;
 
 export const GRPC_CHANNEL_OPTIONS = Object.freeze({
+  "grpc.enable_http_proxy": 0,
   "grpc.max_receive_message_length": MAX_GRPC_MESSAGE_BYTES,
   "grpc.max_send_message_length": MAX_GRPC_MESSAGE_BYTES,
 }) satisfies ChannelOptions;

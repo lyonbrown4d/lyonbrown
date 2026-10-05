@@ -131,6 +131,5 @@ export async function buildDescriptorSet(
   );
 }
 
-export const generatedDirectory = join(packageRoot, "src", "generated");
 export const generatedOutputBase = join(packageRoot, "src");
 export const protocolPackageRoot = packageRoot;

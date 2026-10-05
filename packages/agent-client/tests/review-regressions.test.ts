@@ -7,14 +7,14 @@ import {
   RuntimeSnapshot,
   type SubscribeEventsRequest,
 } from "@lyonbrown/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { AgentClientError } from "../src/index.js";
 import { bindingFor, clientFor, closeDaemons, spawnDaemon } from "./support/fake-daemon.js";
 
 const OTHER_SCOPE = "b".repeat(64);
 
-afterEach(async () => {
+afterAll(async () => {
   await closeDaemons();
 });
 

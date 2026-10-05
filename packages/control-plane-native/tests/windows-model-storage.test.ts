@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -42,6 +42,9 @@ describe.runIf(windows)("Windows native model storage", () => {
       expect(filePath).toBe(join(directoryPath, identity.filename));
       await writeFile(filePath, "verified model", "utf8");
     });
+    await expect(staging.withFilePath((filePath) => readFile(filePath, "utf8"))).resolves.toBe(
+      "verified model",
+    );
     await staging.activate();
     await staging.cleanup();
 
@@ -116,7 +119,7 @@ describe.runIf(windows)("Windows native model storage", () => {
     await anchor.release();
   });
 
-  it("anchors staging against rename and delete, then seals late writes", async () => {
+  it("seals staging against rename, delete, and late writes after the download callback", async () => {
     const storage = createNativeModelStorageCapability(join(await root(), "data", "models"));
     const staging = await storage.createStagingFile(
       identity,
@@ -129,14 +132,56 @@ describe.runIf(windows)("Windows native model storage", () => {
       filePath = file;
       directoryPath = directory;
       await writeFile(file, "sealed", "utf8");
-      await expect(rename(file, `${file}.moved`)).rejects.toBeDefined();
-      await expect(rm(file)).rejects.toBeDefined();
     });
 
     await expect(writeFile(filePath, "late", "utf8")).rejects.toBeDefined();
+    await expect(rename(filePath, `${filePath}.moved`)).rejects.toBeDefined();
+    await expect(rm(filePath)).rejects.toBeDefined();
     await expect(rename(directoryPath, `${directoryPath}.moved`)).rejects.toBeDefined();
     await staging.cleanup();
     await staging.cleanup();
+  });
+
+  it("accepts the ipull temporary-file rename before sealing the staged model", async () => {
+    const storage = createNativeModelStorageCapability(join(await root(), "data", "models"));
+    const staging = await storage.createStagingFile(
+      identity,
+      "operation-ipull-rename",
+      new AbortController().signal,
+    );
+
+    await staging.withFilePath(async (filePath) => {
+      const progressPath = `${filePath}.ipull`;
+      await writeFile(progressPath, "downloaded model", "utf8");
+      await rename(progressPath, filePath);
+    });
+    await staging.activate();
+    await expect(
+      storage.withInstalledFile(identity, new AbortController().signal, (filePath) =>
+        readFile(filePath, "utf8"),
+      ),
+    ).resolves.toEqual({ kind: "present", value: "downloaded model" });
+    await staging.cleanup();
+  });
+
+  it("removes an ipull residue when the download callback fails", async () => {
+    const models = join(await root(), "data", "models");
+    const storage = createNativeModelStorageCapability(models);
+    const staging = await storage.createStagingFile(
+      identity,
+      "operation-ipull-failure",
+      new AbortController().signal,
+    );
+
+    await expect(
+      staging.withFilePath(async (filePath) => {
+        await writeFile(`${filePath}.ipull`, "partial model", "utf8");
+        throw new Error("download failed");
+      }),
+    ).rejects.toThrow("download failed");
+    await staging.cleanup();
+
+    await expect(readdir(models)).resolves.toEqual([]);
   });
 
   it("refuses cleanup while a staging callback is active", async () => {

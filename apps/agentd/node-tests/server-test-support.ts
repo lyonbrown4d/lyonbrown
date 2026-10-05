@@ -22,6 +22,14 @@ import { startAgentdServer, type RunningAgentdServer } from "../node-src/server.
 export const SERVER_INSTANCE_ID = "018f47d6-7c12-7b19-a0b6-ff87748f42bc";
 export const SCOPE_FINGERPRINT = "a".repeat(64);
 
+const poolId = Number.parseInt(process.env.VITEST_POOL_ID ?? "1", 10);
+let nextTestPort = 30_000 + (Number.isSafeInteger(poolId) ? poolId : 1) * 200;
+
+export function allocateTestPort(): number {
+  nextTestPort += 1;
+  return nextTestPort;
+}
+
 export function requestMetadata(commandId: string, epoch = SERVER_INSTANCE_ID): RequestMetadata {
   return RequestMetadata.create({
     protocolVersion: PROTOCOL_VERSION,
@@ -74,6 +82,7 @@ export async function startTestServer(host = new FakeHost()): Promise<TestServer
     token,
     serverInstanceId: SERVER_INSTANCE_ID,
     scopeFingerprint: SCOPE_FINGERPRINT,
+    port: allocateTestPort(),
   });
   const client = new AgentServiceClient(running.address, credentials.createInsecure(), {
     ...GRPC_CHANNEL_OPTIONS,
