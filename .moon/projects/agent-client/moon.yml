@@ -1,0 +1,25 @@
+language: "typescript"
+layer: "library"
+dependsOn: ["local-control-plane", "protocol"]
+fileGroups:
+  package: ["/packages/agent-client/**/*"]
+tasks:
+  lint:
+    args:
+      ["--dir", "packages/agent-client", "--config.enable-pre-post-scripts=false", "run", "lint"]
+  typecheck:
+    args:
+      [
+        "--dir",
+        "packages/agent-client",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "typecheck",
+      ]
+  test:
+    args:
+      ["--dir", "packages/agent-client", "--config.enable-pre-post-scripts=false", "run", "test"]
+  build:
+    args:
+      ["--dir", "packages/agent-client", "--config.enable-pre-post-scripts=false", "run", "build"]
+    outputs: ["/packages/agent-client/dist"]

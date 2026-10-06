@@ -1,0 +1,22 @@
+language: "typescript"
+layer: "application"
+fileGroups:
+  package: ["/apps/docs/**/*"]
+tasks:
+  lint:
+    args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "lint"]
+  typecheck:
+    args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "typecheck"]
+  test:
+    args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "test"]
+    outputs: ["/apps/docs/.vitepress/test-dist"]
+  build:
+    args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "build"]
+    outputs: ["/apps/docs/.vitepress/dist"]
+  dev:
+    command: ["pnpm", "--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "dev"]
+    toolchains: "system"
+    inputs: ["@group(package)"]
+    preset: "server"
+    options:
+      runFromWorkspaceRoot: true

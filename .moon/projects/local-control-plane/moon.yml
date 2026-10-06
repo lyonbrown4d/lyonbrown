@@ -1,0 +1,42 @@
+language: "typescript"
+layer: "library"
+fileGroups:
+  package: ["/packages/local-control-plane/**/*"]
+tasks:
+  lint:
+    args:
+      [
+        "--dir",
+        "packages/local-control-plane",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "lint",
+      ]
+  typecheck:
+    args:
+      [
+        "--dir",
+        "packages/local-control-plane",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "typecheck",
+      ]
+  test:
+    args:
+      [
+        "--dir",
+        "packages/local-control-plane",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "test",
+      ]
+  build:
+    args:
+      [
+        "--dir",
+        "packages/local-control-plane",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "build",
+      ]
+    outputs: ["/packages/local-control-plane/dist"]

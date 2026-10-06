@@ -9,6 +9,7 @@
 3. TypeScript 源文件的相对导入必须使用 `.ts` 扩展名，不得使用 `.js` 指向 TypeScript 源；构建产物扩展名由 TypeScript `rewriteRelativeImportExtensions` 自动改写。
 4. 统一使用 2 空格缩进，不使用 Tab。提交前运行根目录的格式、lint、类型、测试和构建门禁。
 5. 工具依赖放在 `devDependencies`；版本不得使用 `latest`、`*` 或 `~` 范围。复杂编排脚本放在 `scripts/*.ts`，通过 `tsx` 执行并使用 `zx` 管理子进程。
+6. moon 是 monorepo 任务图与缓存的唯一调度器，pnpm 仍是唯一包管理器。根目录的 `dev`、`dev:docs`、`lint`、`typecheck`、`test` 和 `build` 必须经 moon 执行；不得恢复并行的自制 workspace 调度器，也不得让 moon/proto 下载或替换仓库固定的 Node.js 与 pnpm。
 
 ## 结构与边界
 
@@ -19,6 +20,7 @@
 5. EventStore 是会话与执行状态的真相源，Pi 是执行引擎。执行结果必须先映射为 Lyonbrown 领域事件，再投影给 client。
 6. 仓库只保留 Node.js / TypeScript 产品实现。不得重新引入 Rust runtime、GUI/Desktop client 或双实现兼容路径；历史行为需要保留时，转换为语言无关 fixture 或 TypeScript 回归测试。
 7. 新的工程风格与结构约束必须收敛到本文件，不散落为口头约定。
+8. 每个 `apps/*`、`packages/*` workspace 包都必须在 `.moon/workspace.yml` 中注册，并在 `.moon/projects/*/moon.yml` 显式维护内部依赖边、输入与输出。新增、删除或重命名 workspace 包时必须同步更新 moon 项目图和配置契约测试。
 
 ## 验证
 

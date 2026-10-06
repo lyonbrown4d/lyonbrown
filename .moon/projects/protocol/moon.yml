@@ -1,0 +1,38 @@
+language: "typescript"
+layer: "library"
+fileGroups:
+  package: ["/packages/protocol/**/*"]
+tasks:
+  generate:
+    command:
+      [
+        "pnpm",
+        "--dir",
+        "packages/protocol",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "generate",
+      ]
+    toolchains: "system"
+    inputs:
+      - "/packages/protocol/proto/**/*"
+      - "/packages/protocol/scripts/**/*"
+      - "/packages/protocol/buf.gen.yaml"
+      - "/packages/protocol/buf.yaml"
+    outputs: ["/packages/protocol/src/generated"]
+    options:
+      runFromWorkspaceRoot: true
+  lint:
+    args: ["--dir", "packages/protocol", "--config.enable-pre-post-scripts=false", "run", "lint"]
+    deps: ["generate"]
+  typecheck:
+    args:
+      ["--dir", "packages/protocol", "--config.enable-pre-post-scripts=false", "run", "typecheck"]
+    deps: ["generate"]
+  test:
+    args: ["--dir", "packages/protocol", "--config.enable-pre-post-scripts=false", "run", "test"]
+    deps: ["generate"]
+  build:
+    args: ["--dir", "packages/protocol", "--config.enable-pre-post-scripts=false", "run", "build"]
+    deps: ["generate"]
+    outputs: ["/packages/protocol/dist"]

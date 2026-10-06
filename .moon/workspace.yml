@@ -1,0 +1,23 @@
+projects:
+  sources:
+    agent-cli: ".moon/projects/agent-cli"
+    agent-client: ".moon/projects/agent-client"
+    agent-domain: ".moon/projects/agent-domain"
+    agent-launch: ".moon/projects/agent-launch"
+    agent-runtime: ".moon/projects/agent-runtime"
+    agentd: ".moon/projects/agentd"
+    control-plane-native: ".moon/projects/control-plane-native"
+    docs: ".moon/projects/docs"
+    event-store: ".moon/projects/event-store"
+    kernel-pi: ".moon/projects/kernel-pi"
+    local-control-plane: ".moon/projects/local-control-plane"
+    local-model: ".moon/projects/local-model"
+    protocol: ".moon/projects/protocol"
+    ui-model: ".moon/projects/ui-model"
+    workspace: ".moon/projects/workspace"
+
+defaultProject: "agent-cli"
+
+vcs:
+  client: "git"
+  defaultBranch: "main"

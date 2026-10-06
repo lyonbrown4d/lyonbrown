@@ -1,0 +1,25 @@
+language: "typescript"
+# agentd also exposes its composition root to the authenticated CLI client.
+# Keep the mixed application/library package unconstrained until it is split.
+layer: "unknown"
+dependsOn:
+  - "agent-domain"
+  - "agent-runtime"
+  - "control-plane-native"
+  - "event-store"
+  - "kernel-pi"
+  - "local-control-plane"
+  - "local-model"
+  - "protocol"
+fileGroups:
+  package: ["/apps/agentd/**/*"]
+tasks:
+  lint:
+    args: ["--dir", "apps/agentd", "--config.enable-pre-post-scripts=false", "run", "lint"]
+  typecheck:
+    args: ["--dir", "apps/agentd", "--config.enable-pre-post-scripts=false", "run", "typecheck"]
+  test:
+    args: ["--dir", "apps/agentd", "--config.enable-pre-post-scripts=false", "run", "test"]
+  build:
+    args: ["--dir", "apps/agentd", "--config.enable-pre-post-scripts=false", "run", "build"]
+    outputs: ["/apps/agentd/dist"]

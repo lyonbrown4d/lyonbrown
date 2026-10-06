@@ -17,6 +17,31 @@ Lyonbrown TUI 采用接近成熟终端 Agent 的低界面感设计，但不复�
 
 常驻多栏布局不再作为 TUI 默认方案。它会压缩终端正文、破坏原生 scrollback，并增加 SSH、tmux 和窄终端中的操作成本。详情仍可通过 overlay 或临时全屏视图访问。
 
+### 1.1 当前实现与视觉证据
+
+当前 Node TUI 精确固定 `@earendil-works/pi-tui@1.0.0`，使用它提供的
+`TuiMainScreen`、`Editor`、自动补全、键盘输入、终端文本安全处理、宽度截断和
+true-color 样式。`rxjs@7.8.2` 负责 Runtime Snapshot 的 Observable 投影；认证
+gRPC、daemon 发现与启动仍由 `agent-client` 和 `agent-launch` 边界持有。
+
+2026-10-06 从源码启动后的真实终端基线如下。界面会先显示 `Connecting`，连接完成后
+进入 `Ready`；模型缺失时只显示 `required`，不会自动下载：
+
+```text
+Lyonbrown  Ready
+────────────────────────────────────────────────────────────────────────────────
+Start typing while Lyonbrown connects in the background.
+Local model · required 0 MiB
+F2 language · Ctrl+P commands · Ctrl+Shift+A activity · Ctrl+C exit
+────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────
+```
+
+本文下方的 PNG 是已接受的产品设计效果图，用于约束目标交互、信息层级和主题；它们
+不是当前 Node TUI 的实机验收截图。设计图中的 Rust/Cargo 示例文本也不代表仓库仍
+包含 Rust 实现。是否完成某项界面能力，以当前实现、自动化测试和上述真实终端基线为准。
+
 ## 2. 信息架构
 
 默认界面只有四个纵向区域：
@@ -325,7 +350,7 @@ focus.ring
 
 | 能力                                 | 所属模块                    |
 | ------------------------------------ | --------------------------- |
-| `Theme`, token 与 Ratatui style 映射 | TUI client                  |
+| `Theme`、token 与 Pi TUI style 映射  | TUI client                  |
 | `Locale`, 文案目录与键位提示         | TUI client，共享 locale ID  |
 | `UiPreferences` 持久化               | 配置/客户端偏好存储         |
 | `SteerCurrentTurn`, `QueueFollowUp`  | `agent-app` 类型化命令      |

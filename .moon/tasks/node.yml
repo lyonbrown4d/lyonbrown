@@ -1,0 +1,37 @@
+implicitInputs:
+  - "/package.json"
+  - "/pnpm-lock.yaml"
+  - "/pnpm-workspace.yaml"
+
+tasks:
+  lint:
+    command: "pnpm"
+    toolchains: "system"
+    inputs: ["@group(package)"]
+    deps: ["^:build"]
+    options:
+      runFromWorkspaceRoot: true
+
+  typecheck:
+    command: "pnpm"
+    toolchains: "system"
+    inputs: ["@group(package)"]
+    deps: ["^:build"]
+    options:
+      runFromWorkspaceRoot: true
+
+  test:
+    command: "pnpm"
+    toolchains: "system"
+    inputs: ["@group(package)"]
+    deps: ["^:build"]
+    options:
+      runFromWorkspaceRoot: true
+
+  build:
+    command: "pnpm"
+    toolchains: "system"
+    inputs: ["@group(package)"]
+    deps: ["^:build"]
+    options:
+      runFromWorkspaceRoot: true

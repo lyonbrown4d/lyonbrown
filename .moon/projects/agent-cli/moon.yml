@@ -1,0 +1,15 @@
+language: "typescript"
+layer: "tool"
+dependsOn: ["agent-client", "agent-launch", "agentd", "control-plane-native", "ui-model"]
+fileGroups:
+  package: ["/apps/agent-cli/**/*"]
+tasks:
+  lint:
+    args: ["--dir", "apps/agent-cli", "--config.enable-pre-post-scripts=false", "run", "lint"]
+  typecheck:
+    args: ["--dir", "apps/agent-cli", "--config.enable-pre-post-scripts=false", "run", "typecheck"]
+  test:
+    args: ["--dir", "apps/agent-cli", "--config.enable-pre-post-scripts=false", "run", "test"]
+  build:
+    args: ["--dir", "apps/agent-cli", "--config.enable-pre-post-scripts=false", "run", "build"]
+    outputs: ["/apps/agent-cli/dist"]

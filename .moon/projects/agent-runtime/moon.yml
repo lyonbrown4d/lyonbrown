@@ -1,0 +1,25 @@
+language: "typescript"
+layer: "library"
+dependsOn: ["agent-domain", "event-store", "kernel-pi"]
+fileGroups:
+  package: ["/packages/agent-runtime/**/*"]
+tasks:
+  lint:
+    args:
+      ["--dir", "packages/agent-runtime", "--config.enable-pre-post-scripts=false", "run", "lint"]
+  typecheck:
+    args:
+      [
+        "--dir",
+        "packages/agent-runtime",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "typecheck",
+      ]
+  test:
+    args:
+      ["--dir", "packages/agent-runtime", "--config.enable-pre-post-scripts=false", "run", "test"]
+  build:
+    args:
+      ["--dir", "packages/agent-runtime", "--config.enable-pre-post-scripts=false", "run", "build"]
+    outputs: ["/packages/agent-runtime/dist"]

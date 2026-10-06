@@ -1,0 +1,43 @@
+language: "typescript"
+layer: "library"
+dependsOn: ["event-store", "local-control-plane", "local-model"]
+fileGroups:
+  package: ["/packages/control-plane-native/**/*"]
+tasks:
+  lint:
+    args:
+      [
+        "--dir",
+        "packages/control-plane-native",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "lint",
+      ]
+  typecheck:
+    args:
+      [
+        "--dir",
+        "packages/control-plane-native",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "typecheck",
+      ]
+  test:
+    args:
+      [
+        "--dir",
+        "packages/control-plane-native",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "test",
+      ]
+  build:
+    args:
+      [
+        "--dir",
+        "packages/control-plane-native",
+        "--config.enable-pre-post-scripts=false",
+        "run",
+        "build",
+      ]
+    outputs: ["/packages/control-plane-native/dist"]

@@ -17,6 +17,36 @@ The Lyonbrown TUI adopts the low-interface character of mature terminal agents w
 
 A permanent multi-column layout is no longer the TUI default. It compresses terminal content, interferes with native scrollback, and increases the cost of SSH, tmux, and narrow-terminal use. Details remain available through overlays or temporary full-screen views.
 
+### 1.1 Current implementation and visual evidence
+
+The Node TUI pins `@earendil-works/pi-tui@1.0.0` and uses its `TuiMainScreen`,
+`Editor`, autocomplete, keyboard input, terminal text sanitization, width
+truncation, and true-color styling. `rxjs@7.8.2` projects Runtime Snapshots as
+Observables. Authenticated gRPC, daemon discovery, and daemon startup remain
+behind the `agent-client` and `agent-launch` boundaries.
+
+The real source-run terminal baseline captured on 2026-10-06 is shown below.
+It first renders `Connecting`, then reaches `Ready`. A missing model is reported
+as `required` and is not downloaded automatically:
+
+```text
+Lyonbrown  Ready
+────────────────────────────────────────────────────────────────────────────────
+Start typing while Lyonbrown connects in the background.
+Local model · required 0 MiB
+F2 language · Ctrl+P commands · Ctrl+Shift+A activity · Ctrl+C exit
+────────────────────────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────────────
+```
+
+The PNGs below are accepted product-design renders that constrain the target
+interaction, information hierarchy, and themes. They are not acceptance
+screenshots of the current Node TUI. Rust/Cargo sample text in those renders
+also does not imply that a Rust implementation remains in the repository.
+Implementation, automated tests, and the terminal baseline above are the
+source of truth for current capability.
+
 ## 2. Information architecture
 
 The default surface has four vertical regions:
@@ -356,14 +386,14 @@ imply completion of the still-missing selector surfaces.
 
 Recommended ownership:
 
-| Capability                                 | Owner                              |
-| ------------------------------------------ | ---------------------------------- |
-| `Theme`, tokens, and Ratatui style mapping | TUI client                         |
-| `Locale`, message catalog, and key hints   | TUI client, with shared locale IDs |
-| `UiPreferences` persistence                | config/client preference storage   |
-| `SteerCurrentTurn`, `QueueFollowUp`        | typed `agent-app` commands         |
-| `ApprovalView`, `ToolPreview`              | `agent-app` / `agent-tool`         |
-| Session model pin and RoutingDecision      | `agent-app` / `agent-model`        |
+| Capability                                | Owner                              |
+| ----------------------------------------- | ---------------------------------- |
+| `Theme`, tokens, and Pi TUI style mapping | TUI client                         |
+| `Locale`, message catalog, and key hints  | TUI client, with shared locale IDs |
+| `UiPreferences` persistence               | config/client preference storage   |
+| `SteerCurrentTurn`, `QueueFollowUp`       | typed `agent-app` commands         |
+| `ApprovalView`, `ToolPreview`             | `agent-app` / `agent-tool`         |
+| Session model pin and RoutingDecision     | `agent-app` / `agent-model`        |
 
 `UiPreferences` contains at least:
 

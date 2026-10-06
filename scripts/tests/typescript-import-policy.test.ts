@@ -45,10 +45,10 @@ describe("TypeScript import policy", () => {
       },
     )
       .split(/\r?\n/u)
-      .filter((path) => path.length > 0);
-    const violations = findJavaScriptSpecifiers(
-      trackedTypeScript.map((path) => resolve(repositoryRoot, path)),
-    );
+      .filter((path) => path.length > 0)
+      .map((path) => resolve(repositoryRoot, path))
+      .filter((path) => existsSync(path));
+    const violations = findJavaScriptSpecifiers(trackedTypeScript);
 
     expect(violations).toEqual([]);
   });
