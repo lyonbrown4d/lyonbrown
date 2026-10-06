@@ -34,8 +34,10 @@ Kernel → 工具策略与审批。模型决策不能授予权限、绕过审批
 - 只加载已经验证的绝对本地模型路径，并关闭 Transformers 远程模型访问与文件缓存；
 - 状态、问题数、说明和选项均有字节/数量上限；答案必须留在声明集合内，概率必须有限、
   位于 `[0,1]` 且总和有效；异常和畸形结果统一映射为脱敏的 `undetermined`；
-- 释放幂等；取消后丢弃迟到结果。OpenJev 当前不能中断正在运行的 ONNX forward pass，
-  因此在 worker 隔离或上游可取消支持完成前不得默认组合到生产主链路。
+- OpenJev/Transformers 在单线程、有界队列和 V8 worker resource limits 的 Piscina worker
+  中按首次决策懒加载；composition 返回 `configured`，不把尚未加载的模型误报为 ready；
+  释放幂等且有截止时间，AbortSignal 取消会终止对应 worker，而不是让 ONNX forward pass
+  占用 daemon 主线程。
 
 ## 模型与下载策略
 
@@ -43,6 +45,12 @@ Kernel → 工具策略与审批。模型决策不能授予权限、绕过审批
 composition。权重必须复用原生安全存储能力，通过固定 revision、文件清单、SHA-256、
 最大字节数、同文件系统 staging 和原子激活进入独立的 decision-model 目录。下载由用户
 显式启动并在后台运行，不能阻塞 daemon 或普通 chat 启动。
+
+模型根目录通过 dotenv 兼容变量 `LYONBROWN_DECISION_MODEL_ROOT` 注入，并且必须是完整限定的
+本地绝对路径。Windows 必须包含盘符，拒绝当前盘根路径、UNC 和 device namespace。本机开发
+使用不提交的 `.env.local` 指向 `F:` 盘；测试也通过 dotenv 注入动态绝对路径，不得把盘符或
+个人目录写死在 fixture 中。配置缺失或非法时 Provider 显式不可用，不回退到用户主目录或
+系统盘。
 
 ## 默认启用门槛
 
@@ -52,5 +60,5 @@ composition。权重必须复用原生安全存储能力，通过固定 revision
 - 构建制品在断网且禁止原生编译时通过缓存复用、决策、回退和清理 smoke；
 - 未安装或未通过验证时显式回退到已记录的 Pi 路径，安全场景继续 fail closed。
 
-下一实现切片是 decision model 的受保护后台安装状态机、worker 隔离，以及
-decision-before-kernel 的领域事件与恢复测试。
+下一实现切片是 decision model 的受保护后台安装状态机，以及 decision-before-kernel
+的领域事件与恢复测试。

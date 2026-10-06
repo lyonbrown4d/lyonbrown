@@ -28,6 +28,7 @@
       ],
       "@lyonbrown/decision-engine/internal/*": ["packages/decision-engine/src/*.ts"],
       "@lyonbrown/decision-engine/test/*": ["packages/decision-engine/tests/*.ts"],
+      "@lyonbrown/decision-engine/script/*": ["packages/decision-engine/scripts/*.ts"],
       "@lyonbrown/event-store/internal/*": ["packages/event-store/src/*.ts"],
       "@lyonbrown/event-store/test/*": ["packages/event-store/tests/*.ts"],
       "@lyonbrown/kernel-pi/internal/*": ["packages/kernel-pi/src/*.ts"],

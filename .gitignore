@@ -12,3 +12,6 @@ coverage/
 **/.vitepress/cache/
 **/.vitepress/dist/
 **/.vitepress/test-dist/
+.env
+.env.*
+!.env.example

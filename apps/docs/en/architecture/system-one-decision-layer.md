@@ -40,9 +40,11 @@ replace input budgets.
 - state, question count, instructions, and options are bounded; answers must remain in the declared
   set, with finite `[0,1]` probabilities and a valid sum; failures become sanitized `undetermined`
   outcomes;
-- disposal is idempotent and late results are discarded after cancellation. OpenJev cannot
-  currently interrupt an active ONNX forward pass, so it must not enter the default production
-  critical path until worker isolation or upstream cancellation exists.
+- OpenJev and Transformers load lazily on the first decision in a single-threaded Piscina worker
+  with a bounded queue and V8 worker resource limits. Composition reports `configured`, not ready,
+  before the model load succeeds. Disposal is idempotent and deadline-bounded, and AbortSignal
+  cancellation terminates the corresponding worker instead of leaving an ONNX forward pass on the
+  daemon main thread.
 
 ## Model and download policy
 
@@ -51,6 +53,13 @@ use OpenJev's Hub downloader. Weights must reuse native secure storage with a pi
 manifest, SHA-256, byte ceiling, same-filesystem staging, and atomic activation under a separate
 decision-model directory. Download is explicit, background work and never blocks daemon or ordinary
 chat startup.
+
+The model root is injected with the dotenv-compatible `LYONBROWN_DECISION_MODEL_ROOT` variable and
+must be a fully qualified local path. Windows requires a drive-qualified path and rejects current-
+drive roots, UNC paths, and device namespaces. Local development uses an uncommitted `.env.local`
+on the `F:` drive; tests inject a dynamically resolved absolute path through dotenv instead of
+embedding a drive or user directory in fixtures. A missing or invalid value leaves the provider
+explicitly unavailable and never falls back to the home directory or system drive.
 
 ## Default-enable gate
 
@@ -65,5 +74,5 @@ chat startup.
 - a missing or unverified model follows an explicit recorded Pi fallback while security-sensitive
   paths remain fail closed.
 
-The next slice is protected background installation for decision weights, worker isolation, and
-decision-before-kernel domain-event and recovery tests.
+The next slice is protected background installation for decision weights plus decision-before-
+kernel domain-event and recovery tests.

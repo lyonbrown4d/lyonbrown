@@ -1,85 +1,87 @@
-import { isAbsolute } from "node:path";
+import { Piscina } from "piscina";
 
-import { env } from "@huggingface/transformers";
-import { OpenJev } from "open-jev";
-
-import { createOpenJevDecisionEngine } from "@lyonbrown/decision-engine/internal/open-jev-adapter";
-import type { OpenJevRuntime } from "@lyonbrown/decision-engine/internal/open-jev-runtime";
+import {
+  isValidLocalOpenJevConfiguration,
+  type LocalOpenJevConfiguration,
+} from "@lyonbrown/decision-engine/internal/open-jev-configuration";
+import {
+  createWorkerOpenJevDecisionEngine,
+  type DecisionWorkerPool,
+  type OpenJevWorkerTask,
+} from "@lyonbrown/decision-engine/internal/worker-engine";
 import type { DecisionEnginePort } from "@lyonbrown/decision-engine/internal/types";
 
-export interface LocalOpenJevConfiguration {
-  /** Absolute path to an already verified local model directory. */
-  readonly modelPath: string;
-  readonly modelId: string;
-  /** Pinned upstream model commit. */
-  readonly modelRevision: string;
-}
+export type { LocalOpenJevConfiguration } from "@lyonbrown/decision-engine/internal/open-jev-configuration";
 
-interface OpenJevLoadOptions {
-  readonly model: string;
-  readonly device: "cpu";
-  readonly dtype: "q4";
-  readonly truncation: "error";
+export interface OpenJevWorkerPoolOptions {
+  readonly filename: string;
+  readonly minThreads: number;
+  readonly maxThreads: number;
+  readonly maxQueue: number;
+  readonly concurrentTasksPerWorker: number;
+  readonly idleTimeout: number;
+  readonly closeTimeout: number;
+  readonly resourceLimits: {
+    readonly maxOldGenerationSizeMb: number;
+    readonly maxYoungGenerationSizeMb: number;
+    readonly stackSizeMb: number;
+  };
 }
 
 export interface OpenJevCompositionDependencies {
-  readonly load: (options: OpenJevLoadOptions) => Promise<OpenJevRuntime>;
-  readonly disableRemoteModels: () => void;
+  readonly createPool: (options: OpenJevWorkerPoolOptions) => DecisionWorkerPool;
 }
 
-export type LoadDecisionEngineResult =
-  | { readonly kind: "ready"; readonly engine: DecisionEnginePort }
+export type CreateDecisionEngineResult =
+  | { readonly kind: "configured"; readonly engine: DecisionEnginePort }
   | {
       readonly kind: "unavailable";
-      readonly reason: "invalid_configuration" | "provider_load_failed";
+      readonly reason: "invalid_configuration" | "worker_pool_creation_failed";
     };
 
-const MODEL_ID = /^[a-z0-9][a-z0-9._-]{0,127}$/u;
-const MODEL_REVISION = /^[a-f0-9]{40}$/u;
+const WORKER_OPTIONS: OpenJevWorkerPoolOptions = Object.freeze({
+  filename: new URL("./open-jev-worker.js", import.meta.url).href,
+  minThreads: 0,
+  maxThreads: 1,
+  maxQueue: 1,
+  concurrentTasksPerWorker: 1,
+  idleTimeout: 60_000,
+  closeTimeout: 5_000,
+  resourceLimits: Object.freeze({
+    maxOldGenerationSizeMb: 1_024,
+    maxYoungGenerationSizeMb: 128,
+    stackSizeMb: 8,
+  }),
+});
 
-const productionDependencies: OpenJevCompositionDependencies = {
-  load: async (options) => OpenJev.load(options),
-  disableRemoteModels(): void {
-    env.allowRemoteModels = false;
-    env.allowLocalModels = true;
-    env.useFSCache = false;
-    env.cacheDir = null;
+const productionDependencies: OpenJevCompositionDependencies = Object.freeze({
+  createPool(options: OpenJevWorkerPoolOptions): DecisionWorkerPool {
+    const pool = new Piscina<OpenJevWorkerTask, unknown>(options);
+    return {
+      run: (task, runOptions) => pool.run(task, runOptions),
+      close: () => pool.close({ force: true }),
+    };
   },
-};
+});
 
-function validConfiguration(configuration: LocalOpenJevConfiguration): boolean {
-  return (
-    isAbsolute(configuration.modelPath) &&
-    !configuration.modelPath.includes("\0") &&
-    MODEL_ID.test(configuration.modelId) &&
-    MODEL_REVISION.test(configuration.modelRevision)
-  );
-}
-
-export async function loadLocalOpenJevDecisionEngine(
+export function createLocalOpenJevDecisionEngine(
   configuration: LocalOpenJevConfiguration,
   dependencies: OpenJevCompositionDependencies = productionDependencies,
-): Promise<LoadDecisionEngineResult> {
-  if (!validConfiguration(configuration)) {
+): CreateDecisionEngineResult {
+  if (!isValidLocalOpenJevConfiguration(configuration)) {
     return { kind: "unavailable", reason: "invalid_configuration" };
   }
   try {
-    dependencies.disableRemoteModels();
-    const runtime = await dependencies.load({
-      model: configuration.modelPath,
-      device: "cpu",
-      dtype: "q4",
-      truncation: "error",
-    });
+    const pool = dependencies.createPool(WORKER_OPTIONS);
     return {
-      kind: "ready",
-      engine: createOpenJevDecisionEngine({
-        runtime,
-        modelId: configuration.modelId,
-        modelRevision: configuration.modelRevision,
+      kind: "configured",
+      engine: createWorkerOpenJevDecisionEngine({
+        pool,
+        configuration,
+        closeTimeoutMs: WORKER_OPTIONS.closeTimeout,
       }),
     };
   } catch {
-    return { kind: "unavailable", reason: "provider_load_failed" };
+    return { kind: "unavailable", reason: "worker_pool_creation_failed" };
   }
 }

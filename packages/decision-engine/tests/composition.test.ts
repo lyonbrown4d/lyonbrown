@@ -1,60 +1,73 @@
-import { resolve } from "node:path";
-
 import { describe, expect, it, vi } from "vitest";
 
-import { loadLocalOpenJevDecisionEngine } from "@lyonbrown/decision-engine/internal/composition";
+import {
+  createLocalOpenJevDecisionEngine,
+  type OpenJevWorkerPoolOptions,
+} from "@lyonbrown/decision-engine/internal/composition";
+import type { DecisionWorkerPool } from "@lyonbrown/decision-engine/internal/worker-engine";
+import { injectedOpenJevConfiguration } from "@lyonbrown/decision-engine/test/model-environment";
 
-const modelRevision = "0123456789abcdef0123456789abcdef01234567";
+function workerPool(): DecisionWorkerPool {
+  return {
+    run: vi.fn().mockResolvedValue([]),
+    close: vi.fn().mockResolvedValue(undefined),
+  };
+}
 
 describe("OpenJev production composition", () => {
-  it("loads an exact local model path with remote model access disabled", async () => {
-    const runtime = { decide: vi.fn(), dispose: vi.fn().mockResolvedValue(undefined) };
-    const load = vi.fn().mockResolvedValue(runtime);
-    const disableRemoteModels = vi.fn();
-    const modelPath = resolve("fixtures/decision-model");
+  it("creates one bounded Piscina worker for an exact local model path", async () => {
+    const pool = workerPool();
+    const createPool = vi.fn((_options: OpenJevWorkerPoolOptions) => pool);
+    const configuration = injectedOpenJevConfiguration();
 
-    const result = await loadLocalOpenJevDecisionEngine(
-      { modelPath, modelId: "kev-0.6b", modelRevision },
-      { load, disableRemoteModels },
-    );
+    const result = createLocalOpenJevDecisionEngine(configuration, { createPool });
 
-    expect(result.kind).toBe("ready");
-    expect(disableRemoteModels).toHaveBeenCalledOnce();
-    expect(load).toHaveBeenCalledWith({
-      model: modelPath,
-      device: "cpu",
-      dtype: "q4",
-      truncation: "error",
+    expect(result.kind).toBe("configured");
+    expect(createPool).toHaveBeenCalledOnce();
+    const poolOptions = createPool.mock.calls[0]?.[0];
+    expect(poolOptions).toBeDefined();
+    if (poolOptions === undefined) throw new Error("WORKER_POOL_OPTIONS_MISSING");
+    expect(poolOptions.filename).toMatch(/open-jev-worker\.js$/u);
+    expect(poolOptions).toEqual({
+      filename: poolOptions.filename,
+      minThreads: 0,
+      maxThreads: 1,
+      maxQueue: 1,
+      concurrentTasksPerWorker: 1,
+      idleTimeout: 60_000,
+      closeTimeout: 5_000,
+      resourceLimits: {
+        maxOldGenerationSizeMb: 1_024,
+        maxYoungGenerationSizeMb: 128,
+        stackSizeMb: 8,
+      },
     });
   });
 
   it.each(["kev-0.6b", "https://huggingface.co/model", "../model"])(
-    "rejects non-absolute model location %s without loading the provider",
+    "rejects non-absolute model location %s without creating a worker",
     async (modelPath) => {
-      const load = vi.fn();
-      const result = await loadLocalOpenJevDecisionEngine(
-        { modelPath, modelId: "kev-0.6b", modelRevision },
-        { load, disableRemoteModels: vi.fn() },
+      const createPool = vi.fn();
+      const result = createLocalOpenJevDecisionEngine(
+        {
+          ...injectedOpenJevConfiguration(),
+          modelPath,
+        },
+        { createPool },
       );
 
       expect(result).toEqual({ kind: "unavailable", reason: "invalid_configuration" });
-      expect(load).not.toHaveBeenCalled();
+      expect(createPool).not.toHaveBeenCalled();
     },
   );
 
-  it("sanitizes load failures", async () => {
-    const result = await loadLocalOpenJevDecisionEngine(
-      {
-        modelPath: resolve("fixtures/decision-model"),
-        modelId: "kev-0.6b",
-        modelRevision,
+  it("sanitizes worker-pool creation failures", async () => {
+    const result = createLocalOpenJevDecisionEngine(injectedOpenJevConfiguration(), {
+      createPool: () => {
+        throw new Error("private worker failure");
       },
-      {
-        load: vi.fn().mockRejectedValue(new Error("C:\\private\\model.onnx")),
-        disableRemoteModels: vi.fn(),
-      },
-    );
+    });
 
-    expect(result).toEqual({ kind: "unavailable", reason: "provider_load_failed" });
+    expect(result).toEqual({ kind: "unavailable", reason: "worker_pool_creation_failed" });
   });
 });
