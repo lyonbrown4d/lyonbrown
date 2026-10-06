@@ -8,6 +8,7 @@ import {
   type KernelRuntimeError,
 } from "@lyonbrown/kernel-pi/internal/errors";
 import { ListenerDispatcher } from "@lyonbrown/kernel-pi/internal/listener-dispatcher";
+import { toPiHistory } from "@lyonbrown/kernel-pi/internal/history";
 import { createPiStreamFunction } from "@lyonbrown/kernel-pi/internal/pi-bridge";
 import {
   createPiModel,
@@ -70,11 +71,13 @@ export class PiKernelSession implements KernelSession {
       this.markFatal.bind(this),
     );
     const tools = registeredTools.map((tool) => toolExecutor.createAgentTool(tool));
+    const initialMessages = toPiHistory(options.initialMessages, options.budget, limits);
     this.#agent = new Agent({
       initialState: {
         systemPrompt,
         model: createPiModel(modelDescriptor),
         tools,
+        messages: initialMessages,
       },
       streamFn: createPiStreamFunction({
         sessionId: options.sessionId,

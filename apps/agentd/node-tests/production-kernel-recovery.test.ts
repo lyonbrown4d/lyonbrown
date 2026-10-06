@@ -1,14 +1,15 @@
 import { openEventStore } from "@lyonbrown/event-store";
-import type { LocalModelLease } from "@lyonbrown/local-model";
+import type { LocalModelLease, LocalModelMessage } from "@lyonbrown/local-model";
 import { describe, expect, it, vi } from "vitest";
 
 import { createProductionRuntime } from "@lyonbrown/agentd/internal/production-kernel";
 
 const OLD_SESSION = "old-session";
 
-function completedLease(): LocalModelLease {
+function completedLease(requests: LocalModelMessage[][] = []): LocalModelLease {
   return {
-    async *stream() {
+    async *stream(request) {
+      requests.push([...request.messages]);
       yield { type: "text_delta", text: "done" } as const;
       yield { type: "usage", inputTokens: 1, outputTokens: 1 } as const;
       yield { type: "done", reason: "stop" } as const;
@@ -61,19 +62,42 @@ describe("production kernel crash recovery", () => {
     }
   });
 
-  it("rotates a completed session until Pi history hydration is supported", async () => {
+  it("hydrates and resumes a completed session after restart", async () => {
     const store = openEventStore({ testOnlyMemory: true });
-    const lease = completedLease();
+    const requests: LocalModelMessage[][] = [];
+    const lease = completedLease(requests);
     const first = await createProductionRuntime(lease, "model", store, OLD_SESSION);
     await first.startTurn("finish normally");
     await waitForPhase(first, "completed");
     await first.dispose();
 
     const restarted = await createProductionRuntime(lease, "model", store, OLD_SESSION);
-    expect(restarted.snapshot().sessionId).not.toBe(OLD_SESSION);
+    expect(restarted.snapshot().sessionId).toBe(OLD_SESSION);
     expect(await store.currentRevision(OLD_SESSION)).toBeGreaterThan(1n);
     await restarted.startTurn("new context");
     await waitForPhase(restarted, "completed");
+    expect(requests[1]).toEqual([
+      expect.objectContaining({ role: "system" }),
+      { role: "user", content: "finish normally" },
+      { role: "assistant", content: "done" },
+      { role: "user", content: "new context" },
+    ]);
+    await restarted.dispose();
+    store.close();
+  });
+
+  it("rotates completed history that exceeds the Kernel JSON budget after escaping", async () => {
+    const store = openEventStore({ testOnlyMemory: true });
+    const lease = completedLease();
+    const first = await createProductionRuntime(lease, "model", store, OLD_SESSION);
+    for (let turn = 0; turn < 4; turn += 1) {
+      await first.startTurn("\\".repeat(64_000));
+      await waitForPhase(first, "completed");
+    }
+    await first.dispose();
+
+    const restarted = await createProductionRuntime(lease, "model", store, OLD_SESSION);
+    expect(restarted.snapshot().sessionId).not.toBe(OLD_SESSION);
     await restarted.dispose();
     store.close();
   });

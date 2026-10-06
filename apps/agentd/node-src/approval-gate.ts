@@ -4,6 +4,7 @@ import type {
   KernelApprovalRequest,
   KernelApprovalResponseStatus,
 } from "@lyonbrown/kernel-pi";
+import type { RuntimeApprovalPolicy } from "@lyonbrown/agent-domain";
 
 interface PendingApproval {
   readonly requestId: string;
@@ -17,6 +18,11 @@ export class SessionApprovalGate implements KernelApprovalGate {
   readonly #approvedTools = new Set<string>();
   #pending: PendingApproval | undefined;
   #denyRemaining = false;
+
+  constructor(policy: RuntimeApprovalPolicy = { allowedTools: [], denyRemaining: false }) {
+    for (const toolName of policy.allowedTools) this.#approvedTools.add(toolName);
+    this.#denyRemaining = policy.denyRemaining;
+  }
 
   request(request: KernelApprovalRequest): Promise<{ readonly decision: KernelApprovalDecision }> {
     if (request.signal.aborted || this.#denyRemaining) {

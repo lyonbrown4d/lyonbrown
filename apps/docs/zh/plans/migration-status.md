@@ -71,9 +71,9 @@
   可信目录读取实际硬件选择及固定摘要，验证了不自动下载、显式取消/重试、进度、校验、
   激活、pinned/auto 选择、真实回答和 usage、`write` 调用、审批与准确落盘、长 turn 取消、
   缓存重启以及 30 秒预算内关闭。脚本最终输出 `REAL_GGUF_SMOKE_OK`，并清理临时缓存。
-- 重启测试会刻意轮换任何包含历史 turn 的 Session，包括已完成的 Session。这样既
-  保留持久事件，也不会在 Pi 对话状态尚未完整恢复时静默续接；Pi history hydration
-  仍未实现。
+- daemon 重启现在会为已完成且无歧义的 Session 重建 Pi 历史，包括工具调用、工具结果
+  与会话级审批策略。运行中、失败、取消、含 steering、待审批、未决结果或超过
+  128 条消息/256 KiB 的历史仍会 fail closed 并轮换，持久事件继续保留。
 - 本检查点已通过 frozen install、仓库级 format、lint、typecheck、test、build、docs
   和 `ci-gate`；在声明可发布前仍须基于最终发布制品重复执行。
 - Windows x64 开发制品现已使用 pnpm hoisted production deploy，内嵌固定的 Node 24
@@ -107,8 +107,9 @@ gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼�
    取消、推理、缓存重启与有界关闭验证。
 3. 将构建产物认证黑盒从已验证的 spawn 与 setup-required 检查点扩展到复用、重启
    fencing、模型进度、推理与取消。
-4. 在允许 daemon 重启后续接历史 Session 前实现 Pi history hydration。
-5. 在现有窄化文件工具与审批基础上增加 MCP、上下文与 Secret；各能力独立验证前继续
+4. 在已落地的有界 Pi history hydration 基础上实现运行时 context pruning/compaction，
+   并用多 turn 真实 GGUF 场景验证 4096-token 窗口。
+5. 在现有窄化文件工具与审批基础上增加 MCP 与 Secret；各能力独立验证前继续
    default deny。
 6. 对最终制品执行 frozen install、完整 format、lint、typecheck、test、build、docs
    与 `ci-gate`。

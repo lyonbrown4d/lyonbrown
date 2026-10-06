@@ -1,5 +1,6 @@
 export { KernelRuntimeError, type KernelErrorCode } from "@lyonbrown/kernel-pi/internal/errors";
 export { createPiKernelSession, PiKernelSession } from "@lyonbrown/kernel-pi/internal/session";
+export { isValidKernelConversationHistory } from "@lyonbrown/kernel-pi/internal/history";
 export type {
   KernelApprovalGate,
   KernelApprovalDecision,
@@ -10,6 +11,7 @@ export type {
   KernelEventSink,
   KernelJsonPrimitive,
   KernelJsonValue,
+  KernelConversationMessage,
   KernelModelAdapter,
   KernelModelDescriptor,
   KernelModelMessage,

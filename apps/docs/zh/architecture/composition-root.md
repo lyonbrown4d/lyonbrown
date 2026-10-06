@@ -79,9 +79,11 @@ local-model 的单消息上限一致。Kernel 的 256 KiB 限制是完整构造�
 512 KiB 的 follow-up。预算校验与命令持久化共用 daemon 的一条 FIFO 通道，防止并发
 RPC 基于过期状态通过检查。
 
-EventStore 仍是 Session 与执行事件的持久真相源。Pi history hydration 尚未实现，
-因此 daemon 重启后会安全轮换任何包含历史 turn 的 Session——包括已完成 Session——
-而不是在模型上下文不完整时静默续接。旧 Session 仍可从 EventStore 查询。
+EventStore 仍是 Session 与执行事件的持久真相源。daemon 会从领域投影重建已完成且无
+歧义的 Pi 对话历史，包括 assistant 工具调用和 tool result，并恢复会话级审批策略。
+只有状态为 `ready`/`completed`、无 steering、无待审批或未决工具结果，并且历史不超过
+128 条消息与 Kernel 256 KiB 输入上限的 Session 才会续接；运行中、失败、取消、超限或
+结果不确定的 Session 继续 fail closed 并轮换。旧 Session 始终保留在 EventStore 中。
 
 ## 关闭顺序
 

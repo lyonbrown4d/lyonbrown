@@ -117,9 +117,11 @@ inference input, not a single-message allowance. Inactive sessions rotate
 before the next turn at 32 historical turns or 4 MiB of user text; active-turn
 follow-ups are limited to eight entries and 512 KiB in aggregate. Budget checks
 and persistence run in one daemon FIFO command lane so concurrent RPCs cannot
-bypass these limits. After daemon restart, any session with a historical turn
-is safely rotated because Pi history hydration is not implemented yet. Durable
-events remain in EventStore.
+bypass these limits. After daemon restart, bounded completed history is rebuilt
+from durable domain state and supplied to Pi. Sessions with steering, pending
+approval, unresolved work, uncertain tool outcomes, invalid phases, more than
+128 reconstructed messages, or more than 256 KiB of history are safely rotated.
+Durable events remain in EventStore.
 
 The production-composition real-GGUF smoke reads the actual hardware selection
 and verifies its pinned digest from the same trusted catalog rather than

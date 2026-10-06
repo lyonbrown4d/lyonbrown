@@ -36,6 +36,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
     this.#kernel = options.createKernelSession({
       sessionId: options.sessionId,
       eventSink: { append: (event) => this.#appendKernelEvent(event) },
+      state: writer.state,
     });
   }
 

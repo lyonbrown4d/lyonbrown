@@ -97,11 +97,14 @@ user text. During an active turn, at most eight follow-ups totaling 512 KiB may
 be queued. Budget validation and durable command application share one daemon
 FIFO lane, preventing concurrent RPCs from passing checks against stale state.
 
-EventStore remains the durable source of session and execution events. Pi
-history hydration is not implemented yet, so daemon restart safely rotates any
-session containing a historical turn—even a completed one—instead of silently
-resuming with incomplete model context. The old session remains queryable in
-EventStore.
+EventStore remains the durable source of session and execution events. The
+daemon now reconstructs unambiguous completed Pi history from the domain
+projection, including assistant tool calls and tool results, and restores the
+session approval policy. A session resumes only when it is `ready` or
+`completed`, has no steering, pending approval, or unresolved tool outcome, and
+its history stays within 128 messages and the Kernel's 256 KiB input bound.
+Running, failed, cancelled, oversized, ambiguous, or uncertain sessions still
+fail closed and rotate. The old session always remains queryable in EventStore.
 
 ## Shutdown order
 

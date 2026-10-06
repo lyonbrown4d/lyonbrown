@@ -28,6 +28,8 @@ export type KernelModelMessage =
       readonly isError: boolean;
     };
 
+export type KernelConversationMessage = Exclude<KernelModelMessage, { readonly role: "system" }>;
+
 export interface KernelModelTool {
   readonly name: string;
   readonly description: string;
@@ -229,6 +231,8 @@ export interface KernelSession {
 export interface PiKernelSessionOptions {
   readonly sessionId: string;
   readonly systemPrompt: string;
+  /** Completed, bounded conversation history reconstructed by the daemon. */
+  readonly initialMessages?: readonly KernelConversationMessage[];
   readonly model: KernelModelAdapter;
   readonly toolRegistry: KernelToolRegistry;
   readonly approvalGate: KernelApprovalGate;

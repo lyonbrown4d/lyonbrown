@@ -6,6 +6,7 @@ import type { RuntimeEventStorePort } from "@lyonbrown/agent-runtime/internal/ev
 export interface KernelSessionFactoryInput {
   readonly sessionId: string;
   readonly eventSink: KernelEventSink;
+  readonly state: AgentRuntimeState;
 }
 
 export type KernelSessionFactory = (input: KernelSessionFactoryInput) => KernelSession;

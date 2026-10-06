@@ -95,8 +95,9 @@ local-model 的单消息上限一致。生产 Pi 适配器的 256 KiB 限制是�
 总输入的防御上限，不是单条消息配额。非活跃 Session 会在下一次输入前于 32 个历史
 turn 或 4 MiB 用户文本处轮换；活跃 turn 的 follow-up 限制为 8 条、合计 512 KiB。
 预算检查与持久化在 daemon 的同一条 FIFO 命令通道中执行，避免并发 RPC 绕过这些
-限制。daemon 重启后，任何包含历史 turn 的 Session 都会安全轮换，因为 Pi history
-hydration 尚未实现；持久事件仍保留在 EventStore。
+限制。daemon 重启后会从持久领域状态重建有界的已完成历史并交给 Pi。包含 steering、
+待审批、未决工作、结果不确定、非法 phase、超过 128 条重建消息或超过 256 KiB 历史的
+Session 会安全轮换；持久事件仍保留在 EventStore。
 
 当前 Windows 开发机上的生产 composition 真实 GGUF smoke 会读取实际硬件选择结果，
 再从同一可信目录校验固定摘要，而不是在脚本中写死模型。2026-10-07 的运行验证了：

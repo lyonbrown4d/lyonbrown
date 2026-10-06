@@ -100,13 +100,18 @@ describe("agent runtime lifecycle", () => {
     await expect.poll(() => first.snapshot().phase).toBe("completed");
     const expected = first.snapshot();
     await first.dispose();
+    let factoryState: unknown;
     const recovered = await createAgentRuntime({
       sessionId: asSessionId("session-recover"),
       eventStore: runtimeEventStore(store),
-      createKernelSession: new CapturingKernelFactory().create,
+      createKernelSession: (input) => {
+        factoryState = input.state;
+        return new CapturingKernelFactory().create(input);
+      },
       createEventId: sequentialEventIds("second"),
     });
     expect(recovered.snapshot()).toEqual(expected);
+    expect(factoryState).toEqual(expected);
     expect((await eventTypes(store, "session-recover"))[0]).toBe("session_opened");
     expect(
       (await eventTypes(store, "session-recover")).filter((type) => type === "session_opened"),

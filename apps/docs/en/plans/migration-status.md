@@ -96,10 +96,10 @@
   `write`, approval, and exact file content; turn cancellation; cached restart;
   and shutdown within 30 seconds. It ended with `REAL_GGUF_SMOKE_OK` and removed
   its temporary cache.
-- Restart tests deliberately rotate every session containing a historical turn,
-  including completed sessions. This preserves durable events without silently
-  rebuilding incomplete Pi conversation state; Pi history hydration remains
-  unimplemented.
+- Daemon restart now rebuilds completed, unambiguous Pi history, including tool
+  calls, tool results, and session approval policy. Running, failed, cancelled,
+  steered, pending, uncertain, or histories beyond 128 messages/256 KiB still
+  fail closed and rotate while durable events remain preserved.
 - This checkpoint passed frozen install and full repository format, lint,
   typecheck, test, build, docs, and `ci-gate`; repeat them against the final
   release artifacts before making a release claim.
@@ -144,9 +144,10 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
 3. Extend the authenticated built-artifact black box beyond the verified spawn
    and setup-required checkpoint to cover reuse, restart fencing, model
    progress, inference, and cancellation.
-4. Implement Pi history hydration before allowing a historical session to
-   resume across daemon restart.
-5. Extend the existing narrow file-tool and approval path with MCP, context,
-   and secrets; retain default-deny behavior until each capability is independently tested.
+4. Add runtime context pruning/compaction on top of bounded Pi history
+   hydration, then validate the 4096-token window with a multi-turn real-GGUF
+   scenario.
+5. Extend the existing narrow file-tool and approval path with MCP and secrets;
+   retain default-deny behavior until each capability is independently tested.
 6. Run frozen install plus full format, lint, typecheck, test, build, docs, and
    `ci-gate` verification against the final artifacts.

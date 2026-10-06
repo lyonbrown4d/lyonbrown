@@ -94,6 +94,67 @@ function createDependencies(
 }
 
 describe("Pi kernel integration", () => {
+  test("hydrates a completed Lyonbrown transcript before the next prompt", async () => {
+    const model = new ScriptedModel([textResponse("next")]);
+    const { options } = createDependencies(model);
+    options.initialMessages = [
+      { role: "user", content: "previous question" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ callId: "call-1", name: "read", arguments: { path: "notes.txt" } }],
+      },
+      {
+        role: "tool_result",
+        callId: "call-1",
+        name: "read",
+        content: "previous result",
+        isError: false,
+      },
+      { role: "assistant", content: "previous answer", toolCalls: [] },
+    ];
+
+    await createPiKernelSession(options).startTurn("continue");
+
+    expect(model.requests[0]?.messages).toEqual([
+      { role: "system", content: "You are a bounded test agent." },
+      { role: "user", content: "previous question" },
+      {
+        role: "assistant",
+        content: "",
+        toolCalls: [{ callId: "call-1", name: "read", arguments: { path: "notes.txt" } }],
+      },
+      {
+        role: "tool_result",
+        callId: "call-1",
+        name: "read",
+        content: "previous result",
+        isError: false,
+      },
+      { role: "assistant", content: "previous answer", toolCalls: [] },
+      { role: "user", content: "continue" },
+    ]);
+  });
+
+  test("rejects malformed recovered history without evaluating accessors", () => {
+    const model = new ScriptedModel([textResponse("unused")]);
+    const { options } = createDependencies(model);
+    const content = vi.fn(() => "secret");
+    const hostile = Object.defineProperty({ role: "user" }, "content", {
+      enumerable: true,
+      get: content,
+    });
+    options.initialMessages = [hostile] as unknown as NonNullable<
+      PiKernelSessionOptions["initialMessages"]
+    >;
+
+    expect(() => createPiKernelSession(options)).toThrow(
+      expect.objectContaining({ code: "INPUT_BUDGET_EXCEEDED" }),
+    );
+    expect(content).not.toHaveBeenCalled();
+    expect(model.requests).toEqual([]);
+  });
+
   test("persists approval lifecycle and accepts a correlated client decision", async () => {
     let settle: ((value: { readonly decision: KernelApprovalDecision }) => void) | undefined;
     const model = new ScriptedModel([

@@ -20,6 +20,18 @@ function request(
 }
 
 describe("session approval gate", () => {
+  it("hydrates durable session policy without reopening an approval", async () => {
+    const allowed = new SessionApprovalGate({ allowedTools: ["write"], denyRemaining: false });
+    await expect(allowed.request(request("call-1"))).resolves.toEqual({
+      decision: "allow-for-session",
+    });
+
+    const denied = new SessionApprovalGate({ allowedTools: ["write"], denyRemaining: true });
+    await expect(denied.request(request("call-2", "edit"))).resolves.toEqual({
+      decision: "deny-remaining",
+    });
+  });
+
   it("correlates one pending decision and remembers session-scoped approval", async () => {
     const gate = new SessionApprovalGate();
     const pending = gate.request(request("call-1"));
