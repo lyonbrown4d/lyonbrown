@@ -31,6 +31,7 @@ import {
 } from "@lyonbrown/protocol";
 import { commandFingerprint } from "./fingerprint.ts";
 import { ReplayCache, isReplayCapacityError, isReplayConflict } from "./replay-cache.ts";
+import { MAX_MESSAGE_INPUT_BYTES } from "./runtime-limits.ts";
 import type { RuntimeCommand, RuntimeHost } from "./runtime-host.ts";
 import {
   runtimeFailureStatus,
@@ -43,7 +44,6 @@ import {
   requireBoundedText,
   requireEpoch,
   requireMetadata,
-  requireText,
   validateServerIdentity,
 } from "./validation.ts";
 
@@ -149,7 +149,7 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
       });
     }),
     startTurn: unary((request: StartTurnRequest) => {
-      requireText("text", request.text);
+      requireBoundedText("text", request.text, MAX_MESSAGE_INPUT_BYTES);
       return execute(
         request.metadata,
         { kind: "start-turn", text: request.text },
@@ -157,7 +157,7 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
       );
     }),
     steerCurrentTurn: unary((request: SteerCurrentTurnRequest) => {
-      requireText("text", request.text);
+      requireBoundedText("text", request.text, MAX_MESSAGE_INPUT_BYTES);
       return execute(
         request.metadata,
         { kind: "steer-current-turn", text: request.text },
@@ -165,7 +165,7 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
       );
     }),
     queueFollowUp: unary((request: QueueFollowUpRequest) => {
-      requireText("text", request.text);
+      requireBoundedText("text", request.text, MAX_MESSAGE_INPUT_BYTES);
       return execute(
         request.metadata,
         { kind: "queue-follow-up", text: request.text },
@@ -184,12 +184,22 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
     selectSessionModel: unary((request: SelectSessionModelRequest) =>
       unsupported(request.metadata, UnsupportedCommand.UNSUPPORTED_COMMAND_SELECT_SESSION_MODEL),
     ),
-    startModelDownload: unary((request: StartModelDownloadRequest) =>
-      unsupported(request.metadata, UnsupportedCommand.UNSUPPORTED_COMMAND_START_MODEL_DOWNLOAD),
-    ),
-    cancelModelDownload: unary((request: CancelModelDownloadRequest) =>
-      unsupported(request.metadata, UnsupportedCommand.UNSUPPORTED_COMMAND_CANCEL_MODEL_DOWNLOAD),
-    ),
+    startModelDownload: unary((request: StartModelDownloadRequest) => {
+      requireBoundedText("model_id", request.modelId, 128);
+      return execute(
+        request.metadata,
+        { kind: "start-model-download", modelId: request.modelId },
+        commandFingerprint("start_model_download", [request.modelId]),
+      );
+    }),
+    cancelModelDownload: unary((request: CancelModelDownloadRequest) => {
+      requireBoundedText("operation_id", request.operationId, 128);
+      return execute(
+        request.metadata,
+        { kind: "cancel-model-download", operationId: request.operationId },
+        commandFingerprint("cancel_model_download", [request.operationId]),
+      );
+    }),
     getSnapshot: unary(async (request: GetSnapshotRequest): Promise<RuntimeSnapshot> => {
       fence(request.metadata);
       return options.host.snapshot();

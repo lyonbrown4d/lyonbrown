@@ -2,8 +2,12 @@ export interface LocalModelDescriptor {
   readonly id: "qwen3-1.7b-q4_k_m";
   readonly displayName: string;
   readonly expectedDownloadBytes: number;
+  readonly maxBytes: number;
   readonly minimumMemoryBytes: number;
+  readonly sha256: string;
 }
+
+export const LOCAL_MODEL_MAX_MESSAGE_BYTES = 64 * 1024;
 
 export type LocalModelPhase =
   | "checking"
@@ -31,7 +35,37 @@ export interface LocalModelStatus {
   readonly allowedActions: readonly LocalModelAction[];
 }
 
+export type LocalModelMessage =
+  | { readonly role: "system"; readonly content: string }
+  | { readonly role: "user"; readonly content: string }
+  | { readonly role: "assistant"; readonly content: string };
+
+export interface LocalModelInferenceRequest {
+  readonly messages: readonly LocalModelMessage[];
+  readonly signal: AbortSignal;
+  readonly maxOutputTokens: number;
+  readonly maxOutputBytes: number;
+}
+
+export type LocalModelInferenceErrorCode =
+  | "disposed"
+  | "invalid_request"
+  | "native_inference_failed"
+  | "resource_busy"
+  | "unsupported_tool_use";
+
+export type LocalModelInferenceEvent =
+  | { readonly type: "text_delta"; readonly text: string }
+  | { readonly type: "usage"; readonly inputTokens: number; readonly outputTokens: number }
+  | { readonly type: "done"; readonly reason: "stop" | "length" | "cancelled" }
+  | {
+      readonly type: "error";
+      readonly code: LocalModelInferenceErrorCode;
+      readonly message: string;
+    };
+
 export interface LocalModelLease {
+  stream(request: LocalModelInferenceRequest): AsyncIterable<LocalModelInferenceEvent>;
   dispose(): Promise<void>;
 }
 

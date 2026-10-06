@@ -94,6 +94,7 @@ describe("typed statuses and boundary validation", () => {
     expect(() => requireText("text", "\ud800")).toThrow("invalid");
     expect(() => requireBoundedText("name", "abc", 2)).toThrow("exceeds 2 bytes");
     expect(() => requireBoundedText("name", " ", 2)).toThrow("required");
+    expect(() => requireBoundedText("name", "\ud800", 2)).toThrow("invalid");
     expect(() =>
       requireEpoch(RequestMetadata.create({ expectedServerInstanceId: "old" }), "current"),
     ).toThrow("server instance changed");

@@ -1,5 +1,9 @@
 # Local Models and Task Routing
 
+> Verified implementation checkpoint: 2026-10-06. The composition and bounded
+> inference path are covered by focused tests, and built-artifact startup is
+> verified. Real-GGUF execution is still pending.
+
 ## The Node daemon owns llama.cpp by default
 
 Lyonbrown has one product architecture: `agentd` owns the runtime, models, tools, MCP connections, and sessions. The TUI is an authenticated gRPC client. It does not load GGUF files and there is no embedded Runtime fallback.
@@ -29,6 +33,12 @@ Only an explicit user action starts a download. The daemon projects these phases
 
 Cancellation and failure use `cancelled` and `failed`. Every operation receives a new `operation_id`; a stale ID cannot cancel a newer job. Cancellation is too late once atomic installation starts. The daemon owns the job, so closing the TUI does not implicitly cancel it. Progress and results use the existing versioned `RuntimeSnapshot`; the TUI does not implement a downloader.
 
+Model activation is distinct from download. A verified cached model can enter
+`activating`; a failed activation exposes an explicit retry without starting a
+new download. The TUI keeps chat disabled during activation even though there
+is no download `operation_id`. Model-only updates share the daemon's monotonic
+transport revision with Runtime updates.
+
 ## Security and integrity boundary
 
 Production composition must inject a native secure-model storage capability that provides:
@@ -44,10 +54,42 @@ Production must fail closed when this capability is absent; it must not fall bac
 
 ## Current implementation status
 
-`packages/local-model` is completing the managed preset, background inspection/download, cross-process locking, digest validation, atomic activation, and native-load lifecycle. It becomes a releasable default-model path only after its native secure-storage adapter is connected to the `agentd` composition root and passes a real-GGUF test.
+`packages/local-model` implements the managed preset, background
+inspection/download, cross-process locking, digest validation, atomic
+activation, native loading, and a Lyonbrown-owned streaming inference lease.
+The Windows secure-storage adapter and service are connected to the production
+`agentd` composition root; the TUI remains only an authenticated client.
 
-Until then, the states and interactions in this document are the accepted product contract, not a claim that the current Node `agentd` entry point can already run local inference. Required historical behavior is preserved by TypeScript regression tests and language-neutral fixtures.
+The default small-model lease admits exactly one active inference. A second
+request fails immediately with `resource_busy`, never queues, and never creates
+another context. Accepted requests use one sequence in a fixed 4096-token
+context, propagate cancellation, and enforce bounded messages, aggregate input,
+output tokens, output bytes, event queue, and shutdown cleanup. Native errors
+are sanitized, and tool-shaped messages or function-call authority fail closed.
+
+The daemon command boundary limits each user, follow-up, or steering message to
+64 KiB, matching the local-model per-message ceiling. The production Pi
+adapter's 256 KiB limit is a defensive cap on the complete constructed
+inference input, not a single-message allowance. Inactive sessions rotate
+before the next turn at 32 historical turns or 4 MiB of user text; active-turn
+follow-ups are limited to eight entries and 512 KiB in aggregate. Budget checks
+and persistence run in one daemon FIFO command lane so concurrent RPCs cannot
+bypass these limits. After daemon restart, any session with a historical turn
+is safely rotated because Pi history hydration is not implemented yet. Durable
+events remain in EventStore.
+
+This is not yet release evidence. The built launcher/independent daemon startup
+black box reached authenticated `serving` with model setup `required`,
+`allowedActions=[download]`, and revision `2`; it created no GGUF and cleaned up
+its temporary resources. It did not exercise a model. A pinned real GGUF must
+still pass download, activation, streamed inference, cancellation, and shutdown
+testing, and release packaging remains unverified.
 
 ## Typed task routing
 
 Task routing lives in the daemon. Its input is typed step context covering capabilities, privacy, budget, and explicit user selection; its output is a finite complexity/model tier rather than a free-form plan. The default Qwen3 routing and tool-call adapter still need to be completed in the Node Kernel/model adapter and verified through deterministic domain events. A routing failure must have an explicit fallback and cannot make the control model a single point of failure.
+
+The current production kernel has an empty tool registry, default-deny
+approvals, a rejecting secret resolver, and no MCP connections. Model text is
+untrusted output and does not gain tool authority. GUI, Desktop, and mobile
+clients remain outside the current iteration.

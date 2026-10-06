@@ -43,7 +43,7 @@ export function requireText(field: string, value: string): void {
 }
 
 export function requireBoundedText(field: string, value: string, maximumBytes: number): void {
-  if (value.trim().length === 0) throw invalidArgument(`${field} is required`);
+  requireText(field, value);
   if (Buffer.byteLength(value, "utf8") > maximumBytes) {
     throw invalidArgument(`${field} exceeds ${String(maximumBytes)} bytes`);
   }

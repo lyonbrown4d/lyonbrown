@@ -2,6 +2,7 @@ import type { NativeControlPlaneProvider } from "@lyonbrown/local-control-plane"
 import { describe, expect, it, vi } from "vitest";
 
 import { main, type AgentdMainDependencies } from "../node-src/main.ts";
+import { createProductionAgentdRuntime } from "../node-src/production-runtime.ts";
 
 describe("agentd main composition", () => {
   it("passes validated launcher arguments and the native provider to bootstrap", async () => {
@@ -40,6 +41,7 @@ describe("agentd main composition", () => {
       effectiveConfigFingerprint: "production-v1",
       expectedScopeId: "a".repeat(64),
       nativeProvider: provider,
+      createRuntime: createProductionAgentdRuntime,
     });
     expect(waitForShutdown).toHaveBeenCalledWith(running);
   });

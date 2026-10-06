@@ -1,6 +1,12 @@
 import { Metadata, status, type ServerErrorResponse } from "@grpc/grpc-js";
 import type { UnsupportedCommand } from "@lyonbrown/protocol";
-import { CommandErrorCode, CommandErrorDetail, EpochMismatchDetail } from "@lyonbrown/protocol";
+import {
+  CommandErrorCode,
+  CommandErrorDetail,
+  EpochMismatchDetail,
+  InvalidModelIdDetail,
+  ModelDownloadOperationMismatchDetail,
+} from "@lyonbrown/protocol";
 import type { RuntimeFailure } from "./runtime-host.ts";
 
 const DETAILS_KEY = "grpc-status-details-bin";
@@ -103,5 +109,51 @@ export function runtimeFailureStatus(failure: RuntimeFailure): ServerErrorRespon
         "model setup required",
         CommandErrorCode.COMMAND_ERROR_CODE_MODEL_SETUP_REQUIRED,
       );
+    case "MODEL_DOWNLOAD_UNAVAILABLE":
+      return typedCommandStatus(
+        status.UNAVAILABLE,
+        "model download unavailable",
+        CommandErrorCode.COMMAND_ERROR_CODE_MODEL_DOWNLOAD_UNAVAILABLE,
+      );
+    case "INVALID_MODEL_ID":
+      return typedCommandStatus(
+        status.INVALID_ARGUMENT,
+        "invalid model id",
+        CommandErrorCode.COMMAND_ERROR_CODE_INVALID_MODEL_ID,
+        {
+          $case: "invalidModelId",
+          invalidModelId: InvalidModelIdDetail.create({
+            requestedModelId: failure.requestedModelId,
+            configuredModelId: failure.configuredModelId,
+          }),
+        },
+      );
+    case "NO_ACTIVE_MODEL_DOWNLOAD":
+      return typedCommandStatus(
+        status.FAILED_PRECONDITION,
+        "no active model download",
+        CommandErrorCode.COMMAND_ERROR_CODE_NO_ACTIVE_MODEL_DOWNLOAD,
+      );
+    case "MODEL_DOWNLOAD_OPERATION_MISMATCH":
+      return typedCommandStatus(
+        status.FAILED_PRECONDITION,
+        "model download operation changed",
+        CommandErrorCode.COMMAND_ERROR_CODE_MODEL_DOWNLOAD_OPERATION_MISMATCH,
+        {
+          $case: "modelDownloadOperationMismatch",
+          modelDownloadOperationMismatch: ModelDownloadOperationMismatchDetail.create({
+            expectedOperationId: failure.expectedOperationId,
+            receivedOperationId: failure.receivedOperationId,
+          }),
+        },
+      );
+    case "MODEL_DOWNLOAD_CANCELLATION_TOO_LATE":
+      return typedCommandStatus(
+        status.FAILED_PRECONDITION,
+        "model download cancellation is too late",
+        CommandErrorCode.COMMAND_ERROR_CODE_MODEL_DOWNLOAD_CANCELLATION_TOO_LATE,
+      );
+    case "RESOURCE_EXHAUSTED":
+      return trustedStatus(status.RESOURCE_EXHAUSTED, "runtime queue capacity exceeded");
   }
 }

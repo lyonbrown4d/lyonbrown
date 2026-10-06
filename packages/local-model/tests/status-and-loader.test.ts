@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_LOCAL_MODEL, type LocalModelService } from "../src/index.ts";
+import { DEFAULT_LOCAL_MODEL, type LocalModelLease, type LocalModelService } from "../src/index.ts";
 import { createLocalModelManager } from "../src/internal/manager.ts";
-import { Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.ts";
+import {
+  createFakeLlamaLease,
+  Deferred,
+  FakeLlamaEngine,
+  FakeModelIo,
+  flushTasks,
+} from "./support/fakes.ts";
 
 describe("default local model status", () => {
   it("returns immediately in checking while cache verification runs in the background", async () => {
@@ -75,7 +81,9 @@ describe("default local model status", () => {
       id: "qwen3-1.7b-q4_k_m",
       displayName: "Qwen3 1.7B Q4_K_M",
       expectedDownloadBytes: 1_110_000_000,
+      maxBytes: 2_147_483_648,
       minimumMemoryBytes: 4_294_967_296,
+      sha256: "228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f",
     });
     expect(Object.keys(DEFAULT_LOCAL_MODEL)).not.toContain("url");
     expect(Object.keys(DEFAULT_LOCAL_MODEL)).not.toContain("path");
@@ -155,8 +163,8 @@ describe("llama runtime loading", () => {
   it("tracks concurrent loads and disposes every late lease before disposal completes", async () => {
     const io = new FakeModelIo();
     io.installed = true;
-    const first = new Deferred<{ dispose(): Promise<void> }>();
-    const second = new Deferred<{ dispose(): Promise<void> }>();
+    const first = new Deferred<LocalModelLease>();
+    const second = new Deferred<LocalModelLease>();
     const firstDispose = vi.fn(() => Promise.resolve());
     const secondDispose = vi.fn(() => Promise.resolve());
     const engine = {
@@ -179,8 +187,8 @@ describe("llama runtime loading", () => {
     expect(firstSignal?.aborted).toBe(true);
     expect(secondSignal?.aborted).toBe(true);
 
-    first.resolve({ dispose: firstDispose });
-    second.resolve({ dispose: secondDispose });
+    first.resolve(createFakeLlamaLease(firstDispose));
+    second.resolve(createFakeLlamaLease(secondDispose));
 
     await expect(firstLoad).resolves.toEqual({
       kind: "unavailable",
@@ -199,7 +207,7 @@ describe("llama runtime loading", () => {
   it("bounds shutdown while still fencing and disposing a load that resolves late", async () => {
     const io = new FakeModelIo();
     io.installed = true;
-    const lateLease = new Deferred<{ dispose(): Promise<void> }>();
+    const lateLease = new Deferred<LocalModelLease>();
     const leaseDispose = vi.fn(() => Promise.resolve());
     const engine = {
       loadDefault: vi.fn((signal: AbortSignal) => {
@@ -214,7 +222,7 @@ describe("llama runtime loading", () => {
     await expect(service.dispose()).resolves.toBeUndefined();
     expect(engine.loadDefault.mock.calls[0]?.[0].aborted).toBe(true);
 
-    lateLease.resolve({ dispose: leaseDispose });
+    lateLease.resolve(createFakeLlamaLease(leaseDispose));
     await expect(load).resolves.toEqual({
       kind: "unavailable",
       code: "service_disposed",

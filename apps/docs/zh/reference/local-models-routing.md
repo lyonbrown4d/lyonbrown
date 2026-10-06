@@ -1,5 +1,8 @@
 # 本地模型与任务路由
 
+> 已验证实现检查点：2026-10-06。composition 与有界 inference 路径已有聚焦测试
+> 覆盖，构建产物启动已经验证；真实 GGUF 执行仍待完成。
+
 ## Node daemon 默认持有 llama.cpp
 
 Lyonbrown 只有一种产品架构：`agentd` 持有 Runtime、模型、工具、MCP 和 Session，TUI 是经过认证的 gRPC client。客户端不加载 GGUF，也没有 embedded Runtime 回退。
@@ -29,6 +32,11 @@ revision 和摘要固定在代码中，不使用 `main`。固定 resolve URL 避
 
 取消或失败分别进入 `cancelled` 和 `failed`。每次操作都有新的 `operation_id`；旧 ID 不能取消新任务。进入原子安装阶段后取消返回 TooLate。任务属于 daemon，关闭 TUI 不会隐式取消下载。进度与结果进入现有的版本化 `RuntimeSnapshot`；TUI 不实现下载器。
 
+模型激活与下载是两个阶段。已验证的缓存模型可以进入 `activating`；激活失败后可以
+显式重试，而不会启动新的下载。激活期间即使没有 download `operation_id`，TUI 也会
+保持 chat 不可用。仅模型状态更新与 Runtime 更新共享 daemon 的单调 transport
+revision。
+
 ## 安全与完整性边界
 
 生产组合必须由 native provider 注入安全模型存储能力，并满足：
@@ -44,10 +52,33 @@ revision 和摘要固定在代码中，不使用 `main`。固定 resolve URL 避
 
 ## 当前实施状态
 
-`packages/local-model` 正在完成托管 preset、后台检查/下载、跨进程锁、摘要验证、原子激活和原生加载生命周期。只有在 native 安全存储适配器与 `agentd` composition root 接通并通过真实 GGUF 测试后，它才是可发布的默认模型闭环。
+`packages/local-model` 已实现托管 preset、后台检查/下载、跨进程锁、摘要验证、原子
+激活、原生加载和 Lyonbrown 自有的流式 inference lease。Windows 安全存储适配器与
+服务已接入生产 `agentd` composition root；TUI 仍只是认证 client。
 
-在此之前，本文中的状态和交互是已接受的产品契约，不表示当前 Node `agentd` 入口已经可以执行本地推理。仍需保留的历史行为由 TypeScript 回归测试和语言无关 fixture 承载。
+默认小模型 lease 只允许一个活跃 inference。第二个请求会立即以 `resource_busy`
+失败，不排队，也不会创建第二个 context。被接受的请求在固定 4096-token context
+中使用一个 sequence，传递取消信号，并限制消息数、总输入、输出 token、输出字节、
+事件队列与关闭清理。原生错误会脱敏；工具形态消息或 function-call 权限会 fail
+closed。
+
+daemon 命令入口将每条 user、follow-up 或 steering 消息限制为 64 KiB，与
+local-model 的单消息上限一致。生产 Pi 适配器的 256 KiB 限制是完整构造后 inference
+总输入的防御上限，不是单条消息配额。非活跃 Session 会在下一次输入前于 32 个历史
+turn 或 4 MiB 用户文本处轮换；活跃 turn 的 follow-up 限制为 8 条、合计 512 KiB。
+预算检查与持久化在 daemon 的同一条 FIFO 命令通道中执行，避免并发 RPC 绕过这些
+限制。daemon 重启后，任何包含历史 turn 的 Session 都会安全轮换，因为 Pi history
+hydration 尚未实现；持久事件仍保留在 EventStore。
+
+这些还不是发布证据。构建后的 launcher/独立 daemon 启动黑盒已到达认证
+`serving`，模型设置为 `required`，`allowedActions=[download]`，revision 为 `2`；全程
+没有生成 GGUF，临时资源已清理。该黑盒没有执行模型。固定真实 GGUF 仍须通过下载、
+激活、流式推理、取消与关闭测试，发布打包也仍未验证。
 
 ## 类型化任务路由
 
 任务路由位于 daemon 内。输入是包含能力、隐私、预算和用户显式选择的类型化步骤上下文，输出是有限的复杂度/模型层级，而不是自由文本计划。默认 Qwen3 路由与工具调用适配仍需在 Node Kernel/模型适配层完成并通过确定性事件测试；路由失败必须有明确 fallback，不能让控制模型成为单点故障。
+
+当前生产 Kernel 使用空 tool registry、default-deny approval、拒绝式 Secret
+resolver，并且不连接 MCP。模型文本是不受信任的输出，不会获得工具权限。GUI、
+Desktop 与移动端仍不在当前迭代范围内。

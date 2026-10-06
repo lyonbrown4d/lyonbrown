@@ -55,4 +55,28 @@ describe("runtime projection", () => {
       { turnId: "turn-1", stepId: "step-1", kind: "streaming" },
     ]);
   });
+
+  it.each([
+    ["checking", "Checking"],
+    ["activating", "Activating"],
+    ["failed", "Failed"],
+  ] as const)("preserves %s model setup without an operation id", (wirePhase, uiPhase) => {
+    const projected = projectRemoteSnapshot(
+      "11111111-1111-4111-8111-111111111111",
+      runtimeSnapshot({
+        modelSetup: {
+          source: "managed-preset",
+          phase: wirePhase,
+          managedModel: null,
+          operationId: null,
+          downloadedBytes: 0n,
+          totalBytes: null,
+          failure: null,
+          allowedActions: [],
+        },
+      }),
+    );
+
+    expect(projected.modelSetup).toEqual({ phase: uiPhase, operationId: null });
+  });
 });

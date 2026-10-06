@@ -38,6 +38,5 @@ function projectModelSetup(snapshot: RuntimeSnapshotDto): ModelSetupState | null
   if (setup === null) return null;
   const phase = PHASES[setup.phase];
   if (phase === "Required" || phase === "Ready") return { phase, operationId: null };
-  if (setup.operationId === null) return null;
   return { phase, operationId: setup.operationId };
 }

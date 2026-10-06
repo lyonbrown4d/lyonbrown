@@ -9,6 +9,7 @@ import {
 } from "./bootstrap.ts";
 import { AgentdCliError, parseAgentdArguments } from "./cli-arguments.ts";
 import { waitForShutdownSignal } from "./process-lifecycle.ts";
+import { createProductionAgentdRuntime } from "./production-runtime.ts";
 
 export interface AgentdMainDependencies {
   readonly homeDirectory: () => string;
@@ -35,6 +36,7 @@ export async function main(
     effectiveConfigFingerprint: options.effectiveConfigFingerprint,
     expectedScopeId: options.scopeId,
     nativeProvider: dependencies.createNativeProvider(),
+    createRuntime: createProductionAgentdRuntime,
   });
   await dependencies.waitForShutdown(running);
 }

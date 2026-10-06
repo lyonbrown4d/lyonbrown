@@ -6,12 +6,28 @@ import { assertProtocolRevision, projectRuntimeSnapshot } from "./runtime-adapte
 
 const NO_CAPABILITIES = Object.freeze([]) as readonly string[];
 const OK = Object.freeze({ ok: true }) as RuntimeResult;
-type SimpleRuntimeFailure = Exclude<RuntimeFailure, { readonly code: "STEERING" }>;
+type SimpleRuntimeFailure = Extract<
+  RuntimeFailure,
+  {
+    readonly code:
+      | "RUNTIME_STOPPED"
+      | "TURN_ALREADY_ACTIVE"
+      | "NO_ACTIVE_TURN"
+      | "EMPTY_TEXT"
+      | "MODEL_SETUP_REQUIRED"
+      | "MODEL_DOWNLOAD_UNAVAILABLE"
+      | "NO_ACTIVE_MODEL_DOWNLOAD"
+      | "MODEL_DOWNLOAD_CANCELLATION_TOO_LATE";
+  }
+>;
 
 class AgentRuntimeHostAdapter implements RuntimeHost {
   constructor(private readonly runtime: AgentRuntime) {}
 
   async execute(command: RuntimeCommand): Promise<RuntimeResult> {
+    if (command.kind === "start-model-download" || command.kind === "cancel-model-download") {
+      return failure("MODEL_DOWNLOAD_UNAVAILABLE");
+    }
     if (command.kind === "start-turn") {
       if (empty(command.text)) return failure("EMPTY_TEXT");
       try {

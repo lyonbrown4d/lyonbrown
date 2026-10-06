@@ -205,4 +205,69 @@ describe("AgentTuiController", () => {
       { type: "respond-approval", requestId: "approval-1", decision: "allow-once" },
     ]);
   });
+
+  it("keeps chat disabled while activation has no operation id", async () => {
+    const client = new FakeAgentClient();
+    const snapshot = runtimeSnapshot({
+      phase: "model-setup-required",
+      modelSetup: {
+        source: "managed-preset",
+        phase: "activating",
+        managedModel: null,
+        operationId: null,
+        downloadedBytes: 0n,
+        totalBytes: null,
+        failure: null,
+        allowedActions: [],
+      },
+    });
+    const controller = new AgentTuiController({
+      launcher: new FakeLauncher(Promise.resolve(connection(client, snapshot))),
+      render: () => undefined,
+    });
+    controller.open();
+    await vi.waitFor(() => expect(controller.currentFrame().ui.remote.connection).toBe("ready"));
+
+    await controller.submit("must not be sent");
+
+    expect(client.commands).toEqual([]);
+    expect(controller.currentFrame().notice).toBe(
+      "chat is unavailable until the daemon and model are ready",
+    );
+  });
+
+  it("retries a failed managed model without an operation id", async () => {
+    const client = new FakeAgentClient();
+    const snapshot = runtimeSnapshot({
+      phase: "model-setup-required",
+      modelSetup: {
+        source: "managed-preset",
+        phase: "failed",
+        managedModel: {
+          id: "qwen3-1.7b-q4_k_m",
+          expectedDownloadBytes: 100n,
+          maxBytes: 110n,
+          minAvailableMemoryBytes: 1n,
+          sha256: "a".repeat(64),
+        },
+        operationId: null,
+        downloadedBytes: 20n,
+        totalBytes: 100n,
+        failure: { code: "activation", message: "load failed", retryable: true },
+        allowedActions: ["retry"],
+      },
+    });
+    const controller = new AgentTuiController({
+      launcher: new FakeLauncher(Promise.resolve(connection(client, snapshot))),
+      render: () => undefined,
+    });
+    controller.open();
+    await vi.waitFor(() => expect(controller.currentFrame().ui.remote.connection).toBe("ready"));
+
+    await controller.submit("/retry");
+
+    expect(client.commands).toEqual([
+      { type: "start-model-download", modelId: "qwen3-1.7b-q4_k_m" },
+    ]);
+  });
 });

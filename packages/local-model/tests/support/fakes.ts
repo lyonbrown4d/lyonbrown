@@ -6,6 +6,22 @@ import type {
   LlamaLease,
   ModelPreset,
 } from "../../src/internal/contracts.ts";
+import type { LocalModelInferenceEvent } from "../../src/types.ts";
+
+export const createFakeLlamaLease = (
+  dispose: () => Promise<void> = () => Promise.resolve(),
+): LlamaLease => ({
+  stream(): AsyncIterable<LocalModelInferenceEvent> {
+    return {
+      [Symbol.asyncIterator](): AsyncIterator<LocalModelInferenceEvent> {
+        return {
+          next: () => Promise.resolve({ value: undefined, done: true }),
+        };
+      },
+    };
+  },
+  dispose,
+});
 
 export class Deferred<T> {
   readonly promise: Promise<T>;
@@ -115,7 +131,7 @@ export class FakeModelIo implements LocalModelIo {
 export class FakeLlamaEngine implements LlamaEngineAdapter {
   loadCalls = 0;
   error: Error | undefined;
-  readonly lease: LlamaLease = { dispose: () => Promise.resolve() };
+  readonly lease: LlamaLease = createFakeLlamaLease();
 
   loadDefault(signal: AbortSignal): Promise<LlamaLease> {
     void signal;

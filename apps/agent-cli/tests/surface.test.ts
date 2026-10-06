@@ -90,4 +90,31 @@ describe("TUI surface", () => {
     expect(rendered).not.toContain("\u001b[2J");
     expect(rendered).toContain("safetext");
   });
+
+  it("renders activation progress when there is no download operation", () => {
+    const rendered = renderFrame(
+      {
+        ui: createInitialUiModelState(),
+        snapshot: runtimeSnapshot({
+          phase: "model-setup-required",
+          modelSetup: {
+            source: "managed-preset",
+            phase: "activating",
+            managedModel: null,
+            operationId: null,
+            downloadedBytes: 0n,
+            totalBytes: null,
+            failure: null,
+            allowedActions: [],
+          },
+        }),
+        commandPaletteOpen: false,
+        activityOpen: false,
+        notice: null,
+      },
+      80,
+    ).join("\n");
+
+    expect(rendered).toContain("activating");
+  });
 });

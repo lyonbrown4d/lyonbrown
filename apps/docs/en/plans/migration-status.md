@@ -1,9 +1,10 @@
 # Migration Progress
 
-> Resumed on: 2026-10-05
+> Verified checkpoint: 2026-10-06
 >
-> Development now continues directly on `main`. This page records verified
-> engineering state and does not claim that the product is release-ready.
+> Development continues directly on `main`. This page distinguishes implemented
+> and test-covered behavior from release evidence; it does not claim that the
+> product is release-ready.
 
 ## Integrated on `main`
 
@@ -32,34 +33,67 @@
   package lifecycle hooks before lint, typecheck, test, and build.
 - Authenticated loopback gRPC channels explicitly disable environment HTTP
   proxy discovery, so local daemon traffic cannot be redirected to a proxy.
+- The production launcher and `agentd` composition root are connected. The
+  daemon opens the SQLite EventStore, owns the Pi Runtime and local-model
+  service, publishes discovery only after authenticated gRPC is ready, and
+  tears down owned resources in bounded reverse order.
+- The local-model lease now provides bounded streaming chat through
+  `node-llama-cpp`. It permits one active inference, uses a fixed 4096-token
+  context, propagates cancellation, and bounds request, output, queue, and
+  shutdown resources.
+- Model discovery and download remain background operations. Download is
+  optional and starts only after explicit user action; the TUI projects setup,
+  progress, cancellation, failure, activation, and activation-retry states.
+- Client-visible snapshots use a daemon-owned monotonic transport revision, so
+  Runtime recovery revisions and model-only updates cannot violate client
+  fencing.
+- Each user, follow-up, or steering message is bounded to 64 KiB at the daemon
+  command boundary, matching the local-model per-message ceiling. The Kernel's
+  256 KiB limit is a defensive cap on the constructed inference input, not a
+  single-message allowance. Inactive sessions rotate before a new turn at 32
+  historical turns or 4 MiB of user text; active-turn follow-ups are bounded to
+  eight entries and 512 KiB in aggregate. The daemon serializes budget checks
+  and persistence through one FIFO command lane so concurrent RPCs cannot
+  bypass those limits.
 
-## Verification evidence
+## Verification evidence at this checkpoint
 
-- `@lyonbrown/agent-cli`: lint and typecheck pass, build passes, and 18/18 tests
-  pass.
-- `@lyonbrown/control-plane-native`: lint, typecheck, and build pass; 86/86
-  tests pass with 90.65% statement and 85.28% branch coverage.
+- Package-level regression suites cover the TUI, Windows native model storage,
+  protocol cold generation, and rejection of tracked generated protocol output.
 - The ipull regression test reproduces a real Windows filesystem rename before
   sealing the downloaded file. A separate failure test verifies that an
   abandoned `.ipull` file and its staging directory are removed.
-- `@lyonbrown/protocol`: a cold build succeeds without pre-generated sources;
-  lint, typecheck, build, and 29/29 tests pass. A repository policy test rejects
-  tracked or non-ignored protocol output.
-- A full repository `ci-gate` remains required after the next composition
-  slice and before any runnable or release claim.
+- Focused TypeScript tests cover production composition, model-aware Runtime
+  activation and retry, transport revisions, local inference concurrency and
+  cleanup, session rotation, and restart recovery.
+- Current focused suite counts are `agentd` 176 tests, `agent-cli` 28,
+  `ui-model` 56, and `local-model` 86.
+- The built production launcher/independent `agentd` startup black box passed on
+  2026-10-06: `source=spawned`, authenticated health was `serving`, model setup
+  was `required`, `allowedActions=[download]`, and the projected revision was
+  `2`. It created no GGUF automatically, then removed the temporary daemon and
+  directories.
+- Restart tests deliberately rotate every session containing a historical turn,
+  including completed sessions. This preserves durable events without silently
+  rebuilding incomplete Pi conversation state; Pi history hydration remains
+  unimplemented.
+- This checkpoint passed frozen install and full repository format, lint,
+  typecheck, test, build, docs, and `ci-gate`; repeat them against the final
+  release artifacts before making a release claim.
 
 ## Current product state
 
-The repository is Node.js/TypeScript-only, but the product is not yet an
-end-to-end runnable checkpoint. Production still needs:
+The repository is Node.js/TypeScript-only. The production C/S path is now
+composed from TUI launcher through authenticated gRPC to the daemon-owned
+EventStore, Pi Runtime, and local model. This is an implemented and focused-test
+checkpoint, not yet release evidence.
 
-- concrete native discovery, process-spawn, and authenticated client adapters
-  for the TUI launcher;
-- the complete `agentd` production composition root, descriptor publication,
-  ownership-aware shutdown, and executable entry point;
-- an authenticated local daemon/TUI end-to-end test;
-- complete tools, MCP, approval execution, context, secrets, configuration,
-  packaging, and release verification.
+The production kernel intentionally starts with an empty tool registry,
+default-deny approvals, and a rejecting secret resolver. MCP is not connected.
+GUI, Desktop, and mobile clients remain out of scope. The built-artifact startup
+black box is verified, but it did not download or run a model. Real-GGUF
+download, activation, inference, and cancellation, plus release packaging, have
+not yet been verified.
 
 The architecture remains singular: `agentd` owns Runtime, models, tools, MCP,
 and EventStore; the TUI is only an authenticated gRPC presentation client. No
@@ -67,12 +101,14 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
 
 ## Next order
 
-1. Implement production discovery, client-factory, and process-spawner adapters
-   behind `agent-launch` composition boundaries.
-2. Complete `agentd` startup/publication and bounded reverse-order shutdown.
-3. Run an authenticated local daemon/TUI black-box flow covering reuse, spawn,
-   restart fencing, and cancellation.
-4. Continue tools, MCP, approvals, context, secrets, configuration, packaging,
-   and release slices.
-5. Run frozen install plus full format, lint, typecheck, test, build, docs, and
-   `ci-gate` verification before making a runnable or release claim.
+1. Verify a pinned real GGUF through download, activation, cancellation, one
+   streamed turn, and bounded shutdown on supported release hardware.
+2. Extend the authenticated built-artifact black box beyond the verified spawn
+   and setup-required checkpoint to cover reuse, restart fencing, model
+   progress, inference, and cancellation.
+3. Implement Pi history hydration before allowing a historical session to
+   resume across daemon restart.
+4. Add narrowly scoped tools, approval execution, MCP, context, and secrets;
+   retain default-deny behavior until each capability is independently tested.
+5. Complete distributable packaging and then run frozen install plus full
+   format, lint, typecheck, test, build, docs, and `ci-gate` verification.

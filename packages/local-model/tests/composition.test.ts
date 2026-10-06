@@ -10,8 +10,8 @@ import {
 import { createComposedLocalModelService } from "../src/internal/composed-service.ts";
 import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
 import { DEFAULT_MODEL_IDENTITY } from "../src/internal/model-identity.ts";
-import type { LocalModelService } from "../src/types.ts";
-import { Deferred, flushTasks } from "./support/fakes.ts";
+import type { LocalModelLease, LocalModelService } from "../src/types.ts";
+import { createFakeLlamaLease, Deferred, flushTasks } from "./support/fakes.ts";
 
 describe("secure local-model composition", () => {
   it("fails closed without a native secure capability", () => {
@@ -21,7 +21,7 @@ describe("secure local-model composition", () => {
   });
 
   it("binds the fixed identity and holds the native anchor through verification and load", async () => {
-    const loadCompletion = new Deferred<{ dispose(): Promise<void> }>();
+    const loadCompletion = new Deferred<LocalModelLease>();
     const storage = new MemoryStorage(true);
     const verifier = vi.fn(() => {
       expect(storage.anchorHeld).toBe(true);
@@ -41,7 +41,7 @@ describe("secure local-model composition", () => {
 
     const result = service.load();
     expect(storage.anchorHeld).toBe(true);
-    loadCompletion.resolve({ dispose: () => Promise.resolve() });
+    loadCompletion.resolve(createFakeLlamaLease());
 
     await expect(result).resolves.toMatchObject({ kind: "ready" });
     expect(storage.anchorHeld).toBe(false);
@@ -55,7 +55,7 @@ describe("secure local-model composition", () => {
     const service = createComposedLocalModelService(storage, {
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: () => ({
-        loadDefault: () => Promise.resolve({ dispose: () => Promise.resolve() }),
+        loadDefault: () => Promise.resolve(createFakeLlamaLease()),
       }),
     });
     await flushTasks();
@@ -70,7 +70,7 @@ describe("secure local-model composition", () => {
     const service = createComposedLocalModelService(storage, {
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: () => ({
-        loadDefault: () => Promise.resolve({ dispose }),
+        loadDefault: () => Promise.resolve(createFakeLlamaLease(dispose)),
       }),
     });
     await flushTasks();
@@ -87,7 +87,7 @@ describe("secure local-model composition", () => {
     storage.duplicateCallbackOnAccess = 2;
     const dispose = vi.fn(() => Promise.resolve());
     const nodeLlamaEngine = vi.fn(() => ({
-      loadDefault: () => Promise.resolve({ dispose }),
+      loadDefault: () => Promise.resolve(createFakeLlamaLease(dispose)),
     }));
     const service = createComposedLocalModelService(storage, {
       verifyFile: () => Promise.resolve(1),
@@ -110,7 +110,7 @@ describe("secure local-model composition", () => {
     const service = createComposedLocalModelService(storage, {
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: () => ({
-        loadDefault: () => Promise.resolve({ dispose }),
+        loadDefault: () => Promise.resolve(createFakeLlamaLease(dispose)),
       }),
     });
     await flushTasks();

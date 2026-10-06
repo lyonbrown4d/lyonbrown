@@ -27,10 +27,11 @@ export type ActiveModelSetupPhase =
   | "Activating";
 
 export type ModelSetupState =
-  | { readonly phase: "Required"; readonly operationId: null }
-  | { readonly phase: ActiveModelSetupPhase; readonly operationId: string }
-  | { readonly phase: "Ready"; readonly operationId: null }
-  | { readonly phase: "Cancelled" | "Failed"; readonly operationId: string };
+  | { readonly phase: "Required" | "Ready"; readonly operationId: null }
+  | {
+      readonly phase: ActiveModelSetupPhase | "Cancelled" | "Failed";
+      readonly operationId: string | null;
+    };
 
 export interface ActivityItemDto {
   readonly turnId: string;

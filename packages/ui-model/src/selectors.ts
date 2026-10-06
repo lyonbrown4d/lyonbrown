@@ -70,7 +70,9 @@ export function getModelSetupCancellation(state: UiModelState): ModelSetupCancel
     case "Checking":
     case "Downloading":
     case "Verifying":
-      return { allowed: true, operationId: modelSetup.operationId };
+      return modelSetup.operationId === null
+        ? { allowed: false, reason: "no-operation" }
+        : { allowed: true, operationId: modelSetup.operationId };
     case "Installing":
     case "Activating":
       return { allowed: false, reason: "too-late" };

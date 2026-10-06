@@ -1,7 +1,11 @@
 # `agentd` 组合根
 
 `apps/agentd` 是唯一生产组合根。依赖注入只存在于进程边界，不让领域对象从容器
-主动解析服务。
+主动解析服务。生产 launcher 与可执行入口已经使用该组合；不存在第二套进程内或
+兼容架构。
+
+> 已验证实现检查点：2026-10-06。构建后的 launcher 与独立 daemon 启动黑盒已通过；
+> 真实模型执行与发布打包仍待验证。
 
 ## 所有权
 
@@ -9,24 +13,46 @@ daemon 构造并持有：
 
 - 带作用域的 run/data 目录及原生安全能力；
 - 生命周期锁、发现描述符、endpoint 与认证 token；
-- EventStore、durable Runtime、Pi kernel session、工具、MCP 与 Secret；
+- EventStore、durable Runtime、Pi kernel session 与能力策略；
 - 托管 `node-llama-cpp` 模型存储和生命周期；
 - 认证 gRPC 服务与 Snapshot stream。
 
 TUI 只能得到窄化后的 `agent-launch`、`agent-client` 与 `ui-model` 接口，不能得到
-数据库句柄、模型路径、原始 bearer token、供应商 Secret 或 Pi 对象。
+数据库句柄、模型路径、原始 bearer token、供应商 Secret 或 Pi 对象。Snapshot
+顺序使用 daemon 自有的单调 transport revision，不直接暴露 EventStore revision；
+仅模型状态与激活状态的更新也进入同一顺序。
+
+当前生产 Kernel 刻意组合空 tool registry、default-deny approval gate、拒绝式 Secret
+resolver，并且不连接 MCP。这些是安全的能力边界，不是已经完成的集成。
 
 ## 启动顺序
 
 1. 解析并校验类型化进程配置。
 2. 使用稳定的文件系统身份与有效配置指纹推导 workspace scope。
 3. 打开受保护的 run/data 目录并取得 daemon 生命周期 lease。
-4. 打开并恢复 EventStore，再构造 Runtime 与 Pi 适配器。
+4. 打开并恢复 EventStore，再构造本地模型服务。缓存检查在后台开始，且绝不会自动
+   启动下载。
 5. 在私有 endpoint 启动认证 gRPC server。
 6. 最后发布发现描述符；发布时服务必须已可用。
+7. 已验证模型就绪后，激活 inference lease 并构造 Runtime 与 Pi 适配器。激活失败
+   会保持可观察，用户可以显式重试，且无需重新下载模型。
 
 描述符发布前发生的失败不会被 client 发现，并按所有权逆序清理。进程绝不回退到
 embedded Runtime。
+
+## Runtime 与恢复边界
+
+本地模型适配器以单活跃 inference、固定 4096-token context 向 Pi 流式输出文本。
+每条 user、follow-up 或 steering 消息在 daemon 命令入口限制为 64 KiB，与
+local-model 的单消息上限一致。Kernel 的 256 KiB 限制是完整构造后 inference 输入的
+纵深防御上限，并非单条 turn 消息上限。非活跃 Session 会在达到 32 个历史 turn 或
+4 MiB 用户文本后，于接收下一次输入前轮换。turn 活跃期间最多排队 8 条、合计
+512 KiB 的 follow-up。预算校验与命令持久化共用 daemon 的一条 FIFO 通道，防止并发
+RPC 基于过期状态通过检查。
+
+EventStore 仍是 Session 与执行事件的持久真相源。Pi history hydration 尚未实现，
+因此 daemon 重启后会安全轮换任何包含历史 turn 的 Session——包括已完成 Session——
+而不是在模型上下文不完整时静默续接。旧 Session 仍可从 EventStore 查询。
 
 ## 关闭顺序
 
@@ -37,4 +63,8 @@ dispose Runtime 和模型资源、关闭 EventStore、释放 lease 与目录锚�
 ## 测试接缝
 
 生产组合显式注入原生能力；平台实现不可用时 fail closed。测试在同一边界使用 port
-与 fake，生产默认值不得选择测试 helper。
+与 fake，生产默认值不得选择测试 helper。聚焦测试已覆盖组合、激活重试、revision、
+轮换与恢复。构建后的生产 launcher 已拉起独立认证 daemon，观察到 `serving`、
+`setup-required`、`allowedActions=[download]` 与 revision `2`，没有生成 GGUF，并清理了
+临时进程和目录。该证据只验证启动组合；真实 GGUF 下载、激活、推理、取消与发布打包
+仍未验证。

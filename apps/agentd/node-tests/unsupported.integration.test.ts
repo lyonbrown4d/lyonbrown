@@ -1,11 +1,9 @@
 import { status } from "@grpc/grpc-js";
 import {
-  CancelModelDownloadRequest,
   CommandErrorCode,
   ForceStopRequest,
   RespondApprovalRequest,
   SelectSessionModelRequest,
-  StartModelDownloadRequest,
   UnsupportedCommand,
 } from "@lyonbrown/protocol";
 import { afterAll, describe, expect, it } from "vitest";
@@ -69,20 +67,6 @@ describe("deferred command RPCs", () => {
           callback,
         ),
       ),
-      invokeUnary((callback) =>
-        client.startModelDownload(
-          StartModelDownloadRequest.create({ metadata: requestMetadata("download") }),
-          metadata,
-          callback,
-        ),
-      ),
-      invokeUnary((callback) =>
-        client.cancelModelDownload(
-          CancelModelDownloadRequest.create({ metadata: requestMetadata("cancel-download") }),
-          metadata,
-          callback,
-        ),
-      ),
     ];
     const errors = await Promise.all(
       calls.map(async (call) => call.catch((error: unknown) => error)),
@@ -95,14 +79,6 @@ describe("deferred command RPCs", () => {
       {
         $case: "unsupportedCommand",
         unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_SELECT_SESSION_MODEL,
-      },
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_START_MODEL_DOWNLOAD,
-      },
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_CANCEL_MODEL_DOWNLOAD,
       },
     ]);
   });

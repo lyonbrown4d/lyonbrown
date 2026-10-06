@@ -23,15 +23,16 @@
   },
   "dependencies": {
     "@grpc/grpc-js": "1.14.5",
+    "@lyonbrown/agent-domain": "workspace:*",
     "@lyonbrown/agent-runtime": "workspace:*",
     "@lyonbrown/control-plane-native": "workspace:*",
+    "@lyonbrown/event-store": "workspace:*",
+    "@lyonbrown/kernel-pi": "workspace:*",
     "@lyonbrown/local-control-plane": "workspace:*",
+    "@lyonbrown/local-model": "workspace:*",
     "@lyonbrown/protocol": "workspace:*"
   },
   "devDependencies": {
-    "@lyonbrown/agent-domain": "workspace:*",
-    "@lyonbrown/event-store": "workspace:*",
-    "@lyonbrown/kernel-pi": "workspace:*",
     "@vitest/coverage-v8": "4.1.11"
   }
 }

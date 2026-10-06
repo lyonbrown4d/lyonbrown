@@ -1,3 +1,5 @@
+import type { LocalModelLease } from "../types.ts";
+
 export interface ModelPreset {
   readonly id: "qwen3-1.7b-q4_k_m";
   readonly displayName: string;
@@ -41,9 +43,7 @@ export interface InstallLockLease {
   release(): Promise<void>;
 }
 
-export interface LlamaLease {
-  dispose(): Promise<void>;
-}
+export type LlamaLease = LocalModelLease;
 
 export interface LlamaEngineAdapter {
   loadDefault(signal: AbortSignal): Promise<LlamaLease>;
