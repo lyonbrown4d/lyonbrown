@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { isAbsolute, win32 } from "node:path";
-import { controlPlaneError } from "./errors.ts";
+import { controlPlaneError } from "@lyonbrown/local-control-plane/internal/errors";
 import {
   invokePlatform,
   resolveNativeControlPlaneProvider,
   type NativeControlPlaneProvider,
   type WorkspaceIdentity,
-} from "./platform-security.ts";
-import { isWellFormedText } from "./well-formed.ts";
+} from "@lyonbrown/local-control-plane/internal/platform-security";
+import { isWellFormedText } from "@lyonbrown/local-control-plane/internal/well-formed";
 
 export interface ScopeIdentity {
   readonly canonicalWorkspace: string;

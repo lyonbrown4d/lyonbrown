@@ -1,9 +1,13 @@
 import { createHash } from "node:crypto";
 import { types as nodeTypes } from "node:util";
 
-import { domainError } from "./errors.ts";
-import { assertIdentifier, type ClientInstanceId, type CommandId } from "./identifiers.ts";
-import { isWellFormedString } from "./unicode.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
+import {
+  assertIdentifier,
+  type ClientInstanceId,
+  type CommandId,
+} from "@lyonbrown/agent-domain/internal/identifiers";
+import { isWellFormedString } from "@lyonbrown/agent-domain/internal/unicode";
 
 declare const replayKeyBrand: unique symbol;
 declare const commandFingerprintBrand: unique symbol;

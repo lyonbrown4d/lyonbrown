@@ -7,8 +7,8 @@ import {
   assertPnpmVersion,
   inspectRepository,
   type PnpmRunner,
-} from "./preflight-lib.ts";
-import { configureZxPlatform } from "./zx-platform.ts";
+} from "@lyonbrown/workspace/internal/preflight-lib";
+import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
 
 configureZxPlatform(process.platform, usePowerShell);
 

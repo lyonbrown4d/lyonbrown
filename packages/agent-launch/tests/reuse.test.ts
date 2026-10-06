@@ -1,8 +1,8 @@
 import { AgentClientError } from "@lyonbrown/agent-client";
 import { deriveScope } from "@lyonbrown/local-control-plane";
 import { describe, expect, test } from "vitest";
-import { AgentLaunchError } from "../src/errors.ts";
-import { createAgentLauncher } from "../src/launcher.ts";
+import { AgentLaunchError } from "@lyonbrown/agent-launch/internal/errors";
+import { createAgentLauncher } from "@lyonbrown/agent-launch/internal/launcher";
 import {
   CONFIG,
   WORKSPACE,
@@ -13,7 +13,7 @@ import {
   FakeSpawner,
   ManualClock,
   nativeProvider,
-} from "./support/fixtures.ts";
+} from "@lyonbrown/agent-launch/test/support/fixtures";
 
 async function setup() {
   const provider = nativeProvider();

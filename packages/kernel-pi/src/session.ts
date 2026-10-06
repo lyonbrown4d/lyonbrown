@@ -1,22 +1,33 @@
 import { Agent, type AgentEvent } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 
-import { BudgetTracker, validateBudget } from "./budget.ts";
-import { kernelError, toPublicKernelError, type KernelRuntimeError } from "./errors.ts";
-import { ListenerDispatcher } from "./listener-dispatcher.ts";
-import { createPiStreamFunction } from "./pi-bridge.ts";
-import { createPiModel, normalizeModelDescriptor } from "./pi-conversion.ts";
-import { SecretRedactor } from "./redaction.ts";
-import { limitsFromBudget, sanitizeBoundedText, sanitizeText } from "./sanitization.ts";
-import { normalizeTools } from "./tool-normalization.ts";
-import { ToolExecutor } from "./tools.ts";
+import { BudgetTracker, validateBudget } from "@lyonbrown/kernel-pi/internal/budget";
+import {
+  kernelError,
+  toPublicKernelError,
+  type KernelRuntimeError,
+} from "@lyonbrown/kernel-pi/internal/errors";
+import { ListenerDispatcher } from "@lyonbrown/kernel-pi/internal/listener-dispatcher";
+import { createPiStreamFunction } from "@lyonbrown/kernel-pi/internal/pi-bridge";
+import {
+  createPiModel,
+  normalizeModelDescriptor,
+} from "@lyonbrown/kernel-pi/internal/pi-conversion";
+import { SecretRedactor } from "@lyonbrown/kernel-pi/internal/redaction";
+import {
+  limitsFromBudget,
+  sanitizeBoundedText,
+  sanitizeText,
+} from "@lyonbrown/kernel-pi/internal/sanitization";
+import { normalizeTools } from "@lyonbrown/kernel-pi/internal/tool-normalization";
+import { ToolExecutor } from "@lyonbrown/kernel-pi/internal/tools";
 import type {
   KernelEvent,
   KernelEventListener,
   KernelSession,
   KernelToolDefinition,
   PiKernelSessionOptions,
-} from "./types.ts";
+} from "@lyonbrown/kernel-pi/internal/types";
 
 export class PiKernelSession implements KernelSession {
   readonly #agent: Agent;

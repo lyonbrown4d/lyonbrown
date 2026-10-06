@@ -6,7 +6,7 @@ import {
   type KernelModelAdapter,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
 
 describe("secret pattern budgets", () => {
   test("fails with resource exhaustion before tool execution", async () => {

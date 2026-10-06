@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { ListenerDispatcher } from "../src/listener-dispatcher.ts";
-import type { KernelEvent } from "../src/types.ts";
+import { ListenerDispatcher } from "@lyonbrown/kernel-pi/internal/listener-dispatcher";
+import type { KernelEvent } from "@lyonbrown/kernel-pi/internal/types";
 
 const event = (turn: number): KernelEvent => ({ type: "turn_started", turn });
 

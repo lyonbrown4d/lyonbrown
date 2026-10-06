@@ -6,10 +6,13 @@ import {
   type KernelModelAdapter,
   type KernelModelStreamEvent,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
-import { inspectOwnDataProperties, type InspectionFailure } from "../src/inspection.ts";
-import { sanitizeJson } from "../src/sanitization.ts";
-import { normalizeTools } from "../src/tool-normalization.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
+import {
+  inspectOwnDataProperties,
+  type InspectionFailure,
+} from "@lyonbrown/kernel-pi/internal/inspection";
+import { sanitizeJson } from "@lyonbrown/kernel-pi/internal/sanitization";
+import { normalizeTools } from "@lyonbrown/kernel-pi/internal/tool-normalization";
 
 const limits = {
   maxDepth: 4,

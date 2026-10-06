@@ -1,6 +1,17 @@
-import { api, pointerAddress, type Handle } from "./api.ts";
-import { ACCESS, ATTRIBUTES, CREATION, ERRORS, FLAGS, SHARE } from "./constants.ts";
-import { NativeFailure } from "../result.ts";
+import {
+  api,
+  pointerAddress,
+  type Handle,
+} from "@lyonbrown/control-plane-native/internal/windows/api";
+import {
+  ACCESS,
+  ATTRIBUTES,
+  CREATION,
+  ERRORS,
+  FLAGS,
+  SHARE,
+} from "@lyonbrown/control-plane-native/internal/windows/constants";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 const INVALID_HANDLE = (1n << BigInt(process.arch === "ia32" ? 32 : 64)) - 1n;
 

@@ -4,10 +4,14 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_PRESET, MODEL_CATALOG, modelDownloadUri } from "../src/internal/catalog.ts";
-import type { ModelFileDownloadRequest } from "../src/internal/model-download.ts";
-import { NodeModelIo } from "../src/internal/node-model-io.ts";
-import { TestNativeModelStorage } from "./support/native-storage.ts";
+import {
+  DEFAULT_PRESET,
+  MODEL_CATALOG,
+  modelDownloadUri,
+} from "@lyonbrown/local-model/internal/internal/catalog";
+import type { ModelFileDownloadRequest } from "@lyonbrown/local-model/internal/internal/model-download";
+import { NodeModelIo } from "@lyonbrown/local-model/internal/internal/node-model-io";
+import { TestNativeModelStorage } from "@lyonbrown/local-model/test/support/native-storage";
 
 const temporaryDirectories: string[] = [];
 

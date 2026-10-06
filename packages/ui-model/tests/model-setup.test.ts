@@ -10,7 +10,7 @@ import {
   type ModelSetupPhase,
   type ModelSetupState,
   type UiModelState,
-} from "../src/index.ts";
+} from "@lyonbrown/ui-model/internal/index";
 
 function setupFor(phase: ModelSetupPhase): ModelSetupState {
   if (phase === "Required" || phase === "Ready") {

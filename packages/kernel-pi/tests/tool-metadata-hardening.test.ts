@@ -5,7 +5,7 @@ import {
   type KernelModelAdapter,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
 
 const model: KernelModelAdapter = {
   model: { provider: "offline", id: "metadata-hardening" },

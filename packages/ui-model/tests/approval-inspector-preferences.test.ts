@@ -11,7 +11,7 @@ import {
   reduceUiModel,
   type RemoteSnapshot,
   type UiModelState,
-} from "../src/index.ts";
+} from "@lyonbrown/ui-model/internal/index";
 
 function snapshot(epoch: string, sessionId: string, revision: bigint): RemoteSnapshot {
   return {

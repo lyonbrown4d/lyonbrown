@@ -1,14 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_LOCAL_MODEL, type LocalModelLease, type LocalModelService } from "../src/index.ts";
-import { createLocalModelManager } from "../src/internal/manager.ts";
+import {
+  DEFAULT_LOCAL_MODEL,
+  type LocalModelLease,
+  type LocalModelService,
+} from "@lyonbrown/local-model/internal/index";
+import { createLocalModelManager } from "@lyonbrown/local-model/internal/internal/manager";
 import {
   createFakeLlamaLease,
   Deferred,
   FakeLlamaEngine,
   FakeModelIo,
   flushTasks,
-} from "./support/fakes.ts";
+} from "@lyonbrown/local-model/test/support/fakes";
 
 describe("default local model status", () => {
   it("returns immediately in checking while cache verification runs in the background", async () => {

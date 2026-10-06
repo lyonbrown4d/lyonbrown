@@ -1,9 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import type { LocalModelPhase, LocalModelService } from "../src/index.ts";
-import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
-import { createLocalModelManager } from "../src/internal/manager.ts";
-import { artifact, Deferred, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.ts";
+import type { LocalModelPhase, LocalModelService } from "@lyonbrown/local-model/internal/index";
+import { DEFAULT_PRESET } from "@lyonbrown/local-model/internal/internal/catalog";
+import { createLocalModelManager } from "@lyonbrown/local-model/internal/internal/manager";
+import {
+  artifact,
+  Deferred,
+  FakeLlamaEngine,
+  FakeModelIo,
+  flushTasks,
+} from "@lyonbrown/local-model/test/support/fakes";
 
 describe("explicit background download lifecycle", () => {
   it("starts only on command and publishes bounded progress", async () => {

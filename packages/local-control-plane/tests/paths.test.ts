@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveScopedDaemonPaths } from "../src/index.ts";
-import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.ts";
+import { deriveScopedDaemonPaths } from "@lyonbrown/local-control-plane/internal/index";
+import {
+  FakePlatformSecurity,
+  INODE_IDENTITY,
+} from "@lyonbrown/local-control-plane/test/test-support";
 
 describe("scoped daemon paths", () => {
   it("derives the stable workspace cache layout and runtime scope from one native identity", async () => {

@@ -1,11 +1,18 @@
 import { stripVTControlCharacters, types } from "node:util";
 
-import { kernelError, type KernelErrorCode, type KernelRuntimeError } from "./errors.ts";
-import { inspectOwnDataProperties, type InspectionFailure } from "./inspection.ts";
-import { isSecretReference } from "./secret-reference.ts";
-import type { KernelJsonValue, KernelResourceBudget } from "./types.ts";
+import {
+  kernelError,
+  type KernelErrorCode,
+  type KernelRuntimeError,
+} from "@lyonbrown/kernel-pi/internal/errors";
+import {
+  inspectOwnDataProperties,
+  type InspectionFailure,
+} from "@lyonbrown/kernel-pi/internal/inspection";
+import { isSecretReference } from "@lyonbrown/kernel-pi/internal/secret-reference";
+import type { KernelJsonValue, KernelResourceBudget } from "@lyonbrown/kernel-pi/internal/types";
 
-export { isSecretReference } from "./secret-reference.ts";
+export { isSecretReference } from "@lyonbrown/kernel-pi/internal/secret-reference";
 
 // eslint-disable-next-line no-control-regex -- the sanitizer intentionally removes C0/C1 controls
 const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/gu;

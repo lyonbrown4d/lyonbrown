@@ -1,4 +1,4 @@
-import { domainError } from "./errors.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
 
 export const MAX_AGENT_RUNTIME_ASSISTANT_BYTES = 1024 * 1024;
 

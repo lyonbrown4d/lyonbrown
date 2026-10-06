@@ -7,8 +7,8 @@ import type {
   ModelDownloadIntent,
   ModelSetupCancellation,
   UiModelState,
-} from "./types.ts";
-import { getFreshCurrentServerInstanceId } from "./epoch.ts";
+} from "@lyonbrown/ui-model/internal/types";
+import { getFreshCurrentServerInstanceId } from "@lyonbrown/ui-model/internal/epoch";
 
 export function getConnectionFreshness(state: UiModelState): ConnectionFreshness {
   switch (state.remote.connection) {

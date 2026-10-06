@@ -17,8 +17,12 @@ import {
   type RequestMetadata,
 } from "@lyonbrown/protocol";
 
-import type { AgentCommand, ApprovalDecision, ModelSelectionDto } from "./types.ts";
-import { requireId, requireText } from "./validation.ts";
+import type {
+  AgentCommand,
+  ApprovalDecision,
+  ModelSelectionDto,
+} from "@lyonbrown/agent-client/internal/types";
+import { requireId, requireText } from "@lyonbrown/agent-client/internal/validation";
 
 export interface WireCommand {
   readonly invoke: (

@@ -5,9 +5,9 @@ import {
   GRPC_CHANNEL_OPTIONS,
   MAX_GRPC_MESSAGE_BYTES,
 } from "@lyonbrown/protocol";
-import { createAuthorizationInterceptor } from "./auth.ts";
-import type { RuntimeHost } from "./runtime-host.ts";
-import { createAgentService } from "./service.ts";
+import { createAuthorizationInterceptor } from "@lyonbrown/agentd/internal/auth";
+import type { RuntimeHost } from "@lyonbrown/agentd/internal/runtime-host";
+import { createAgentService } from "@lyonbrown/agentd/internal/service";
 
 const LOOPBACK_HOST = "127.0.0.1";
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 5_000;

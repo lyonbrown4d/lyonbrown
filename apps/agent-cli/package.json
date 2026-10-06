@@ -20,7 +20,7 @@
     "pretest": "pnpm dependencies:build",
     "test": "vitest run --coverage",
     "prebuild": "pnpm dependencies:build",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json --resolve-full-paths --resolve-full-extension .js"
   },
   "dependencies": {
     "@earendil-works/pi-tui": "1.0.0",

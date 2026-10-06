@@ -2,7 +2,7 @@ import { types as nodeTypes } from "node:util";
 
 import type { EventStore, LoadOptions, StoredEvent } from "@lyonbrown/event-store";
 
-import { runtimeError } from "./errors.ts";
+import { runtimeError } from "@lyonbrown/agent-runtime/internal/errors";
 
 const runtimeEventPageBrand: unique symbol = Symbol("runtime-event-page");
 const pageContents = new WeakMap<object, readonly StoredEvent[]>();

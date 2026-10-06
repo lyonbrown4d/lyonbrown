@@ -1,14 +1,18 @@
 import type Database from "better-sqlite3";
 
-import { decodeEventPayload, encodeEventPayload } from "./codec.ts";
+import { decodeEventPayload, encodeEventPayload } from "@lyonbrown/event-store/internal/codec";
 import {
   EventAlreadyExistsError,
   RevisionConflictError,
   RevisionExhaustedError,
   StorageBusyError,
-} from "./errors.ts";
-import type { EventToAppend, StoredEvent } from "./types.ts";
-import { MAX_BATCH_PAYLOAD_BYTES, MAX_SQLITE_INTEGER, validateAppend } from "./validation.ts";
+} from "@lyonbrown/event-store/internal/errors";
+import type { EventToAppend, StoredEvent } from "@lyonbrown/event-store/internal/types";
+import {
+  MAX_BATCH_PAYLOAD_BYTES,
+  MAX_SQLITE_INTEGER,
+  validateAppend,
+} from "@lyonbrown/event-store/internal/validation";
 
 interface RevisionRow {
   readonly current_revision: bigint;

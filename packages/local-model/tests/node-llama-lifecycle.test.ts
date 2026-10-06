@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { LocalModelInferenceEvent } from "../src/index.ts";
-import { createNodeLlamaEngine } from "../src/internal/node-llama.ts";
-import { Deferred } from "./support/fakes.ts";
+import type { LocalModelInferenceEvent } from "@lyonbrown/local-model/internal/index";
+import { createNodeLlamaEngine } from "@lyonbrown/local-model/internal/internal/node-llama";
+import { Deferred } from "@lyonbrown/local-model/test/support/fakes";
 
 const collect = async (
   stream: AsyncIterable<LocalModelInferenceEvent>,

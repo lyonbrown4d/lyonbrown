@@ -3,8 +3,8 @@ import {
   createPortablePathVerifier,
   type PathSecurityVerifier,
 } from "@lyonbrown/event-store/path-verifier";
-import { createFailClosedPosixSecurity } from "./posix-provider.ts";
-import type { WindowsEventStoreVerifierOptions } from "./windows/store-verifier.ts";
+import { createFailClosedPosixSecurity } from "@lyonbrown/control-plane-native/internal/posix-provider";
+import type { WindowsEventStoreVerifierOptions } from "@lyonbrown/control-plane-native/internal/windows/store-verifier";
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
 
 type SecurityFactory = () => PlatformControlPlaneSecurity;
@@ -51,13 +51,14 @@ const unavailableWindows: SecurityFactory = () => {
 
 const windowsFactory = await selectWindowsFactory(
   process.platform,
-  () => import("./windows/provider.ts"),
+  () => import("@lyonbrown/control-plane-native/internal/windows/provider"),
   unavailableWindows,
 );
 
 const windowsStoreVerifierFactory =
   process.platform === "win32"
-    ? (await import("./windows/store-verifier.ts")).createWindowsEventStorePathVerifier
+    ? (await import("@lyonbrown/control-plane-native/internal/windows/store-verifier"))
+        .createWindowsEventStorePathVerifier
     : undefined;
 
 const unavailableModelStorage: ModelStorageFactory = () => {
@@ -66,7 +67,7 @@ const unavailableModelStorage: ModelStorageFactory = () => {
 
 const windowsModelStorageFactory = await selectWindowsModelStorageFactory(
   process.platform,
-  () => import("./windows/model-storage.ts"),
+  () => import("@lyonbrown/control-plane-native/internal/windows/model-storage"),
   unavailableModelStorage,
 );
 

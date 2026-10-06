@@ -1,7 +1,11 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { SecretRedactor } from "../src/redaction.ts";
-import { boundedSummary, sanitizeJson, utf8Bytes } from "../src/sanitization.ts";
+import { SecretRedactor } from "@lyonbrown/kernel-pi/internal/redaction";
+import {
+  boundedSummary,
+  sanitizeJson,
+  utf8Bytes,
+} from "@lyonbrown/kernel-pi/internal/sanitization";
 
 const limits = {
   maxDepth: 3,

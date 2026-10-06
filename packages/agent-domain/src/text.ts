@@ -1,5 +1,5 @@
-import { domainError } from "./errors.ts";
-import { assertWellFormedString } from "./unicode.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
+import { assertWellFormedString } from "@lyonbrown/agent-domain/internal/unicode";
 
 export const MAX_TEXT_BYTES = 1024 * 1024;
 

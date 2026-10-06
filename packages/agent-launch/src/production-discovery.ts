@@ -16,7 +16,7 @@ import type {
   DiscoveryClient,
   DiscoveryContext,
   StartupLease,
-} from "./types.ts";
+} from "@lyonbrown/agent-launch/internal/types";
 
 export interface ProductionDiscoveryOptions {
   readonly nativeProvider: NativeControlPlaneProvider;

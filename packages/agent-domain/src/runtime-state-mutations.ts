@@ -1,17 +1,17 @@
-import type { Revision } from "./revision.ts";
+import type { Revision } from "@lyonbrown/agent-domain/internal/revision";
 import type {
   AgentRuntimeState,
   RuntimeActivityState,
   RuntimeToolState,
   RuntimeTurnState,
-} from "./runtime-state-types.ts";
+} from "@lyonbrown/agent-domain/internal/runtime-state-types";
 import {
   ZERO_RUNTIME_USAGE,
   freezeActivity,
   freezeState,
   freezeTool,
   freezeTurn,
-} from "./runtime-state-types.ts";
+} from "@lyonbrown/agent-domain/internal/runtime-state-types";
 
 type StateChanges = Partial<
   Pick<AgentRuntimeState, "assistantTextBytes" | "outcomeUnknown" | "phase" | "lastError" | "usage">

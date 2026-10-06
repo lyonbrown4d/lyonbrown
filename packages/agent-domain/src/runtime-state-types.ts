@@ -1,7 +1,7 @@
-import type { SessionId } from "./identifiers.ts";
-import type { Revision } from "./revision.ts";
-import type { RuntimeUsage } from "./runtime-events.ts";
-import type { RuntimeJsonValue } from "./runtime-json.ts";
+import type { SessionId } from "@lyonbrown/agent-domain/internal/identifiers";
+import type { Revision } from "@lyonbrown/agent-domain/internal/revision";
+import type { RuntimeUsage } from "@lyonbrown/agent-domain/internal/runtime-events";
+import type { RuntimeJsonValue } from "@lyonbrown/agent-domain/internal/runtime-json";
 
 export type AgentRuntimePhase =
   | "uninitialized"

@@ -39,4 +39,4 @@ export async function drainActivationTask(task: Promise<void> | undefined): Prom
 import type { AgentRuntime } from "@lyonbrown/agent-runtime";
 import type { LocalModelLease } from "@lyonbrown/local-model";
 
-import { ACTIVATION_SHUTDOWN_TIMEOUT_MS } from "./runtime-limits.ts";
+import { ACTIVATION_SHUTDOWN_TIMEOUT_MS } from "@lyonbrown/agentd/internal/runtime-limits";

@@ -7,7 +7,7 @@ import {
   createInitialAgentRuntimeState,
   reduceAgentRuntimeEvent,
   type AgentRuntimeEvent,
-} from "../src/index.ts";
+} from "@lyonbrown/agent-domain/internal/index";
 
 const sessionId = asSessionId("session-runtime-state");
 

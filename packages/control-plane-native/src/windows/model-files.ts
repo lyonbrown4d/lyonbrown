@@ -1,16 +1,28 @@
-import { api } from "./api.ts";
-import { ACCESS, ATTRIBUTES, CREATION, FLAGS, LOCK, SHARE } from "./constants.ts";
-import { disposeOnClose } from "./files.ts";
-import { createFile, failureForLastError, OwnedHandle, validateObjectType } from "./handles.ts";
-import { openRegularFile } from "./handles.ts";
-import { fileIdentity } from "./identity.ts";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import {
+  ACCESS,
+  ATTRIBUTES,
+  CREATION,
+  FLAGS,
+  LOCK,
+  SHARE,
+} from "@lyonbrown/control-plane-native/internal/windows/constants";
+import { disposeOnClose } from "@lyonbrown/control-plane-native/internal/windows/files";
+import {
+  createFile,
+  failureForLastError,
+  OwnedHandle,
+  validateObjectType,
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
+import { openRegularFile } from "@lyonbrown/control-plane-native/internal/windows/handles";
+import { fileIdentity } from "@lyonbrown/control-plane-native/internal/windows/identity";
 import {
   currentUser,
   verifyPrivateInheritedFile,
   verifyPrivateObject,
   withPrivateSecurity,
-} from "./security.ts";
-import { NativeFailure } from "../result.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/security";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 function overlapped(): object {
   return { Internal: 0, InternalHigh: 0, Offset: 0, OffsetHigh: 0, hEvent: null };

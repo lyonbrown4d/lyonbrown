@@ -2,7 +2,10 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { resolveReleaseTarget, windowsAgentLauncher } from "../release-artifact-lib.ts";
+import {
+  resolveReleaseTarget,
+  windowsAgentLauncher,
+} from "@lyonbrown/workspace/internal/release-artifact-lib";
 
 describe("release artifact contract", () => {
   const workspace = resolve("C:/workspace/lyonbrown");

@@ -1,9 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { deriveScope } from "../src/index.ts";
-import { deriveScopeFromIdentity, encodeWorkspaceIdentity } from "../src/scope.ts";
-import { FakePlatformSecurity, INODE_IDENTITY } from "./test-support.ts";
+import { deriveScope } from "@lyonbrown/local-control-plane/internal/index";
+import {
+  deriveScopeFromIdentity,
+  encodeWorkspaceIdentity,
+} from "@lyonbrown/local-control-plane/internal/scope";
+import {
+  FakePlatformSecurity,
+  INODE_IDENTITY,
+} from "@lyonbrown/local-control-plane/test/test-support";
 
 interface IdentityVector {
   readonly name: string;

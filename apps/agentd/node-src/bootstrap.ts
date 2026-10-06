@@ -10,12 +10,12 @@ import {
   type NativeControlPlaneProvider,
   type SecureRunDirectory,
 } from "@lyonbrown/local-control-plane";
-import type { RuntimeHost } from "./runtime-host.ts";
+import type { RuntimeHost } from "@lyonbrown/agentd/internal/runtime-host";
 import {
   startAgentdServer,
   type RunningAgentdServer,
   type StartAgentdServerOptions,
-} from "./server.ts";
+} from "@lyonbrown/agentd/internal/server";
 
 export type AgentdBootstrapErrorCode =
   | "DAEMON_ALREADY_RUNNING"

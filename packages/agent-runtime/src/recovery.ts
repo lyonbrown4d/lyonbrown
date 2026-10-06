@@ -10,8 +10,11 @@ import {
 } from "@lyonbrown/agent-domain";
 import type { StoredEvent } from "@lyonbrown/event-store";
 
-import { runtimeError } from "./errors.ts";
-import { readRuntimeEventPage, type RuntimeEventStorePort } from "./event-store-port.ts";
+import { runtimeError } from "@lyonbrown/agent-runtime/internal/errors";
+import {
+  readRuntimeEventPage,
+  type RuntimeEventStorePort,
+} from "@lyonbrown/agent-runtime/internal/event-store-port";
 
 const RECOVERY_PAGE_SIZE = 256;
 const MAX_RECOVERY_EVENTS = 100_000;

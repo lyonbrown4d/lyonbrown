@@ -6,14 +6,14 @@ import {
 } from "@lyonbrown/protocol";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { MAX_MESSAGE_INPUT_BYTES } from "../node-src/runtime-limits.ts";
+import { MAX_MESSAGE_INPUT_BYTES } from "@lyonbrown/agentd/internal/runtime-limits";
 import {
   authorization,
   invokeUnary,
   requestMetadata,
   startTestServer,
   type TestServerState,
-} from "./server-test-support.ts";
+} from "@lyonbrown/agentd/test/server-test-support";
 
 describe("runtime command input boundaries", () => {
   const states: TestServerState[] = [];

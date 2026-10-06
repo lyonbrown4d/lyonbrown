@@ -1,4 +1,4 @@
-import { assertProtocolRevision } from "./runtime-adapter-projection.ts";
+import { assertProtocolRevision } from "@lyonbrown/agentd/internal/runtime-adapter-projection";
 
 const MAX_UINT64 = 0xffff_ffff_ffff_ffffn;
 

@@ -1,4 +1,4 @@
-import { controlPlaneError } from "./errors.ts";
+import { controlPlaneError } from "@lyonbrown/local-control-plane/internal/errors";
 
 function skipWhitespace(text: string, start: number): number {
   let index = start;

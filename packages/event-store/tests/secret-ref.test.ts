@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { PayloadValidationError, encodeEventPayload } from "../src/index.ts";
+import { PayloadValidationError, encodeEventPayload } from "@lyonbrown/event-store/internal/index";
 
 describe("SecretRef persistence boundary", () => {
   it.each([

@@ -6,10 +6,10 @@ import {
   AgentdBootstrapError,
   startProductionAgentd,
   type RunningProductionAgentd,
-} from "./bootstrap.ts";
-import { AgentdCliError, parseAgentdArguments } from "./cli-arguments.ts";
-import { waitForShutdownSignal } from "./process-lifecycle.ts";
-import { createProductionAgentdRuntime } from "./production-runtime.ts";
+} from "@lyonbrown/agentd/internal/bootstrap";
+import { AgentdCliError, parseAgentdArguments } from "@lyonbrown/agentd/internal/cli-arguments";
+import { waitForShutdownSignal } from "@lyonbrown/agentd/internal/process-lifecycle";
+import { createProductionAgentdRuntime } from "@lyonbrown/agentd/internal/production-runtime";
 
 export interface AgentdMainDependencies {
   readonly homeDirectory: () => string;

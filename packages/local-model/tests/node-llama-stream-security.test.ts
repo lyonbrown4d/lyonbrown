@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { LocalModelInferenceEvent, LocalModelInferenceRequest } from "../src/index.ts";
-import { createNodeLlamaEngine } from "../src/internal/node-llama.ts";
-import { createNodeLlamaHarness } from "./support/node-llama.ts";
+import type {
+  LocalModelInferenceEvent,
+  LocalModelInferenceRequest,
+} from "@lyonbrown/local-model/internal/index";
+import { createNodeLlamaEngine } from "@lyonbrown/local-model/internal/internal/node-llama";
+import { createNodeLlamaHarness } from "@lyonbrown/local-model/test/support/node-llama";
 
 const request = (): LocalModelInferenceRequest => ({
   messages: [{ role: "user", content: "hello" }],

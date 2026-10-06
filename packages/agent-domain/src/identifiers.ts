@@ -1,5 +1,5 @@
-import { domainError } from "./errors.ts";
-import { assertWellFormedString } from "./unicode.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
+import { assertWellFormedString } from "@lyonbrown/agent-domain/internal/unicode";
 
 declare const sessionIdBrand: unique symbol;
 declare const turnIdBrand: unique symbol;

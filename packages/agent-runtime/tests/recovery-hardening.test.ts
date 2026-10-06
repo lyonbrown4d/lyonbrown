@@ -4,8 +4,11 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import type { StoredEvent } from "@lyonbrown/event-store";
 import { describe, expect, test } from "vitest";
 
-import { createRuntimeEventPage, type RuntimeEventStorePort } from "../src/event-store-port.ts";
-import { recoverRuntimeState } from "../src/recovery.ts";
+import {
+  createRuntimeEventPage,
+  type RuntimeEventStorePort,
+} from "@lyonbrown/agent-runtime/internal/event-store-port";
+import { recoverRuntimeState } from "@lyonbrown/agent-runtime/internal/recovery";
 
 const sessionId = asSessionId("session-recovery-hardening");
 

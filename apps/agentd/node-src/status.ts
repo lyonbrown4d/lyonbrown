@@ -7,7 +7,7 @@ import {
   InvalidModelIdDetail,
   ModelDownloadOperationMismatchDetail,
 } from "@lyonbrown/protocol";
-import type { RuntimeFailure } from "./runtime-host.ts";
+import type { RuntimeFailure } from "@lyonbrown/agentd/internal/runtime-host";
 
 const DETAILS_KEY = "grpc-status-details-bin";
 const INTERNAL_MESSAGE = "internal daemon error";

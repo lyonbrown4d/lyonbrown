@@ -4,7 +4,7 @@ import type { AgentLauncher } from "@lyonbrown/agent-launch";
 import { createProductionAgentLauncher } from "@lyonbrown/agent-launch/composition";
 import { createControlPlaneNativeProvider } from "@lyonbrown/control-plane-native";
 
-import { VERSION } from "./cli.ts";
+import { VERSION } from "@lyonbrown/agent-cli/internal/cli";
 
 const EFFECTIVE_CONFIG_FINGERPRINT = "production-default";
 const require = createRequire(import.meta.url);

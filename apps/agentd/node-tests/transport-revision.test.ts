@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { nextTransportRevision } from "../node-src/transport-revision.ts";
+import { nextTransportRevision } from "@lyonbrown/agentd/internal/transport-revision";
 
 describe("daemon transport revisions", () => {
   it("increments valid revisions and rejects negative or exhausted values", () => {

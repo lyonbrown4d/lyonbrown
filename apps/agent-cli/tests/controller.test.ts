@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { AgentTuiController, type AgentTuiFrame } from "../src/controller.ts";
-import { connection, FakeAgentClient, FakeLauncher } from "./support/fake-launcher.ts";
-import { runtimeSnapshot } from "./support/runtime.ts";
+import { AgentTuiController, type AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
+import {
+  connection,
+  FakeAgentClient,
+  FakeLauncher,
+} from "@lyonbrown/agent-cli/test/support/fake-launcher";
+import { runtimeSnapshot } from "@lyonbrown/agent-cli/test/support/runtime";
 
 describe("AgentTuiController", () => {
   it("renders connecting before daemon discovery settles", () => {

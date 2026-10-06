@@ -7,10 +7,13 @@ import {
   SECURITY_ATTRIBUTES,
   type Handle,
   type Pointer,
-} from "./api.ts";
-import { SECURITY } from "./constants.ts";
-import { failureForLastError, OwnedHandle } from "./handles.ts";
-import { NativeFailure } from "../result.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/api";
+import { SECURITY } from "@lyonbrown/control-plane-native/internal/windows/constants";
+import {
+  failureForLastError,
+  OwnedHandle,
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 interface CurrentUser {
   readonly sid: Uint8Array;

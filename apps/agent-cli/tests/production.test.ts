@@ -26,7 +26,7 @@ vi.mock("@lyonbrown/control-plane-native", () => ({
   createControlPlaneNativeProvider: () => mocks.nativeProvider,
 }));
 
-import { createProductionMainDependencies } from "../src/production.ts";
+import { createProductionMainDependencies } from "@lyonbrown/agent-cli/internal/production";
 
 const require = createRequire(import.meta.url);
 

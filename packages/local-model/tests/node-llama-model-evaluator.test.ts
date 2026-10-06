@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MODEL_CATALOG, modelDownloadUri } from "../src/internal/catalog.ts";
-import { createNodeLlamaModelEvaluator } from "../src/internal/node-llama-model-evaluator.ts";
+import { MODEL_CATALOG, modelDownloadUri } from "@lyonbrown/local-model/internal/internal/catalog";
+import { createNodeLlamaModelEvaluator } from "@lyonbrown/local-model/internal/internal/node-llama-model-evaluator";
 
 describe("node-llama hardware compatibility adapter", () => {
   it("scores only trusted catalog URIs against one bounded hardware snapshot", async () => {

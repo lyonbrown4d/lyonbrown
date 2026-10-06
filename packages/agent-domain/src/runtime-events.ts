@@ -1,9 +1,16 @@
 import { types as nodeTypes } from "node:util";
 
-import { domainError } from "./errors.ts";
-import { asSessionId, assertIdentifier, type SessionId } from "./identifiers.ts";
-import { copyRuntimeJson, type RuntimeJsonValue } from "./runtime-json.ts";
-import { validateText } from "./text.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
+import {
+  asSessionId,
+  assertIdentifier,
+  type SessionId,
+} from "@lyonbrown/agent-domain/internal/identifiers";
+import {
+  copyRuntimeJson,
+  type RuntimeJsonValue,
+} from "@lyonbrown/agent-domain/internal/runtime-json";
+import { validateText } from "@lyonbrown/agent-domain/internal/text";
 
 interface RuntimeEventBase {
   readonly sessionId: SessionId;

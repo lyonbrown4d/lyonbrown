@@ -7,7 +7,7 @@ import {
   type KernelModelStreamEvent,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
 
 const baseBudget = {
   maxInputBytes: 1_024,

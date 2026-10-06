@@ -1,10 +1,10 @@
 import type { ChannelOptions } from "@grpc/grpc-js";
 
-export * from "./auth.ts";
-export * from "./boundary.ts";
-export * from "./generated/agent/v1/agent.ts";
-export * from "./generated/agent/v1/commands.ts";
-export * from "./generated/agent/v1/snapshot.ts";
+export * from "@lyonbrown/protocol/internal/auth";
+export * from "@lyonbrown/protocol/internal/boundary";
+export * from "@lyonbrown/protocol/generated/agent/v1/agent";
+export * from "@lyonbrown/protocol/generated/agent/v1/commands";
+export * from "@lyonbrown/protocol/generated/agent/v1/snapshot";
 
 export const PROTOCOL_VERSION = 1;
 export const MAX_GRPC_MESSAGE_BYTES = 16 * 1024 * 1024;

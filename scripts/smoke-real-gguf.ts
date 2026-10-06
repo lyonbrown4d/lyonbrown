@@ -10,17 +10,23 @@ import type { RunningProductionAgentd } from "@lyonbrown/agentd/composition";
 import type { NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
 import { $, usePowerShell } from "zx";
 
-import { verifyInstalledModelCache } from "./smoke-real-gguf-cache.ts";
-import { runRealGgufSmokeFlow, type RealGgufSmokePort } from "./smoke-real-gguf-flow.ts";
-import { safeSnapshot, SnapshotReporter } from "./smoke-real-gguf-report.ts";
-import { configureZxPlatform } from "./zx-platform.ts";
+import { verifyInstalledModelCache } from "@lyonbrown/workspace/internal/smoke-real-gguf-cache";
+import {
+  runRealGgufSmokeFlow,
+  type RealGgufSmokePort,
+} from "@lyonbrown/workspace/internal/smoke-real-gguf-flow";
+import {
+  safeSnapshot,
+  SnapshotReporter,
+} from "@lyonbrown/workspace/internal/smoke-real-gguf-report";
+import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
 import {
   assertSafeTemporaryRoot,
   bounded,
   cleanupTemporaryAfterClose,
   parseRealGgufSmokeAuthorization,
   runAllAttemptCleanup,
-} from "./smoke-real-gguf-lib.ts";
+} from "@lyonbrown/workspace/internal/smoke-real-gguf-lib";
 
 const FINGERPRINT = "real-gguf-release-smoke-v1";
 const DEPENDENCY_BUILD_TIMEOUT_MS = 15 * 60 * 1_000;

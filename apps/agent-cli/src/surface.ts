@@ -1,10 +1,10 @@
 import { parseColor, styleText, truncateToWidth } from "@earendil-works/pi-tui";
 
-import type { AgentTuiFrame } from "./controller.ts";
-import { labels } from "./locales.ts";
-import { renderModelSetup } from "./model-setup-surface.ts";
-import { safeTerminalText } from "./text-safety.ts";
-import { THEMES } from "./themes.ts";
+import type { AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
+import { labels } from "@lyonbrown/agent-cli/internal/locales";
+import { renderModelSetup } from "@lyonbrown/agent-cli/internal/model-setup-surface";
+import { safeTerminalText } from "@lyonbrown/agent-cli/internal/text-safety";
+import { THEMES } from "@lyonbrown/agent-cli/internal/themes";
 
 const COMMANDS = [
   "/language [en|zh]",

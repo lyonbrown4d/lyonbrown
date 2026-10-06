@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import type { ModelPreset, ModelSelector } from "../src/internal/contracts.ts";
-import { createLocalModelManager } from "../src/internal/manager.ts";
-import { createHardwareAwareModelSelector } from "../src/internal/model-selection.ts";
-import { artifact, FakeLlamaEngine, FakeModelIo, flushTasks } from "./support/fakes.ts";
+import type {
+  ModelPreset,
+  ModelSelector,
+} from "@lyonbrown/local-model/internal/internal/contracts";
+import { createLocalModelManager } from "@lyonbrown/local-model/internal/internal/manager";
+import { createHardwareAwareModelSelector } from "@lyonbrown/local-model/internal/internal/model-selection";
+import {
+  artifact,
+  FakeLlamaEngine,
+  FakeModelIo,
+  flushTasks,
+} from "@lyonbrown/local-model/test/support/fakes";
 
 const small = fixturePreset("fixture-small", 1, 500);
 const installedLarge = fixturePreset("fixture-large", 2, 1_500);

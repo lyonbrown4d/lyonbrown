@@ -2,12 +2,15 @@ import { randomUUID } from "node:crypto";
 
 import { parseAgentRuntimeEvent } from "@lyonbrown/agent-domain";
 
-import { runtimeError } from "./errors.ts";
-import { RuntimeEventWriter } from "./event-writer.ts";
-import { recoverRuntimeState } from "./recovery.ts";
-import { DefaultAgentRuntime } from "./runtime.ts";
-import type { LatestSnapshotFeed } from "./snapshot-feed.ts";
-import type { AgentRuntime, CreateAgentRuntimeOptions } from "./types.ts";
+import { runtimeError } from "@lyonbrown/agent-runtime/internal/errors";
+import { RuntimeEventWriter } from "@lyonbrown/agent-runtime/internal/event-writer";
+import { recoverRuntimeState } from "@lyonbrown/agent-runtime/internal/recovery";
+import { DefaultAgentRuntime } from "@lyonbrown/agent-runtime/internal/runtime";
+import type { LatestSnapshotFeed } from "@lyonbrown/agent-runtime/internal/snapshot-feed";
+import type {
+  AgentRuntime,
+  CreateAgentRuntimeOptions,
+} from "@lyonbrown/agent-runtime/internal/types";
 
 export async function createAgentRuntime(
   options: CreateAgentRuntimeOptions,

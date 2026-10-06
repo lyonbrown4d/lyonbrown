@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import { NativeFailure } from "../src/result.ts";
-import { api } from "../src/windows/api.ts";
-import { ERRORS } from "../src/windows/constants.ts";
-import { openSecureDirectory } from "../src/windows/directory.ts";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import { ERRORS } from "@lyonbrown/control-plane-native/internal/windows/constants";
+import { openSecureDirectory } from "@lyonbrown/control-plane-native/internal/windows/directory";
 import {
   failureForLastError,
   failureForNtStatus,
   OwnedHandle,
   validateObjectType,
-} from "../src/windows/handles.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
 
 describe("Windows handle boundary", () => {
   it.runIf(process.platform === "win32")("rejects non-canonical run-directory input", () => {

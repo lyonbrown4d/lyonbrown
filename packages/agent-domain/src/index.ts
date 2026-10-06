@@ -3,7 +3,7 @@ export {
   domainError,
   type DomainErrorCode,
   type DomainErrorDetailsByCode,
-} from "./errors.ts";
+} from "@lyonbrown/agent-domain/internal/errors";
 export {
   MAX_IDENTIFIER_BYTES,
   asApprovalId,
@@ -21,7 +21,7 @@ export {
   type ServerInstanceId,
   type SessionId,
   type TurnId,
-} from "./identifiers.ts";
+} from "@lyonbrown/agent-domain/internal/identifiers";
 export {
   PROTOCOL_VERSION,
   createCommandMetadata,
@@ -31,8 +31,13 @@ export {
   type CommandMetadata,
   type CommandMetadataInput,
   type CommandReceipt,
-} from "./protocol.ts";
-export { MAX_UINT64, asRevision, incrementRevision, type Revision } from "./revision.ts";
+} from "@lyonbrown/agent-domain/internal/protocol";
+export {
+  MAX_UINT64,
+  asRevision,
+  incrementRevision,
+  type Revision,
+} from "@lyonbrown/agent-domain/internal/revision";
 export {
   REPLAY_FINGERPRINT_MAX_BYTE_ARRAY_BYTES,
   REPLAY_FINGERPRINT_MAX_CONTAINER_WIDTH,
@@ -44,19 +49,19 @@ export {
   createReplayKey,
   type CommandFingerprint,
   type ReplayKey,
-} from "./replay.ts";
-export { MAX_TEXT_BYTES, validateText } from "./text.ts";
+} from "@lyonbrown/agent-domain/internal/replay";
+export { MAX_TEXT_BYTES, validateText } from "@lyonbrown/agent-domain/internal/text";
 export {
   parseAgentRuntimeEvent,
   type AgentRuntimeEvent,
   type RuntimeUsage,
-} from "./runtime-events.ts";
+} from "@lyonbrown/agent-domain/internal/runtime-events";
 export {
   RUNTIME_JSON_MAX_STRING_BYTES,
   RUNTIME_JSON_MAX_TOTAL_STRING_BYTES,
   type RuntimeJsonPrimitive,
   type RuntimeJsonValue,
-} from "./runtime-json.ts";
+} from "@lyonbrown/agent-domain/internal/runtime-json";
 export {
   createInitialAgentRuntimeState,
   reduceAgentRuntimeEvent,
@@ -67,5 +72,5 @@ export {
   type RuntimeToolState,
   type RuntimeTurnState,
   type VersionedAgentRuntimeEvent,
-} from "./runtime-state.ts";
-export { MAX_AGENT_RUNTIME_ASSISTANT_BYTES } from "./runtime-state-budgets.ts";
+} from "@lyonbrown/agent-domain/internal/runtime-state";
+export { MAX_AGENT_RUNTIME_ASSISTANT_BYTES } from "@lyonbrown/agent-domain/internal/runtime-state-budgets";

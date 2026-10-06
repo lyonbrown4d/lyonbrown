@@ -1,4 +1,8 @@
-import type { RecoveredToolCall, RecoveredToolCallStatus, StoredEvent } from "./types.ts";
+import type {
+  RecoveredToolCall,
+  RecoveredToolCallStatus,
+  StoredEvent,
+} from "@lyonbrown/event-store/internal/types";
 
 interface MutableRecoveredToolCall {
   toolCallId: string;

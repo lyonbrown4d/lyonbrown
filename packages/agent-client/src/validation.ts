@@ -1,6 +1,6 @@
 import { validateStringId, validateText } from "@lyonbrown/protocol";
 
-import { clientError } from "./errors.ts";
+import { clientError } from "@lyonbrown/agent-client/internal/errors";
 
 export function requireId(field: string, value: unknown): string {
   const result = validateStringId(value);

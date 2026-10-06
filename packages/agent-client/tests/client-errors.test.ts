@@ -2,8 +2,17 @@ import { Metadata, status } from "@grpc/grpc-js";
 import { CommandErrorCode, CommandErrorDetail } from "@lyonbrown/protocol";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { AgentClientError, createAgentClient, type AgentCommand } from "../src/index.ts";
-import { bindingFor, clientFor, closeDaemons, spawnDaemon } from "./support/fake-daemon.ts";
+import {
+  AgentClientError,
+  createAgentClient,
+  type AgentCommand,
+} from "@lyonbrown/agent-client/internal/index";
+import {
+  bindingFor,
+  clientFor,
+  closeDaemons,
+  spawnDaemon,
+} from "@lyonbrown/agent-client/test/support/fake-daemon";
 
 afterAll(async () => {
   await closeDaemons();

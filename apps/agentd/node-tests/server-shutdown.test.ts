@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { shutdownServer, type GrpcShutdownHandle } from "../node-src/server.ts";
+import { shutdownServer, type GrpcShutdownHandle } from "@lyonbrown/agentd/internal/server";
 
 describe("gRPC server shutdown", () => {
   it("forces shutdown when graceful shutdown does not settle within the bound", async () => {

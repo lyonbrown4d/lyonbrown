@@ -2,15 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": "../..",
-    "paths": {
-      "@lyonbrown/control-plane-native": ["../../packages/control-plane-native/src/index.ts"],
-      "@lyonbrown/local-control-plane/native-adapter": [
-        "../../packages/local-control-plane/src/native-adapter.ts"
-      ],
-      "@lyonbrown/local-control-plane": ["../../packages/local-control-plane/src/index.ts"],
-      "@lyonbrown/protocol": ["../../packages/protocol/src/index.ts"]
-    }
+    "rootDir": "../.."
   },
   "include": ["node-src/**/*.ts", "node-tests/**/*.ts", "vitest.config.ts"]
 }

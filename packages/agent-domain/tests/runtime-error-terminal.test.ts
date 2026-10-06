@@ -7,7 +7,7 @@ import {
   reduceAgentRuntimeEvent,
   type AgentRuntimeEvent,
   type AgentRuntimeState,
-} from "../src/index.ts";
+} from "@lyonbrown/agent-domain/internal/index";
 
 const sessionId = asSessionId("runtime-error-terminal");
 

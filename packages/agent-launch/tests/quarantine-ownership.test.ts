@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { SpawnQuarantine } from "../src/spawn-quarantine.ts";
-import { StageRunner } from "../src/stage-runner.ts";
-import type { SpawnAttempt, StartupLease } from "../src/types.ts";
-import { AdvancingSleeper, ManualClock } from "./support/fixtures.ts";
+import { SpawnQuarantine } from "@lyonbrown/agent-launch/internal/spawn-quarantine";
+import { StageRunner } from "@lyonbrown/agent-launch/internal/stage-runner";
+import type { SpawnAttempt, StartupLease } from "@lyonbrown/agent-launch/internal/types";
+import { AdvancingSleeper, ManualClock } from "@lyonbrown/agent-launch/test/support/fixtures";
 
 function deferred<T>(): {
   readonly promise: Promise<T>;

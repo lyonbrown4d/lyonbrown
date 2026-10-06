@@ -16,9 +16,9 @@ import {
   startProductionAgentd,
   type AgentdBootstrapError,
   type ProductionAgentdRuntime,
-} from "../node-src/bootstrap.ts";
-import type { StartAgentdServerOptions } from "../node-src/server.ts";
-import { FakeHost } from "./server-test-support.ts";
+} from "@lyonbrown/agentd/internal/bootstrap";
+import type { StartAgentdServerOptions } from "@lyonbrown/agentd/internal/server";
+import { FakeHost } from "@lyonbrown/agentd/test/server-test-support";
 
 const WORKSPACE = "C:\\work\\lyonbrown";
 const HOME_DIRECTORY = "C:\\Users\\agent";

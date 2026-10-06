@@ -12,14 +12,17 @@ import {
   type NativeModelStorageCapability,
 } from "@lyonbrown/local-model/composition";
 
-import type { ProductionAgentdRuntime, ProductionRuntimeContext } from "./bootstrap.ts";
-import { collectCleanupFailure } from "./cleanup.ts";
+import type {
+  ProductionAgentdRuntime,
+  ProductionRuntimeContext,
+} from "@lyonbrown/agentd/internal/bootstrap";
+import { collectCleanupFailure } from "@lyonbrown/agentd/internal/cleanup";
 import {
   createModelAwareRuntime,
   type CreateModelAwareRuntimeOptions,
   type ModelAwareRuntime,
-} from "./model-aware-runtime.ts";
-import { agentdProxyEnvironment } from "./proxy-environment.ts";
+} from "@lyonbrown/agentd/internal/model-aware-runtime";
+import { agentdProxyEnvironment } from "@lyonbrown/agentd/internal/proxy-environment";
 
 export interface ProductionRuntimeDependencies {
   readonly openStore: (options: {

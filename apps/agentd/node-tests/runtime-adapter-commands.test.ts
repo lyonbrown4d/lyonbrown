@@ -1,13 +1,13 @@
 import { AgentRuntimeError } from "@lyonbrown/agent-runtime";
 import { describe, expect, test } from "vitest";
 
-import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.ts";
+import { createRuntimeHostAdapter } from "@lyonbrown/agentd/internal/runtime-adapter";
 import {
   activeState,
   FakeAgentRuntime,
   openedState,
   stateFrom,
-} from "./runtime-adapter-support.ts";
+} from "@lyonbrown/agentd/test/runtime-adapter-support";
 
 describe("runtime host adapter commands", () => {
   test("maps start, steer, follow-up, and cancel to the agent runtime", async () => {

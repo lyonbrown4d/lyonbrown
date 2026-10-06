@@ -10,9 +10,9 @@ import {
 } from "@lyonbrown/ui-model";
 import type { Subscription } from "rxjs";
 
-import { parseInput, type ParsedInput } from "./commands.ts";
-import { projectRemoteSnapshot } from "./projection.ts";
-import { observeRuntimeSnapshots } from "./runtime-snapshot-stream.ts";
+import { parseInput, type ParsedInput } from "@lyonbrown/agent-cli/internal/commands";
+import { projectRemoteSnapshot } from "@lyonbrown/agent-cli/internal/projection";
+import { observeRuntimeSnapshots } from "@lyonbrown/agent-cli/internal/runtime-snapshot-stream";
 
 export interface AgentTuiFrame {
   readonly ui: UiModelState;

@@ -26,6 +26,9 @@
 - Protocol `.proto` schema 与版本化 wire fixture 继续作为受跟踪的契约源；生成的
   TypeScript/gRPC 文件由 Git 忽略，并在 lint、typecheck、test、build 前由包生命周期
   自动生成。
+- 手写 TypeScript 已统一迁移到 `@lyonbrown/...` workspace 根别名；测试门禁会拒绝
+  相对模块引用和跨 workspace 私有别名访问，生产构建会将私有别名改写为可直接执行的
+  Node ESM `.js` 路径。
 - 认证 loopback gRPC channel 显式关闭环境 HTTP proxy 发现，避免本地 daemon 流量被
   重定向到代理。生产 composition 仅将 `HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 及其
   小写形式传给 Node 24 `setGlobalProxyFromEnv`，供 daemon 持有的外部模型请求使用，

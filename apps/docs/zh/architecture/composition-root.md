@@ -25,6 +25,17 @@ TUI 只能得到窄化后的 `agent-launch`、`agent-client` 与 `ui-model` 接�
 当前生产 Kernel 刻意组合空 tool registry、default-deny approval gate、拒绝式 Secret
 resolver，并且不连接 MCP。这些是安全的能力边界，不是已经完成的集成。
 
+## Workspace 导入边界
+
+手写 TypeScript 不使用相对模块引用，统一从 `@lyonbrown/...` 根别名导入。每个
+workspace 的 `/internal/*`、`/test/*` 与 `/script/*` 都是所有者私有命名空间，仓库
+门禁会拒绝其他 workspace 引用；跨包只能经过 `package.json` 声明的公开入口。
+
+Vitest 使用 `vite-tsconfig-paths` 解析源码别名，生产 TypeScript 构建完成后使用
+`tsc-alias` 将私有别名改写为带 `.js` 扩展名的 Node ESM 路径。构建产物不得残留私有
+别名。被 Git 忽略的 protocol 生成物仍由 Buf 插件生成和管理，不能作为手写代码绕过
+导入边界的理由。
+
 ## 后台任务与调度
 
 `agentd` 不自建业务调度器。当前仓库中的原生 timer 只承担 RPC deadline、关闭等待、

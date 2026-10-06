@@ -5,7 +5,11 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { RevisionExhaustedError, openEventStore, type PathSecurityVerifier } from "../src/index.ts";
+import {
+  RevisionExhaustedError,
+  openEventStore,
+  type PathSecurityVerifier,
+} from "@lyonbrown/event-store/internal/index";
 
 const allow: PathSecurityVerifier = {
   verifyRequestedDataDirectory: () => undefined,

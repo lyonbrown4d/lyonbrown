@@ -2,11 +2,21 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../src/windows/api.ts";
-import { atomicReplace, readPrivateFile, tryLock } from "../src/windows/files.ts";
-import { openDirectory, type OwnedHandle } from "../src/windows/handles.ts";
-import { canonicalPath, workspaceIdentity } from "../src/windows/identity.ts";
-import { openSecureDirectory } from "../src/windows/directory.ts";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import {
+  atomicReplace,
+  readPrivateFile,
+  tryLock,
+} from "@lyonbrown/control-plane-native/internal/windows/files";
+import {
+  openDirectory,
+  type OwnedHandle,
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
+import {
+  canonicalPath,
+  workspaceIdentity,
+} from "@lyonbrown/control-plane-native/internal/windows/identity";
+import { openSecureDirectory } from "@lyonbrown/control-plane-native/internal/windows/directory";
 
 interface Context {
   readonly root: string;

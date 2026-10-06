@@ -1,8 +1,8 @@
 import type { ModelSetupDto } from "@lyonbrown/agent-client";
 import type { Locale } from "@lyonbrown/ui-model";
 
-import { labels } from "./locales.ts";
-import { safeTerminalText } from "./text-safety.ts";
+import { labels } from "@lyonbrown/agent-cli/internal/locales";
+import { safeTerminalText } from "@lyonbrown/agent-cli/internal/text-safety";
 
 export interface ModelSetupStyles {
   readonly heading: (value: string) => string;

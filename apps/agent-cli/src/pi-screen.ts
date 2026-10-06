@@ -13,10 +13,10 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 
-import type { AgentTuiFrame } from "./controller.ts";
-import { setupKeyIntent } from "./setup-input.ts";
-import { renderFrame } from "./surface.ts";
-import { THEMES } from "./themes.ts";
+import type { AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
+import { setupKeyIntent } from "@lyonbrown/agent-cli/internal/setup-input";
+import { renderFrame } from "@lyonbrown/agent-cli/internal/surface";
+import { THEMES } from "@lyonbrown/agent-cli/internal/themes";
 
 export interface PiScreenOptions {
   readonly terminal?: Terminal;

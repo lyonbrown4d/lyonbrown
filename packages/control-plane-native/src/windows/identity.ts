@@ -1,8 +1,12 @@
 import type { ResolvedWorkspaceIdentity } from "@lyonbrown/local-control-plane/native-adapter";
-import { api } from "./api.ts";
-import { FILE_INFO } from "./constants.ts";
-import { failureForLastError, openWorkspaceDirectory, validateObjectType } from "./handles.ts";
-import type { OwnedHandle } from "./handles.ts";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import { FILE_INFO } from "@lyonbrown/control-plane-native/internal/windows/constants";
+import {
+  failureForLastError,
+  openWorkspaceDirectory,
+  validateObjectType,
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
+import type { OwnedHandle } from "@lyonbrown/control-plane-native/internal/windows/handles";
 
 export function canonicalPath(handle: OwnedHandle): string {
   const required = Number(api.GetFinalPathNameByHandleW(handle.borrow(), null, 0, 0));

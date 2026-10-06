@@ -3,8 +3,8 @@
 import { pathToFileURL } from "node:url";
 import type { AgentLauncher } from "@lyonbrown/agent-launch";
 
-import { runAgentTui } from "./app.ts";
-import { HELP_TEXT, VERSION, parseCliArgs } from "./cli.ts";
+import { runAgentTui } from "@lyonbrown/agent-cli/internal/app";
+import { HELP_TEXT, VERSION, parseCliArgs } from "@lyonbrown/agent-cli/internal/cli";
 
 export interface MainDependencies {
   readonly launcher: AgentLauncher;
@@ -24,7 +24,8 @@ export async function main(
     return;
   }
   const resolvedDependencies =
-    dependencies ?? (await import("./production.ts")).createProductionMainDependencies();
+    dependencies ??
+    (await import("@lyonbrown/agent-cli/internal/production")).createProductionMainDependencies();
   await runAgentTui(resolvedDependencies);
 }
 

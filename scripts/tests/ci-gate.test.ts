@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { CI_GATES, runCiGate } from "../ci-gate-lib.ts";
+import { CI_GATES, runCiGate } from "@lyonbrown/workspace/internal/ci-gate-lib";
 
 describe("CI gate orchestration", () => {
   test("runs every gate in the required order", async () => {

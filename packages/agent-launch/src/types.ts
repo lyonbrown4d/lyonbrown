@@ -1,6 +1,10 @@
 import type { AgentClient, ClientDeadlines } from "@lyonbrown/agent-client";
 import type { NativeControlPlaneProvider, ScopeIdentity } from "@lyonbrown/local-control-plane";
-export type { AgentLaunchConnection, AgentLauncher, ConnectAgentInput } from "./public-types.ts";
+export type {
+  AgentLaunchConnection,
+  AgentLauncher,
+  ConnectAgentInput,
+} from "@lyonbrown/agent-launch/internal/public-types";
 
 /** Capability whose implementation privately retains authenticated connection material. */
 export interface DiscoveredDaemonCapability {

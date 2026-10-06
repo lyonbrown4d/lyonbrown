@@ -10,8 +10,8 @@ import {
   parseRealGgufSmokeAuthorization,
   runAllAttemptCleanup,
   type ProgressState,
-} from "../smoke-real-gguf-lib.ts";
-import { verifyInstalledModelCache } from "../smoke-real-gguf-cache.ts";
+} from "@lyonbrown/workspace/internal/smoke-real-gguf-lib";
+import { verifyInstalledModelCache } from "@lyonbrown/workspace/internal/smoke-real-gguf-cache";
 
 describe("real GGUF smoke authorization", () => {
   test("requires both the environment gate and confirmation flag", () => {

@@ -1,5 +1,5 @@
 import { isIP } from "node:net";
-import { controlPlaneError } from "./errors.ts";
+import { controlPlaneError } from "@lyonbrown/local-control-plane/internal/errors";
 
 interface EndpointParts {
   readonly host: string;

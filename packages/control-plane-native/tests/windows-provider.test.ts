@@ -10,8 +10,8 @@ import {
   openSecureRunDirectory,
 } from "@lyonbrown/local-control-plane";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createControlPlaneNativeProvider } from "../src/index.ts";
-import { api } from "../src/windows/api.ts";
+import { createControlPlaneNativeProvider } from "@lyonbrown/control-plane-native/internal/index";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
 
 const windows = process.platform === "win32";
 const roots: string[] = [];
@@ -222,7 +222,7 @@ describe.runIf(windows)("Windows native control plane", () => {
     });
     await directory.discovery.publish(descriptor);
 
-    const handle = await import("../src/windows/directory.ts");
+    const handle = await import("@lyonbrown/control-plane-native/internal/windows/directory");
     const direct = handle.openSecureDirectory(path);
     await expect(direct.readPrivateFile("agentd.json", 1)).resolves.toEqual({
       ok: false,
@@ -235,7 +235,9 @@ describe.runIf(windows)("Windows native control plane", () => {
   it("returns not-found for an absent private file and supports zero-byte I/O", async () => {
     const root = await temporaryRoot();
     const path = join(root, "run");
-    const { openSecureDirectory } = await import("../src/windows/directory.ts");
+    const { openSecureDirectory } = await import(
+      "@lyonbrown/control-plane-native/internal/windows/directory"
+    );
     const handle = openSecureDirectory(path);
     await expect(handle.readPrivateFile("agentd.json", 64)).resolves.toEqual({
       ok: true,

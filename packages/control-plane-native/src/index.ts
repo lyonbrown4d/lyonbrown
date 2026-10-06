@@ -2,12 +2,12 @@ import {
   createNativeControlPlaneProvider,
   type NativeControlPlaneProvider,
 } from "@lyonbrown/local-control-plane/native-adapter";
-import { createPlatformSecurity } from "./platform.ts";
-import { createPlatformEventStorePathVerifier } from "./platform.ts";
-import { createPlatformModelStorageCapability } from "./platform.ts";
+import { createPlatformSecurity } from "@lyonbrown/control-plane-native/internal/platform";
+import { createPlatformEventStorePathVerifier } from "@lyonbrown/control-plane-native/internal/platform";
+import { createPlatformModelStorageCapability } from "@lyonbrown/control-plane-native/internal/platform";
 import type { PathSecurityVerifier } from "@lyonbrown/event-store/path-verifier";
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
-import type { WindowsEventStoreVerifierOptions } from "./windows/store-verifier.ts";
+import type { WindowsEventStoreVerifierOptions } from "@lyonbrown/control-plane-native/internal/windows/store-verifier";
 
 let provider: NativeControlPlaneProvider | undefined;
 

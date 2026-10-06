@@ -1,5 +1,8 @@
-import { launchError } from "./errors.ts";
-import type { AgentLaunchDeadlines, CreateAgentLauncherOptions } from "./types.ts";
+import { launchError } from "@lyonbrown/agent-launch/internal/errors";
+import type {
+  AgentLaunchDeadlines,
+  CreateAgentLauncherOptions,
+} from "@lyonbrown/agent-launch/internal/types";
 
 const DEFAULT_STARTUP_MS = 30_000;
 const DEFAULT_POLL_INTERVAL_MS = 25;

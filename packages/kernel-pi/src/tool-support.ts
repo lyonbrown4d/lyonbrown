@@ -1,14 +1,18 @@
-import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.ts";
-import { inspectOwnDataProperties } from "./inspection.ts";
-import type { SecretRedactor } from "./redaction.ts";
+import {
+  copyInternalKernelError,
+  kernelError,
+  type KernelRuntimeError,
+} from "@lyonbrown/kernel-pi/internal/errors";
+import { inspectOwnDataProperties } from "@lyonbrown/kernel-pi/internal/inspection";
+import type { SecretRedactor } from "@lyonbrown/kernel-pi/internal/redaction";
 import {
   assertByteLimit,
   isSecretReference,
   jsonStringBudgetBytes,
   utf8Bytes,
   type SanitizationLimits,
-} from "./sanitization.ts";
-import type { KernelJsonValue, KernelToolDefinition } from "./types.ts";
+} from "@lyonbrown/kernel-pi/internal/sanitization";
+import type { KernelJsonValue, KernelToolDefinition } from "@lyonbrown/kernel-pi/internal/types";
 
 export function replaceSecretRefsForValidation(
   value: KernelJsonValue,

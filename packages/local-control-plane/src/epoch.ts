@@ -1,4 +1,4 @@
-import type { DiscoveryDescriptor } from "./descriptor.ts";
+import type { DiscoveryDescriptor } from "@lyonbrown/local-control-plane/internal/descriptor";
 
 export interface EpochBinding {
   readonly endpoint: string;

@@ -1,7 +1,7 @@
 import type { AgentRuntimeState, SessionId } from "@lyonbrown/agent-domain";
 import type { KernelEventSink, KernelSession } from "@lyonbrown/kernel-pi";
 
-import type { RuntimeEventStorePort } from "./event-store-port.ts";
+import type { RuntimeEventStorePort } from "@lyonbrown/agent-runtime/internal/event-store-port";
 
 export interface KernelSessionFactoryInput {
   readonly sessionId: string;

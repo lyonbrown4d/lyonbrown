@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { ModelCompatibilityEvaluator, ModelPreset } from "../src/internal/contracts.ts";
-import { createHardwareAwareModelSelector } from "../src/internal/model-selection.ts";
+import type {
+  ModelCompatibilityEvaluator,
+  ModelPreset,
+} from "@lyonbrown/local-model/internal/internal/contracts";
+import { createHardwareAwareModelSelector } from "@lyonbrown/local-model/internal/internal/model-selection";
 
 const GIB = 1024 ** 3;
 

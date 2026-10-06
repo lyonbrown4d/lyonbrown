@@ -1,6 +1,9 @@
-import { descriptorFor } from "../public-model.ts";
-import type { LocalModelLoadResult } from "../types.ts";
-import type { LlamaEngineAdapter, ModelPreset } from "./contracts.ts";
+import { descriptorFor } from "@lyonbrown/local-model/internal/public-model";
+import type { LocalModelLoadResult } from "@lyonbrown/local-model/internal/types";
+import type {
+  LlamaEngineAdapter,
+  ModelPreset,
+} from "@lyonbrown/local-model/internal/internal/contracts";
 
 export const loadSelectedModel = async (
   engine: LlamaEngineAdapter,

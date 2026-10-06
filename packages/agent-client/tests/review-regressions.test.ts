@@ -9,8 +9,13 @@ import {
 } from "@lyonbrown/protocol";
 import { afterAll, describe, expect, it } from "vitest";
 
-import { AgentClientError } from "../src/index.ts";
-import { bindingFor, clientFor, closeDaemons, spawnDaemon } from "./support/fake-daemon.ts";
+import { AgentClientError } from "@lyonbrown/agent-client/internal/index";
+import {
+  bindingFor,
+  clientFor,
+  closeDaemons,
+  spawnDaemon,
+} from "@lyonbrown/agent-client/test/support/fake-daemon";
 
 const OTHER_SCOPE = "b".repeat(64);
 

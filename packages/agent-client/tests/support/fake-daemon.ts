@@ -26,7 +26,7 @@ import {
   type StartTurnRequest,
 } from "@lyonbrown/protocol";
 
-import { createAgentClient, type AgentClient } from "../../src/index.ts";
+import { createAgentClient, type AgentClient } from "@lyonbrown/agent-client/internal/index";
 
 const SCOPE = "a".repeat(64);
 const poolId = Number.parseInt(process.env.VITEST_POOL_ID ?? "1", 10);

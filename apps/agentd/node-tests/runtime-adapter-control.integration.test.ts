@@ -8,7 +8,7 @@ import {
 } from "@lyonbrown/agent-runtime";
 import { describe, expect, test, vi } from "vitest";
 
-import { createRuntimeHostAdapter } from "../node-src/runtime-adapter.ts";
+import { createRuntimeHostAdapter } from "@lyonbrown/agentd/internal/runtime-adapter";
 
 function deferred(): { readonly promise: Promise<void>; readonly resolve: () => void } {
   let resolve = (): void => undefined;

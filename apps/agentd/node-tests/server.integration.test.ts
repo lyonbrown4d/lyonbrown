@@ -25,8 +25,8 @@ import {
   type RuntimeSnapshot,
 } from "@lyonbrown/protocol";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { createAgentService } from "../node-src/service.ts";
-import type { RuntimeResult } from "../node-src/runtime-host.ts";
+import { createAgentService } from "@lyonbrown/agentd/internal/service";
+import type { RuntimeResult } from "@lyonbrown/agentd/internal/runtime-host";
 import {
   FakeHost,
   SCOPE_FINGERPRINT,
@@ -39,7 +39,7 @@ import {
   requestMetadata,
   startTestServer,
   startTurn,
-} from "./server-test-support.ts";
+} from "@lyonbrown/agentd/test/server-test-support";
 
 describe("agentd gRPC server", () => {
   const states: TestServerState[] = [];

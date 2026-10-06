@@ -6,12 +6,12 @@ import {
   type Llama,
 } from "node-llama-cpp";
 
-import { modelDownloadUri } from "./catalog.ts";
+import { modelDownloadUri } from "@lyonbrown/local-model/internal/internal/catalog";
 import type {
   ModelCompatibilityEvaluation,
   ModelCompatibilityEvaluator,
   ModelPreset,
-} from "./contracts.ts";
+} from "@lyonbrown/local-model/internal/internal/contracts";
 
 const MAX_CATALOG_SIZE = 8;
 const METADATA_TIMEOUT_MS = 5_000;

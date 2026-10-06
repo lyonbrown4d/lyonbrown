@@ -7,7 +7,7 @@ import {
   type KernelModelRequest,
   type KernelModelStreamEvent,
   type KernelToolDefinition,
-} from "../src/index.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
 
 const budget = {
   maxInputBytes: 16_384,

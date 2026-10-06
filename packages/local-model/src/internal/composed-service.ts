@@ -1,19 +1,24 @@
-import type { NativeModelStorageCapability } from "../native-storage.ts";
-import type { LocalModelService } from "../types.ts";
-import { DEFAULT_PRESET, MODEL_CATALOG } from "./catalog.ts";
-import type { LlamaEngineAdapter, LlamaLease, ModelPreset, ModelSelector } from "./contracts.ts";
-import { verifyModelFile } from "./file-verification.ts";
-import { createLocalModelManager } from "./manager.ts";
-import { createHardwareAwareModelSelector } from "./model-selection.ts";
-import { modelIdentityFor } from "./model-identity.ts";
-import { createNodeLlamaEngine } from "./node-llama.ts";
-import { createNodeLlamaModelEvaluator } from "./node-llama-model-evaluator.ts";
+import type { NativeModelStorageCapability } from "@lyonbrown/local-model/internal/native-storage";
+import type { LocalModelService } from "@lyonbrown/local-model/internal/types";
+import { DEFAULT_PRESET, MODEL_CATALOG } from "@lyonbrown/local-model/internal/internal/catalog";
+import type {
+  LlamaEngineAdapter,
+  LlamaLease,
+  ModelPreset,
+  ModelSelector,
+} from "@lyonbrown/local-model/internal/internal/contracts";
+import { verifyModelFile } from "@lyonbrown/local-model/internal/internal/file-verification";
+import { createLocalModelManager } from "@lyonbrown/local-model/internal/internal/manager";
+import { createHardwareAwareModelSelector } from "@lyonbrown/local-model/internal/internal/model-selection";
+import { modelIdentityFor } from "@lyonbrown/local-model/internal/internal/model-identity";
+import { createNodeLlamaEngine } from "@lyonbrown/local-model/internal/internal/node-llama";
+import { createNodeLlamaModelEvaluator } from "@lyonbrown/local-model/internal/internal/node-llama-model-evaluator";
 import {
   NodeModelIo,
   type ModelFileDownloader,
   type ModelFileVerifier,
   type ProcessLockAcquirer,
-} from "./node-model-io.ts";
+} from "@lyonbrown/local-model/internal/internal/node-model-io";
 
 interface CompositionDependencies {
   readonly modelFileDownloader?: ModelFileDownloader;

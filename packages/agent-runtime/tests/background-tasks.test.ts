@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { RuntimeBackgroundTasks } from "../src/background-tasks.ts";
+import { RuntimeBackgroundTasks } from "@lyonbrown/agent-runtime/internal/background-tasks";
 
 describe("runtime background task supervisor", () => {
   test("removes rejected work and refuses new work after close", async () => {

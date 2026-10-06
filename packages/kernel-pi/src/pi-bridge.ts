@@ -8,16 +8,24 @@ import {
   type Usage,
 } from "@earendil-works/pi-ai";
 
-import type { BudgetTracker } from "./budget.ts";
-import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.ts";
-import { inspectRawModelEvent } from "./model-event-inspection.ts";
-import { assertUsage, toKernelMessage, toPiUsage } from "./pi-conversion.ts";
+import type { BudgetTracker } from "@lyonbrown/kernel-pi/internal/budget";
+import {
+  copyInternalKernelError,
+  kernelError,
+  type KernelRuntimeError,
+} from "@lyonbrown/kernel-pi/internal/errors";
+import { inspectRawModelEvent } from "@lyonbrown/kernel-pi/internal/model-event-inspection";
+import {
+  assertUsage,
+  toKernelMessage,
+  toPiUsage,
+} from "@lyonbrown/kernel-pi/internal/pi-conversion";
 import {
   assertByteLimit,
   sanitizeJson,
   sanitizeText,
   type SanitizationLimits,
-} from "./sanitization.ts";
+} from "@lyonbrown/kernel-pi/internal/sanitization";
 import type {
   KernelJsonValue,
   KernelModelAdapter,
@@ -25,7 +33,7 @@ import type {
   KernelModelRequest,
   KernelModelStreamEvent,
   KernelModelTool,
-} from "./types.ts";
+} from "@lyonbrown/kernel-pi/internal/types";
 
 const ZERO_USAGE: Usage = {
   input: 0,

@@ -1,35 +1,8 @@
-import { fileURLToPath } from "node:url";
+import tsconfigPaths from "vite-tsconfig-paths";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  resolve: {
-    alias: [
-      {
-        find: "@lyonbrown/control-plane-native",
-        replacement: fileURLToPath(
-          new URL("../../packages/control-plane-native/src/index.ts", import.meta.url),
-        ),
-      },
-      {
-        find: /^@lyonbrown\/local-control-plane\/native-adapter$/u,
-        replacement: fileURLToPath(
-          new URL("../../packages/local-control-plane/src/native-adapter.ts", import.meta.url),
-        ),
-      },
-      {
-        find: "@lyonbrown/local-control-plane",
-        replacement: fileURLToPath(
-          new URL("../../packages/local-control-plane/src/index.ts", import.meta.url),
-        ),
-      },
-      {
-        find: "@lyonbrown/protocol",
-        replacement: fileURLToPath(
-          new URL("../../packages/protocol/src/index.ts", import.meta.url),
-        ),
-      },
-    ],
-  },
+  plugins: [tsconfigPaths()],
   test: {
     environment: "node",
     include: ["node-tests/**/*.test.ts"],

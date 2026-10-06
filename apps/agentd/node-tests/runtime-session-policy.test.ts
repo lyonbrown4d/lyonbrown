@@ -6,13 +6,13 @@ import {
   MAX_SESSION_STEERING_PER_TURN,
   MAX_SESSION_TURNS,
   MAX_SESSION_USER_BYTES,
-} from "../node-src/runtime-limits.ts";
+} from "@lyonbrown/agentd/internal/runtime-limits";
 import {
   followUpWithinBudget,
   shouldRotateSession,
   steeringWithinBudget,
-} from "../node-src/runtime-session-policy.ts";
-import { stateFrom } from "./runtime-adapter-support.ts";
+} from "@lyonbrown/agentd/internal/runtime-session-policy";
+import { stateFrom } from "@lyonbrown/agentd/test/runtime-adapter-support";
 
 const SESSION_ID = "b".repeat(64);
 

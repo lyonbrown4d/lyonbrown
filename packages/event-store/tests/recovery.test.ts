@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { recoverToolCalls, type StoredEvent } from "../src/index.ts";
+import { recoverToolCalls, type StoredEvent } from "@lyonbrown/event-store/internal/index";
 
 function event(revision: bigint, type: string, payload: unknown): StoredEvent {
   return {

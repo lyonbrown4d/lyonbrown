@@ -7,8 +7,12 @@ import {
 } from "@lyonbrown/kernel-pi";
 import { expect, test } from "vitest";
 
-import { createAgentRuntime } from "../src/index.ts";
-import { eventTypes, runtimeEventStore, sequentialEventIds } from "./support.ts";
+import { createAgentRuntime } from "@lyonbrown/agent-runtime/internal/index";
+import {
+  eventTypes,
+  runtimeEventStore,
+  sequentialEventIds,
+} from "@lyonbrown/agent-runtime/test/support";
 
 const budget = {
   maxInputBytes: 4_096,

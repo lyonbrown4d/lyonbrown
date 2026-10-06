@@ -6,9 +6,9 @@ import {
   collectCleanupFailure,
   disposeActivationResources,
   drainActivationTask,
-} from "./cleanup.ts";
-import type { CreateModelAwareRuntimeOptions } from "./model-aware-runtime-types.ts";
-import { createProductionRuntime } from "./production-kernel.ts";
+} from "@lyonbrown/agentd/internal/cleanup";
+import type { CreateModelAwareRuntimeOptions } from "@lyonbrown/agentd/internal/model-aware-runtime-types";
+import { createProductionRuntime } from "@lyonbrown/agentd/internal/production-kernel";
 
 interface ModelActivationOptions {
   readonly modelService: LocalModelService;

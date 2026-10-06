@@ -13,12 +13,16 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { PathSecurityError, openEventStore, type PathSecurityVerifier } from "../src/index.ts";
+import {
+  PathSecurityError,
+  openEventStore,
+  type PathSecurityVerifier,
+} from "@lyonbrown/event-store/internal/index";
 import {
   assertSecurePosixDirectoryMetadata,
   assertSecurePosixFileMetadata,
   createPortablePathVerifier,
-} from "../src/path-security.ts";
+} from "@lyonbrown/event-store/internal/path-security";
 
 const directories: string[] = [];
 

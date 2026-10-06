@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 
-import { waitForShutdownSignal } from "../node-src/process-lifecycle.ts";
+import { waitForShutdownSignal } from "@lyonbrown/agentd/internal/process-lifecycle";
 
 describe("agentd process lifecycle", () => {
   it("closes once on the first termination signal and removes both listeners", async () => {

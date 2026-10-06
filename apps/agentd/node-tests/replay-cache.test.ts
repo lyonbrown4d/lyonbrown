@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ReplayCache, ReplayConflictError } from "../node-src/replay-cache.ts";
+import { ReplayCache, ReplayConflictError } from "@lyonbrown/agentd/internal/replay-cache";
 
 describe("ReplayCache", () => {
   it("coalesces concurrent commands and replays the completed result", async () => {

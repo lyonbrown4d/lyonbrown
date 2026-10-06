@@ -26,7 +26,7 @@
     "pretypecheck": "pnpm build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --coverage",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json --resolve-full-paths --resolve-full-extension .js"
   },
   "dependencies": {
     "@lyonbrown/agent-client": "workspace:*",

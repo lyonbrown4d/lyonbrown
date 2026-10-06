@@ -2,8 +2,8 @@ import type {
   LocalModelInferenceErrorCode,
   LocalModelInferenceRequest,
   LocalModelMessage,
-} from "../types.ts";
-import { LOCAL_MODEL_MAX_MESSAGE_BYTES } from "../types.ts";
+} from "@lyonbrown/local-model/internal/types";
+import { LOCAL_MODEL_MAX_MESSAGE_BYTES } from "@lyonbrown/local-model/internal/types";
 
 const MAX_MESSAGE_COUNT = 128;
 const MAX_INPUT_BYTES = 1024 * 1024;

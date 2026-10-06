@@ -1,4 +1,4 @@
-import type { ModelPreset } from "./contracts.ts";
+import type { ModelPreset } from "@lyonbrown/local-model/internal/internal/contracts";
 
 const GIB = 1024 ** 3;
 

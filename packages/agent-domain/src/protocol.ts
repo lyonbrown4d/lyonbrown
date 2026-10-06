@@ -1,4 +1,4 @@
-import { domainError } from "./errors.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
 import {
   asClientInstanceId,
   asCommandId,
@@ -6,8 +6,8 @@ import {
   type ClientInstanceId,
   type CommandId,
   type ServerInstanceId,
-} from "./identifiers.ts";
-import { readDataRecord, requireDataField } from "./record-boundary.ts";
+} from "@lyonbrown/agent-domain/internal/identifiers";
+import { readDataRecord, requireDataField } from "@lyonbrown/agent-domain/internal/record-boundary";
 
 export const PROTOCOL_VERSION = 1;
 

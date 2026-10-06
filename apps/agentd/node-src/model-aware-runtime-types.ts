@@ -2,7 +2,7 @@ import type { AgentRuntime } from "@lyonbrown/agent-runtime";
 import type { EventStore } from "@lyonbrown/event-store";
 import type { LocalModelLease, LocalModelService } from "@lyonbrown/local-model";
 
-import type { RuntimeHost } from "./runtime-host.ts";
+import type { RuntimeHost } from "@lyonbrown/agentd/internal/runtime-host";
 
 export interface CreateModelAwareRuntimeOptions {
   readonly sessionId: string;

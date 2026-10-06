@@ -1,8 +1,8 @@
 import { AgentClientError } from "@lyonbrown/agent-client";
 import { deriveScope, type NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
 import { describe, expect, test } from "vitest";
-import { createAgentLauncher } from "../src/launcher.ts";
-import type { CreateAgentLauncherOptions } from "../src/types.ts";
+import { createAgentLauncher } from "@lyonbrown/agent-launch/internal/launcher";
+import type { CreateAgentLauncherOptions } from "@lyonbrown/agent-launch/internal/types";
 import {
   CONFIG,
   WORKSPACE,
@@ -13,7 +13,7 @@ import {
   FakeSpawner,
   ManualClock,
   nativeProvider,
-} from "./support/fixtures.ts";
+} from "@lyonbrown/agent-launch/test/support/fixtures";
 
 function options(
   discovery = new FakeDiscovery(),

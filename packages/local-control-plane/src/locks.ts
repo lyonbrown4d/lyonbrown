@@ -1,5 +1,11 @@
-import { invokePlatform, type KernelFileLock } from "./platform-security.ts";
-import { resolveRunDirectoryHandle, type SecureRunDirectory } from "./run-directory.ts";
+import {
+  invokePlatform,
+  type KernelFileLock,
+} from "@lyonbrown/local-control-plane/internal/platform-security";
+import {
+  resolveRunDirectoryHandle,
+  type SecureRunDirectory,
+} from "@lyonbrown/local-control-plane/internal/run-directory";
 
 export interface DaemonLease {
   readonly kind: "startup" | "lifetime";

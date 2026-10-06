@@ -1,7 +1,10 @@
 import type { AgentRuntimeState } from "@lyonbrown/agent-domain";
 
-import type { RuntimeCommand } from "./runtime-host.ts";
-import { followUpWithinBudget, steeringWithinBudget } from "./runtime-session-policy.ts";
+import type { RuntimeCommand } from "@lyonbrown/agentd/internal/runtime-host";
+import {
+  followUpWithinBudget,
+  steeringWithinBudget,
+} from "@lyonbrown/agentd/internal/runtime-session-policy";
 
 export function runtimeCommandWithinBudget(
   state: AgentRuntimeState,

@@ -4,7 +4,7 @@ import {
   parseAgentdArguments,
   type AgentdCliError,
   type AgentdCliOptions,
-} from "../node-src/cli-arguments.ts";
+} from "@lyonbrown/agentd/internal/cli-arguments";
 
 const VALID_ARGUMENTS = [
   "--workspace",

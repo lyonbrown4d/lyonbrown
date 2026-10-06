@@ -5,7 +5,7 @@ import {
   AbortableSleeper,
   MonotonicClock,
   createProductionAgentLauncher,
-} from "../src/production.ts";
+} from "@lyonbrown/agent-launch/internal/production";
 
 function nativeProvider() {
   return createNativeControlPlaneProvider({

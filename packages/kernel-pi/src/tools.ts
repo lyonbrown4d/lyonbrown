@@ -3,9 +3,13 @@ import type { JsonValue } from "@earendil-works/pi-ai";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 
-import type { BudgetTracker } from "./budget.ts";
-import { copyInternalKernelError, kernelError, type KernelRuntimeError } from "./errors.ts";
-import type { SecretRedactor } from "./redaction.ts";
+import type { BudgetTracker } from "@lyonbrown/kernel-pi/internal/budget";
+import {
+  copyInternalKernelError,
+  kernelError,
+  type KernelRuntimeError,
+} from "@lyonbrown/kernel-pi/internal/errors";
+import type { SecretRedactor } from "@lyonbrown/kernel-pi/internal/redaction";
 import {
   assertByteLimit,
   limitsFromBudget,
@@ -13,7 +17,7 @@ import {
   sanitizeJson,
   sanitizeText,
   type SanitizationLimits,
-} from "./sanitization.ts";
+} from "@lyonbrown/kernel-pi/internal/sanitization";
 import {
   abortCode,
   createDeadlineSignal,
@@ -26,13 +30,13 @@ import {
   toExternalToolError,
   toSafePreExecutionError,
   toSafeToolError,
-} from "./tool-support.ts";
+} from "@lyonbrown/kernel-pi/internal/tool-support";
 import type {
   KernelEvent,
   KernelJsonValue,
   KernelToolDefinition,
   PiKernelSessionOptions,
-} from "./types.ts";
+} from "@lyonbrown/kernel-pi/internal/types";
 
 type EmitEvent = (event: KernelEvent) => Promise<void>;
 

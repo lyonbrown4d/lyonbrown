@@ -15,14 +15,14 @@ import {
 } from "@lyonbrown/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createModelAwareRuntime } from "../node-src/model-aware-runtime.ts";
-import { createProductionRuntime } from "../node-src/production-kernel.ts";
+import { createModelAwareRuntime } from "@lyonbrown/agentd/internal/model-aware-runtime";
+import { createProductionRuntime } from "@lyonbrown/agentd/internal/production-kernel";
 import {
   MAX_QUEUED_FOLLOW_UPS,
   MAX_SESSION_TURNS,
   MAX_SESSION_USER_BYTES,
-} from "../node-src/runtime-limits.ts";
-import { FakeAgentRuntime, stateFrom } from "./runtime-adapter-support.ts";
+} from "@lyonbrown/agentd/internal/runtime-limits";
+import { FakeAgentRuntime, stateFrom } from "@lyonbrown/agentd/test/runtime-adapter-support";
 
 const SESSION_ID = "a".repeat(64);
 

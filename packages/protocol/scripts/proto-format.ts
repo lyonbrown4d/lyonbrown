@@ -2,7 +2,7 @@ import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { runBufWithZx, protocolPackageRoot } from "./generation.ts";
+import { runBufWithZx, protocolPackageRoot } from "@lyonbrown/protocol/script/generation";
 
 const FORMAT_TIMEOUT_MS = 30_000;
 

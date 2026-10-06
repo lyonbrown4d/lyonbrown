@@ -11,7 +11,7 @@ vi.mock("../src/production.ts", () => ({
   createProductionMainDependencies: () => ({ launcher: mocks.productionLauncher }),
 }));
 
-import { main } from "../src/main.ts";
+import { main } from "@lyonbrown/agent-cli/internal/main";
 
 describe("agent production entry", () => {
   beforeEach(() => {

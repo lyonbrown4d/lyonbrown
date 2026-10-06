@@ -1,11 +1,14 @@
-import { domainError } from "./errors.ts";
-import type { SessionId } from "./identifiers.ts";
-import { incrementRevision, type Revision } from "./revision.ts";
-import type { AgentRuntimeEvent } from "./runtime-events.ts";
-import { hasActiveTurn } from "./runtime-state-mutations.ts";
-import { applyRuntimeEvent } from "./runtime-state-reducer.ts";
-import type { AgentRuntimeState } from "./runtime-state-types.ts";
-import { ZERO_RUNTIME_USAGE, freezeState } from "./runtime-state-types.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
+import type { SessionId } from "@lyonbrown/agent-domain/internal/identifiers";
+import { incrementRevision, type Revision } from "@lyonbrown/agent-domain/internal/revision";
+import type { AgentRuntimeEvent } from "@lyonbrown/agent-domain/internal/runtime-events";
+import { hasActiveTurn } from "@lyonbrown/agent-domain/internal/runtime-state-mutations";
+import { applyRuntimeEvent } from "@lyonbrown/agent-domain/internal/runtime-state-reducer";
+import type { AgentRuntimeState } from "@lyonbrown/agent-domain/internal/runtime-state-types";
+import {
+  ZERO_RUNTIME_USAGE,
+  freezeState,
+} from "@lyonbrown/agent-domain/internal/runtime-state-types";
 
 export type {
   AgentRuntimePhase,
@@ -14,7 +17,7 @@ export type {
   RuntimeFailure,
   RuntimeToolState,
   RuntimeTurnState,
-} from "./runtime-state-types.ts";
+} from "@lyonbrown/agent-domain/internal/runtime-state-types";
 
 export interface VersionedAgentRuntimeEvent {
   readonly revision: Revision;

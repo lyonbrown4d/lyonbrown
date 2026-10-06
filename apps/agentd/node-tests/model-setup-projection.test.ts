@@ -11,7 +11,10 @@ import {
 } from "@lyonbrown/protocol";
 import { describe, expect, it } from "vitest";
 
-import { projectModelSetup, projectSetupRuntimePhase } from "../node-src/model-setup-projection.ts";
+import {
+  projectModelSetup,
+  projectSetupRuntimePhase,
+} from "@lyonbrown/agentd/internal/model-setup-projection";
 
 function status(
   phase: LocalModelPhase,

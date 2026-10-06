@@ -1,10 +1,10 @@
-export { createAgentClient } from "./factory.ts";
-export { AgentClientError } from "./errors.ts";
+export { createAgentClient } from "@lyonbrown/agent-client/internal/factory";
+export { AgentClientError } from "@lyonbrown/agent-client/internal/errors";
 export type {
   AgentClientErrorCode,
   AgentClientErrorDetails,
   AgentClientErrorKind,
-} from "./errors.ts";
+} from "@lyonbrown/agent-client/internal/errors";
 export type {
   ActivitySnapshotDto,
   AgentClient,
@@ -38,4 +38,4 @@ export type {
   ToolPreviewDto,
   ToolResultDto,
   TurnSnapshotDto,
-} from "./types.ts";
+} from "@lyonbrown/agent-client/internal/types";

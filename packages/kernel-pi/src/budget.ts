@@ -1,6 +1,6 @@
-import { kernelError } from "./errors.ts";
-import { assertByteLimit } from "./sanitization.ts";
-import type { KernelResourceBudget } from "./types.ts";
+import { kernelError } from "@lyonbrown/kernel-pi/internal/errors";
+import { assertByteLimit } from "@lyonbrown/kernel-pi/internal/sanitization";
+import type { KernelResourceBudget } from "@lyonbrown/kernel-pi/internal/types";
 
 const BUDGET_KEYS = [
   "maxInputBytes",

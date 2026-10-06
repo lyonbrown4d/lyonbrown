@@ -8,7 +8,7 @@ import type {
   RouteSummary,
 } from "@lyonbrown/protocol";
 
-import { clientError } from "./errors.ts";
+import { clientError } from "@lyonbrown/agent-client/internal/errors";
 import {
   disabledReason,
   modelAction,
@@ -17,7 +17,7 @@ import {
   modelSetupPhase,
   modelSource,
   modelTier,
-} from "./snapshot-scalars.ts";
+} from "@lyonbrown/agent-client/internal/snapshot-scalars";
 import type {
   ModelCatalogDto,
   ModelOptionDto,
@@ -26,8 +26,13 @@ import type {
   ModelSelectionDto,
   ModelSetupDto,
   RouteSummaryDto,
-} from "./types.ts";
-import { protocolDisplayName, protocolId, protocolText, requiredField } from "./validation.ts";
+} from "@lyonbrown/agent-client/internal/types";
+import {
+  protocolDisplayName,
+  protocolId,
+  protocolText,
+  requiredField,
+} from "@lyonbrown/agent-client/internal/validation";
 
 export function mapSelection(value: ModelSelection | undefined): ModelSelectionDto {
   const selection = requiredField("model_selection", value).selection;

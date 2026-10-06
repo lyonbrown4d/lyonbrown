@@ -8,9 +8,12 @@ import {
   openSecureRunDirectory,
   type NativeControlPlaneProvider,
   type SecureRunDirectory,
-} from "../src/index.ts";
-import type { PlatformSecurityContract, SecureDirectoryHandle } from "../src/native-adapter.ts";
-import { FakePlatformSecurity } from "./test-support.ts";
+} from "@lyonbrown/local-control-plane/internal/index";
+import type {
+  PlatformSecurityContract,
+  SecureDirectoryHandle,
+} from "@lyonbrown/local-control-plane/internal/native-adapter";
+import { FakePlatformSecurity } from "@lyonbrown/local-control-plane/test/test-support";
 
 const RUN_PATH = "/private/agent/scope";
 const SCOPE = "a".repeat(64);

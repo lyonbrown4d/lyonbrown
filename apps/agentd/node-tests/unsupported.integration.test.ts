@@ -15,7 +15,7 @@ import {
   invokeUnary,
   requestMetadata,
   startTestServer,
-} from "./server-test-support.ts";
+} from "@lyonbrown/agentd/test/server-test-support";
 
 describe("deferred command RPCs", () => {
   const states: TestServerState[] = [];

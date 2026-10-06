@@ -1,14 +1,14 @@
 import { describe, expect, test } from "vitest";
 
-import { kernelError } from "../src/errors.ts";
+import { kernelError } from "@lyonbrown/kernel-pi/internal/errors";
 import {
   assertUsage,
   createPiModel,
   normalizeModelDescriptor,
   toKernelMessage,
   toPiUsage,
-} from "../src/pi-conversion.ts";
-import { SecretRedactor } from "../src/redaction.ts";
+} from "@lyonbrown/kernel-pi/internal/pi-conversion";
+import { SecretRedactor } from "@lyonbrown/kernel-pi/internal/redaction";
 import {
   abortCode,
   createDeadlineSignal,
@@ -19,8 +19,11 @@ import {
   resolveSecrets,
   toSafePreExecutionError,
   toSafeToolError,
-} from "../src/tool-support.ts";
-import type { KernelModelAdapter, KernelModelStreamEvent } from "../src/types.ts";
+} from "@lyonbrown/kernel-pi/internal/tool-support";
+import type {
+  KernelModelAdapter,
+  KernelModelStreamEvent,
+} from "@lyonbrown/kernel-pi/internal/types";
 
 const limits = {
   maxDepth: 4,

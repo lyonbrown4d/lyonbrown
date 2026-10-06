@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat } from "node:fs/promises";
 
-import type { ModelPreset } from "./contracts.ts";
+import type { ModelPreset } from "@lyonbrown/local-model/internal/internal/contracts";
 
 export const verifyModelFile = async (
   filePath: string,

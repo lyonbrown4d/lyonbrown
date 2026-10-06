@@ -2,8 +2,15 @@ import { win32 } from "node:path";
 
 import { PathSecurityError, type PathSecurityVerifier } from "@lyonbrown/event-store/path-verifier";
 
-import { api } from "./api.ts";
-import { ACCESS, ATTRIBUTES, CREATION, ERRORS, FLAGS, SHARE } from "./constants.ts";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import {
+  ACCESS,
+  ATTRIBUTES,
+  CREATION,
+  ERRORS,
+  FLAGS,
+  SHARE,
+} from "@lyonbrown/control-plane-native/internal/windows/constants";
 import {
   createFile,
   failureForLastError,
@@ -11,10 +18,14 @@ import {
   openRegularFile,
   validateObjectType,
   type OwnedHandle,
-} from "./handles.ts";
-import { fileIdentity } from "./identity.ts";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.ts";
-import { NativeFailure } from "../result.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
+import { fileIdentity } from "@lyonbrown/control-plane-native/internal/windows/identity";
+import {
+  currentUser,
+  verifyPrivateObject,
+  withPrivateSecurity,
+} from "@lyonbrown/control-plane-native/internal/windows/security";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 const DATABASE_NAMES = new Set([
   "lyonbrown.sqlite3",

@@ -14,7 +14,7 @@ import {
   openEventStore,
   type PathSecurityVerifier,
   type RevisionConflictError,
-} from "../src/index.ts";
+} from "@lyonbrown/event-store/internal/index";
 
 const allowTestPath: PathSecurityVerifier = {
   verifyRequestedDataDirectory: () => undefined,

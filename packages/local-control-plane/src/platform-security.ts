@@ -1,4 +1,8 @@
-import { ControlPlaneError, controlPlaneError, type ControlPlaneOperation } from "./errors.ts";
+import {
+  ControlPlaneError,
+  controlPlaneError,
+  type ControlPlaneOperation,
+} from "@lyonbrown/local-control-plane/internal/errors";
 
 export type PlatformFailureCode =
   | "access_denied"

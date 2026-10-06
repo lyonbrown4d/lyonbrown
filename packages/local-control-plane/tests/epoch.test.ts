@@ -5,7 +5,7 @@ import {
   createDiscoveryDescriptor,
   fenceEpochAtEnqueue,
   fenceEpochAtExecution,
-} from "../src/index.ts";
+} from "@lyonbrown/local-control-plane/internal/index";
 
 const SCOPE_ID = "ef".repeat(32);
 

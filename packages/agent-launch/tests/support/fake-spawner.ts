@@ -1,5 +1,9 @@
-import type { ProcessSpawner, SpawnAgentdRequest, SpawnAttempt } from "../../src/types.ts";
-import type { Candidate, FakeDiscovery } from "./fixtures.ts";
+import type {
+  ProcessSpawner,
+  SpawnAgentdRequest,
+  SpawnAttempt,
+} from "@lyonbrown/agent-launch/internal/types";
+import type { Candidate, FakeDiscovery } from "@lyonbrown/agent-launch/test/support/fixtures";
 
 function rejectUnknown<T>(value: unknown): Promise<T> {
   return Promise.resolve().then(() => {

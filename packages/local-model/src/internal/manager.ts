@@ -7,22 +7,26 @@ import type {
   LocalModelSelectionReason,
   LocalModelStatus,
   StartModelDownloadResult,
-} from "../types.ts";
-import { waitForTasks } from "./background-tasks.ts";
-import { CATALOG_FALLBACK_PRESET } from "./catalog.ts";
+} from "@lyonbrown/local-model/internal/types";
+import { waitForTasks } from "@lyonbrown/local-model/internal/internal/background-tasks";
+import { CATALOG_FALLBACK_PRESET } from "@lyonbrown/local-model/internal/internal/catalog";
 import type {
   DownloadArtifact,
   LocalModelIo,
   LlamaEngineAdapter,
   ModelPreset,
-} from "./contracts.ts";
+} from "@lyonbrown/local-model/internal/internal/contracts";
 import {
   createDeterministicSelectionOptions,
   type ModelSelectionOptions,
   selectInitialModel,
-} from "./initial-model-selection.ts";
-import { loadSelectedModel } from "./model-loader.ts";
-import { cloneStatus, statusFor, validProgress } from "./status.ts";
+} from "@lyonbrown/local-model/internal/internal/initial-model-selection";
+import { loadSelectedModel } from "@lyonbrown/local-model/internal/internal/model-loader";
+import {
+  cloneStatus,
+  statusFor,
+  validProgress,
+} from "@lyonbrown/local-model/internal/internal/status";
 
 interface ActiveOperation {
   readonly id: string;

@@ -8,7 +8,7 @@ import type {
   NativeModelIdentity,
   NativeModelStagingFile,
   NativeModelStorageCapability,
-} from "../../src/native-storage.ts";
+} from "@lyonbrown/local-model/internal/native-storage";
 
 export class TestNativeModelStorage implements NativeModelStorageCapability {
   readonly identities: NativeModelIdentity[] = [];

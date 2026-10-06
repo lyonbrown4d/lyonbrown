@@ -4,8 +4,8 @@ import type { AgentRuntime } from "@lyonbrown/agent-runtime";
 import type { EventStore } from "@lyonbrown/event-store";
 import type { LocalModelLease } from "@lyonbrown/local-model";
 
-import type { CreateModelAwareRuntimeOptions } from "./model-aware-runtime-types.ts";
-import { createProductionRuntime } from "./production-kernel.ts";
+import type { CreateModelAwareRuntimeOptions } from "@lyonbrown/agentd/internal/model-aware-runtime-types";
+import { createProductionRuntime } from "@lyonbrown/agentd/internal/production-kernel";
 
 export async function rotateRuntimeSession(options: {
   readonly current: AgentRuntime;

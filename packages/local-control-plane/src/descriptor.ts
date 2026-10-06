@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { TextDecoder } from "node:util";
 import { z } from "zod";
-import { validateLoopbackEndpoint } from "./endpoint.ts";
-import { ControlPlaneError, controlPlaneError } from "./errors.ts";
-import { rejectDuplicateTopLevelKeys } from "./json-keys.ts";
-import { SecretToken } from "./token.ts";
+import { validateLoopbackEndpoint } from "@lyonbrown/local-control-plane/internal/endpoint";
+import {
+  ControlPlaneError,
+  controlPlaneError,
+} from "@lyonbrown/local-control-plane/internal/errors";
+import { rejectDuplicateTopLevelKeys } from "@lyonbrown/local-control-plane/internal/json-keys";
+import { SecretToken } from "@lyonbrown/local-control-plane/internal/token";
 
 export const MAX_DISCOVERY_BYTES = 4 * 1024;
 export const DISCOVERY_SCHEMA_VERSION = 1;

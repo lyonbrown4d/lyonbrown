@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createNodeLlamaEngine } from "../src/internal/node-llama.ts";
+import { createNodeLlamaEngine } from "@lyonbrown/local-model/internal/internal/node-llama";
 
 describe("node-llama-cpp production boundary", () => {
   it("loads only official prebuilds and forbids source downloads and compilation fallback", async () => {

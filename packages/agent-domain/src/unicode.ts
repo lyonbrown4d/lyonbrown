@@ -1,4 +1,4 @@
-import { domainError } from "./errors.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
 
 interface WellFormedStringPrototype {
   isWellFormed(this: string): boolean;

@@ -2,7 +2,7 @@ import type { LocalModelLease } from "@lyonbrown/local-model";
 import type { KernelModelRequest } from "@lyonbrown/kernel-pi";
 import { describe, expect, it, vi } from "vitest";
 
-import { createLocalKernelModelAdapter } from "../node-src/local-model-adapter.ts";
+import { createLocalKernelModelAdapter } from "@lyonbrown/agentd/internal/local-model-adapter";
 
 function request(overrides: Partial<KernelModelRequest> = {}): KernelModelRequest {
   return {

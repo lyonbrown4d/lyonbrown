@@ -1,8 +1,8 @@
 import type { NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
 import { describe, expect, it, vi } from "vitest";
 
-import { main, type AgentdMainDependencies } from "../node-src/main.ts";
-import { createProductionAgentdRuntime } from "../node-src/production-runtime.ts";
+import { main, type AgentdMainDependencies } from "@lyonbrown/agentd/internal/main";
+import { createProductionAgentdRuntime } from "@lyonbrown/agentd/internal/production-runtime";
 
 describe("agentd main composition", () => {
   it("passes validated launcher arguments and the native provider to bootstrap", async () => {

@@ -8,29 +8,39 @@ import {
   RuntimeSnapshot,
 } from "@lyonbrown/protocol";
 
-import { latestRuntimeFeed, type RuntimeFeed } from "./latest-runtime-feed.ts";
-import { closeModelAwareResources } from "./model-aware-close.ts";
-import { executeModelDownloadCommand } from "./model-download-commands.ts";
-import { failedRuntimeResult } from "./model-download-results.ts";
-import { ModelLeaseOwnership } from "./model-lease-ownership.ts";
+import {
+  latestRuntimeFeed,
+  type RuntimeFeed,
+} from "@lyonbrown/agentd/internal/latest-runtime-feed";
+import { closeModelAwareResources } from "@lyonbrown/agentd/internal/model-aware-close";
+import { executeModelDownloadCommand } from "@lyonbrown/agentd/internal/model-download-commands";
+import { failedRuntimeResult } from "@lyonbrown/agentd/internal/model-download-results";
+import { ModelLeaseOwnership } from "@lyonbrown/agentd/internal/model-lease-ownership";
 import type {
   CreateModelAwareRuntimeOptions,
   ModelAwareRuntime,
-} from "./model-aware-runtime-types.ts";
-import { ModelActivationController } from "./model-activation.ts";
+} from "@lyonbrown/agentd/internal/model-aware-runtime-types";
+import { ModelActivationController } from "@lyonbrown/agentd/internal/model-activation";
 import {
   projectModelSetup,
   projectSetupRuntimePhase,
   type ActivationPhase,
-} from "./model-setup-projection.ts";
-import { createRuntimeHostAdapter } from "./runtime-adapter.ts";
-import { assertProtocolRevision, projectRuntimeSnapshot } from "./runtime-adapter-projection.ts";
-import { runtimeCommandWithinBudget } from "./runtime-command-budget.ts";
-import { RuntimeCommandSerialQueue } from "./runtime-command-serial-queue.ts";
-import type { RuntimeCommand, RuntimeHost, RuntimeResult } from "./runtime-host.ts";
-import { shouldRotateSession } from "./runtime-session-policy.ts";
-import { rotateRuntimeSession } from "./runtime-session-rotation.ts";
-import { nextTransportRevision } from "./transport-revision.ts";
+} from "@lyonbrown/agentd/internal/model-setup-projection";
+import { createRuntimeHostAdapter } from "@lyonbrown/agentd/internal/runtime-adapter";
+import {
+  assertProtocolRevision,
+  projectRuntimeSnapshot,
+} from "@lyonbrown/agentd/internal/runtime-adapter-projection";
+import { runtimeCommandWithinBudget } from "@lyonbrown/agentd/internal/runtime-command-budget";
+import { RuntimeCommandSerialQueue } from "@lyonbrown/agentd/internal/runtime-command-serial-queue";
+import type {
+  RuntimeCommand,
+  RuntimeHost,
+  RuntimeResult,
+} from "@lyonbrown/agentd/internal/runtime-host";
+import { shouldRotateSession } from "@lyonbrown/agentd/internal/runtime-session-policy";
+import { rotateRuntimeSession } from "@lyonbrown/agentd/internal/runtime-session-rotation";
+import { nextTransportRevision } from "@lyonbrown/agentd/internal/transport-revision";
 
 const CAPABILITIES = Object.freeze(["runtime.pi-local.v1", "model-download.v1"]);
 const AUTO_SELECTION = ModelSelection.create({ selection: { $case: "auto", auto: true } });
@@ -38,7 +48,7 @@ const AUTO_SELECTION = ModelSelection.create({ selection: { $case: "auto", auto:
 export type {
   CreateModelAwareRuntimeOptions,
   ModelAwareRuntime,
-} from "./model-aware-runtime-types.ts";
+} from "@lyonbrown/agentd/internal/model-aware-runtime-types";
 
 export function createModelAwareRuntime(
   options: CreateModelAwareRuntimeOptions,

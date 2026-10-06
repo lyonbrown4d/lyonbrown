@@ -29,6 +29,20 @@ The current production kernel deliberately composes an empty tool registry,
 default-deny approval gate, rejecting secret resolver, and no MCP connections.
 Those are safe capability boundaries, not finished integrations.
 
+## Workspace import boundary
+
+Hand-written TypeScript does not use relative module specifiers. It imports
+through `@lyonbrown/...` root aliases. Each workspace owns its `/internal/*`,
+`/test/*`, and `/script/*` namespaces; repository gates reject access from a
+different workspace. Cross-package imports must use declared public package
+entries.
+
+Vitest resolves source aliases through `vite-tsconfig-paths`. Production
+TypeScript builds run `tsc-alias` after compilation to emit Node ESM paths with
+`.js` extensions, and private aliases must not remain in build artifacts. The
+Git-ignored protocol output remains generated and owned by Buf; it is not a
+precedent for hand-written code to bypass the import boundary.
+
 ## Background work and scheduling
 
 `agentd` does not build a business scheduler. Native timers currently serve

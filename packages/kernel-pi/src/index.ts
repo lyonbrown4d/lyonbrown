@@ -1,5 +1,5 @@
-export { KernelRuntimeError, type KernelErrorCode } from "./errors.ts";
-export { createPiKernelSession, PiKernelSession } from "./session.ts";
+export { KernelRuntimeError, type KernelErrorCode } from "@lyonbrown/kernel-pi/internal/errors";
+export { createPiKernelSession, PiKernelSession } from "@lyonbrown/kernel-pi/internal/session";
 export type {
   KernelApprovalGate,
   KernelApprovalRequest,
@@ -25,4 +25,4 @@ export type {
   KernelToolRisk,
   KernelUsage,
   PiKernelSessionOptions,
-} from "./types.ts";
+} from "@lyonbrown/kernel-pi/internal/types";

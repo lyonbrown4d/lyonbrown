@@ -4,8 +4,8 @@ import {
   failedRuntimeResult,
   mapCancelDownloadResult,
   mapStartDownloadResult,
-} from "./model-download-results.ts";
-import type { RuntimeCommand, RuntimeResult } from "./runtime-host.ts";
+} from "@lyonbrown/agentd/internal/model-download-results";
+import type { RuntimeCommand, RuntimeResult } from "@lyonbrown/agentd/internal/runtime-host";
 
 type ModelCommand = Extract<
   RuntimeCommand,

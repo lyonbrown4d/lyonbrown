@@ -9,7 +9,7 @@ import {
   type KernelResourceBudget,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
 
 const budget: KernelResourceBudget = {
   maxInputBytes: 4_096,

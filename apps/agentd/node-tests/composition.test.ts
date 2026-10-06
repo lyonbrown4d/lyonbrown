@@ -14,7 +14,7 @@ vi.mock("../node-src/production-runtime.ts", () => ({
   createProductionAgentdRuntime: createRuntimeInternal,
 }));
 
-import * as composition from "../node-src/composition.ts";
+import * as composition from "@lyonbrown/agentd/internal/composition";
 
 describe("public production composition", () => {
   beforeEach(() => {

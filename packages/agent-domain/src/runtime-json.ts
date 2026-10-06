@@ -1,7 +1,7 @@
 import { types as nodeTypes } from "node:util";
 
-import { domainError } from "./errors.ts";
-import { isWellFormedString } from "./unicode.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
+import { isWellFormedString } from "@lyonbrown/agent-domain/internal/unicode";
 
 export type RuntimeJsonPrimitive = null | boolean | number | string;
 export type RuntimeJsonValue =

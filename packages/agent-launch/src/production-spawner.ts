@@ -1,5 +1,9 @@
 import { spawn as nodeSpawn, type SpawnOptions } from "node:child_process";
-import type { ProcessSpawner, SpawnAgentdRequest, SpawnAttempt } from "./types.ts";
+import type {
+  ProcessSpawner,
+  SpawnAgentdRequest,
+  SpawnAttempt,
+} from "@lyonbrown/agent-launch/internal/types";
 
 export interface AgentdProcessConfiguration {
   readonly command: string;

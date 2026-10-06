@@ -2,7 +2,7 @@ import type * as GrpcModule from "@grpc/grpc-js";
 import { PROTOCOL_VERSION, RuntimeSnapshot, type RuntimeEvent } from "@lyonbrown/protocol";
 import { describe, expect, it, vi } from "vitest";
 
-import type { RuntimeHost } from "../node-src/runtime-host.ts";
+import type { RuntimeHost } from "@lyonbrown/agentd/internal/runtime-host";
 
 const grpcState = vi.hoisted(() => ({ constructorCalls: 0, bindCalls: 0 }));
 
@@ -37,7 +37,7 @@ vi.mock("@grpc/grpc-js", async (importOriginal) => {
   return { ...actual, Server: FakeServer };
 });
 
-const { startAgentdServer } = await import("../node-src/server.ts");
+const { startAgentdServer } = await import("@lyonbrown/agentd/internal/server");
 
 const host: RuntimeHost = {
   execute: async () => ({ ok: true }),

@@ -1,7 +1,13 @@
-import { domainError } from "./errors.ts";
-import type { Revision } from "./revision.ts";
-import type { AgentRuntimeEvent, RuntimeUsage } from "./runtime-events.ts";
-import { checkedAssistantBytes, checkedUsageAdd } from "./runtime-state-budgets.ts";
+import { domainError } from "@lyonbrown/agent-domain/internal/errors";
+import type { Revision } from "@lyonbrown/agent-domain/internal/revision";
+import type {
+  AgentRuntimeEvent,
+  RuntimeUsage,
+} from "@lyonbrown/agent-domain/internal/runtime-events";
+import {
+  checkedAssistantBytes,
+  checkedUsageAdd,
+} from "@lyonbrown/agent-domain/internal/runtime-state-budgets";
 import {
   addTool,
   appendActivity,
@@ -12,9 +18,9 @@ import {
   updateLastActivity,
   updateLastTurn,
   updateTool,
-} from "./runtime-state-mutations.ts";
-import type { AgentRuntimeState } from "./runtime-state-types.ts";
-import { freezeFailure, freezeState } from "./runtime-state-types.ts";
+} from "@lyonbrown/agent-domain/internal/runtime-state-mutations";
+import type { AgentRuntimeState } from "@lyonbrown/agent-domain/internal/runtime-state-types";
+import { freezeFailure, freezeState } from "@lyonbrown/agent-domain/internal/runtime-state-types";
 
 export function applyRuntimeEvent(
   state: AgentRuntimeState,

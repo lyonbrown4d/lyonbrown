@@ -1,6 +1,6 @@
-import type { NativeModelIdentity } from "../native-storage.ts";
-import { DEFAULT_PRESET } from "./catalog.ts";
-import type { ModelPreset } from "./contracts.ts";
+import type { NativeModelIdentity } from "@lyonbrown/local-model/internal/native-storage";
+import { DEFAULT_PRESET } from "@lyonbrown/local-model/internal/internal/catalog";
+import type { ModelPreset } from "@lyonbrown/local-model/internal/internal/contracts";
 
 export const modelIdentityFor = (preset: ModelPreset): NativeModelIdentity => ({
   modelId: preset.id,

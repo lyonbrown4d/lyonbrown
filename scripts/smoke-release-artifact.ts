@@ -4,7 +4,7 @@ import { resolve, join } from "node:path";
 
 import { $, usePowerShell } from "zx";
 
-import { configureZxPlatform } from "./zx-platform.ts";
+import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
 
 configureZxPlatform(process.platform, usePowerShell);
 

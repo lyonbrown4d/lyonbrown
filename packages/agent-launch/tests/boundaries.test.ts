@@ -1,12 +1,12 @@
-import * as publicApi from "../src/index.ts";
-import { createAgentLauncher } from "../src/launcher.ts";
+import * as publicApi from "@lyonbrown/agent-launch/internal/index";
+import { createAgentLauncher } from "@lyonbrown/agent-launch/internal/launcher";
 import type {
   DiscoveredDaemonCapability,
   DiscoveryClient,
   ProcessSpawner,
   SpawnAttempt,
   StartupLease,
-} from "../src/types.ts";
+} from "@lyonbrown/agent-launch/internal/types";
 import { describe, expect, test } from "vitest";
 import {
   CONFIG,
@@ -17,7 +17,7 @@ import {
   FakeSpawner,
   ManualClock,
   nativeProvider,
-} from "./support/fixtures.ts";
+} from "@lyonbrown/agent-launch/test/support/fixtures";
 
 function pending<T>(): Promise<T> {
   return new Promise<T>(() => undefined);

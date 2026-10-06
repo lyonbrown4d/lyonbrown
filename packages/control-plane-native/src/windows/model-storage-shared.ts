@@ -1,8 +1,8 @@
 import type { NativeModelIdentity } from "@lyonbrown/local-model/composition";
 
-import type { OwnedHandle } from "./handles.ts";
-import type { SharedFileLock } from "./model-files.ts";
-import { identityKey } from "./model-identity.ts";
+import type { OwnedHandle } from "@lyonbrown/control-plane-native/internal/windows/handles";
+import type { SharedFileLock } from "@lyonbrown/control-plane-native/internal/windows/model-files";
+import { identityKey } from "@lyonbrown/control-plane-native/internal/windows/model-identity";
 
 const PUBLIC_STORAGE_ERRORS = new Set([
   "native_model_identity_invalid",

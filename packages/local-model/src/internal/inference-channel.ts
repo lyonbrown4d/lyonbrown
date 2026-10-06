@@ -1,4 +1,4 @@
-import type { LocalModelInferenceEvent } from "../types.ts";
+import type { LocalModelInferenceEvent } from "@lyonbrown/local-model/internal/types";
 
 const MAX_QUEUED_EVENTS = 32;
 

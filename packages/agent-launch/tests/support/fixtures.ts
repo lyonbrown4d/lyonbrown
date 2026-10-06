@@ -20,9 +20,9 @@ import type {
   DiscoveryContext,
   Sleeper,
   StartupLease,
-} from "../../src/types.ts";
+} from "@lyonbrown/agent-launch/internal/types";
 
-export { FakeSpawner } from "./fake-spawner.ts";
+export { FakeSpawner } from "@lyonbrown/agent-launch/test/support/fake-spawner";
 
 export const WORKSPACE = process.platform === "win32" ? "C:\\workspace" : "/workspace";
 export const CONFIG = "runtime-config-v1";

@@ -11,8 +11,8 @@ import {
   openEventStore,
   type EventAlreadyExistsError,
   type PathSecurityVerifier,
-} from "../src/index.ts";
-import { prepareDatabasePath } from "../src/path-security.ts";
+} from "@lyonbrown/event-store/internal/index";
+import { prepareDatabasePath } from "@lyonbrown/event-store/internal/path-security";
 
 const allow: PathSecurityVerifier = {
   verifyRequestedDataDirectory: () => undefined,

@@ -6,7 +6,7 @@
 
 1. 使用 Node.js 24 LTS 与仓库固定的 pnpm，不混用 npm、Yarn 或 Bun。依赖安装必须更新并提交 `pnpm-lock.yaml`，不得把 pnpm store/cache 重定向到仓库内。
 2. TypeScript 使用 ESM 与 `strict` 模式。不得在关键路径使用 `any` 或隐式 `any`；跨包只从公开入口导入。
-3. TypeScript 源文件的相对导入必须使用 `.ts` 扩展名，不得使用 `.js` 指向 TypeScript 源；构建产物扩展名由 TypeScript `rewriteRelativeImportExtensions` 自动改写。
+3. 手写 TypeScript 源文件禁止相对模块导入，统一使用 `@lyonbrown/...` 根路径别名；包内实现使用所属 workspace 的 `/internal/*`、测试 helper 使用 `/test/*`、脚本使用 `/script/*`，跨包仍只能从对方公开入口导入。别名不得携带 `.ts` 扩展名，生产构建必须将别名改写为 Node.js 可执行的 `.js` 路径；协议生成物由生成器管理，不得作为手写代码引用相对路径的先例。
 4. 统一使用 2 空格缩进，不使用 Tab。提交前运行根目录的格式、lint、类型、测试和构建门禁。
 5. 工具依赖放在 `devDependencies`；版本不得使用 `latest`、`*` 或 `~` 范围。复杂编排脚本放在 `scripts/*.ts`，通过 `tsx` 执行并使用 `zx` 管理子进程。
 6. Node 后端的业务级延迟任务、周期任务、重试编排和持久化作业必须优先采用经过维护的第三方库，不得用 `setInterval`、递归 `setTimeout`、自建 cron 解析器或临时数据库表实现调度器。原生 timer 仅用于有界的进程内 deadline、取消、资源清理等待和短退避；需要跨重启、并发 worker、幂等重试或可观测状态时，必须先定义 job port，再选择成熟的持久化队列/工作流引擎。

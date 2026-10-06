@@ -5,8 +5,8 @@ import {
 } from "@lyonbrown/agent-domain";
 import type { KernelEvent } from "@lyonbrown/kernel-pi";
 
-import { runtimeError } from "./errors.ts";
-import type { RuntimeEventWriter } from "./event-writer.ts";
+import { runtimeError } from "@lyonbrown/agent-runtime/internal/errors";
+import type { RuntimeEventWriter } from "@lyonbrown/agent-runtime/internal/event-writer";
 
 export function combineRuntimeSignal(
   userSignal: AbortSignal | undefined,

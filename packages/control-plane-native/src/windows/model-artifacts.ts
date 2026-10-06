@@ -3,11 +3,14 @@ import type {
   NativeModelStagingFile,
 } from "@lyonbrown/local-model/composition";
 
-import { SHARE } from "./constants.ts";
-import { atomicReplaceOpenFile, disposeOnClose } from "./files.ts";
-import type { OwnedHandle } from "./handles.ts";
-import { fileIdentity } from "./identity.ts";
-import type { ModelDirectoryLease } from "./model-directory.ts";
+import { SHARE } from "@lyonbrown/control-plane-native/internal/windows/constants";
+import {
+  atomicReplaceOpenFile,
+  disposeOnClose,
+} from "@lyonbrown/control-plane-native/internal/windows/files";
+import type { OwnedHandle } from "@lyonbrown/control-plane-native/internal/windows/handles";
+import { fileIdentity } from "@lyonbrown/control-plane-native/internal/windows/identity";
+import type { ModelDirectoryLease } from "@lyonbrown/control-plane-native/internal/windows/model-directory";
 import {
   assertSameFile,
   deleteStagedModelIfPresent,
@@ -18,14 +21,14 @@ import {
   openStagedModel,
   reopenModelFile,
   type SharedFileLock,
-} from "./model-files.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/model-files";
 import {
   closeQuietly,
   promiseFrom,
   releaseQuietly,
   storageFailure,
-} from "./model-storage-shared.ts";
-import { NativeFailure } from "../result.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/model-storage-shared";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 export class WindowsInstallLockAnchor implements NativeInstallLockAnchor {
   #releaseStarted = false;

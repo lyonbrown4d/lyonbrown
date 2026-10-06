@@ -3,13 +3,13 @@ import {
   type DiscoveryDescriptor,
   parseDiscoveryDescriptor,
   serializeDiscoveryDescriptor,
-} from "./descriptor.ts";
-import { controlPlaneError } from "./errors.ts";
+} from "@lyonbrown/local-control-plane/internal/descriptor";
+import { controlPlaneError } from "@lyonbrown/local-control-plane/internal/errors";
 import {
   invokePlatform,
   type PlatformResult,
   type SecureDirectoryHandle,
-} from "./platform-security.ts";
+} from "@lyonbrown/local-control-plane/internal/platform-security";
 
 const DISCOVERY_FILE = "agentd.json";
 const DISCOVERY_CONSTRUCTION_TOKEN = Object.freeze({});

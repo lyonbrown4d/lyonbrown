@@ -5,7 +5,7 @@ import {
   createRuntimeEventStorePort,
   type RuntimeEventStorePort,
   type RuntimeEventStoreSource,
-} from "../src/index.ts";
+} from "@lyonbrown/agent-runtime/internal/index";
 
 export class CapturingKernelFactory {
   sink: KernelEventSink | undefined;

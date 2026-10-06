@@ -16,11 +16,11 @@ import {
   type RuntimeSnapshot,
 } from "@lyonbrown/protocol";
 
-import { mapCommand, type WireCommand } from "./command.ts";
-import { clientError } from "./errors.ts";
-import { mapHandshake } from "./handshake.ts";
-import { mapSnapshot } from "./snapshot.ts";
-import { isRetryableTransportError } from "./status-error.ts";
+import { mapCommand, type WireCommand } from "@lyonbrown/agent-client/internal/command";
+import { clientError } from "@lyonbrown/agent-client/internal/errors";
+import { mapHandshake } from "@lyonbrown/agent-client/internal/handshake";
+import { mapSnapshot } from "@lyonbrown/agent-client/internal/snapshot";
+import { isRetryableTransportError } from "@lyonbrown/agent-client/internal/status-error";
 import {
   TransportFailure,
   createTransport,
@@ -31,8 +31,12 @@ import {
   staleEpoch,
   type NormalizedDeadlines,
   type TransportState,
-} from "./transport.ts";
-import { publicUnaryCall, unaryCall, type CapturedTransport } from "./unary.ts";
+} from "@lyonbrown/agent-client/internal/transport";
+import {
+  publicUnaryCall,
+  unaryCall,
+  type CapturedTransport,
+} from "@lyonbrown/agent-client/internal/unary";
 import type {
   AgentClient,
   AgentCommand,
@@ -44,8 +48,8 @@ import type {
   RuntimeEventDto,
   RuntimeSnapshotDto,
   SubscribeEventsInput,
-} from "./types.ts";
-import { requireId, requireNonNegativeRevision } from "./validation.ts";
+} from "@lyonbrown/agent-client/internal/types";
+import { requireId, requireNonNegativeRevision } from "@lyonbrown/agent-client/internal/validation";
 
 export class DefaultAgentClient implements AgentClient {
   readonly #clientInstanceId: string;

@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import type { NativeModelIdentity } from "@lyonbrown/local-model/composition";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createNativeModelStorageCapability } from "../src/index.ts";
+import { createNativeModelStorageCapability } from "@lyonbrown/control-plane-native/internal/index";
 
 const windows = process.platform === "win32";
 const roots: string[] = [];

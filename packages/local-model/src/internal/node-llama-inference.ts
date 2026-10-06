@@ -4,9 +4,15 @@ import type {
   LocalModelInferenceEvent,
   LocalModelInferenceRequest,
   LocalModelMessage,
-} from "../types.ts";
-import { InferenceEventChannel, singleInferenceEventIterator } from "./inference-channel.ts";
-import { utf8Prefix, validateInferenceRequest } from "./inference-request.ts";
+} from "@lyonbrown/local-model/internal/types";
+import {
+  InferenceEventChannel,
+  singleInferenceEventIterator,
+} from "@lyonbrown/local-model/internal/internal/inference-channel";
+import {
+  utf8Prefix,
+  validateInferenceRequest,
+} from "@lyonbrown/local-model/internal/internal/inference-request";
 
 const LENGTH_ABORT = Object.freeze(new Error("local_model_output_limit"));
 export const DISPOSE_ABORT = Object.freeze(new Error("local_model_disposed"));

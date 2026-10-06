@@ -6,7 +6,7 @@ import {
   type KernelModelAdapter,
   type KernelModelRequest,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
 
 describe("session listener isolation", () => {
   test("does not let a hung listener block a run or cancellation", async () => {

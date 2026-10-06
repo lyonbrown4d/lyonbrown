@@ -4,7 +4,7 @@ import {
   errorFromUnknown,
   waitForCondition,
   type ProgressState,
-} from "./smoke-real-gguf-lib.ts";
+} from "@lyonbrown/workspace/internal/smoke-real-gguf-lib";
 import {
   assertSmokeSnapshotHealthy,
   hasProgress,
@@ -14,7 +14,7 @@ import {
   requireManagedModel,
   requireOperationId,
   requireSessionId,
-} from "./smoke-real-gguf-assertions.ts";
+} from "@lyonbrown/workspace/internal/smoke-real-gguf-assertions";
 
 export interface SmokeSnapshot {
   readonly revision: bigint;

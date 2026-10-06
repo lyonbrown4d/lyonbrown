@@ -1,6 +1,6 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { inspect } from "node:util";
-import { controlPlaneError } from "./errors.ts";
+import { controlPlaneError } from "@lyonbrown/local-control-plane/internal/errors";
 
 const TOKEN_BYTES = 32;
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;

@@ -5,8 +5,8 @@ import type {
   LlamaEngineAdapter,
   LlamaLease,
   ModelPreset,
-} from "../../src/internal/contracts.ts";
-import type { LocalModelInferenceEvent } from "../../src/types.ts";
+} from "@lyonbrown/local-model/internal/internal/contracts";
+import type { LocalModelInferenceEvent } from "@lyonbrown/local-model/internal/types";
 
 export const createFakeLlamaLease = (
   dispose: () => Promise<void> = () => Promise.resolve(),

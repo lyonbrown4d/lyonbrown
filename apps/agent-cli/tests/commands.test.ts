@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseInput } from "../src/commands.ts";
+import { parseInput } from "@lyonbrown/agent-cli/internal/commands";
 
 describe("TUI commands", () => {
   it("keeps ordinary multilingual text as chat input", () => {

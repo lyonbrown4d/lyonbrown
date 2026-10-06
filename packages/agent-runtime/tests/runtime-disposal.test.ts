@@ -2,8 +2,12 @@ import { asSessionId } from "@lyonbrown/agent-domain";
 import { openEventStore } from "@lyonbrown/event-store";
 import { describe, expect, test, vi } from "vitest";
 
-import { createAgentRuntime } from "../src/index.ts";
-import { eventTypes, runtimeEventStore, sequentialEventIds } from "./support.ts";
+import { createAgentRuntime } from "@lyonbrown/agent-runtime/internal/index";
+import {
+  eventTypes,
+  runtimeEventStore,
+  sequentialEventIds,
+} from "@lyonbrown/agent-runtime/test/support";
 
 describe("runtime background lifecycle", () => {
   test("does not start the kernel when disposed during the user-message append", async () => {

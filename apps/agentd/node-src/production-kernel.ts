@@ -11,8 +11,8 @@ import type { EventStore } from "@lyonbrown/event-store";
 import { createPiKernelSession, type KernelEventSink } from "@lyonbrown/kernel-pi";
 import type { LocalModelLease } from "@lyonbrown/local-model";
 
-import { createLocalKernelModelAdapter } from "./local-model-adapter.ts";
-import { KERNEL_MAX_INPUT_BYTES } from "./runtime-limits.ts";
+import { createLocalKernelModelAdapter } from "@lyonbrown/agentd/internal/local-model-adapter";
+import { KERNEL_MAX_INPUT_BYTES } from "@lyonbrown/agentd/internal/runtime-limits";
 
 export async function createProductionRuntime(
   lease: LocalModelLease,

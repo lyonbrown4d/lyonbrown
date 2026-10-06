@@ -7,8 +7,8 @@ import {
   asCommandId,
   asSessionId,
   validateText,
-} from "../src/index.ts";
-import { captureError } from "./test-error.ts";
+} from "@lyonbrown/agent-domain/internal/index";
+import { captureError } from "@lyonbrown/agent-domain/test/test-error";
 
 describe("opaque identifiers", () => {
   it("accepts non-UUID identifiers without trimming or rewriting them", () => {

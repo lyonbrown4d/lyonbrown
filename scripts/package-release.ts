@@ -4,8 +4,11 @@ import { dirname, join } from "node:path";
 
 import { $, usePowerShell } from "zx";
 
-import { resolveReleaseTarget, windowsAgentLauncher } from "./release-artifact-lib.ts";
-import { configureZxPlatform } from "./zx-platform.ts";
+import {
+  resolveReleaseTarget,
+  windowsAgentLauncher,
+} from "@lyonbrown/workspace/internal/release-artifact-lib";
+import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
 
 configureZxPlatform(process.platform, usePowerShell);
 

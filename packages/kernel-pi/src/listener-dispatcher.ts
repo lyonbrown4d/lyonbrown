@@ -1,5 +1,5 @@
-import { kernelError, type KernelRuntimeError } from "./errors.ts";
-import type { KernelEvent, KernelEventListener } from "./types.ts";
+import { kernelError, type KernelRuntimeError } from "@lyonbrown/kernel-pi/internal/errors";
+import type { KernelEvent, KernelEventListener } from "@lyonbrown/kernel-pi/internal/types";
 
 export interface ListenerDispatcherOptions {
   readonly maxPendingEvents: number;

@@ -8,10 +8,13 @@ import type { StoredEvent } from "@lyonbrown/event-store";
 import type { KernelEvent } from "@lyonbrown/kernel-pi";
 import { describe, expect, test } from "vitest";
 
-import { mapKernelEvent } from "../src/kernel-events.ts";
-import { createRuntimeEventPage, type RuntimeEventStorePort } from "../src/event-store-port.ts";
-import { recoverRuntimeState } from "../src/recovery.ts";
-import { LatestSnapshotFeed } from "../src/snapshot-feed.ts";
+import { mapKernelEvent } from "@lyonbrown/agent-runtime/internal/kernel-events";
+import {
+  createRuntimeEventPage,
+  type RuntimeEventStorePort,
+} from "@lyonbrown/agent-runtime/internal/event-store-port";
+import { recoverRuntimeState } from "@lyonbrown/agent-runtime/internal/recovery";
+import { LatestSnapshotFeed } from "@lyonbrown/agent-runtime/internal/snapshot-feed";
 
 const sessionId = asSessionId("session-boundary");
 

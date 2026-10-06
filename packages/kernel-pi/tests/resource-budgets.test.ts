@@ -7,8 +7,8 @@ import {
   type KernelModelStreamEvent,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
-import { KernelRuntimeError } from "../src/errors.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
+import { KernelRuntimeError } from "@lyonbrown/kernel-pi/internal/errors";
 
 const baseBudget = {
   maxInputBytes: 1_024,

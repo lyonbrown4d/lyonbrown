@@ -4,7 +4,7 @@ import {
   NodeProcessSpawner,
   type SpawnProcess,
   type SpawnedAgentdProcess,
-} from "../src/production-spawner.ts";
+} from "@lyonbrown/agent-launch/internal/production-spawner";
 
 class FakeChild extends EventEmitter implements SpawnedAgentdProcess {
   public killCalls = 0;

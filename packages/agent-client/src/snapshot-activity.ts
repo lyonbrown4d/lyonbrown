@@ -15,8 +15,8 @@ import {
   stopReason,
   toolState,
   turnStatus,
-} from "./snapshot-scalars.ts";
-import { mapRouteSummary } from "./snapshot-model.ts";
+} from "@lyonbrown/agent-client/internal/snapshot-scalars";
+import { mapRouteSummary } from "@lyonbrown/agent-client/internal/snapshot-model";
 import type {
   ActivitySnapshotDto,
   ApprovalSnapshotDto,
@@ -24,8 +24,13 @@ import type {
   ToolActivityDto,
   ToolPreviewDto,
   TurnSnapshotDto,
-} from "./types.ts";
-import { protocolId, protocolText, requireJson, requiredField } from "./validation.ts";
+} from "@lyonbrown/agent-client/internal/types";
+import {
+  protocolId,
+  protocolText,
+  requireJson,
+  requiredField,
+} from "@lyonbrown/agent-client/internal/validation";
 
 export function mapTurn(value: TurnSnapshot): TurnSnapshotDto {
   return {

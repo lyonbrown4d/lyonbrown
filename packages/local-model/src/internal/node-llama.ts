@@ -1,7 +1,13 @@
 import { getLlama } from "node-llama-cpp";
 
-import type { LocalModelInferenceEvent, LocalModelInferenceRequest } from "../types.ts";
-import type { LlamaEngineAdapter, LlamaLease } from "./contracts.ts";
+import type {
+  LocalModelInferenceEvent,
+  LocalModelInferenceRequest,
+} from "@lyonbrown/local-model/internal/types";
+import type {
+  LlamaEngineAdapter,
+  LlamaLease,
+} from "@lyonbrown/local-model/internal/internal/contracts";
 import {
   createDefaultNativeChat,
   createNodeLlamaInferenceStream,
@@ -10,7 +16,7 @@ import {
   type NativeChat,
   type NativeModel,
   type NativeSequence,
-} from "./node-llama-inference.ts";
+} from "@lyonbrown/local-model/internal/internal/node-llama-inference";
 
 const SHUTDOWN_TIMEOUT_MS = 5_000;
 

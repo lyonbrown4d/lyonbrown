@@ -1,13 +1,13 @@
-import { kernelError } from "./errors.ts";
-import { inspectOwnDataProperties } from "./inspection.ts";
+import { kernelError } from "@lyonbrown/kernel-pi/internal/errors";
+import { inspectOwnDataProperties } from "@lyonbrown/kernel-pi/internal/inspection";
 import {
   boundedSummary,
   sanitizeJson,
   sanitizeText,
   utf8Bytes,
   type SanitizationLimits,
-} from "./sanitization.ts";
-import type { KernelJsonValue } from "./types.ts";
+} from "@lyonbrown/kernel-pi/internal/sanitization";
+import type { KernelJsonValue } from "@lyonbrown/kernel-pi/internal/types";
 
 export interface SecretRedactorOptions {
   readonly maxSecretCount: number;

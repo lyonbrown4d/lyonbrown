@@ -1,5 +1,9 @@
-import type { ApprovalState, UiModelAction, UiModelState } from "./types.ts";
-import { getFreshCurrentServerInstanceId } from "./epoch.ts";
+import type {
+  ApprovalState,
+  UiModelAction,
+  UiModelState,
+} from "@lyonbrown/ui-model/internal/types";
+import { getFreshCurrentServerInstanceId } from "@lyonbrown/ui-model/internal/epoch";
 
 function failClosedApproval(
   approval: ApprovalState | null,

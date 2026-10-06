@@ -7,7 +7,7 @@ import {
   parseDiscoveryDescriptor,
   serializeDiscoveryDescriptor,
   verifySecretToken,
-} from "../src/index.ts";
+} from "@lyonbrown/local-control-plane/internal/index";
 
 const SCOPE_ID = "ab".repeat(32);
 

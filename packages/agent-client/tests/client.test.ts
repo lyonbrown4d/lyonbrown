@@ -8,8 +8,13 @@ import {
 } from "@lyonbrown/protocol";
 import { afterAll, describe, expect, it } from "vitest";
 
-import type { AgentCommand } from "../src/index.ts";
-import { bindingFor, clientFor, closeDaemons, spawnDaemon } from "./support/fake-daemon.ts";
+import type { AgentCommand } from "@lyonbrown/agent-client/internal/index";
+import {
+  bindingFor,
+  clientFor,
+  closeDaemons,
+  spawnDaemon,
+} from "@lyonbrown/agent-client/test/support/fake-daemon";
 
 const SCOPE = "a".repeat(64);
 

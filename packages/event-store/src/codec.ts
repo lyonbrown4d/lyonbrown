@@ -1,6 +1,6 @@
 import { isProxy } from "node:util/types";
 
-import { PayloadValidationError } from "./errors.ts";
+import { PayloadValidationError } from "@lyonbrown/event-store/internal/errors";
 
 export const MAX_EVENT_PAYLOAD_BYTES = 1024 * 1024;
 export const MAX_PAYLOAD_DEPTH = 64;

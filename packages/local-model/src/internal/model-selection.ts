@@ -4,7 +4,7 @@ import type {
   ModelPreset,
   ModelSelection,
   ModelSelector,
-} from "./contracts.ts";
+} from "@lyonbrown/local-model/internal/internal/contracts";
 
 export const createHardwareAwareModelSelector = (
   evaluator: ModelCompatibilityEvaluator,

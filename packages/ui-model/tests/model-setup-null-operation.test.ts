@@ -8,7 +8,7 @@ import {
   type ModelSetupPhase,
   type ModelSetupState,
   type UiModelState,
-} from "../src/index.ts";
+} from "@lyonbrown/ui-model/internal/index";
 
 function withModelSetup(modelSetup: ModelSetupState): UiModelState {
   let state = createInitialUiModelState();

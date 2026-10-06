@@ -33,7 +33,7 @@ import {
   stopReason,
   toolState,
   turnStatus,
-} from "../src/snapshot-scalars.ts";
+} from "@lyonbrown/agent-client/internal/snapshot-scalars";
 
 describe("snapshot semantic enum mapping", () => {
   it.each([

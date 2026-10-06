@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { LocalModelInferenceEvent, LocalModelInferenceRequest } from "../src/index.ts";
-import { createNodeLlamaEngine } from "../src/internal/node-llama.ts";
+import type {
+  LocalModelInferenceEvent,
+  LocalModelInferenceRequest,
+} from "@lyonbrown/local-model/internal/index";
+import { createNodeLlamaEngine } from "@lyonbrown/local-model/internal/internal/node-llama";
 import {
   createNodeLlamaHarness,
   type GenerationOptions,
   type GenerationResult,
-} from "./support/node-llama.ts";
+} from "@lyonbrown/local-model/test/support/node-llama";
 
 const collect = async (
   stream: AsyncIterable<LocalModelInferenceEvent>,

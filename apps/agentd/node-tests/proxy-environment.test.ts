@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createProxyEnvironmentManager } from "../node-src/proxy-environment.ts";
+import { createProxyEnvironmentManager } from "@lyonbrown/agentd/internal/proxy-environment";
 
 describe("agentd proxy environment", () => {
   it("passes only supported proxy variables to Node", () => {

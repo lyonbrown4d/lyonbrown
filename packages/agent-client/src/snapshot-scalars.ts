@@ -16,8 +16,8 @@ import {
   TurnStatus,
 } from "@lyonbrown/protocol";
 
-import { clientError } from "./errors.ts";
-import type { RuntimePhaseDto } from "./types.ts";
+import { clientError } from "@lyonbrown/agent-client/internal/errors";
+import type { RuntimePhaseDto } from "@lyonbrown/agent-client/internal/types";
 
 function unknown(field: string): never {
   throw clientError("protocol", "INVALID_SNAPSHOT", `${field} contains an unknown enum value`);

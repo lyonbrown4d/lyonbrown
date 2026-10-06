@@ -6,8 +6,8 @@ import {
   canonicalEncode,
   commandFingerprint,
   createReplayKey,
-} from "../src/index.ts";
-import { captureError } from "./test-error.ts";
+} from "@lyonbrown/agent-domain/internal/index";
+import { captureError } from "@lyonbrown/agent-domain/test/test-error";
 
 describe("replay keys", () => {
   it("is an unambiguous tuple of client and command identifiers", () => {

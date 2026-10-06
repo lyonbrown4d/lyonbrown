@@ -1,5 +1,9 @@
-import type { LocalModelSelectionReason } from "../types.ts";
-import type { LocalModelIo, ModelPreset, ModelSelector } from "./contracts.ts";
+import type { LocalModelSelectionReason } from "@lyonbrown/local-model/internal/types";
+import type {
+  LocalModelIo,
+  ModelPreset,
+  ModelSelector,
+} from "@lyonbrown/local-model/internal/internal/contracts";
 
 export interface ModelSelectionOptions {
   readonly catalog: readonly ModelPreset[];

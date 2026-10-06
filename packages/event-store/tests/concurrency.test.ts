@@ -5,7 +5,11 @@ import { Worker } from "node:worker_threads";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { StorageBusyError, openEventStore, type PathSecurityVerifier } from "../src/index.ts";
+import {
+  StorageBusyError,
+  openEventStore,
+  type PathSecurityVerifier,
+} from "@lyonbrown/event-store/internal/index";
 
 const allow: PathSecurityVerifier = {
   verifyRequestedDataDirectory: () => undefined,

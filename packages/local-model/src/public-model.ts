@@ -1,6 +1,6 @@
-import { CATALOG_FALLBACK_PRESET } from "./internal/catalog.ts";
-import type { ModelPreset } from "./internal/contracts.ts";
-import type { LocalModelDescriptor } from "./types.ts";
+import { CATALOG_FALLBACK_PRESET } from "@lyonbrown/local-model/internal/internal/catalog";
+import type { ModelPreset } from "@lyonbrown/local-model/internal/internal/contracts";
+import type { LocalModelDescriptor } from "@lyonbrown/local-model/internal/types";
 
 export const descriptorFor = (preset: ModelPreset): LocalModelDescriptor => ({
   id: preset.id,

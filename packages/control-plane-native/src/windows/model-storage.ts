@@ -8,15 +8,18 @@ import type {
   NativeModelStorageCapability,
 } from "@lyonbrown/local-model/composition";
 
-import { fileIdentity } from "./identity.ts";
-import type { OwnedHandle } from "./handles.ts";
-import { WindowsInstallLockAnchor, WindowsModelStagingFile } from "./model-artifacts.ts";
+import { fileIdentity } from "@lyonbrown/control-plane-native/internal/windows/identity";
+import type { OwnedHandle } from "@lyonbrown/control-plane-native/internal/windows/handles";
+import {
+  WindowsInstallLockAnchor,
+  WindowsModelStagingFile,
+} from "@lyonbrown/control-plane-native/internal/windows/model-artifacts";
 import {
   createPrivateChildDirectory,
   openModelsDirectory,
   validateModelsDirectory,
   type ModelDirectoryLease,
-} from "./model-directory.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/model-directory";
 import {
   assertSameFile,
   createPrivateModelFile,
@@ -25,8 +28,12 @@ import {
   openInstalledModel,
   openOrCreatePrivateLockFile,
   type SharedFileLock,
-} from "./model-files.ts";
-import { assertModelIdentity, assertOperationId, identityKey } from "./model-identity.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/model-files";
+import {
+  assertModelIdentity,
+  assertOperationId,
+  identityKey,
+} from "@lyonbrown/control-plane-native/internal/windows/model-identity";
 import {
   child,
   closeQuietly,
@@ -35,8 +42,8 @@ import {
   releaseQuietly,
   storageFailure,
   throwIfAborted,
-} from "./model-storage-shared.ts";
-import { NativeFailure } from "../result.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/model-storage-shared";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 class ModelStorageCallbackFailure extends Error {
   public constructor(readonly callbackError: unknown) {

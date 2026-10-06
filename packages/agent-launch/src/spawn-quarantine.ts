@@ -1,5 +1,5 @@
-import type { StageRunner } from "./stage-runner.ts";
-import type { SpawnAttempt, StartupLease } from "./types.ts";
+import type { StageRunner } from "@lyonbrown/agent-launch/internal/stage-runner";
+import type { SpawnAttempt, StartupLease } from "@lyonbrown/agent-launch/internal/types";
 
 interface QuarantineEntry {
   readonly lease: StartupLease;

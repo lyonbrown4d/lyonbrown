@@ -6,18 +6,21 @@ import type {
   NativeInstallLockAnchor,
   NativeModelStagingFile,
   NativeModelStorageCapability,
-} from "../native-storage.ts";
-import { modelDownloadUri } from "./catalog.ts";
+} from "@lyonbrown/local-model/internal/native-storage";
+import { modelDownloadUri } from "@lyonbrown/local-model/internal/internal/catalog";
 import type {
   DownloadArtifact,
   DownloadProgress,
   InstallLockLease,
   LocalModelIo,
   ModelPreset,
-} from "./contracts.ts";
-import { verifyModelFile } from "./file-verification.ts";
-import { downloadModelFile, type ModelFileDownloadRequest } from "./model-download.ts";
-import { modelIdentityFor } from "./model-identity.ts";
+} from "@lyonbrown/local-model/internal/internal/contracts";
+import { verifyModelFile } from "@lyonbrown/local-model/internal/internal/file-verification";
+import {
+  downloadModelFile,
+  type ModelFileDownloadRequest,
+} from "@lyonbrown/local-model/internal/internal/model-download";
+import { modelIdentityFor } from "@lyonbrown/local-model/internal/internal/model-identity";
 
 export interface ModelFileDownloader {
   downloadModelFile(request: ModelFileDownloadRequest): Promise<void>;

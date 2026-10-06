@@ -1,5 +1,5 @@
-export { DEFAULT_LOCAL_MODEL } from "./public-model.ts";
-export { LOCAL_MODEL_MAX_MESSAGE_BYTES } from "./types.ts";
+export { DEFAULT_LOCAL_MODEL } from "@lyonbrown/local-model/internal/public-model";
+export { LOCAL_MODEL_MAX_MESSAGE_BYTES } from "@lyonbrown/local-model/internal/types";
 export type {
   CancelModelDownloadResult,
   LocalModelAction,
@@ -15,4 +15,4 @@ export type {
   LocalModelSelectionReason,
   LocalModelStatus,
   StartModelDownloadResult,
-} from "./types.ts";
+} from "@lyonbrown/local-model/internal/types";

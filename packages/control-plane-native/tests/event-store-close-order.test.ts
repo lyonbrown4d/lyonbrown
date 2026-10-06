@@ -10,8 +10,8 @@ import {
 } from "@lyonbrown/event-store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createNativeEventStorePathVerifier } from "../src/index.ts";
-import { api, type Handle } from "../src/windows/api.ts";
+import { createNativeEventStorePathVerifier } from "@lyonbrown/control-plane-native/internal/index";
+import { api, type Handle } from "@lyonbrown/control-plane-native/internal/windows/api";
 
 const temporaryDirectories: string[] = [];
 const databaseClose = Object.getOwnPropertyDescriptor(Database.prototype, "close")?.value as (

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { THEME_IDS, createInitialUiModelState } from "@lyonbrown/ui-model";
 
-import { renderFrame } from "../src/surface.ts";
-import { THEMES } from "../src/themes.ts";
-import { runtimeSnapshot } from "./support/runtime.ts";
+import { renderFrame } from "@lyonbrown/agent-cli/internal/surface";
+import { THEMES } from "@lyonbrown/agent-cli/internal/themes";
+import { runtimeSnapshot } from "@lyonbrown/agent-cli/test/support/runtime";
 
 describe("TUI surface", () => {
   it("defines the accepted semantic tokens for all six themes with hearth-teal as default", () => {

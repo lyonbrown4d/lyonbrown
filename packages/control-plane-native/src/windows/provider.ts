@@ -1,7 +1,7 @@
 import type { PlatformControlPlaneSecurity } from "@lyonbrown/local-control-plane/native-adapter";
-import { capture } from "../result.ts";
-import { openSecureDirectory } from "./directory.ts";
-import { workspaceIdentity } from "./identity.ts";
+import { capture } from "@lyonbrown/control-plane-native/internal/result";
+import { openSecureDirectory } from "@lyonbrown/control-plane-native/internal/windows/directory";
+import { workspaceIdentity } from "@lyonbrown/control-plane-native/internal/windows/identity";
 
 export function createWindowsSecurity(): PlatformControlPlaneSecurity {
   return {

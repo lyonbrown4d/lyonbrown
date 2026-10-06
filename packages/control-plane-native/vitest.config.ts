@@ -1,3 +1,4 @@
+import tsconfigPaths from "vite-tsconfig-paths";
 import { defineConfig } from "vitest/config";
 
 interface TestPlan {
@@ -22,6 +23,7 @@ export function testPlan(platform: NodeJS.Platform): TestPlan {
 const plan = testPlan(process.platform);
 
 export default defineConfig({
+  plugins: [tsconfigPaths()],
   test: {
     environment: "node",
     include: plan.include,

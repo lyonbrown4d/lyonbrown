@@ -5,13 +5,17 @@ import {
 } from "@lyonbrown/agent-domain";
 import type { KernelEvent } from "@lyonbrown/kernel-pi";
 
-import { RuntimeBackgroundTasks } from "./background-tasks.ts";
-import { runtimeError } from "./errors.ts";
-import type { RuntimeEventWriter } from "./event-writer.ts";
-import { mapKernelEvent } from "./kernel-events.ts";
-import * as runtimeHelpers from "./runtime-helpers.ts";
-import { LatestSnapshotFeed } from "./snapshot-feed.ts";
-import type { AgentRuntime, CreateAgentRuntimeOptions, RuntimeSnapshotFeed } from "./types.ts";
+import { RuntimeBackgroundTasks } from "@lyonbrown/agent-runtime/internal/background-tasks";
+import { runtimeError } from "@lyonbrown/agent-runtime/internal/errors";
+import type { RuntimeEventWriter } from "@lyonbrown/agent-runtime/internal/event-writer";
+import { mapKernelEvent } from "@lyonbrown/agent-runtime/internal/kernel-events";
+import * as runtimeHelpers from "@lyonbrown/agent-runtime/internal/runtime-helpers";
+import { LatestSnapshotFeed } from "@lyonbrown/agent-runtime/internal/snapshot-feed";
+import type {
+  AgentRuntime,
+  CreateAgentRuntimeOptions,
+  RuntimeSnapshotFeed,
+} from "@lyonbrown/agent-runtime/internal/types";
 
 export class DefaultAgentRuntime implements AgentRuntime {
   readonly #kernel: ReturnType<CreateAgentRuntimeOptions["createKernelSession"]>;

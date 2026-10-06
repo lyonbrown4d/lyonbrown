@@ -5,9 +5,12 @@ import {
   inspectWorkspaceManifests,
   validateFrozenLockfile,
   type PnpmRunner,
-} from "./preflight-workspace.ts";
+} from "@lyonbrown/workspace/internal/preflight-workspace";
 
-export { FROZEN_LOCKFILE_ARGS, type PnpmRunner } from "./preflight-workspace.ts";
+export {
+  FROZEN_LOCKFILE_ARGS,
+  type PnpmRunner,
+} from "@lyonbrown/workspace/internal/preflight-workspace";
 
 export const NODE_VERSION = "24.15.0";
 export const PNPM_VERSION = "10.33.4";

@@ -9,16 +9,16 @@ export {
   RevisionConflictError,
   RevisionExhaustedError,
   StorageBusyError,
-} from "./errors.ts";
+} from "@lyonbrown/event-store/internal/errors";
 export {
   MAX_EVENT_PAYLOAD_BYTES,
   MAX_PAYLOAD_DEPTH,
   MAX_PAYLOAD_NODES,
   decodeEventPayload,
   encodeEventPayload,
-} from "./codec.ts";
-export { recoverToolCalls } from "./recovery.ts";
-export { openEventStore } from "./store.ts";
+} from "@lyonbrown/event-store/internal/codec";
+export { recoverToolCalls } from "@lyonbrown/event-store/internal/recovery";
+export { openEventStore } from "@lyonbrown/event-store/internal/store";
 export type {
   EventStore,
   EventToAppend,
@@ -31,4 +31,4 @@ export type {
   SessionMetadata,
   StoredEvent,
   StoreDiagnostics,
-} from "./types.ts";
+} from "@lyonbrown/event-store/internal/types";

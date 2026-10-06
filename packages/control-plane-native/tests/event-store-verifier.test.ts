@@ -5,9 +5,9 @@ import { join } from "node:path";
 import { openEventStore, PathSecurityError } from "@lyonbrown/event-store";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createNativeEventStorePathVerifier } from "../src/index.ts";
-import { api } from "../src/windows/api.ts";
-import { ERRORS } from "../src/windows/constants.ts";
+import { createNativeEventStorePathVerifier } from "@lyonbrown/control-plane-native/internal/index";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import { ERRORS } from "@lyonbrown/control-plane-native/internal/windows/constants";
 
 const temporaryDirectories: string[] = [];
 

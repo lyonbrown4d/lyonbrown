@@ -4,14 +4,26 @@ import type {
   PlatformResult,
   SecureDirectoryHandle,
 } from "@lyonbrown/local-control-plane/native-adapter";
-import { api } from "./api.ts";
-import { ERRORS } from "./constants.ts";
-import { atomicReplace, readPrivateFile, tryLock } from "./files.ts";
-import { failureForLastError, openDirectory, validateObjectType } from "./handles.ts";
-import type { OwnedHandle } from "./handles.ts";
-import { canonicalPath } from "./identity.ts";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.ts";
-import { capture, NativeFailure } from "../result.ts";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import { ERRORS } from "@lyonbrown/control-plane-native/internal/windows/constants";
+import {
+  atomicReplace,
+  readPrivateFile,
+  tryLock,
+} from "@lyonbrown/control-plane-native/internal/windows/files";
+import {
+  failureForLastError,
+  openDirectory,
+  validateObjectType,
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
+import type { OwnedHandle } from "@lyonbrown/control-plane-native/internal/windows/handles";
+import { canonicalPath } from "@lyonbrown/control-plane-native/internal/windows/identity";
+import {
+  currentUser,
+  verifyPrivateObject,
+  withPrivateSecurity,
+} from "@lyonbrown/control-plane-native/internal/windows/security";
+import { capture, NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 function closeAll(handles: readonly OwnedHandle[]): NativeFailure | undefined {
   let failure: NativeFailure | undefined;

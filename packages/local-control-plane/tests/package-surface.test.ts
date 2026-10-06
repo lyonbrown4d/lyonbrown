@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
-import * as publicApi from "../src/index.ts";
-import * as nativeAdapterApi from "../src/native-adapter.ts";
+import * as publicApi from "@lyonbrown/local-control-plane/internal/index";
+import * as nativeAdapterApi from "@lyonbrown/local-control-plane/internal/native-adapter";
 
 const execute = promisify(execFile);
 const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -71,6 +71,8 @@ describe("package surface", () => {
     };
     expect(Object.keys(packageJson.exports)).toEqual([".", "./native-adapter"]);
     expect(packageJson.files).toEqual(["dist/**/*.js", "dist/**/*.d.ts", "README.md"]);
-    expect(packageJson.scripts.build).toBe("pnpm clean && tsc -p tsconfig.build.json");
+    expect(packageJson.scripts.build).toBe(
+      "pnpm clean && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json --resolve-full-paths --resolve-full-extension .js",
+    );
   }, 20_000);
 });

@@ -1,4 +1,4 @@
-import { CorruptEventStoreError } from "./errors.ts";
+import { CorruptEventStoreError } from "@lyonbrown/event-store/internal/errors";
 
 export const SCHEMA_VERSION = 2;
 

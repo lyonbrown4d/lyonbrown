@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   mapCancelDownloadResult,
   mapStartDownloadResult,
-} from "../node-src/model-download-results.ts";
+} from "@lyonbrown/agentd/internal/model-download-results";
 
 describe("model download command result mapping", () => {
   it.each<StartModelDownloadResult>([

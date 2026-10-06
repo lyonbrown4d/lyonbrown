@@ -5,9 +5,12 @@ import { openEventStore } from "@lyonbrown/event-store";
 import { ModelSetupPhase } from "@lyonbrown/protocol";
 import { describe, expect, it, vi } from "vitest";
 
-import { createModelAwareRuntime } from "../node-src/model-aware-runtime.ts";
-import { MAX_SESSION_STEERING_PER_TURN, MAX_SESSION_TURNS } from "../node-src/runtime-limits.ts";
-import { FakeAgentRuntime, stateFrom } from "./runtime-adapter-support.ts";
+import { createModelAwareRuntime } from "@lyonbrown/agentd/internal/model-aware-runtime";
+import {
+  MAX_SESSION_STEERING_PER_TURN,
+  MAX_SESSION_TURNS,
+} from "@lyonbrown/agentd/internal/runtime-limits";
+import { FakeAgentRuntime, stateFrom } from "@lyonbrown/agentd/test/runtime-adapter-support";
 
 const SESSION_ID = "e".repeat(64);
 

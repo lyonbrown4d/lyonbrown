@@ -1,4 +1,4 @@
-import type { LocalModelLease } from "../types.ts";
+import type { LocalModelLease } from "@lyonbrown/local-model/internal/types";
 
 export interface ModelPreset {
   readonly id: string;

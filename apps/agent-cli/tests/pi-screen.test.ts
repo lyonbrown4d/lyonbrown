@@ -2,9 +2,9 @@ import type { Terminal } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import { createInitialUiModelState, reduceUiModel, type UiModelState } from "@lyonbrown/ui-model";
 
-import { createPiScreen } from "../src/pi-screen.ts";
-import { createInitialFrame, type AgentTuiFrame } from "../src/controller.ts";
-import { runtimeSnapshot } from "./support/runtime.ts";
+import { createPiScreen } from "@lyonbrown/agent-cli/internal/pi-screen";
+import { createInitialFrame, type AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
+import { runtimeSnapshot } from "@lyonbrown/agent-cli/test/support/runtime";
 
 describe("Pi TUI screen", () => {
   it("uses TuiMainScreen focus propagation and preserves Chinese IME input", async () => {

@@ -1,11 +1,17 @@
-import { createDiscoveryClient, type DiscoveryClient } from "./discovery-store.ts";
-import { controlPlaneError, type ControlPlaneOperation } from "./errors.ts";
+import {
+  createDiscoveryClient,
+  type DiscoveryClient,
+} from "@lyonbrown/local-control-plane/internal/discovery-store";
+import {
+  controlPlaneError,
+  type ControlPlaneOperation,
+} from "@lyonbrown/local-control-plane/internal/errors";
 import {
   invokePlatform,
   resolveNativeControlPlaneProvider,
   type NativeControlPlaneProvider,
   type SecureDirectoryHandle,
-} from "./platform-security.ts";
+} from "@lyonbrown/local-control-plane/internal/platform-security";
 
 declare const secureRunDirectoryBrand: unique symbol;
 const RUN_DIRECTORY_CONSTRUCTION_TOKEN = Object.freeze({});

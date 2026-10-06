@@ -1,5 +1,9 @@
-export { DEFAULT_LOCALE, DEFAULT_THEME_ID, createInitialUiModelState } from "./initial-state.ts";
-export { reduceUiModel } from "./reducer.ts";
+export {
+  DEFAULT_LOCALE,
+  DEFAULT_THEME_ID,
+  createInitialUiModelState,
+} from "@lyonbrown/ui-model/internal/initial-state";
+export { reduceUiModel } from "@lyonbrown/ui-model/internal/reducer";
 export {
   getApprovalDisposition,
   getChatSubmitAvailability,
@@ -9,8 +13,8 @@ export {
   getModelSetupCancellation,
   getSendableApprovalDenyIntent,
   getSendableModelDownloadIntent,
-} from "./selectors.ts";
-export { THEME_IDS } from "./types.ts";
+} from "@lyonbrown/ui-model/internal/selectors";
+export { THEME_IDS } from "@lyonbrown/ui-model/internal/types";
 export type {
   ActivityItemDto,
   ActivitySelection,
@@ -39,4 +43,4 @@ export type {
   ThemeId,
   UiModelAction,
   UiModelState,
-} from "./types.ts";
+} from "@lyonbrown/ui-model/internal/types";

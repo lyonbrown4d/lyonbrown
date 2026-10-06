@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { createNativeControlPlaneProvider } from "../src/native-adapter.ts";
+import { createNativeControlPlaneProvider } from "@lyonbrown/local-control-plane/internal/native-adapter";
 import type {
   KernelFileLock,
   PlatformControlPlaneSecurity,
@@ -7,7 +7,7 @@ import type {
   ResolvedWorkspaceIdentity,
   SecureDirectoryHandle,
   WorkspaceIdentity,
-} from "../src/platform-security.ts";
+} from "@lyonbrown/local-control-plane/internal/platform-security";
 
 interface DirectoryState {
   readonly files: Map<string, Uint8Array>;

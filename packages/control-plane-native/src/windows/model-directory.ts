@@ -1,17 +1,30 @@
 import { win32 } from "node:path";
 
-import { api } from "./api.ts";
-import { ACCESS, CREATION, ERRORS, FLAGS, SHARE } from "./constants.ts";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import {
+  ACCESS,
+  CREATION,
+  ERRORS,
+  FLAGS,
+  SHARE,
+} from "@lyonbrown/control-plane-native/internal/windows/constants";
 import {
   createFile,
   failureForLastError,
   openDirectory,
   validateObjectType,
   type OwnedHandle,
-} from "./handles.ts";
-import { canonicalPath, fileIdentity } from "./identity.ts";
-import { currentUser, verifyPrivateObject, withPrivateSecurity } from "./security.ts";
-import { NativeFailure } from "../result.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/handles";
+import {
+  canonicalPath,
+  fileIdentity,
+} from "@lyonbrown/control-plane-native/internal/windows/identity";
+import {
+  currentUser,
+  verifyPrivateObject,
+  withPrivateSecurity,
+} from "@lyonbrown/control-plane-native/internal/windows/security";
+import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 function wellFormed(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {

@@ -2,7 +2,7 @@ import { openEventStore } from "@lyonbrown/event-store";
 import type { LocalModelLease } from "@lyonbrown/local-model";
 import { describe, expect, it, vi } from "vitest";
 
-import { createProductionRuntime } from "../node-src/production-kernel.ts";
+import { createProductionRuntime } from "@lyonbrown/agentd/internal/production-kernel";
 
 const OLD_SESSION = "old-session";
 

@@ -1,15 +1,22 @@
 import { types } from "node:util";
 
-import { kernelError } from "./errors.ts";
-import { inspectOwnDataProperties, type InspectionFailure } from "./inspection.ts";
+import { kernelError } from "@lyonbrown/kernel-pi/internal/errors";
+import {
+  inspectOwnDataProperties,
+  type InspectionFailure,
+} from "@lyonbrown/kernel-pi/internal/inspection";
 import {
   assertByteLimit,
   limitsFromBudget,
   sanitizeBoundedText,
   sanitizeJson,
   type SanitizationLimits,
-} from "./sanitization.ts";
-import type { KernelJsonValue, KernelToolDefinition, PiKernelSessionOptions } from "./types.ts";
+} from "@lyonbrown/kernel-pi/internal/sanitization";
+import type {
+  KernelJsonValue,
+  KernelToolDefinition,
+  PiKernelSessionOptions,
+} from "@lyonbrown/kernel-pi/internal/types";
 
 export function normalizeTools(
   tools: readonly KernelToolDefinition[],

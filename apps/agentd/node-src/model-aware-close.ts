@@ -2,9 +2,9 @@ import type { AgentRuntime, RuntimeSnapshotFeed } from "@lyonbrown/agent-runtime
 import type { EventStore } from "@lyonbrown/event-store";
 import type { LocalModelLease, LocalModelService } from "@lyonbrown/local-model";
 
-import { collectCleanupFailure } from "./cleanup.ts";
-import type { RuntimeFeed } from "./latest-runtime-feed.ts";
-import type { ModelActivationController } from "./model-activation.ts";
+import { collectCleanupFailure } from "@lyonbrown/agentd/internal/cleanup";
+import type { RuntimeFeed } from "@lyonbrown/agentd/internal/latest-runtime-feed";
+import type { ModelActivationController } from "@lyonbrown/agentd/internal/model-activation";
 
 export async function closeModelAwareResources(options: {
   readonly unsubscribeModel: () => void;

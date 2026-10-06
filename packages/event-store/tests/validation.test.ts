@@ -5,7 +5,7 @@ import {
   PayloadValidationError,
   encodeEventPayload,
   openEventStore,
-} from "../src/index.ts";
+} from "@lyonbrown/event-store/internal/index";
 
 describe("event-store input budgets", () => {
   it.each([

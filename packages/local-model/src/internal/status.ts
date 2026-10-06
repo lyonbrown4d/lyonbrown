@@ -1,6 +1,9 @@
-import { descriptorFor } from "../public-model.ts";
-import type { LocalModelSelectionReason, LocalModelStatus } from "../types.ts";
-import type { ModelPreset } from "./contracts.ts";
+import { descriptorFor } from "@lyonbrown/local-model/internal/public-model";
+import type {
+  LocalModelSelectionReason,
+  LocalModelStatus,
+} from "@lyonbrown/local-model/internal/types";
+import type { ModelPreset } from "@lyonbrown/local-model/internal/internal/contracts";
 
 export const statusFor = (
   preset: ModelPreset,

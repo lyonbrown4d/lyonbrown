@@ -9,8 +9,8 @@ import {
   createCommandReceipt,
   validateCommandMetadata,
   validateCommandReceipt,
-} from "../src/index.ts";
-import { captureError } from "./test-error.ts";
+} from "@lyonbrown/agent-domain/internal/index";
+import { captureError } from "@lyonbrown/agent-domain/test/test-error";
 
 describe("command contracts", () => {
   const commandId = asCommandId("command-01");

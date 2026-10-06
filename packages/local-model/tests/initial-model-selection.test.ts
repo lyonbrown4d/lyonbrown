@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { MODEL_CATALOG } from "../src/internal/catalog.ts";
+import { MODEL_CATALOG } from "@lyonbrown/local-model/internal/internal/catalog";
 import {
   createDeterministicSelectionOptions,
   selectInitialModel,
-} from "../src/internal/initial-model-selection.ts";
-import { Deferred, FakeModelIo } from "./support/fakes.ts";
+} from "@lyonbrown/local-model/internal/internal/initial-model-selection";
+import { Deferred, FakeModelIo } from "@lyonbrown/local-model/test/support/fakes";
 
 describe("initial model selection boundaries", () => {
   it("rejects an empty trusted catalog without inspecting storage", async () => {

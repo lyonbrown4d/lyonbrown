@@ -14,7 +14,9 @@ interface ModelStoragePlatformModule {
 
 describe("native model storage platform contract", () => {
   it("does not load Windows DLLs on POSIX and fails closed", async () => {
-    const module = (await import("../src/platform.ts")) as ModelStoragePlatformModule;
+    const module = (await import(
+      "@lyonbrown/control-plane-native/internal/platform"
+    )) as ModelStoragePlatformModule;
     const loadWindows = vi.fn(() =>
       Promise.reject(new Error("Windows DLLs must not load on POSIX")),
     );
@@ -35,7 +37,9 @@ describe("native model storage platform contract", () => {
   });
 
   it("selects the supplied Windows model storage factory", async () => {
-    const module = (await import("../src/platform.ts")) as ModelStoragePlatformModule;
+    const module = (await import(
+      "@lyonbrown/control-plane-native/internal/platform"
+    )) as ModelStoragePlatformModule;
     const capability = {} as NativeModelStorageCapability;
     const createWindowsModelStorageCapability = vi.fn(() => capability);
     const loadWindows = vi.fn(() => Promise.resolve({ createWindowsModelStorageCapability }));

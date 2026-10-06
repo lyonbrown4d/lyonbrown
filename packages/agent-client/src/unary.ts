@@ -1,6 +1,11 @@
 import { type Metadata, type ServiceError } from "@grpc/grpc-js";
 
-import { TransportFailure, deadline, publicError, type TransportState } from "./transport.ts";
+import {
+  TransportFailure,
+  deadline,
+  publicError,
+  type TransportState,
+} from "@lyonbrown/agent-client/internal/transport";
 
 export interface CapturedTransport {
   readonly state: TransportState;

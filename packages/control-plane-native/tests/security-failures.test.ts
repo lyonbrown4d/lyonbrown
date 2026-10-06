@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "../src/windows/api.ts";
-import { SECURITY } from "../src/windows/constants.ts";
+import { api } from "@lyonbrown/control-plane-native/internal/windows/api";
+import { SECURITY } from "@lyonbrown/control-plane-native/internal/windows/constants";
 import {
   currentUser,
   validateAccessAce,
   verifyPrivateObject,
   withPrivateSecurity,
-} from "../src/windows/security.ts";
+} from "@lyonbrown/control-plane-native/internal/windows/security";
 
 const user = { sid: new Uint8Array([1, 2, 3]), sidString: "S-1-5-18" };
 

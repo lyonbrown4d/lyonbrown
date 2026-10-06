@@ -1,5 +1,5 @@
-import { launchError } from "./errors.ts";
-import type { Clock, Sleeper } from "./types.ts";
+import { launchError } from "@lyonbrown/agent-launch/internal/errors";
+import type { Clock, Sleeper } from "@lyonbrown/agent-launch/internal/types";
 
 export type TimeoutCode = "STARTUP_TIMEOUT" | "READINESS_TIMEOUT";
 export type DiscardValue<T> = (value: T, signal: AbortSignal) => Promise<void>;

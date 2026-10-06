@@ -4,9 +4,9 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
-import { downloadModelFile } from "../src/internal/model-download.ts";
-import { TestNativeModelStorage } from "./support/native-storage.ts";
+import { DEFAULT_PRESET } from "@lyonbrown/local-model/internal/internal/catalog";
+import { downloadModelFile } from "@lyonbrown/local-model/internal/internal/model-download";
+import { TestNativeModelStorage } from "@lyonbrown/local-model/test/support/native-storage";
 
 const temporaryDirectories: string[] = [];
 
@@ -27,7 +27,7 @@ describe("streaming model download", () => {
       "fetch",
       vi.fn(() => Promise.resolve(responseFromChunks([content], content.byteLength.toString()))),
     );
-    const { NodeModelIo } = await import("../src/internal/node-model-io.ts");
+    const { NodeModelIo } = await import("@lyonbrown/local-model/internal/internal/node-model-io");
     const io = new NodeModelIo(new TestNativeModelStorage(root));
     const preset = {
       ...DEFAULT_PRESET,

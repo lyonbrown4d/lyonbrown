@@ -1,4 +1,4 @@
-import type { SmokeSnapshot } from "./smoke-real-gguf-flow.ts";
+import type { SmokeSnapshot } from "@lyonbrown/workspace/internal/smoke-real-gguf-flow";
 
 const PUBLIC_FAILURE_CODE = /^[A-Za-z0-9_-]{1,64}$/u;
 

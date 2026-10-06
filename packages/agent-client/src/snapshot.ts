@@ -1,22 +1,22 @@
 import { PROTOCOL_VERSION, type RuntimeEvent, type RuntimeSnapshot } from "@lyonbrown/protocol";
 
-import { clientError } from "./errors.ts";
-import { mapApproval, mapTurn } from "./snapshot-activity.ts";
+import { clientError } from "@lyonbrown/agent-client/internal/errors";
+import { mapApproval, mapTurn } from "@lyonbrown/agent-client/internal/snapshot-activity";
 import {
   mapCatalog,
   mapModelSetup,
   mapPolicy,
   mapRouteSummary,
   mapSelection,
-} from "./snapshot-model.ts";
-import { runtimePhase } from "./snapshot-scalars.ts";
-import type { RuntimeEventDto, RuntimeSnapshotDto } from "./types.ts";
+} from "@lyonbrown/agent-client/internal/snapshot-model";
+import { runtimePhase } from "@lyonbrown/agent-client/internal/snapshot-scalars";
+import type { RuntimeEventDto, RuntimeSnapshotDto } from "@lyonbrown/agent-client/internal/types";
 import {
   protocolId,
   protocolText,
   requireNonNegativeRevision,
   requiredField,
-} from "./validation.ts";
+} from "@lyonbrown/agent-client/internal/validation";
 
 export function mapSnapshot(wire: RuntimeSnapshot): RuntimeSnapshotDto {
   if (wire.protocolVersion !== PROTOCOL_VERSION) {

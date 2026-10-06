@@ -1,4 +1,4 @@
-import type { UiModelState } from "./types.ts";
+import type { UiModelState } from "@lyonbrown/ui-model/internal/types";
 
 export const DEFAULT_LOCALE = "en-US" as const;
 export const DEFAULT_THEME_ID = "hearth-teal" as const;

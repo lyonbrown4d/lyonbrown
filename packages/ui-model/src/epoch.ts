@@ -1,4 +1,4 @@
-import type { UiModelState } from "./types.ts";
+import type { UiModelState } from "@lyonbrown/ui-model/internal/types";
 
 export function getFreshCurrentServerInstanceId(state: UiModelState): string | null {
   const { remote } = state;

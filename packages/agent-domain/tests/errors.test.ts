@@ -1,6 +1,10 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { DomainError, domainError, type DomainErrorCode } from "../src/index.ts";
+import {
+  DomainError,
+  domainError,
+  type DomainErrorCode,
+} from "@lyonbrown/agent-domain/internal/index";
 
 describe("typed domain errors", () => {
   it("supports every transport-independent error code", () => {

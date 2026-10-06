@@ -7,7 +7,7 @@ import {
   MAX_SESSION_STEERING_PER_TURN,
   MAX_SESSION_TURNS,
   MAX_SESSION_USER_BYTES,
-} from "./runtime-limits.ts";
+} from "@lyonbrown/agentd/internal/runtime-limits";
 
 function textBytes(text: string): number {
   return Buffer.byteLength(text, "utf8");

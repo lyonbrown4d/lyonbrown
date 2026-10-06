@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { LocalModelInferenceEvent, LocalModelInferenceRequest } from "../src/index.ts";
-import { InferenceEventChannel } from "../src/internal/inference-channel.ts";
-import { validateInferenceRequest } from "../src/internal/inference-request.ts";
+import type {
+  LocalModelInferenceEvent,
+  LocalModelInferenceRequest,
+} from "@lyonbrown/local-model/internal/index";
+import { InferenceEventChannel } from "@lyonbrown/local-model/internal/internal/inference-channel";
+import { validateInferenceRequest } from "@lyonbrown/local-model/internal/internal/inference-request";
 
 const request = (
   overrides: Partial<LocalModelInferenceRequest> = {},

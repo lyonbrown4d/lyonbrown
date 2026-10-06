@@ -7,8 +7,7 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
-    "types": ["node"],
-    "paths": {}
+    "types": ["node"]
   },
   "include": ["node-src/**/*.ts"],
   "exclude": ["node-tests/**/*.ts", "dist"]

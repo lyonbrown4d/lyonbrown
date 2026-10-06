@@ -5,7 +5,7 @@ import {
   RUNTIME_JSON_MAX_TOTAL_STRING_BYTES,
   asSessionId,
   parseAgentRuntimeEvent,
-} from "../src/index.ts";
+} from "@lyonbrown/agent-domain/internal/index";
 
 describe("runtime event boundary", () => {
   test("accepts a plain domain event and freezes nested values", () => {

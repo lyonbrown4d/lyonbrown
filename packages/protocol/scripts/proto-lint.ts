@@ -1,4 +1,4 @@
-import { protocolPackageRoot, runBufWithZx } from "./generation.ts";
+import { protocolPackageRoot, runBufWithZx } from "@lyonbrown/protocol/script/generation";
 
 await runBufWithZx({
   args: ["lint"],

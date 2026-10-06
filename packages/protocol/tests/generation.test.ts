@@ -9,7 +9,7 @@ import {
   type BufCommandError,
   type BufCommand,
   type BufCommandRunner,
-} from "../scripts/generation.ts";
+} from "@lyonbrown/protocol/script/generation";
 
 const temporaryDirectories: string[] = [];
 

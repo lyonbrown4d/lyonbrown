@@ -7,8 +7,27 @@ import { describe, expect, test } from "vitest";
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const protocolGeneratedRoot = resolve(repositoryRoot, "packages/protocol/src/generated");
+const relativeModuleSpecifier = /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["'](\.{1,2}\/[^"']+)["']/gu;
+const privateWorkspaceSpecifier =
+  /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["'](@lyonbrown\/([^/"']+)\/(?:internal|test|script|generated)\/[^"']+)["']/gu;
 const relativeJavaScriptSpecifier =
   /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["'](\.{1,2}\/[^"']+[.](?:c|m)?js)["']/gu;
+const workspaceRoots = new Map<string, string>([
+  ["workspace", "scripts/"],
+  ["agent-cli", "apps/agent-cli/"],
+  ["agentd", "apps/agentd/"],
+  ["agent-client", "packages/agent-client/"],
+  ["agent-domain", "packages/agent-domain/"],
+  ["agent-launch", "packages/agent-launch/"],
+  ["agent-runtime", "packages/agent-runtime/"],
+  ["control-plane-native", "packages/control-plane-native/"],
+  ["event-store", "packages/event-store/"],
+  ["kernel-pi", "packages/kernel-pi/"],
+  ["local-control-plane", "packages/local-control-plane/"],
+  ["local-model", "packages/local-model/"],
+  ["protocol", "packages/protocol/"],
+  ["ui-model", "packages/ui-model/"],
+]);
 
 function listTypeScriptFiles(directory: string): string[] {
   if (!existsSync(directory)) {
@@ -34,23 +53,55 @@ function findJavaScriptSpecifiers(paths: readonly string[]): string[] {
   });
 }
 
+function findRelativeModuleSpecifiers(paths: readonly string[]): string[] {
+  return paths.flatMap((path) => {
+    const source = readFileSync(path, "utf8");
+    return [...source.matchAll(relativeModuleSpecifier)].map(
+      (match) =>
+        `${path.slice(repositoryRoot.length + 1)}: ${match[1] ?? "unknown relative module specifier"}`,
+    );
+  });
+}
+
+function findPrivateAliasEscapes(paths: readonly string[]): string[] {
+  return paths.flatMap((path) => {
+    const repositoryPath = path.slice(repositoryRoot.length + 1).replaceAll("\\", "/");
+    const source = readFileSync(path, "utf8");
+    return [...source.matchAll(privateWorkspaceSpecifier)].flatMap((match) => {
+      const specifier = match[1] ?? "unknown private workspace specifier";
+      const workspaceRoot = workspaceRoots.get(match[2] ?? "");
+      return workspaceRoot !== undefined && repositoryPath.startsWith(workspaceRoot)
+        ? []
+        : [`${repositoryPath}: ${specifier}`];
+    });
+  });
+}
+
+function trackedTypeScriptFiles(): string[] {
+  return execFileSync(
+    "git",
+    ["ls-files", "--cached", "--others", "--exclude-standard", "--", "*.ts", "*.mts", "*.cts"],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    },
+  )
+    .split(/\r?\n/u)
+    .filter((path) => path.length > 0)
+    .map((path) => resolve(repositoryRoot, path))
+    .filter((path) => existsSync(path));
+}
+
 describe("TypeScript import policy", () => {
-  test("uses TypeScript extensions for relative TypeScript source imports", () => {
-    const trackedTypeScript = execFileSync(
-      "git",
-      ["ls-files", "--cached", "--others", "--exclude-standard", "--", "*.ts", "*.mts", "*.cts"],
-      {
-        cwd: repositoryRoot,
-        encoding: "utf8",
-      },
-    )
-      .split(/\r?\n/u)
-      .filter((path) => path.length > 0)
-      .map((path) => resolve(repositoryRoot, path))
-      .filter((path) => existsSync(path));
-    const violations = findJavaScriptSpecifiers(trackedTypeScript);
+  test("rejects relative module specifiers in tracked TypeScript sources", () => {
+    const trackedTypeScript = trackedTypeScriptFiles();
+    const violations = findRelativeModuleSpecifiers(trackedTypeScript);
 
     expect(violations).toEqual([]);
+  });
+
+  test("keeps private aliases inside their owning workspace", () => {
+    expect(findPrivateAliasEscapes(trackedTypeScriptFiles())).toEqual([]);
   });
 
   test("generates ignored TypeScript sources with TypeScript import extensions", () => {

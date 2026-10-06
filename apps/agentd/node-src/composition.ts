@@ -1,7 +1,7 @@
 import type { NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
 
-import { startProductionAgentd as startProductionAgentdInternal } from "./bootstrap.ts";
-import { createProductionAgentdRuntime as createProductionAgentdRuntimeInternal } from "./production-runtime.ts";
+import { startProductionAgentd as startProductionAgentdInternal } from "@lyonbrown/agentd/internal/bootstrap";
+import { createProductionAgentdRuntime as createProductionAgentdRuntimeInternal } from "@lyonbrown/agentd/internal/production-runtime";
 
 export interface StartProductionAgentdOptions {
   readonly workspace: string;

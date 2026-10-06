@@ -1,7 +1,11 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 
-import { asRevision, incrementRevision, type Revision } from "../src/index.ts";
-import { captureError } from "./test-error.ts";
+import {
+  asRevision,
+  incrementRevision,
+  type Revision,
+} from "@lyonbrown/agent-domain/internal/index";
+import { captureError } from "@lyonbrown/agent-domain/test/test-error";
 
 describe("uint64 revisions", () => {
   it("keeps revisions as bigint beyond Number.MAX_SAFE_INTEGER", () => {

@@ -1,6 +1,6 @@
 import { Key, matchesKey } from "@earendil-works/pi-tui";
 
-import type { AgentTuiFrame } from "./controller.ts";
+import type { AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
 
 export type SetupKeyIntent = "download" | "retry" | "cancel" | "exit" | "blocked";
 

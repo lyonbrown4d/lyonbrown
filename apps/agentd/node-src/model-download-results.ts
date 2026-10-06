@@ -1,6 +1,6 @@
 import type { CancelModelDownloadResult, StartModelDownloadResult } from "@lyonbrown/local-model";
 
-import type { RuntimeFailure, RuntimeResult } from "./runtime-host.ts";
+import type { RuntimeFailure, RuntimeResult } from "@lyonbrown/agentd/internal/runtime-host";
 
 const OK = Object.freeze({ ok: true }) as RuntimeResult;
 

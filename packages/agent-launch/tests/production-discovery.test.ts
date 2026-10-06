@@ -12,7 +12,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   createProductionAgentClientFactory,
   createProductionDiscoveryClient,
-} from "../src/production-discovery.ts";
+} from "@lyonbrown/agent-launch/internal/production-discovery";
 
 const WORKSPACE = process.platform === "win32" ? "C:\\workspace" : "/workspace";
 const CONFIGURATION = "production-discovery-test";

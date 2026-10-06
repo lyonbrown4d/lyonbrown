@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { PayloadValidationError, decodeEventPayload, encodeEventPayload } from "../src/index.ts";
+import {
+  PayloadValidationError,
+  decodeEventPayload,
+  encodeEventPayload,
+} from "@lyonbrown/event-store/internal/index";
 
 describe("event payload codec", () => {
   it("round-trips safe JSON without inheriting attacker-controlled prototypes", () => {

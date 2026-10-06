@@ -1,7 +1,7 @@
 import { types } from "node:util";
 
-import type { BudgetTracker } from "./budget.ts";
-import { kernelError } from "./errors.ts";
+import type { BudgetTracker } from "@lyonbrown/kernel-pi/internal/budget";
+import { kernelError } from "@lyonbrown/kernel-pi/internal/errors";
 
 const MODEL_EVENT_KEYS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["usage", new Set(["type", "usage"])],

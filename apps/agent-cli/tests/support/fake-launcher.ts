@@ -7,7 +7,7 @@ import type {
 } from "@lyonbrown/agent-client";
 import type { AgentLaunchConnection, AgentLauncher } from "@lyonbrown/agent-launch";
 
-import { runtimeSnapshot } from "./runtime.ts";
+import { runtimeSnapshot } from "@lyonbrown/agent-cli/test/support/runtime";
 
 export class FakeAgentClient implements AgentClient {
   public readonly commands: AgentCommand[] = [];

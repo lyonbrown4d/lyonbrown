@@ -10,7 +10,7 @@ import {
   requestMetadata,
   startTestServer,
   type TestServerState,
-} from "./server-test-support.ts";
+} from "@lyonbrown/agentd/test/server-test-support";
 
 describe("model download RPCs", () => {
   const states: TestServerState[] = [];

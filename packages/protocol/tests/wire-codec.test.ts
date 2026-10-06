@@ -10,7 +10,7 @@ import {
   ModelSelection,
   ModelSetupSnapshot,
   RuntimeEvent,
-} from "../src/index.ts";
+} from "@lyonbrown/protocol/internal/index";
 
 describe("generated wire contracts", () => {
   it("round-trips uint64 values beyond Number.MAX_SAFE_INTEGER as bigint", () => {

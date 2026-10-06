@@ -7,11 +7,11 @@ import type { LocalModelService } from "@lyonbrown/local-model";
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ModelAwareRuntime } from "../node-src/model-aware-runtime.ts";
+import type { ModelAwareRuntime } from "@lyonbrown/agentd/internal/model-aware-runtime";
 import {
   createProductionAgentdRuntime,
   type ProductionRuntimeDependencies,
-} from "../node-src/production-runtime.ts";
+} from "@lyonbrown/agentd/internal/production-runtime";
 
 const CONTEXT = {
   canonicalWorkspace: "C:\\workspace",

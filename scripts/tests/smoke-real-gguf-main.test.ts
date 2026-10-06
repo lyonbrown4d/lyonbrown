@@ -17,7 +17,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   return { ...original, mkdtemp: mocks.makeTemporaryRoot };
 });
 
-import { main } from "../smoke-real-gguf.ts";
+import { main } from "@lyonbrown/workspace/internal/smoke-real-gguf";
 
 describe("real GGUF smoke main guard", () => {
   afterEach(() => {

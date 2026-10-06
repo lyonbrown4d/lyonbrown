@@ -1,7 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { assertSmokeSnapshotHealthy } from "../smoke-real-gguf-assertions.ts";
-import { runRealGgufSmokeFlow, type SmokeSnapshot } from "../smoke-real-gguf-flow.ts";
+import { assertSmokeSnapshotHealthy } from "@lyonbrown/workspace/internal/smoke-real-gguf-assertions";
+import {
+  runRealGgufSmokeFlow,
+  type SmokeSnapshot,
+} from "@lyonbrown/workspace/internal/smoke-real-gguf-flow";
 
 describe("real GGUF failure fencing", () => {
   test("fails immediately when model setup reports a terminal failure", () => {

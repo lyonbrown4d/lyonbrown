@@ -1,5 +1,9 @@
-import { EventAlreadyExistsError } from "./errors.ts";
-import type { EventToAppend, ListSessionsOptions, LoadOptions } from "./types.ts";
+import { EventAlreadyExistsError } from "@lyonbrown/event-store/internal/errors";
+import type {
+  EventToAppend,
+  ListSessionsOptions,
+  LoadOptions,
+} from "@lyonbrown/event-store/internal/types";
 
 export const MAX_BATCH_EVENTS = 256;
 export const MAX_BATCH_PAYLOAD_BYTES = 4 * 1024 * 1024;

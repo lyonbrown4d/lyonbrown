@@ -1,7 +1,10 @@
-import { decodeEventPayload } from "./codec.ts";
-import { CorruptEventStoreError } from "./errors.ts";
-import type { SessionMetadata, StoredEvent } from "./types.ts";
-import { isCanonicalIsoTimestamp, MAX_SQLITE_INTEGER } from "./validation.ts";
+import { decodeEventPayload } from "@lyonbrown/event-store/internal/codec";
+import { CorruptEventStoreError } from "@lyonbrown/event-store/internal/errors";
+import type { SessionMetadata, StoredEvent } from "@lyonbrown/event-store/internal/types";
+import {
+  isCanonicalIsoTimestamp,
+  MAX_SQLITE_INTEGER,
+} from "@lyonbrown/event-store/internal/validation";
 
 const malformedUnicode = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u;
 const MAX_IDENTIFIER_BYTES = 128;

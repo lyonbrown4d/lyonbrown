@@ -3,27 +3,27 @@ import { isAbsolute } from "node:path";
 
 import Database from "better-sqlite3";
 
-import { appendEvents } from "./append.ts";
+import { appendEvents } from "@lyonbrown/event-store/internal/append";
 import {
   CorruptEventStoreError,
   EventStoreClosedError,
   EventStoreError,
   InvalidStoreOptionsError,
   PathSecurityError,
-} from "./errors.ts";
+} from "@lyonbrown/event-store/internal/errors";
 import {
   validateEventRows,
   validateSessionIntegrity,
   type RuntimeEventRow,
   type SessionIntegrityRow,
-} from "./integrity.ts";
+} from "@lyonbrown/event-store/internal/integrity";
 import {
   defaultPathVerifier,
   prepareDatabasePath,
   reverifyDatabasePath,
   verifyDatabaseSidecars,
-} from "./path-security.ts";
-import { migrate, SCHEMA_VERSION } from "./schema.ts";
+} from "@lyonbrown/event-store/internal/path-security";
+import { migrate, SCHEMA_VERSION } from "@lyonbrown/event-store/internal/schema";
 import type {
   EventStore,
   EventToAppend,
@@ -34,8 +34,8 @@ import type {
   SessionMetadata,
   StoredEvent,
   StoreDiagnostics,
-} from "./types.ts";
-import { validateList, validateLoad } from "./validation.ts";
+} from "@lyonbrown/event-store/internal/types";
+import { validateList, validateLoad } from "@lyonbrown/event-store/internal/validation";
 
 const SESSION_INTEGRITY_SELECT = `
   SELECT s.session_id, s.current_revision, s.created_at, s.updated_at,

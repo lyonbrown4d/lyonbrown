@@ -1,6 +1,6 @@
-import { createComposedLocalModelService } from "./internal/composed-service.ts";
-import type { NativeModelStorageCapability } from "./native-storage.ts";
-import type { LocalModelService } from "./types.ts";
+import { createComposedLocalModelService } from "@lyonbrown/local-model/internal/internal/composed-service";
+import type { NativeModelStorageCapability } from "@lyonbrown/local-model/internal/native-storage";
+import type { LocalModelService } from "@lyonbrown/local-model/internal/types";
 
 export type {
   NativeInstalledFileResult,
@@ -8,7 +8,7 @@ export type {
   NativeModelIdentity,
   NativeModelStagingFile,
   NativeModelStorageCapability,
-} from "./native-storage.ts";
+} from "@lyonbrown/local-model/internal/native-storage";
 
 export const createLocalModelService = (
   capability: NativeModelStorageCapability,

@@ -1,12 +1,20 @@
 import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
-import { createAgentLauncher } from "./launcher.ts";
+import { createAgentLauncher } from "@lyonbrown/agent-launch/internal/launcher";
 import {
   createProductionAgentClientFactory,
   createProductionDiscoveryClient,
-} from "./production-discovery.ts";
-import { NodeProcessSpawner, type AgentdProcessConfiguration } from "./production-spawner.ts";
-import type { AgentLauncher, Clock, CreateAgentLauncherOptions, Sleeper } from "./types.ts";
+} from "@lyonbrown/agent-launch/internal/production-discovery";
+import {
+  NodeProcessSpawner,
+  type AgentdProcessConfiguration,
+} from "@lyonbrown/agent-launch/internal/production-spawner";
+import type {
+  AgentLauncher,
+  Clock,
+  CreateAgentLauncherOptions,
+  Sleeper,
+} from "@lyonbrown/agent-launch/internal/types";
 
 export interface CreateProductionAgentLauncherOptions
   extends Omit<CreateAgentLauncherOptions, "ports"> {
@@ -53,4 +61,4 @@ export function createProductionAgentLauncher(
   });
 }
 
-export type { AgentdProcessConfiguration } from "./production-spawner.ts";
+export type { AgentdProcessConfiguration } from "@lyonbrown/agent-launch/internal/production-spawner";

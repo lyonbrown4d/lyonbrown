@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseCliArgs } from "../src/cli.ts";
+import { parseCliArgs } from "@lyonbrown/agent-cli/internal/cli";
 
 describe("agent command", () => {
   it("enters chat directly with no subcommand", () => {

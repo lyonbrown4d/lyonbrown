@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { projectRemoteSnapshot } from "../src/projection.ts";
-import { runtimeSnapshot } from "./support/runtime.ts";
+import { projectRemoteSnapshot } from "@lyonbrown/agent-cli/internal/projection";
+import { runtimeSnapshot } from "@lyonbrown/agent-cli/test/support/runtime";
 
 describe("runtime projection", () => {
   it("projects model download and activity state into the shared UI model", () => {

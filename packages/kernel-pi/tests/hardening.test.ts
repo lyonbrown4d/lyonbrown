@@ -1,13 +1,13 @@
 import { describe, expect, test, vi } from "vitest";
 
-import { BudgetTracker, validateBudget } from "../src/budget.ts";
-import { KernelRuntimeError } from "../src/errors.ts";
+import { BudgetTracker, validateBudget } from "@lyonbrown/kernel-pi/internal/budget";
+import { KernelRuntimeError } from "@lyonbrown/kernel-pi/internal/errors";
 import {
   createPiKernelSession,
   type KernelModelAdapter,
   type KernelToolDefinition,
   type PiKernelSessionOptions,
-} from "../src/index.ts";
+} from "@lyonbrown/kernel-pi/internal/index";
 import {
   assertByteLimit,
   isSecretReference,
@@ -15,8 +15,8 @@ import {
   sanitizeJson,
   sanitizeText,
   utf8Bytes,
-} from "../src/sanitization.ts";
-import { SecretRedactor } from "../src/redaction.ts";
+} from "@lyonbrown/kernel-pi/internal/sanitization";
+import { SecretRedactor } from "@lyonbrown/kernel-pi/internal/redaction";
 
 const valueLimits = {
   maxDepth: 2,

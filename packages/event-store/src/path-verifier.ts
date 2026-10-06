@@ -1,3 +1,3 @@
-export { PathSecurityError } from "./errors.ts";
-export { createPortablePathVerifier } from "./path-security.ts";
-export type { PathSecurityVerifier } from "./types.ts";
+export { PathSecurityError } from "@lyonbrown/event-store/internal/errors";
+export { createPortablePathVerifier } from "@lyonbrown/event-store/internal/path-security";
+export type { PathSecurityVerifier } from "@lyonbrown/event-store/internal/types";
