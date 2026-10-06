@@ -25,20 +25,13 @@ truncation, and true-color styling. `rxjs@7.8.2` projects Runtime Snapshots as
 Observables. Authenticated gRPC, daemon discovery, and daemon startup remain
 behind the `agent-client` and `agent-launch` boundaries.
 
-The real source-run terminal baseline captured on 2026-10-06 is shown below.
-It first renders `Connecting`, then reaches `Ready`. A missing model is reported
-as `required` and is not downloaded automatically:
-
-```text
-Lyonbrown  Ready
-────────────────────────────────────────────────────────────────────────────────
-Start typing while Lyonbrown connects in the background.
-Local model · required 0 MiB
-F2 language · Ctrl+P commands · Ctrl+Shift+A activity · Ctrl+C exit
-────────────────────────────────────────────────────────────────────────────────
-
-────────────────────────────────────────────────────────────────────────────────
-```
+The local PTY black-box run on 2026-10-06 confirmed that the interface appears
+before model transfer, reaches `Ready` after connection, and reports a missing
+model as `Required` until the user explicitly presses `D` or Enter. Current
+shortcuts are `F2` for locale, `Ctrl-P` for the command palette, `Ctrl-O` for
+the Activity Inspector, and `Ctrl-C` for cancellation or exit. See
+[Local real-scenario black-box validation](tui-black-box-validation.md) for the
+full scenarios, evidence, and remaining blocked cases.
 
 The PNGs below are accepted product-design renders that constrain the target
 interaction, information hierarchy, and themes. They are not acceptance
@@ -96,12 +89,16 @@ conversation surface, `?` opens help only when the Composer is empty, and
 `/help` opens the same help surface. `F2` remains global and changes locale
 without opening an overlay.
 
-Today `/language`, `/queue <message>`, `/help`, and `/quit` are executable.
-`/model`, `/theme`, `/sessions`, `/new`, `/resume`, and `/status` are visible
-but explicitly disabled until their real surfaces exist. `/queue` is likewise
-disabled inside the palette because activation cannot provide its required
-message; its slash form remains available. Unknown slash input is intercepted
-locally with a localized hint and is never submitted as a prompt.
+`/model`, `/theme`, `/language`, `/status`, `/help`, and `/quit` now open real
+surfaces or execute locally; the slash form `/queue <message>` is also
+available. `/sessions`, `/new`, and `/resume` remain explicitly unavailable.
+`/queue` stays disabled in the palette because activation cannot supply its
+required message, while its slash and `Alt-Enter` paths work. Model selection
+only sends a route advertised as selectable by the daemon. The production
+daemon does not yet implement that mutation, so its real acceptance case
+remains blocked rather than being represented as a success. Unknown slash
+input is intercepted locally with a localized hint and is never submitted as
+a prompt.
 
 Outside Model Setup, Escape closes only the top overlay or clears selection; it
 does not exit the TUI. Model Setup is the deliberate exception described below:
@@ -263,10 +260,12 @@ The control palette is a temporary overlay with keyboard-reachable Model, Theme,
 - language changes redraw client copy immediately without rewriting transcript content;
 - current, saved, and previewed values remain distinguishable.
 
-The complete palette, preview, and preference-persistence behavior above remains
-part of M12. The implemented language slice already selects a startup locale
-from the system and provides the global `F2` toggle plus local `/language`
-commands; it does not yet claim the complete persisted Language overlay.
+The complete palette, all-six-theme live preview, Escape restoration, explicit
+apply, and persisted theme/locale preferences are implemented. Locale starts
+from the system and is available through global `F2`, local `/language`
+commands, and the Language overlay. The Model section only presents routes the
+daemon advertises as selectable. Production support for changing the Session
+model remains a backend gap documented by the real-scenario validation.
 
 Theme and language are client preferences. A Session model pin is shared application state. Provider credentials and model-install state belong to Runtime/configuration state. They must not share an untyped settings map.
 
@@ -358,8 +357,9 @@ Values are ordered as `background / raised / active`, `primary / secondary / fai
 - Palette titles, search/empty/disabled states, help shortcuts, command labels,
   and unknown-command feedback are available in both locales. `F2` also works
   while Model Setup, Approval, or an overlay has input priority.
-- Persisting the selected locale and exposing it through the complete control
-  palette remain M12 work.
+- Locale and theme selections persist. A corrupt, oversized, or unwritable
+  preference file neither prevents TUI startup nor creates an unhandled Promise
+  rejection.
 - Slash commands, config keys, model IDs, provider IDs, shell commands, paths, and shortcuts retain stable English forms.
 - Titles, statuses, help, risk explanations, actions, and empty states are localized.
 - Existing user/model transcript content remains in its original language; only client chrome is re-localized.

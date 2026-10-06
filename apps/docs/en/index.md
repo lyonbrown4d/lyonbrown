@@ -10,6 +10,7 @@ Lyonbrown is a local-first, model-provider-neutral Agent Runtime. The Agent owns
 - [FluxDI Composition Root](architecture/composition-root.md)
 - [System One Decision Layer](architecture/system-one-decision-layer.md)
 - [TUI Visual and Interaction Baseline](design/tui-interaction-design.md)
+- [TUI Local Real-Scenario Black-Box Validation](design/tui-black-box-validation.md)
 - [Node.js / TypeScript + Pi Migration Plan](plans/node-typescript-pi-migration.md)
 - [Migration Progress](plans/migration-status.md)
 - [Configuration Reference](reference/configuration.md)

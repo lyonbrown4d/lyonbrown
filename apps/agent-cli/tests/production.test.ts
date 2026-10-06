@@ -34,7 +34,9 @@ describe("production TUI composition", () => {
   it("creates only the authenticated client launcher capability", () => {
     const dependencies = createProductionMainDependencies();
 
-    expect(dependencies).toEqual({ launcher: mocks.launcher });
+    expect(dependencies.launcher).toBe(mocks.launcher);
+    expect(typeof dependencies.preferenceStore.load).toBe("function");
+    expect(typeof dependencies.preferenceStore.save).toBe("function");
     expect(mocks.createProductionAgentLauncher).toHaveBeenCalledOnce();
     const options = mocks.createProductionAgentLauncher.mock.calls[0]?.[0];
     if (options === undefined) throw new Error("production launcher options were not captured");

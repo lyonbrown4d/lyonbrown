@@ -74,8 +74,7 @@ describe("TUI surface", () => {
               allowedActions: ["download"],
             },
           }),
-          commandPaletteOpen: false,
-          activityOpen: false,
+          overlay: null,
           notice: null,
         },
         100,
@@ -115,8 +114,7 @@ describe("TUI surface", () => {
           allowedActions: ["cancel" as const],
         },
       }),
-      commandPaletteOpen: false,
-      activityOpen: false,
+      overlay: null,
       notice: null,
     };
 
@@ -135,8 +133,7 @@ describe("TUI surface", () => {
       {
         ui: createInitialUiModelState(),
         snapshot: null,
-        commandPaletteOpen: false,
-        activityOpen: false,
+        overlay: null,
         notice: null,
       },
       29,
@@ -145,7 +142,42 @@ describe("TUI surface", () => {
     expect(rendered).toContain("Terminal too small");
   });
 
-  it("renders bilingual chrome, model progress, activity and approval", () => {
+  it("suspends content below eight rows and keeps model actions visible at 30x8", () => {
+    const base = {
+      ui: freshUi(),
+      snapshot: runtimeSnapshot({
+        phase: "model-setup-required" as const,
+        modelSetup: {
+          source: "managed-preset" as const,
+          phase: "required" as const,
+          managedModel: {
+            id: "qwen3-1.7b-q4_k_m",
+            displayName: null,
+            recommendationReason: "hardware-compatible" as const,
+            expectedDownloadBytes: 1_107_408_544n,
+            maxBytes: 2_147_483_648n,
+            minAvailableMemoryBytes: 4_294_967_296n,
+            sha256: "a".repeat(64),
+          },
+          operationId: null,
+          downloadedBytes: 0n,
+          totalBytes: null,
+          failure: null,
+          allowedActions: ["download" as const],
+        },
+      }),
+      overlay: null,
+      notice: null,
+    };
+
+    expect(renderFrame(base, 80, { height: 7 }).join("\n")).toContain("at least 8 rows");
+    const compact = renderFrame(base, 30, { height: 8 });
+    expect(compact.join("\n")).toContain("Enter/D");
+    expect(compact.join("\n")).toContain("Q/Esc");
+    expect(compact).toHaveLength(5);
+  });
+
+  it("renders bilingual chrome, model progress and approval", () => {
     const ui = createInitialUiModelState();
     const lines = renderFrame(
       {
@@ -185,8 +217,7 @@ describe("TUI surface", () => {
             approvedBy: null,
           },
         }),
-        commandPaletteOpen: true,
-        activityOpen: true,
+        overlay: null,
         notice: null,
       },
       100,
@@ -194,9 +225,7 @@ describe("TUI surface", () => {
 
     expect(lines).toContain("正在连接");
     expect(lines).toContain("50%");
-    expect(lines).toContain("需要批准");
-    expect(lines).toContain("命令面板");
-    expect(lines).toContain("活动检查器");
+    expect(lines).toContain("需要授权");
   });
 
   it("removes terminal control sequences from daemon-provided text", () => {
@@ -215,8 +244,7 @@ describe("TUI surface", () => {
             },
           ],
         }),
-        commandPaletteOpen: false,
-        activityOpen: false,
+        overlay: null,
         notice: null,
       },
       80,
@@ -244,8 +272,7 @@ describe("TUI surface", () => {
             allowedActions: [],
           },
         }),
-        commandPaletteOpen: false,
-        activityOpen: false,
+        overlay: null,
         notice: null,
       },
       80,

@@ -24,19 +24,10 @@ Lyonbrown TUI 采用接近成熟终端 Agent 的低界面感设计，但不复�
 true-color 样式。`rxjs@7.8.2` 负责 Runtime Snapshot 的 Observable 投影；认证
 gRPC、daemon 发现与启动仍由 `agent-client` 和 `agent-launch` 边界持有。
 
-2026-10-06 从源码启动后的真实终端基线如下。界面会先显示 `Connecting`，连接完成后
-进入 `Ready`；模型缺失时只显示 `required`，不会自动下载：
-
-```text
-Lyonbrown  Ready
-────────────────────────────────────────────────────────────────────────────────
-Start typing while Lyonbrown connects in the background.
-Local model · required 0 MiB
-F2 language · Ctrl+P commands · Ctrl+Shift+A activity · Ctrl+C exit
-────────────────────────────────────────────────────────────────────────────────
-
-────────────────────────────────────────────────────────────────────────────────
-```
+2026-10-06 的本机 PTY 黑盒验收确认：界面先于模型传输出现；连接后进入 `Ready`；
+模型缺失时只显示 `Required`，必须由用户按 `D` 或 Enter 明确开始下载。当前快捷键为
+`F2` 切换语言、`Ctrl-P` 打开命令面板、`Ctrl-O` 打开活动检查器、`Ctrl-C` 取消或退出。
+完整场景、证据与尚未通过项见[本机真实场景黑盒验收](tui-black-box-validation.md)。
 
 本文下方的 PNG 是已接受的产品设计效果图，用于约束目标交互、信息层级和主题；它们
 不是当前 Node TUI 的实机验收截图。设计图中的 Rust/Cargo 示例文本也不代表仓库仍
@@ -89,11 +80,12 @@ Overlay 是临时上下文，不改变 Session，也不清空 Composer：
 `Ctrl-P` 从对话界面打开可搜索的命令面板；只有输入框为空时，`?` 才打开帮助；
 `/help` 打开同一个帮助界面。`F2` 始终是全局语言切换，不需要先打开浮层。
 
-目前真正可执行的是 `/language`、`/queue <消息>`、`/help` 和 `/quit`。
-`/model`、`/theme`、`/sessions`、`/new`、`/resume`、`/status` 在真实界面落地前
-可见但明确标为禁用。`/queue` 需要消息参数，因此也在命令面板中禁用，但其 slash
-形式可用。未知 slash 输入会由客户端本地拦截并显示本地化提示，绝不会作为普通
-prompt 提交。
+已落地并可打开真实界面的是 `/model`、`/theme`、`/language`、`/status`、`/help`
+和 `/quit`；`/queue <消息>` 的 slash 形式可用。`/sessions`、`/new`、`/resume`
+仍明确标为不可用。`/queue` 需要消息参数，因此在命令面板中禁用，但其 slash 形式
+和 `Alt-Enter` 路径可用。模型选择只会发送 daemon 公布为可选的 route；当前生产
+daemon 尚未实现该变更命令，因此真实验收保持阻塞而不伪造成功。未知 slash 输入会
+由客户端本地拦截并显示本地化提示，绝不会作为普通 prompt 提交。
 
 在模型设置之外，Esc 只关闭最上层 overlay 或清除选择，不退出 TUI。模型设置是
 下文明确列出的例外：`Required`、`Failed` 或 `Cancelled` 时 `Esc` 退出；仅当
@@ -231,9 +223,10 @@ revision 或 epoch 不匹配的 Snapshot 不能局部改变对话、审批或检
 - 语言切换立即重绘客户端文案，不改变 transcript 原始内容；
 - 当前值、已保存值和正在预览的值必须可区分。
 
-上述完整控制面板、预览与偏好持久化仍属于 M12。当前已落地的语言切片会
-根据系统 locale 选择启动语言，并提供全局 `F2` 切换和本地 `/language` 命令；
-现在尚不宣称完整、可持久化的 Language overlay 已完成。
+上述完整控制面板、六主题即时预览、Esc 恢复、显式应用以及主题/语言偏好持久化均已
+落地。语言会根据系统 locale 初始化，并提供全局 `F2`、本地 `/language` 命令和
+Language overlay。Model 分区只显示 Snapshot 中由 daemon 公布为可选的模型；
+生产 daemon 的会话模型变更仍是后端待办，详见真实场景黑盒验收。
 
 主题和语言属于客户端偏好；Session 模型 pin 属于共享应用层状态；Provider 凭据和模型安装状态属于 Runtime/配置状态。三者不得使用同一个无类型 settings map。
 
@@ -322,7 +315,8 @@ focus.ring
   Session state。参数无效时，以当前语言显示 `/language [en-US|zh-CN]` 用法。
 - 命令面板标题、搜索/空结果/禁用状态、帮助快捷键、命令标签和未知命令反馈均提供
   中英文版本。模型设置、审批或浮层优先处理输入时，`F2` 仍然可用。
-- 选择结果持久化和完整控制面板入口仍属于 M12 工作。
+- 语言和主题选择会持久化；偏好文件损坏、过大或写入失败不会阻止 TUI 启动或形成
+  未处理的 Promise rejection。
 - Slash command、配置 key、模型 ID、Provider ID、命令、路径和快捷键保持稳定英文形式。
 - 标题、状态、帮助、风险说明、动作和空状态全部本地化。
 - Transcript 中已产生的用户/模型内容保持原文；只重新本地化客户端 chrome。

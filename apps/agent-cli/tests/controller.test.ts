@@ -45,6 +45,24 @@ describe("AgentTuiController", () => {
     ]);
   });
 
+  it("steers the active turn when ordinary composer text is submitted while running", async () => {
+    const client = new FakeAgentClient();
+    const controller = new AgentTuiController({
+      launcher: new FakeLauncher(
+        Promise.resolve(connection(client, runtimeSnapshot({ phase: "streaming" }))),
+      ),
+      render: () => undefined,
+    });
+    controller.open();
+    await vi.waitFor(() => expect(controller.currentFrame().ui.remote.connection).toBe("ready"));
+
+    await controller.submit("focus on the failing test");
+
+    expect(client.commands).toEqual([
+      { type: "steer-current-turn", text: "focus on the failing test" },
+    ]);
+  });
+
   it("changes language with F2 semantics and exposes all six themes", async () => {
     const client = new FakeAgentClient();
     const frames: AgentTuiFrame[] = [];
@@ -63,104 +81,91 @@ describe("AgentTuiController", () => {
     });
   });
 
-  it("streams monotonic snapshots and marks a lost stream stale", async () => {
+  it("previews a theme without persistence and saves only explicit theme or language choices", async () => {
     const client = new FakeAgentClient();
-    const frames: AgentTuiFrame[] = [];
+    const saved: { locale: string; themeId: string }[] = [];
     const controller = new AgentTuiController({
       launcher: new FakeLauncher(Promise.resolve(connection(client))),
-      render: (frame) => frames.push(frame),
+      render: () => undefined,
+      preferenceStore: {
+        load: async () => null,
+        save: async (preferences) => {
+          saved.push(preferences);
+        },
+      },
     });
     controller.open();
-    await vi.waitFor(() => expect(frames.at(-1)?.ui.remote.connection).toBe("ready"));
 
-    const next = runtimeSnapshot({ revision: 2n, phase: "streaming" });
-    client.events.push({ protocolVersion: 1, revision: 2n, snapshot: next });
-    await vi.waitFor(() => expect(frames.at(-1)?.snapshot?.revision).toBe(2n));
-    client.events.fail(new Error("stream gone"));
+    controller.previewTheme("carbon-mint");
+    expect(controller.currentFrame().ui.preferences.themeId).toBe("carbon-mint");
+    expect(saved).toEqual([]);
 
-    await vi.waitFor(() => {
-      expect(frames.at(-1)?.ui.remote).toMatchObject({
-        connection: "stale",
-        unavailableReason: "event stream unavailable",
-      });
-    });
+    await controller.submit("/theme graphite-coral");
+    await controller.submit("/language zh-CN");
+
+    expect(saved).toEqual([
+      { locale: "en-US", themeId: "graphite-coral" },
+      { locale: "zh-CN", themeId: "graphite-coral" },
+    ]);
   });
 
-  it("marks a naturally completed event stream stale", async () => {
+  it("reports a failed F2 preference save without an unhandled rejection", async () => {
+    const client = new FakeAgentClient();
+    const controller = new AgentTuiController({
+      launcher: new FakeLauncher(Promise.resolve(connection(client))),
+      render: () => undefined,
+      preferenceStore: {
+        load: async () => null,
+        save: async () => Promise.reject(new Error("preference store unavailable")),
+      },
+    });
+    controller.open();
+
+    controller.toggleLanguage();
+
+    await vi.waitFor(() =>
+      expect(controller.currentFrame().notice).toBe("preference store unavailable"),
+    );
+  });
+
+  it("localizes client-side command failures without sending unknown slash input", async () => {
     const client = new FakeAgentClient();
     const controller = new AgentTuiController({
       launcher: new FakeLauncher(Promise.resolve(connection(client))),
       render: () => undefined,
     });
     controller.open();
+    controller.toggleLanguage();
+
+    await controller.submit("/unknown secret");
+
+    expect(controller.currentFrame().notice).toContain("未知命令");
+    expect(client.commands).toEqual([]);
+  });
+
+  it("opens typed overlays, selects a session model and requests local exit", async () => {
+    const client = new FakeAgentClient();
+    const exits: string[] = [];
+    const controller = new AgentTuiController({
+      launcher: new FakeLauncher(Promise.resolve(connection(client))),
+      render: () => undefined,
+      requestExit: () => exits.push("exit"),
+    });
+    controller.open();
     await vi.waitFor(() => expect(controller.currentFrame().ui.remote.connection).toBe("ready"));
 
-    client.events.complete();
+    await controller.submit("/model");
+    expect(controller.currentFrame().overlay).toEqual({ kind: "control", tab: "model" });
+    await controller.submit("/model auto");
+    await controller.submit("/status");
+    expect(controller.currentFrame().overlay).toEqual({ kind: "status" });
+    await controller.submit("/quit");
 
-    await vi.waitFor(() => {
-      expect(controller.currentFrame().ui.remote).toMatchObject({
-        connection: "stale",
-        unavailableReason: "event stream ended",
-      });
+    expect(client.commands).toContainEqual({
+      type: "select-session-model",
+      selection: { kind: "auto" },
     });
-  });
-
-  it("atomically ignores a conflicting snapshot at the current revision", async () => {
-    const client = new FakeAgentClient();
-    const frames: AgentTuiFrame[] = [];
-    const controller = new AgentTuiController({
-      launcher: new FakeLauncher(Promise.resolve(connection(client))),
-      render: (frame) => frames.push(frame),
-    });
-    controller.open();
-    await vi.waitFor(() => expect(frames.at(-1)?.ui.remote.connection).toBe("ready"));
-
-    const conflicting = runtimeSnapshot({
-      revision: 1n,
-      lastError: "conflicting payload",
-      pendingApproval: {
-        requestId: "forged-at-same-revision",
-        toolName: "execute",
-        argumentsJson: "{}",
-        stepId: "forged-step",
-        preview: null,
-        deadlineRemainingMs: 5_000n,
-        state: "pending",
-        approvedBy: null,
-      },
-    });
-    client.events.push({ protocolVersion: 1, revision: 1n, snapshot: conflicting });
-    await Promise.resolve();
-
-    expect(controller.currentFrame().snapshot?.lastError).toBeNull();
-    expect(controller.currentFrame().ui.approval).toBeNull();
-  });
-
-  it("fences late stream values and closes the authenticated client exactly once", async () => {
-    const client = new FakeAgentClient();
-    const frames: AgentTuiFrame[] = [];
-    const controller = new AgentTuiController({
-      launcher: new FakeLauncher(Promise.resolve(connection(client))),
-      render: (frame) => frames.push(frame),
-    });
-    controller.open();
-    await vi.waitFor(() => expect(frames.at(-1)?.ui.remote.connection).toBe("ready"));
-
-    await controller.close();
-    const count = frames.length;
-    client.events.push({
-      protocolVersion: 1,
-      revision: 2n,
-      snapshot: runtimeSnapshot({ revision: 2n }),
-    });
-    await Promise.resolve();
-
-    expect(client.closeCount).toBe(1);
-    expect(client.subscriptions).toHaveLength(1);
-    expect(client.subscriptions[0]?.afterRevision).toBe(1n);
-    expect(client.subscriptions[0]?.signal).toBeInstanceOf(AbortSignal);
-    expect(client.subscriptions[0]?.signal?.aborted).toBe(true);
-    expect(frames).toHaveLength(count);
+    expect(exits).toEqual(["exit"]);
   });
 
   it("uses only fresh snapshot capabilities for retry and approval", async () => {

@@ -14,6 +14,7 @@ export interface Labels {
   readonly empty: string;
   readonly footer: string;
   readonly terminalTooSmall: string;
+  readonly terminalTooShort: string;
   readonly modelSetup: {
     readonly phase: Record<
       | "required"
@@ -57,8 +58,9 @@ const EN: Labels = {
   commands: "Command palette",
   activity: "Activity Inspector",
   empty: "Start typing while Lyonbrown connects in the background.",
-  footer: "F2 language · Ctrl+P commands · Ctrl+Shift+A activity · Ctrl+C exit",
+  footer: "F2 language · Ctrl+P commands · Ctrl+O activity · Ctrl+C cancel",
   terminalTooSmall: "Terminal too small · resize to at least 30 columns",
+  terminalTooShort: "Terminal too short · resize to at least 8 rows",
   modelSetup: {
     phase: {
       required: "Required",
@@ -101,8 +103,9 @@ const ZH: Labels = {
   commands: "命令面板",
   activity: "活动检查器",
   empty: "可以立即输入；Lyonbrown 会在后台连接。",
-  footer: "F2 语言 · Ctrl+P 命令 · Ctrl+Shift+A 活动 · Ctrl+C 退出",
+  footer: "F2 语言 · Ctrl+P 命令 · Ctrl+O 活动 · Ctrl+C 取消",
   terminalTooSmall: "终端过小 · 请调整到至少 30 列",
+  terminalTooShort: "终端过矮 · 请调整到至少 8 行",
   modelSetup: {
     phase: {
       required: "需要模型",

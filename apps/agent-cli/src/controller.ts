@@ -1,51 +1,46 @@
 import type { AgentClient, AgentCommand, RuntimeSnapshotDto } from "@lyonbrown/agent-client";
-import type { AgentLauncher } from "@lyonbrown/agent-launch";
 import {
-  createInitialUiModelState,
   getChatSubmitAvailability,
   getDaemonMutationAvailability,
   reduceUiModel,
   type UiModelAction,
-  type UiModelState,
+  type ThemeId,
 } from "@lyonbrown/ui-model";
 import type { Subscription } from "rxjs";
 
 import { parseInput, type ParsedInput } from "@lyonbrown/agent-cli/internal/commands";
+import {
+  assertSelectableModel,
+  cancelCommand,
+  isActiveTurn,
+  modelDownloadCommand,
+  publicMessage,
+} from "@lyonbrown/agent-cli/internal/controller-helpers";
+import {
+  createInitialFrame,
+  type AgentTuiControllerOptions,
+  type AgentTuiFrame,
+} from "@lyonbrown/agent-cli/internal/controller-state";
 import { projectRemoteSnapshot } from "@lyonbrown/agent-cli/internal/projection";
 import { observeRuntimeSnapshots } from "@lyonbrown/agent-cli/internal/runtime-snapshot-stream";
 
-export interface AgentTuiFrame {
-  readonly ui: UiModelState;
-  readonly snapshot: RuntimeSnapshotDto | null;
-  readonly commandPaletteOpen: boolean;
-  readonly activityOpen: boolean;
-  readonly notice: string | null;
-}
-
-export interface AgentTuiControllerOptions {
-  readonly launcher: AgentLauncher;
-  readonly render: (frame: AgentTuiFrame) => void;
-}
-
-export function createInitialFrame(): AgentTuiFrame {
-  return {
-    ui: createInitialUiModelState(),
-    snapshot: null,
-    commandPaletteOpen: false,
-    activityOpen: false,
-    notice: null,
-  };
-}
+export { createInitialFrame } from "@lyonbrown/agent-cli/internal/controller-state";
+export type {
+  AgentTuiControllerOptions,
+  AgentTuiFrame,
+} from "@lyonbrown/agent-cli/internal/controller-state";
 
 export class AgentTuiController {
-  private frame = createInitialFrame();
+  private frame: AgentTuiFrame;
   private client: AgentClient | null = null;
   private eventAbort: AbortController | null = null;
   private eventSubscription: Subscription | null = null;
   private generation = 0;
   private closed = false;
 
-  public constructor(private readonly options: AgentTuiControllerOptions) {}
+  public constructor(private readonly options: AgentTuiControllerOptions) {
+    this.frame = createInitialFrame(options.initialPreferences);
+  }
 
   public currentFrame(): AgentTuiFrame {
     return this.frame;
@@ -61,23 +56,36 @@ export class AgentTuiController {
   public toggleLanguage(): void {
     const locale = this.frame.ui.preferences.locale === "en-US" ? "zh-CN" : "en-US";
     this.dispatch({ type: "localeChanged", locale });
+    void this.persistPreferences().catch((error: unknown) => {
+      this.update({ notice: publicMessage(error, this.frame.ui.preferences.locale) });
+    });
+  }
+
+  public previewTheme(themeId: ThemeId): void {
+    this.dispatch({ type: "themeChanged", themeId });
   }
 
   public togglePalette(): void {
-    this.update({ commandPaletteOpen: !this.frame.commandPaletteOpen });
+    const open = this.frame.overlay?.kind !== "commands";
+    this.update({ overlay: open ? { kind: "commands" } : null });
   }
 
   public toggleActivity(): void {
-    this.update({ activityOpen: !this.frame.activityOpen });
+    const open = this.frame.overlay?.kind !== "activity";
+    this.update({ overlay: open ? { kind: "activity" } : null });
+  }
+
+  public closeOverlay(): void {
+    this.update({ overlay: null });
   }
 
   public async submit(raw: string): Promise<boolean> {
     try {
       await this.handle(parseInput(raw));
-      this.update({ notice: null, commandPaletteOpen: false });
+      this.update({ notice: null });
       return true;
     } catch (error: unknown) {
-      this.update({ notice: publicMessage(error) });
+      this.update({ notice: publicMessage(error, this.frame.ui.preferences.locale) });
       return false;
     }
   }
@@ -147,6 +155,11 @@ export class AgentTuiController {
   ): void {
     if (!this.isCurrent(generation)) return;
     if (this.frame.snapshot !== null && snapshot.revision <= this.frame.snapshot.revision) return;
+    const sessionChanged =
+      this.frame.snapshot !== null && this.frame.snapshot.sessionId !== snapshot.sessionId;
+    if (sessionChanged && this.frame.overlay?.kind === "activity") {
+      this.frame = { ...this.frame, overlay: null };
+    }
     this.frame = { ...this.frame, snapshot };
     this.dispatch({
       type: "snapshotReceived",
@@ -159,6 +172,7 @@ export class AgentTuiController {
     const current = this.frame.ui.approval;
     const pending = snapshot.pendingApproval;
     if (pending !== null && current?.request.requestId !== pending.requestId) {
+      if (this.frame.overlay !== null) this.update({ overlay: null });
       this.dispatch({
         type: "approvalRequested",
         request: { requestId: pending.requestId, summary: pending.toolName },
@@ -174,15 +188,25 @@ export class AgentTuiController {
 
   private async handle(input: ParsedInput): Promise<void> {
     switch (input.kind) {
-      case "language":
+      case "language": {
+        const locale =
+          input.locale ?? (this.frame.ui.preferences.locale === "en-US" ? "zh-CN" : "en-US");
         this.dispatch({
           type: "localeChanged",
-          locale:
-            input.locale ?? (this.frame.ui.preferences.locale === "en-US" ? "zh-CN" : "en-US"),
+          locale,
         });
+        await this.persistPreferences();
         return;
+      }
       case "theme":
         this.dispatch({ type: "themeChanged", themeId: input.themeId });
+        await this.persistPreferences();
+        return;
+      case "model":
+        assertSelectableModel(this.frame.snapshot, input.selection);
+        return this.enqueueFresh({ type: "select-session-model", selection: input.selection });
+      case "control":
+        this.update({ overlay: { kind: "control", tab: input.tab } });
         return;
       case "palette":
         this.togglePalette();
@@ -191,46 +215,44 @@ export class AgentTuiController {
         this.toggleActivity();
         return;
       case "help":
-        this.update({ commandPaletteOpen: true });
+        this.update({ overlay: { kind: "help" } });
+        return;
+      case "status":
+        this.update({ overlay: { kind: "status" } });
+        return;
+      case "sessions":
+        this.update({ overlay: { kind: "sessions" } });
+        return;
+      case "unavailable":
+        throw new Error(`/${input.command} is not available yet`);
+      case "quit":
+        this.options.requestExit?.();
         return;
       case "chat":
         if (!getChatSubmitAvailability(this.frame.ui).enabled) {
           throw new Error("chat is unavailable until the daemon and model are ready");
         }
-        return this.enqueue({ type: "start-turn", text: input.text });
+        return this.enqueue(
+          isActiveTurn(this.frame.snapshot?.phase)
+            ? { type: "steer-current-turn", text: input.text }
+            : { type: "start-turn", text: input.text },
+        );
       case "steer":
         return this.enqueueFresh({ type: "steer-current-turn", text: input.text });
       case "follow-up":
         return this.enqueueFresh({ type: "queue-follow-up", text: input.text });
       case "cancel":
-        return this.cancelCurrentOperation();
+        return this.enqueueFresh(cancelCommand(this.frame.snapshot));
+      case "force-stop":
+        return this.enqueueFresh({ type: "force-stop" });
       case "download":
       case "retry":
-        return this.startDownload(input.kind);
+        return this.enqueueFresh(modelDownloadCommand(this.frame.snapshot, input.kind));
       case "approve":
         return this.respondApproval(input.scope === "once" ? "allow-once" : "allow-for-session");
       case "deny":
         return this.respondApproval(input.scope === "once" ? "deny-once" : "deny-remaining");
     }
-  }
-
-  private async cancelCurrentOperation(): Promise<void> {
-    const setup = this.frame.snapshot?.modelSetup;
-    if (setup?.operationId !== null && setup?.operationId !== undefined) {
-      if (setup.allowedActions.includes("cancel")) {
-        return this.enqueueFresh({ type: "cancel-model-download", operationId: setup.operationId });
-      }
-    }
-    return this.enqueueFresh({ type: "cancel-turn" });
-  }
-
-  private async startDownload(action: "download" | "retry"): Promise<void> {
-    const setup = this.frame.snapshot?.modelSetup;
-    const modelId = setup?.managedModel?.id;
-    if (modelId === undefined || setup?.allowedActions.includes(action) !== true) {
-      throw new Error(`model ${action} is not available`);
-    }
-    return this.enqueueFresh({ type: "start-model-download", modelId });
   }
 
   private async respondApproval(
@@ -253,6 +275,10 @@ export class AgentTuiController {
     await this.client.enqueue(command);
   }
 
+  private async persistPreferences(): Promise<void> {
+    await this.options.preferenceStore?.save(this.frame.ui.preferences);
+  }
+
   private dispatch(action: UiModelAction): void {
     this.frame = { ...this.frame, ui: reduceUiModel(this.frame.ui, action) };
     this.options.render(this.frame);
@@ -266,8 +292,4 @@ export class AgentTuiController {
   private isCurrent(generation: number): boolean {
     return !this.closed && generation === this.generation;
   }
-}
-
-function publicMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "request failed";
 }

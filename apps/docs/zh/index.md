@@ -10,6 +10,7 @@ Lyonbrown 是一个本地优先、模型供应商中立的通用 Agent Runtime�
 - [FluxDI 组合根](architecture/composition-root.md)：应用装配边界、依赖图验证与替换策略。
 - [System One 决策层](architecture/system-one-decision-layer.md)：OpenJev 前置决策、生命周期、安全边界与启用门槛。
 - [TUI 视觉与交互设计基线](design/tui-interaction-design.md)：单一对话流、中英文界面、六套内置主题、实时引导、内联审批和控制面板。
+- [TUI 本机真实场景黑盒验收](design/tui-black-box-validation.md)：记录真实 daemon、模型下载、推理、交互流程与生产阻塞项。
 - [Node.js / TypeScript + Pi 迁移计划](plans/node-typescript-pi-migration.md)：目标架构、TUI 里程碑、完成定义与切换风险。
 - [迁移进度](plans/migration-status.md)：已合入内容、验证证据与后续顺序。
 - [配置参考](reference/configuration.md)：分层配置、远程模型、MCP、会话存储与 TUI。
