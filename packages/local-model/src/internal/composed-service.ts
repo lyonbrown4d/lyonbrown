@@ -8,13 +8,13 @@ import { DEFAULT_MODEL_IDENTITY } from "./model-identity.ts";
 import { createNodeLlamaEngine } from "./node-llama.ts";
 import {
   NodeModelIo,
-  type ModelDownloaderApi,
+  type ModelFileDownloader,
   type ModelFileVerifier,
   type ProcessLockAcquirer,
 } from "./node-model-io.ts";
 
 interface CompositionDependencies {
-  readonly downloaderApi?: ModelDownloaderApi;
+  readonly modelFileDownloader?: ModelFileDownloader;
   readonly nodeLlamaEngine?: typeof createNodeLlamaEngine;
   readonly verifyFile?: ModelFileVerifier;
   readonly lockProcess?: ProcessLockAcquirer;
@@ -27,7 +27,7 @@ export const createComposedLocalModelService = (
   const verifier = dependencies.verifyFile ?? verifyModelFile;
   const io = new NodeModelIo(
     capability,
-    dependencies.downloaderApi,
+    dependencies.modelFileDownloader,
     verifier,
     dependencies.lockProcess,
   );

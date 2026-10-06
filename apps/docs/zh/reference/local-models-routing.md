@@ -1,7 +1,8 @@
 # 本地模型与任务路由
 
 > 已验证实现检查点：2026-10-06。composition 与有界 inference 路径已有聚焦测试
-> 覆盖，构建产物启动已经验证；真实 GGUF 执行仍待完成。
+> 覆盖；当前 Windows 开发机上的生产 composition 真实 GGUF smoke 已通过。发布打包
+> 与最终 release artifact 仍未验证。
 
 ## Node daemon 默认持有 llama.cpp
 
@@ -15,7 +16,7 @@ Node 实现使用精确锁定的 `node-llama-cpp`，并将其作为必需依赖�
 | ------------- | ------------------------------------------------------------------ |
 | Preset        | `qwen3-1.7b-q4_k_m`                                                |
 | 文件          | `Qwen3-1.7B-Q4_K_M.gguf`                                           |
-| 预期下载大小  | 约 1.11 GB                                                         |
+| 固定制品大小  | 1,107,408,544 bytes                                                |
 | 最低可用内存  | 4 GiB                                                              |
 | 来源 revision | `7fb011e9aee6e4dc7adf8430df9ea8de6a466aa3`                         |
 | SHA-256       | `228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f` |
@@ -36,6 +37,12 @@ revision 和摘要固定在代码中，不使用 `main`。固定 resolve URL 避
 显式重试，而不会启动新的下载。激活期间即使没有 download `operation_id`，TUI 也会
 保持 chat 不可用。仅模型状态更新与 Runtime 更新共享 daemon 的单调 transport
 revision。
+
+下载实现使用 Node 24 内建 `fetch` 将 response body 流式写入原生 staging。请求、响应
+body 与文件写入共享取消信号；只有响应 headers 到达前的瞬时请求失败会执行有限次数
+重试。生产 composition 通过 `setGlobalProxyFromEnv` 配置 Node 全局代理，并且只传入
+`HTTP_PROXY`、`HTTPS_PROXY`、`NO_PROXY` 及其小写形式；认证 loopback gRPC 明确禁用
+环境代理发现。
 
 ## 安全与完整性边界
 
@@ -60,7 +67,8 @@ revision。
 失败，不排队，也不会创建第二个 context。被接受的请求在固定 4096-token context
 中使用一个 sequence，传递取消信号，并限制消息数、总输入、输出 token、输出字节、
 事件队列与关闭清理。原生错误会脱敏；工具形态消息或 function-call 权限会 fail
-closed。
+closed。Qwen3 inference 固定向 `node-llama-cpp` 传入 `budgets.thoughtTokens=0`，避免
+隐藏 thought 用尽 client 可见的输出 token 预算。
 
 daemon 命令入口将每条 user、follow-up 或 steering 消息限制为 64 KiB，与
 local-model 的单消息上限一致。生产 Pi 适配器的 256 KiB 限制是完整构造后 inference
@@ -70,10 +78,16 @@ turn 或 4 MiB 用户文本处轮换；活跃 turn 的 follow-up 限制为 8 条
 限制。daemon 重启后，任何包含历史 turn 的 Session 都会安全轮换，因为 Pi history
 hydration 尚未实现；持久事件仍保留在 EventStore。
 
-这些还不是发布证据。构建后的 launcher/独立 daemon 启动黑盒已到达认证
-`serving`，模型设置为 `required`，`allowedActions=[download]`，revision 为 `2`；全程
-没有生成 GGUF，临时资源已清理。该黑盒没有执行模型。固定真实 GGUF 仍须通过下载、
-激活、流式推理、取消与关闭测试，发布打包也仍未验证。
+当前 Windows 开发机上的生产 composition 真实 GGUF smoke 已验证固定
+`Qwen3-1.7B-Q4_K_M.gguf`（1,107,408,544 bytes，SHA-256
+`228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f`）。启动时没有自动
+下载；用户显式启动首个 operation，观察到进度后取消；新的 operation 随后完成下载、
+摘要校验与激活。测试还验证了 client 可见的短回答和 usage、长 turn 取消后继续、同一
+缓存重启时不重新下载且创建新 Session/空 turns，以及活跃 inference 在 15 秒界限内
+关闭。脚本输出 `REAL_GGUF_SMOKE_OK`，并清理了临时模型缓存。
+
+以上只是当前 Windows 开发机和生产 composition 的执行证据，不是发布打包或最终
+release artifact 的验证。GUI、Desktop、移动端与 MCP 仍不在本阶段范围内。
 
 ## 类型化任务路由
 

@@ -19,6 +19,7 @@ import {
   type CreateModelAwareRuntimeOptions,
   type ModelAwareRuntime,
 } from "./model-aware-runtime.ts";
+import { agentdProxyEnvironment } from "./proxy-environment.ts";
 
 export interface ProductionRuntimeDependencies {
   readonly openStore: (options: {
@@ -29,6 +30,7 @@ export interface ProductionRuntimeDependencies {
   readonly createModelStorage: (modelsDirectory: string) => NativeModelStorageCapability;
   readonly createModelService: (storage: NativeModelStorageCapability) => LocalModelService;
   readonly createRuntime: (options: CreateModelAwareRuntimeOptions) => ModelAwareRuntime;
+  readonly acquireProxyEnvironment: () => () => void;
 }
 
 const DEFAULT_DEPENDENCIES: ProductionRuntimeDependencies = Object.freeze({
@@ -38,6 +40,7 @@ const DEFAULT_DEPENDENCIES: ProductionRuntimeDependencies = Object.freeze({
   createModelStorage: createNativeModelStorageCapability,
   createModelService: createLocalModelService,
   createRuntime: createModelAwareRuntime,
+  acquireProxyEnvironment: () => agentdProxyEnvironment.acquire(),
 });
 
 export async function createProductionAgentdRuntime(
@@ -49,22 +52,54 @@ export async function createProductionAgentdRuntime(
     pathVerifier: dependencies.createPathVerifier(context.dataDirectory),
   });
   let modelService: LocalModelService | undefined;
+  let releaseProxyEnvironment: (() => void) | undefined;
   try {
+    releaseProxyEnvironment = dependencies.acquireProxyEnvironment();
     const recent = await eventStore.listSessions({ limit: 1 });
     const sessionId = recent[0]?.sessionId ?? context.scopeId;
     modelService = dependencies.createModelService(
       dependencies.createModelStorage(join(context.dataDirectory, "models")),
     );
-    return dependencies.createRuntime({ sessionId, modelService, eventStore });
+    const runtime = dependencies.createRuntime({ sessionId, modelService, eventStore });
+    return withProxyEnvironmentLease(runtime, releaseProxyEnvironment);
   } catch (error: unknown) {
     const failures: unknown[] = [error];
     if (modelService !== undefined) {
       const ownedModelService = modelService;
       await collectCleanupFailure(() => ownedModelService.dispose(), failures);
     }
+    if (releaseProxyEnvironment !== undefined) {
+      await collectCleanupFailure(releaseProxyEnvironment, failures);
+    }
     await collectCleanupFailure(() => {
       eventStore.close();
     }, failures);
     throw new AggregateError(failures, "production runtime composition failed", { cause: error });
+  }
+}
+
+function withProxyEnvironmentLease(
+  runtime: ModelAwareRuntime,
+  releaseProxyEnvironment: () => void,
+): ProductionAgentdRuntime {
+  let closeTask: Promise<void> | undefined;
+  return Object.freeze({
+    host: runtime.host,
+    close(): Promise<void> {
+      closeTask ??= closeRuntimeAndProxy(runtime, releaseProxyEnvironment);
+      return closeTask;
+    },
+  });
+}
+
+async function closeRuntimeAndProxy(
+  runtime: ModelAwareRuntime,
+  releaseProxyEnvironment: () => void,
+): Promise<void> {
+  const failures: unknown[] = [];
+  await collectCleanupFailure(() => runtime.close(), failures);
+  await collectCleanupFailure(releaseProxyEnvironment, failures);
+  if (failures.length > 0) {
+    throw new AggregateError(failures, "production runtime cleanup failed");
   }
 }

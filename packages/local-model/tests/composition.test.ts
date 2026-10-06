@@ -127,18 +127,15 @@ describe("secure local-model composition", () => {
     const storage = new MemoryStorage(false);
     let signalWasAborted = false;
     const service = createComposedLocalModelService(storage, {
-      downloaderApi: {
-        createModelDownloader: (options) =>
-          Promise.resolve({
-            download: ({ signal } = {}) => {
-              options.onProgress({
-                downloadedSize: DEFAULT_PRESET.maxBytes + 1,
-                totalSize: DEFAULT_PRESET.maxBytes + 1,
-              });
-              signalWasAborted = signal?.aborted === true;
-              return Promise.reject(new Error("stopped"));
-            },
-          }),
+      modelFileDownloader: {
+        downloadModelFile: (request) => {
+          request.onProgress({
+            downloadedBytes: DEFAULT_PRESET.maxBytes + 1,
+            totalBytes: DEFAULT_PRESET.maxBytes + 1,
+          });
+          signalWasAborted = request.signal.aborted;
+          return Promise.reject(new Error("stopped"));
+        },
       },
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: vi.fn(),
@@ -158,7 +155,7 @@ describe("secure local-model composition", () => {
     async (verifiedBytes) => {
       const storage = new MemoryStorage(false);
       const service = createComposedLocalModelService(storage, {
-        downloaderApi: successfulDownloader(),
+        modelFileDownloader: successfulDownloader(),
         verifyFile: () => Promise.resolve(verifiedBytes),
         nodeLlamaEngine: vi.fn(),
         lockProcess: () => Promise.resolve(() => Promise.resolve()),
@@ -237,10 +234,7 @@ class MemoryStorage implements NativeModelStorageCapability {
 }
 
 const successfulDownloader = () => ({
-  createModelDownloader: (options: { dirPath: string; fileName: string }) =>
-    Promise.resolve({
-      download: () => Promise.resolve(`${options.dirPath}\\${options.fileName}`),
-    }),
+  downloadModelFile: () => Promise.resolve(),
 });
 
 const waitForPhase = async (

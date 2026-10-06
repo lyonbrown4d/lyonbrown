@@ -45,6 +45,7 @@ interface NativeGenerationOptions {
   readonly signal: AbortSignal;
   readonly stopOnAbortSignal: true;
   readonly maxTokens: number;
+  readonly budgets: { readonly thoughtTokens: 0 };
 }
 
 interface NativeGenerationResult {
@@ -141,6 +142,7 @@ const executeInference = async (
     chat = createChat(sequence);
     const response = await chat.generateResponse(toHistory(messages), {
       maxTokens: request.maxOutputTokens,
+      budgets: { thoughtTokens: 0 },
       signal: controller.signal,
       stopOnAbortSignal: true,
       onTextChunk(text): void {

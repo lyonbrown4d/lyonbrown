@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
+import type { ModelFileDownloadRequest } from "../src/internal/model-download.ts";
 import { NodeModelIo } from "../src/internal/node-model-io.ts";
 import { TestNativeModelStorage } from "./support/native-storage.ts";
 
@@ -20,12 +21,8 @@ describe("model I/O adapter", () => {
   it("serializes installers across independent adapters with a cancellable process lock", async () => {
     const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
     temporaryDirectories.push(root);
-    const firstIo = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: vi.fn(),
-    });
-    const secondIo = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: vi.fn(),
-    });
+    const firstIo = new NodeModelIo(new TestNativeModelStorage(root));
+    const secondIo = new NodeModelIo(new TestNativeModelStorage(root));
     const first = await firstIo.acquireInstallLock(DEFAULT_PRESET, new AbortController().signal);
     let secondAcquired = false;
     const secondPromise = secondIo
@@ -47,12 +44,8 @@ describe("model I/O adapter", () => {
   it("cancels a process-lock waiter without taking the active lock", async () => {
     const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
     temporaryDirectories.push(root);
-    const firstIo = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: vi.fn(),
-    });
-    const secondIo = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: vi.fn(),
-    });
+    const firstIo = new NodeModelIo(new TestNativeModelStorage(root));
+    const secondIo = new NodeModelIo(new TestNativeModelStorage(root));
     const first = await firstIo.acquireInstallLock(DEFAULT_PRESET, new AbortController().signal);
     const controller = new AbortController();
     const waiting = secondIo.acquireInstallLock(DEFAULT_PRESET, controller.signal);
@@ -77,9 +70,7 @@ describe("model I/O adapter", () => {
     await mkdir(staleDirectory);
     const staleTime = new Date(Date.now() - 60_000);
     await utimes(staleDirectory, staleTime, staleTime);
-    const io = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: vi.fn(),
-    });
+    const io = new NodeModelIo(new TestNativeModelStorage(root));
 
     const lease = await io.acquireInstallLock(DEFAULT_PRESET, new AbortController().signal);
 
@@ -87,26 +78,23 @@ describe("model I/O adapter", () => {
   });
 
   it.each([
-    { downloadedSize: -1, totalSize: 10 },
-    { downloadedSize: Number.NaN, totalSize: 10 },
-    { downloadedSize: 11, totalSize: 10 },
-    { downloadedSize: 1025, totalSize: 1025 },
-    { downloadedSize: 1, totalSize: Number.MAX_SAFE_INTEGER + 1 },
+    { downloadedBytes: -1, totalBytes: 10 },
+    { downloadedBytes: Number.NaN, totalBytes: 10 },
+    { downloadedBytes: 11, totalBytes: 10 },
+    { downloadedBytes: 1025, totalBytes: 1025 },
+    { downloadedBytes: 1, totalBytes: Number.MAX_SAFE_INTEGER + 1 },
   ])("actively aborts invalid downloader progress %#", async (invalidProgress) => {
     const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
     temporaryDirectories.push(root);
     let continuedAfterInvalidProgress = false;
     const io = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: (options) =>
-        Promise.resolve({
-          download: ({ signal } = {}) => {
-            options.onProgress(invalidProgress);
-            continuedAfterInvalidProgress = signal?.aborted !== true;
-            return signal?.aborted
-              ? Promise.reject(new Error("aborted at I/O boundary"))
-              : Promise.resolve(join(options.dirPath, options.fileName));
-          },
-        }),
+      downloadModelFile: (request) => {
+        request.onProgress(invalidProgress);
+        continuedAfterInvalidProgress = !request.signal.aborted;
+        return request.signal.aborted
+          ? Promise.reject(new Error("aborted at I/O boundary"))
+          : Promise.resolve();
+      },
     });
     const preset = { ...DEFAULT_PRESET, maxBytes: 1024 } as const;
 
@@ -125,15 +113,12 @@ describe("model I/O adapter", () => {
     temporaryDirectories.push(root);
     let abortedBeforeContinuing = false;
     const io = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: (options) =>
-        Promise.resolve({
-          download: ({ signal } = {}) => {
-            options.onProgress({ downloadedSize: 8, totalSize: 10 });
-            options.onProgress({ downloadedSize: 7, totalSize: 10 });
-            abortedBeforeContinuing = signal?.aborted === true;
-            return Promise.reject(new Error("stopped"));
-          },
-        }),
+      downloadModelFile: (request) => {
+        request.onProgress({ downloadedBytes: 8, totalBytes: 10 });
+        request.onProgress({ downloadedBytes: 7, totalBytes: 10 });
+        abortedBeforeContinuing = request.signal.aborted;
+        return Promise.reject(new Error("stopped"));
+      },
     });
 
     await expect(
@@ -151,15 +136,12 @@ describe("model I/O adapter", () => {
     temporaryDirectories.push(root);
     let abortedBeforeContinuing = false;
     const io = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: (options) =>
-        Promise.resolve({
-          download: ({ signal } = {}) => {
-            options.onProgress({ downloadedSize: 7, totalSize: 10 });
-            options.onProgress({ downloadedSize: 7, totalSize: 9 });
-            abortedBeforeContinuing = signal?.aborted === true;
-            return Promise.reject(new Error("stopped"));
-          },
-        }),
+      downloadModelFile: (request) => {
+        request.onProgress({ downloadedBytes: 7, totalBytes: 10 });
+        request.onProgress({ downloadedBytes: 7, totalBytes: 9 });
+        abortedBeforeContinuing = request.signal.aborted;
+        return Promise.reject(new Error("stopped"));
+      },
     });
 
     await expect(
@@ -176,18 +158,12 @@ describe("model I/O adapter", () => {
     const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
     temporaryDirectories.push(root);
     const content = Buffer.from("fixture");
-    const createModelDownloader = vi.fn((options: { dirPath: string; fileName: string }) =>
-      Promise.resolve({
-        download: async ({ signal }: { signal?: AbortSignal } = {}) => {
-          if (signal?.aborted) throw new Error("aborted");
-          const path = join(options.dirPath, options.fileName);
-          await writeFile(path, content);
-          return path;
-        },
-      }),
-    );
+    const downloadModelFile = vi.fn(async (request: ModelFileDownloadRequest) => {
+      if (request.signal.aborted) throw new Error("aborted");
+      await writeFile(request.targetPath, content);
+    });
     const storage = new TestNativeModelStorage(root);
-    const io = new NodeModelIo(storage, { createModelDownloader });
+    const io = new NodeModelIo(storage, { downloadModelFile });
     const preset = {
       ...DEFAULT_PRESET,
       sha256: "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d",
@@ -202,16 +178,14 @@ describe("model I/O adapter", () => {
       signal: controller.signal,
       onProgress: vi.fn(),
     });
-    expect(createModelDownloader).toHaveBeenCalledWith(
-      expect.objectContaining({
-        modelUri:
-          "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/7fb011e9aee6e4dc7adf8430df9ea8de6a466aa3/Qwen3-1.7B-Q4_K_M.gguf",
-        fileName: "Qwen3-1.7B-Q4_K_M.gguf",
-        showCliProgress: false,
-        skipExisting: false,
-        deleteTempFileOnCancel: true,
-      }),
+    expect(downloadModelFile).toHaveBeenCalledOnce();
+    const request = downloadModelFile.mock.calls[0]?.[0];
+    expect(request?.source).toBe(
+      "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/7fb011e9aee6e4dc7adf8430df9ea8de6a466aa3/Qwen3-1.7B-Q4_K_M.gguf",
     );
+    expect(request?.targetPath).toContain(".staging-");
+    expect(request?.maxBytes).toBe(1024);
+    expect(request?.signal.aborted).toBe(false);
     await expect(io.verify(staged, preset, controller.signal)).resolves.toBe(content.byteLength);
     await io.activate(staged);
     await expect(io.inspectInstalled(preset, controller.signal)).resolves.toBe(true);
@@ -221,16 +195,10 @@ describe("model I/O adapter", () => {
   it("rejects a wrong digest and never treats it as installed", async () => {
     const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
     temporaryDirectories.push(root);
-    const createModelDownloader = vi.fn((options: { dirPath: string; fileName: string }) =>
-      Promise.resolve({
-        download: async () => {
-          const path = join(options.dirPath, options.fileName);
-          await writeFile(path, "corrupt");
-          return path;
-        },
-      }),
-    );
-    const io = new NodeModelIo(new TestNativeModelStorage(root), { createModelDownloader });
+    const downloadModelFile = vi.fn(async (request: ModelFileDownloadRequest) => {
+      await writeFile(request.targetPath, "corrupt");
+    });
+    const io = new NodeModelIo(new TestNativeModelStorage(root), { downloadModelFile });
     const controller = new AbortController();
     const staged = await io.download(DEFAULT_PRESET, {
       operationId: "op-1",
@@ -245,14 +213,11 @@ describe("model I/O adapter", () => {
     await expect(io.inspectInstalled(DEFAULT_PRESET, controller.signal)).resolves.toBe(false);
   });
 
-  it("removes staging data when the official downloader fails before returning an artifact", async () => {
+  it("removes staging data when the streaming download fails", async () => {
     const root = await mkdtemp(join(tmpdir(), "lyonbrown-local-model-"));
     temporaryDirectories.push(root);
     const io = new NodeModelIo(new TestNativeModelStorage(root), {
-      createModelDownloader: () =>
-        Promise.resolve({
-          download: () => Promise.reject(new Error("network failed")),
-        }),
+      downloadModelFile: () => Promise.reject(new Error("network failed")),
     });
 
     await expect(

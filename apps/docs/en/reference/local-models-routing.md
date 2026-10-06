@@ -1,8 +1,9 @@
 # Local Models and Task Routing
 
 > Verified implementation checkpoint: 2026-10-06. The composition and bounded
-> inference path are covered by focused tests, and built-artifact startup is
-> verified. Real-GGUF execution is still pending.
+> inference path are covered by focused tests, and a production-composition
+> real-GGUF smoke passed on the current Windows development machine. Release
+> packaging and the final release artifact remain unverified.
 
 ## The Node daemon owns llama.cpp by default
 
@@ -16,7 +17,7 @@ There is currently one built-in managed preset, and it is the default:
 | ------------------------ | ------------------------------------------------------------------ |
 | Preset                   | `qwen3-1.7b-q4_k_m`                                                |
 | File                     | `Qwen3-1.7B-Q4_K_M.gguf`                                           |
-| Expected download        | about 1.11 GB                                                      |
+| Fixed artifact size      | 1,107,408,544 bytes                                                |
 | Minimum available memory | 4 GiB                                                              |
 | Source revision          | `7fb011e9aee6e4dc7adf8430df9ea8de6a466aa3`                         |
 | SHA-256                  | `228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f` |
@@ -38,6 +39,14 @@ Model activation is distinct from download. A verified cached model can enter
 new download. The TUI keeps chat disabled during activation even though there
 is no download `operation_id`. Model-only updates share the daemon's monotonic
 transport revision with Runtime updates.
+
+The downloader uses the Node 24 built-in `fetch` to stream the response body
+into native staging. The request, response body, and file write share one
+cancellation signal; only transient request failures before response headers
+receive finitely bounded retries. Production composition configures Node's
+global proxy through `setGlobalProxyFromEnv`, passing only `HTTP_PROXY`,
+`HTTPS_PROXY`, `NO_PROXY`, and their lowercase forms. Authenticated loopback
+gRPC explicitly disables environment proxy discovery.
 
 ## Security and integrity boundary
 
@@ -66,6 +75,9 @@ another context. Accepted requests use one sequence in a fixed 4096-token
 context, propagate cancellation, and enforce bounded messages, aggregate input,
 output tokens, output bytes, event queue, and shutdown cleanup. Native errors
 are sanitized, and tool-shaped messages or function-call authority fail closed.
+Qwen3 inference always passes `budgets.thoughtTokens=0` to `node-llama-cpp`,
+preventing hidden thought from exhausting the client-visible output-token
+budget.
 
 The daemon command boundary limits each user, follow-up, or steering message to
 64 KiB, matching the local-model per-message ceiling. The production Pi
@@ -78,12 +90,21 @@ bypass these limits. After daemon restart, any session with a historical turn
 is safely rotated because Pi history hydration is not implemented yet. Durable
 events remain in EventStore.
 
-This is not yet release evidence. The built launcher/independent daemon startup
-black box reached authenticated `serving` with model setup `required`,
-`allowedActions=[download]`, and revision `2`; it created no GGUF and cleaned up
-its temporary resources. It did not exercise a model. A pinned real GGUF must
-still pass download, activation, streamed inference, cancellation, and shutdown
-testing, and release packaging remains unverified.
+The production-composition real-GGUF smoke on the current Windows development
+machine verified the pinned `Qwen3-1.7B-Q4_K_M.gguf` (1,107,408,544 bytes,
+SHA-256
+`228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f`). Startup
+did not download automatically. An explicit first operation was cancelled after
+progress, and a new operation completed download, digest verification, and
+activation. The smoke also verified a client-visible short answer and usage,
+continuation after cancelling a long turn, restart on the same cache without a
+redownload and with a new session/empty turns, and active-inference shutdown
+within the 15-second bound. It ended with `REAL_GGUF_SMOKE_OK` and removed its
+temporary model cache.
+
+This is evidence for the current Windows development machine and production
+composition only. It is not verification of release packaging or the final
+release artifact. GUI, Desktop, mobile, and MCP remain outside this phase.
 
 ## Typed task routing
 

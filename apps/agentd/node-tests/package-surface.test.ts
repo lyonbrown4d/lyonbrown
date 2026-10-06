@@ -23,11 +23,16 @@ function importFromPackage(specifier: string) {
 }
 
 describe("agentd package surface", () => {
-  it("does not expose a package-specifier API that bypasses production composition", async () => {
+  it("exposes only the supervised production composition entry", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("../package.json", import.meta.url), "utf8"),
     ) as PackageManifest;
-    expect(manifest.exports).toEqual({});
+    expect(manifest.exports).toEqual({
+      "./composition": {
+        types: "./dist/composition.d.ts",
+        import: "./dist/composition.js",
+      },
+    });
     expect(manifest.main).toBeUndefined();
     expect(importFromPackage("@lyonbrown/agentd").status).not.toBe(0);
     expect(importFromPackage("@lyonbrown/agentd/dist/server.js").status).not.toBe(0);

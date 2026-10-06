@@ -57,7 +57,11 @@ describe("node-llama inference stream", () => {
         { type: "user", text: "Hello" },
         { type: "model", response: ["Hi"] },
       ],
-      expect.objectContaining({ maxTokens: 64, stopOnAbortSignal: true }),
+      expect.objectContaining({
+        maxTokens: 64,
+        budgets: { thoughtTokens: 0 },
+        stopOnAbortSignal: true,
+      }),
     );
     const contextOptions = harness.createContext.mock.calls[0]?.[0];
     expect(contextOptions).toMatchObject({ contextSize: 4_096, sequences: 1 });

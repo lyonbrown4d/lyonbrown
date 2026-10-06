@@ -30,13 +30,16 @@ function dependencies() {
   const storage = {} as NativeModelStorageCapability;
   const modelDispose = vi.fn(() => Promise.resolve());
   const modelService = { dispose: modelDispose } as unknown as LocalModelService;
-  const runtime = { host: {}, close: vi.fn(async () => undefined) } as unknown as ModelAwareRuntime;
+  const runtimeClose = vi.fn(async () => undefined);
+  const runtime = { host: {}, close: runtimeClose } as unknown as ModelAwareRuntime;
+  const releaseProxyEnvironment = vi.fn();
   const values: ProductionRuntimeDependencies = {
     openStore: vi.fn(() => store),
     createPathVerifier: vi.fn((_securityRoot: string) => verifier),
     createModelStorage: vi.fn(() => storage),
     createModelService: vi.fn(() => modelService),
     createRuntime: vi.fn(() => runtime),
+    acquireProxyEnvironment: vi.fn(() => releaseProxyEnvironment),
   };
   return {
     values,
@@ -48,6 +51,8 @@ function dependencies() {
     modelService,
     modelDispose,
     runtime,
+    runtimeClose,
+    releaseProxyEnvironment,
   };
 }
 
@@ -74,7 +79,9 @@ describe("production runtime composition", () => {
   it("uses native capabilities under the scoped data directory", async () => {
     const state = dependencies();
 
-    await expect(createProductionAgentdRuntime(CONTEXT, state.values)).resolves.toBe(state.runtime);
+    const runtime = await createProductionAgentdRuntime(CONTEXT, state.values);
+    expect(runtime.host).toBe(state.runtime.host);
+    expect(state.values.acquireProxyEnvironment).toHaveBeenCalledOnce();
     expect(state.values.createPathVerifier).toHaveBeenCalledWith(CONTEXT.dataDirectory);
     expect(state.values.openStore).toHaveBeenCalledWith({
       dataDirectory: join(CONTEXT.dataDirectory, "events"),
@@ -89,6 +96,11 @@ describe("production runtime composition", () => {
       modelService: state.modelService,
       eventStore: state.store,
     });
+
+    await runtime.close();
+    await runtime.close();
+    expect(state.runtimeClose).toHaveBeenCalledOnce();
+    expect(state.releaseProxyEnvironment).toHaveBeenCalledOnce();
   });
 
   it("rolls back the store when later composition fails", async () => {
@@ -108,6 +120,7 @@ describe("production runtime composition", () => {
     expect((caught as AggregateError).errors).toEqual([failure]);
     expect((caught as Error & { cause?: unknown }).cause).toBe(failure);
     expect(state.storeClose).toHaveBeenCalledOnce();
+    expect(state.releaseProxyEnvironment).toHaveBeenCalledOnce();
   });
 
   it("disposes the model service before rolling back when runtime construction fails", async () => {
@@ -127,6 +140,7 @@ describe("production runtime composition", () => {
     expect((caught as AggregateError).errors).toEqual([failure]);
     expect(state.modelDispose).toHaveBeenCalledOnce();
     expect(state.storeClose).toHaveBeenCalledOnce();
+    expect(state.releaseProxyEnvironment).toHaveBeenCalledOnce();
   });
 
   it("resumes the most recently updated workspace session", async () => {
@@ -166,6 +180,9 @@ describe("production runtime composition", () => {
       createRuntime: vi.fn(() => {
         throw startup;
       }),
+      acquireProxyEnvironment: vi.fn(() => () => {
+        order.push("proxy");
+      }),
       openStore: vi.fn(
         () =>
           ({
@@ -181,7 +198,7 @@ describe("production runtime composition", () => {
     const caught = await createProductionAgentdRuntime(CONTEXT, values).catch(
       (error: unknown) => error,
     );
-    expect(order).toEqual(["model", "store"]);
+    expect(order).toEqual(["model", "proxy", "store"]);
     expect(caught).toBeInstanceOf(AggregateError);
     expect((caught as AggregateError).errors).toEqual([startup, disposeFailure, closeFailure]);
     expect((caught as Error & { cause?: unknown }).cause).toBe(startup);

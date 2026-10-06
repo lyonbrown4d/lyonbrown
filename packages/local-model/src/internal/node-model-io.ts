@@ -1,6 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
 
-import { createModelDownloader } from "node-llama-cpp";
 import lockfile from "proper-lockfile";
 
 import type {
@@ -17,19 +16,11 @@ import type {
   ModelPreset,
 } from "./contracts.ts";
 import { verifyModelFile } from "./file-verification.ts";
+import { downloadModelFile, type ModelFileDownloadRequest } from "./model-download.ts";
 import { DEFAULT_MODEL_IDENTITY } from "./model-identity.ts";
 
-export interface ModelDownloaderApi {
-  createModelDownloader(options: {
-    modelUri: string;
-    dirPath: string;
-    fileName: string;
-    showCliProgress: false;
-    skipExisting: false;
-    deleteTempFileOnCancel: true;
-    parallelDownloads: number;
-    onProgress: (status: { downloadedSize: number; totalSize: number }) => void;
-  }): Promise<{ download(options?: { signal?: AbortSignal }): Promise<string> }>;
+export interface ModelFileDownloader {
+  downloadModelFile(request: ModelFileDownloadRequest): Promise<void>;
 }
 
 export type ModelFileVerifier = typeof verifyModelFile;
@@ -45,7 +36,9 @@ export class NodeModelIo implements LocalModelIo {
 
   constructor(
     private readonly storage: NativeModelStorageCapability,
-    private readonly api: ModelDownloaderApi = { createModelDownloader },
+    private readonly downloader: ModelFileDownloader = {
+      downloadModelFile,
+    },
     private readonly verifyFile: ModelFileVerifier = verifyModelFile,
     private readonly lockProcess: ProcessLockAcquirer = acquireProcessLock,
   ) {}
@@ -91,9 +84,7 @@ export class NodeModelIo implements LocalModelIo {
       request.signal,
     );
     try {
-      await staging.withFilePath((filePath, directoryPath) =>
-        this.downloadToPath(preset, request, filePath, directoryPath),
-      );
+      await staging.withFilePath((filePath) => this.downloadToPath(preset, request, filePath));
       const artifact = Object.freeze({ operationId: request.operationId, token: Symbol() });
       this.artifacts.set(artifact, { operationId: request.operationId, staging });
       return artifact;
@@ -139,7 +130,6 @@ export class NodeModelIo implements LocalModelIo {
       readonly onProgress: (progress: DownloadProgress) => void;
     },
     expectedPath: string,
-    directoryPath: string,
   ): Promise<void> {
     const controller = new AbortController();
     const forwardAbort = () => {
@@ -151,20 +141,17 @@ export class NodeModelIo implements LocalModelIo {
     let previousDownloadedBytes = 0;
     let previousTotalBytes = 0;
     try {
-      const downloader = await this.api.createModelDownloader({
-        modelUri: MODEL_DOWNLOAD_URI,
-        dirPath: directoryPath,
-        fileName: preset.filename,
-        showCliProgress: false,
-        skipExisting: false,
-        deleteTempFileOnCancel: true,
-        parallelDownloads: 4,
-        onProgress: ({ downloadedSize, totalSize }) => {
+      await this.downloader.downloadModelFile({
+        source: MODEL_DOWNLOAD_URI,
+        targetPath: expectedPath,
+        maxBytes: preset.maxBytes,
+        signal: controller.signal,
+        onProgress: ({ downloadedBytes, totalBytes }) => {
           if (
             boundaryFailure ||
             !validDownloadProgress(
-              downloadedSize,
-              totalSize,
+              downloadedBytes,
+              totalBytes,
               previousDownloadedBytes,
               previousTotalBytes,
               preset.maxBytes,
@@ -174,15 +161,13 @@ export class NodeModelIo implements LocalModelIo {
             controller.abort(new Error("model_download_limits_exceeded"));
             return;
           }
-          previousDownloadedBytes = downloadedSize;
-          previousTotalBytes = totalSize;
-          request.onProgress({ downloadedBytes: downloadedSize, totalBytes: totalSize });
+          previousDownloadedBytes = downloadedBytes;
+          previousTotalBytes = totalBytes;
+          request.onProgress({ downloadedBytes, totalBytes });
         },
       });
-      const returnedPath = await downloader.download({ signal: controller.signal });
       throwIfAborted(controller.signal);
       throwIfAborted(request.signal);
-      if (returnedPath !== expectedPath) throw new Error("model_download_target_invalid");
     } finally {
       request.signal.removeEventListener("abort", forwardAbort);
     }

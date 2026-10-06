@@ -166,9 +166,6 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
         deleteStagedModelIfPresent(this.filePath);
       },
       () => {
-        deleteStagedModelIfPresent(`${this.filePath}.ipull`);
-      },
-      () => {
         disposeOnClose(this.stagingDirectory);
       },
       () => {

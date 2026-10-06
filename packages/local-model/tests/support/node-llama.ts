@@ -2,6 +2,7 @@ import { vi } from "vitest";
 
 export interface GenerationOptions {
   readonly maxTokens: number;
+  readonly budgets: { readonly thoughtTokens: 0 };
   readonly onTextChunk: (text: string) => void;
   readonly signal: AbortSignal;
   readonly stopOnAbortSignal: true;

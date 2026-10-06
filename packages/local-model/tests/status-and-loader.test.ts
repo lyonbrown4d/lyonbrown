@@ -80,7 +80,7 @@ describe("default local model status", () => {
     expect(DEFAULT_LOCAL_MODEL).toEqual({
       id: "qwen3-1.7b-q4_k_m",
       displayName: "Qwen3 1.7B Q4_K_M",
-      expectedDownloadBytes: 1_110_000_000,
+      expectedDownloadBytes: 1_107_408_544,
       maxBytes: 2_147_483_648,
       minimumMemoryBytes: 4_294_967_296,
       sha256: "228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f",

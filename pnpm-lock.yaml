@@ -14,6 +14,21 @@ importers:
       '@eslint/js':
         specifier: 9.39.1
         version: 9.39.1
+      '@lyonbrown/agent-client':
+        specifier: workspace:*
+        version: link:packages/agent-client
+      '@lyonbrown/agent-launch':
+        specifier: workspace:*
+        version: link:packages/agent-launch
+      '@lyonbrown/agentd':
+        specifier: workspace:*
+        version: link:apps/agentd
+      '@lyonbrown/control-plane-native':
+        specifier: workspace:*
+        version: link:packages/control-plane-native
+      '@lyonbrown/local-control-plane':
+        specifier: workspace:*
+        version: link:packages/local-control-plane
       '@types/node':
         specifier: 24.10.1
         version: 24.10.1
