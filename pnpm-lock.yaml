@@ -68,6 +68,9 @@ importers:
       '@lyonbrown/agent-launch':
         specifier: workspace:*
         version: link:../../packages/agent-launch
+      '@lyonbrown/agentd':
+        specifier: workspace:*
+        version: link:../agentd
       '@lyonbrown/control-plane-native':
         specifier: workspace:*
         version: link:../../packages/control-plane-native

@@ -26,6 +26,7 @@
     "@earendil-works/pi-tui": "1.0.0",
     "@lyonbrown/agent-client": "workspace:*",
     "@lyonbrown/agent-launch": "workspace:*",
+    "@lyonbrown/agentd": "workspace:*",
     "@lyonbrown/control-plane-native": "workspace:*",
     "@lyonbrown/ui-model": "workspace:*",
     "rxjs": "7.8.2"

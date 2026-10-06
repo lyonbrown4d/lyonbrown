@@ -44,7 +44,7 @@ be captured by TypeScript regression tests or language-neutral fixtures.
 | P3 Runtime     | In progress | Pi kernel and durable Runtime adapters exist; finish tools, MCP, approval, context, and secret paths                  |
 | P4 Daemon      | In progress | server, control plane, launcher, and local-model foundation exist; finish production composition and process adapters |
 | P5 TUI         | In progress | migrate `apps/agent-cli` to Pi TUI, connect the real client, and complete bilingual interaction surfaces              |
-| P6 Release     | Not started | package, sign, soak, upgrade/rollback, and installer verification                                                     |
+| P6 Release     | In progress | relocatable Windows development artifact and native smoke pass; archive, signing, install, upgrade/rollback remain    |
 
 ## TUI milestone
 

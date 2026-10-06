@@ -23,7 +23,7 @@ function importFromPackage(specifier: string) {
 }
 
 describe("agentd package surface", () => {
-  it("exposes only the supervised production composition entry", async () => {
+  it("exposes only the supervised composition and daemon entries", async () => {
     const manifest = JSON.parse(
       await readFile(new URL("../package.json", import.meta.url), "utf8"),
     ) as PackageManifest;
@@ -32,6 +32,7 @@ describe("agentd package surface", () => {
         types: "./dist/composition.d.ts",
         import: "./dist/composition.js",
       },
+      "./daemon": "./dist/main.js",
     });
     expect(manifest.main).toBeUndefined();
     expect(importFromPackage("@lyonbrown/agentd").status).not.toBe(0);

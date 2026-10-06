@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import type { AgentLauncher } from "@lyonbrown/agent-launch";
@@ -27,6 +28,8 @@ vi.mock("@lyonbrown/control-plane-native", () => ({
 
 import { createProductionMainDependencies } from "../src/production.ts";
 
+const require = createRequire(import.meta.url);
+
 describe("production TUI composition", () => {
   it("creates only the authenticated client launcher capability", () => {
     const dependencies = createProductionMainDependencies();
@@ -51,6 +54,6 @@ describe("production TUI composition", () => {
     expect(options).not.toHaveProperty("model");
     expect(options.agentd.arguments).toHaveLength(1);
     expect(isAbsolute(options.agentd.arguments?.[0] ?? "")).toBe(true);
-    expect(options.agentd.arguments?.[0]).toMatch(/[\\/]apps[\\/]agentd[\\/]dist[\\/]main\.js$/u);
+    expect(options.agentd.arguments?.[0]).toBe(require.resolve("@lyonbrown/agentd/daemon"));
   });
 });

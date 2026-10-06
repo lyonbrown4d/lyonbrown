@@ -26,6 +26,8 @@
     "format": "prettier --no-error-on-unmatched-pattern --write \"scripts/**/*.ts\" \"apps/**/*.{ts,mts,mjs,json}\" \"apps/docs/**/*.md\" \"packages/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{md,yaml,yml}\" \"tools/**/*.{ts,mts,mjs,json}\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\"",
     "format:check": "prettier --no-error-on-unmatched-pattern --check \"scripts/**/*.ts\" \"apps/**/*.{ts,mts,mjs,json}\" \"apps/docs/**/*.md\" \"packages/**/*.{ts,mts,mjs,json}\" \"packages/**/*.{md,yaml,yml}\" \"tools/**/*.{ts,mts,mjs,json}\" package.json pnpm-workspace.yaml \"tsconfig*.json\" eslint.config.mjs .prettierrc.json AGENTS.md SECURITY.md \".github/**/*.yml\"",
     "scripts:verify": "vitest run --dir scripts/tests",
+    "package:release": "tsx scripts/package-release.ts",
+    "smoke:release-artifact": "tsx scripts/smoke-release-artifact.ts",
     "smoke:real-gguf": "tsx scripts/smoke-real-gguf.ts",
     "audit": "pnpm audit --registry=https://registry.npmjs.org"
   },

@@ -1,4 +1,6 @@
 /target
+/artifacts/
+.release-smoke/
 .worktrees/
 .idea/
 *.iml

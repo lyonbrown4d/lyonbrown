@@ -25,6 +25,7 @@ const englishSidebar = [
     items: [
       { text: "Configuration", link: "/en/reference/configuration" },
       { text: "Local Models and Routing", link: "/en/reference/local-models-routing" },
+      { text: "Release Artifacts", link: "/en/reference/release-artifacts" },
     ],
   },
 ];
@@ -54,6 +55,7 @@ const chineseSidebar = [
     items: [
       { text: "配置", link: "/zh/reference/configuration" },
       { text: "本地模型与路由", link: "/zh/reference/local-models-routing" },
+      { text: "发布制品", link: "/zh/reference/release-artifacts" },
     ],
   },
 ];

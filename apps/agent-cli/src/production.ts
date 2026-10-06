@@ -1,5 +1,5 @@
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { fileURLToPath } from "node:url";
 import type { AgentLauncher } from "@lyonbrown/agent-launch";
 import { createProductionAgentLauncher } from "@lyonbrown/agent-launch/composition";
 import { createControlPlaneNativeProvider } from "@lyonbrown/control-plane-native";
@@ -7,10 +7,11 @@ import { createControlPlaneNativeProvider } from "@lyonbrown/control-plane-nativ
 import { VERSION } from "./cli.ts";
 
 const EFFECTIVE_CONFIG_FINGERPRINT = "production-default";
+const require = createRequire(import.meta.url);
 
 export function createProductionMainDependencies(): { readonly launcher: AgentLauncher } {
   const workspace = process.cwd();
-  const agentdEntry = fileURLToPath(new URL("../../agentd/dist/main.js", import.meta.url));
+  const agentdEntry = require.resolve("@lyonbrown/agentd/daemon");
   return {
     launcher: createProductionAgentLauncher({
       nativeProvider: createControlPlaneNativeProvider(),

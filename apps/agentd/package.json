@@ -7,8 +7,12 @@
     "./composition": {
       "types": "./dist/composition.d.ts",
       "import": "./dist/composition.js"
-    }
+    },
+    "./daemon": "./dist/main.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "dependencies:build": "pnpm --filter \"@lyonbrown/agentd^...\" --workspace-concurrency=1 run build",
     "format": "prettier --write \"node-src/**/*.ts\" \"node-tests/**/*.ts\" \"*.{json,ts,mjs}\"",

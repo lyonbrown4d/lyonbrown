@@ -73,6 +73,11 @@
   仍未实现。
 - 本检查点已通过 frozen install、仓库级 format、lint、typecheck、test、build、docs
   和 `ci-gate`；在声明可发布前仍须基于最终发布制品重复执行。
+- Windows x64 开发制品现已使用 pnpm hoisted production deploy，内嵌固定的 Node 24
+  runtime，并提供相对路径的 `agent.cmd`。制品 smoke 会加载 CLI、公开 daemon entry、
+  SQLite prebuild 与 llama.cpp CPU prebuild，同时禁止编译/下载 fallback。制品不含文件
+  系统链接，并在目录改名后再次通过。这是打包证据，尚不是归档、签名、安装器或真实
+  GGUF 的最终发布证据。
 
 ## 当前产品状态
 
@@ -82,16 +87,18 @@ gRPC 接到 daemon 持有的 EventStore、Pi Runtime 和本地模型。这是“
 
 生产 Kernel 当前刻意使用空 tool registry、默认拒绝审批，并拒绝 Secret 解析；MCP
 尚未接入。GUI、Desktop 和移动端仍不在当前范围。真实 GGUF 下载、激活、推理、取消、
-缓存重启与有界关闭已经在当前 Windows 开发机的生产 composition 上通过；这不是发布
-打包或最终 release artifact 的验证，不能据此声明产品可发布。
+缓存重启与有界关闭已经在当前 Windows 开发机的生产 composition 上通过；可移动开发
+目录已经验证，但归档、签名、安装后的最终 release artifact 仍未验证，不能据此声明
+产品可发布。
 
 架构保持唯一：`agentd` 持有 Runtime、模型、工具、MCP 与 EventStore，TUI 只是认证
 gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼容路径。
 
 ## 后续顺序
 
-1. 完成可分发打包，并基于最终 release artifact 在支持的发布硬件上重复固定真实
-   GGUF 的下载、激活、取消、推理、缓存重启与有界关闭验证。
+1. 决策并实现 CPU/Vulkan/CUDA 制品变体、归档/checksum/SBOM/签名和干净机器安装器，
+   并基于最终 release artifact 在支持的发布硬件上重复固定真实 GGUF 的下载、激活、
+   取消、推理、缓存重启与有界关闭验证。
 2. 将构建产物认证黑盒从已验证的 spawn 与 setup-required 检查点扩展到复用、重启
    fencing、模型进度、推理与取消。
 3. 在允许 daemon 重启后续接历史 Session 前实现 Pi history hydration。

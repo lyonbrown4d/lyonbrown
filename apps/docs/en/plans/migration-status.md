@@ -98,6 +98,13 @@
 - This checkpoint passed frozen install and full repository format, lint,
   typecheck, test, build, docs, and `ci-gate`; repeat them against the final
   release artifacts before making a release claim.
+- A Windows x64 development artifact now uses pnpm's hoisted production deploy,
+  embeds the pinned Node 24 runtime, and exposes a relative `agent.cmd`.
+  Artifact smoke loads the CLI, public daemon entry, SQLite prebuild, and
+  llama.cpp CPU prebuild with build/download fallback disabled. The artifact
+  contained no filesystem links and passed again after its directory was
+  renamed. This is packaging evidence, not yet archive, signing, installer, or
+  real-GGUF release evidence.
 
 ## Current product state
 
@@ -111,8 +118,9 @@ default-deny approvals, and a rejecting secret resolver. MCP is not connected.
 GUI, Desktop, and mobile clients remain out of scope. Real-GGUF download,
 activation, inference, cancellation, cached restart, and bounded shutdown are
 verified only on the current Windows development machine through production
-composition. Release packaging and the final release artifact remain
-unverified, so this is not a release-readiness claim.
+composition. A relocatable development directory is verified, but the archived,
+signed, installed final artifact remains unverified, so this is not a
+release-readiness claim.
 
 The architecture remains singular: `agentd` owns Runtime, models, tools, MCP,
 and EventStore; the TUI is only an authenticated gRPC presentation client. No
@@ -120,9 +128,11 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
 
 ## Next order
 
-1. Complete distributable packaging, then repeat pinned real-GGUF download,
-   activation, cancellation, inference, cached restart, and bounded shutdown
-   against the final release artifact on supported release hardware.
+1. Decide and implement CPU/Vulkan/CUDA artifact variants,
+   archive/checksum/SBOM/signing, and clean-machine installer behavior. Then
+   repeat pinned real-GGUF download, activation, cancellation, inference,
+   cached restart, and bounded shutdown against the final release artifact on
+   supported release hardware.
 2. Extend the authenticated built-artifact black box beyond the verified spawn
    and setup-required checkpoint to cover reuse, restart fencing, model
    progress, inference, and cancellation.

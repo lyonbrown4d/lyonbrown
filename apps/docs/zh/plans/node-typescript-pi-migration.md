@@ -40,7 +40,7 @@ Pi 的具体类型必须停留在适配层，不得进入 protobuf 契约、领�
 | P3 Runtime | 进行中 | Pi kernel 与 durable Runtime 适配器已落地；补齐工具、MCP、审批、上下文与 Secret 链路 |
 | P4 Daemon  | 进行中 | server、control plane、launcher、本地模型基础已存在；补齐生产组合根和进程适配器      |
 | P5 TUI     | 进行中 | 将 `apps/agent-cli` 迁移到 Pi TUI，接通真实 client，完成双语交互闭环                 |
-| P6 发布    | 未开始 | 打包、签名、soak、升级/回滚与安装器验证                                              |
+| P6 发布    | 进行中 | Windows 可移动开发制品与 native smoke 已通过；仍需归档、签名、安装、升级/回滚验证    |
 
 ## TUI 里程碑
 
