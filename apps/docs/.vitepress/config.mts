@@ -1,4 +1,5 @@
 import { defineConfig } from "vitepress";
+import { withMermaid } from "vitepress-plugin-mermaid";
 
 const englishSidebar = [
   { text: "Introduction", link: "/en/" },
@@ -60,47 +61,49 @@ const chineseSidebar = [
   },
 ];
 
-export default defineConfig({
-  title: "Lyonbrown",
-  description: "Local-first agent runtime documentation",
-  cleanUrls: true,
-  locales: {
-    root: {
-      label: "Languages",
-      lang: "en-US",
-      themeConfig: {
-        search: { provider: "local" },
-        nav: [
-          { text: "English", link: "/en/" },
-          { text: "简体中文", link: "/zh/" },
-        ],
+export default withMermaid(
+  defineConfig({
+    title: "Lyonbrown",
+    description: "Local-first agent runtime documentation",
+    cleanUrls: true,
+    locales: {
+      root: {
+        label: "Languages",
+        lang: "en-US",
+        themeConfig: {
+          search: { provider: "local" },
+          nav: [
+            { text: "English", link: "/en/" },
+            { text: "简体中文", link: "/zh/" },
+          ],
+        },
+      },
+      en: {
+        label: "English",
+        lang: "en-US",
+        link: "/en/",
+        themeConfig: {
+          search: { provider: "local" },
+          nav: [
+            { text: "Home", link: "/en/" },
+            { text: "Migration", link: "/en/plans/node-typescript-pi-migration" },
+          ],
+          sidebar: englishSidebar,
+        },
+      },
+      zh: {
+        label: "简体中文",
+        lang: "zh-CN",
+        link: "/zh/",
+        themeConfig: {
+          search: { provider: "local" },
+          nav: [
+            { text: "首页", link: "/zh/" },
+            { text: "迁移计划", link: "/zh/plans/node-typescript-pi-migration" },
+          ],
+          sidebar: chineseSidebar,
+        },
       },
     },
-    en: {
-      label: "English",
-      lang: "en-US",
-      link: "/en/",
-      themeConfig: {
-        search: { provider: "local" },
-        nav: [
-          { text: "Home", link: "/en/" },
-          { text: "Migration", link: "/en/plans/node-typescript-pi-migration" },
-        ],
-        sidebar: englishSidebar,
-      },
-    },
-    zh: {
-      label: "简体中文",
-      lang: "zh-CN",
-      link: "/zh/",
-      themeConfig: {
-        search: { provider: "local" },
-        nav: [
-          { text: "首页", link: "/zh/" },
-          { text: "迁移计划", link: "/zh/plans/node-typescript-pi-migration" },
-        ],
-        sidebar: chineseSidebar,
-      },
-    },
-  },
-});
+  }),
+);

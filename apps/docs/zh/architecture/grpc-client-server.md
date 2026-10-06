@@ -1,16 +1,110 @@
 # 本地 gRPC Client/Server 架构
 
-Lyonbrown 只有一种产品拓扑：
+Lyonbrown 只有一种产品拓扑。下图以当前 Node.js / TypeScript 生产实现为准；实线表示
+运行时数据流，虚线表示发现、拉起和本地安全控制流。
 
-```text
-agent TUI ── 认证本地 gRPC ── agentd
-                                ├── durable Runtime 与 Pi kernel
-                                ├── EventStore、工具、MCP、Secret
-                                └── node-llama-cpp 与其他模型
+## 系统全景
+
+```mermaid
+flowchart LR
+  user([用户])
+
+  subgraph client["Client 进程 · apps/agent-cli"]
+    tui["Pi TUI<br/>输入 · 渲染 · locale · theme"]
+    launcher["agent-launch<br/>scope · 发现 · 拉起"]
+    grpcClient["agent-client<br/>认证 · handshake · 重连"]
+    uiModel["ui-model + RxJS<br/>客户端投影"]
+
+    tui --> launcher
+    tui --> grpcClient
+    grpcClient --> uiModel --> tui
+  end
+
+  subgraph daemon["Daemon 进程 · apps/agentd（唯一组合根）"]
+    grpcServer["gRPC service<br/>命令 + Snapshot stream"]
+    host["Runtime host<br/>校验 · epoch · FIFO"]
+    modelAware["Model-aware runtime<br/>模型状态与激活"]
+    runtime["agent-runtime<br/>durable execution"]
+    domain["agent-domain<br/>领域事件 + reducer"]
+    kernel["kernel-pi<br/>Pi Agent Core 适配层"]
+    localModel["local-model<br/>模型生命周期与推理"]
+    control["local-control-plane + native<br/>scope · token · lock · 安全路径"]
+
+    grpcServer --> host --> modelAware --> runtime
+    runtime --> domain
+    runtime --> kernel --> localModel
+    control -.-> grpcServer
+  end
+
+  subgraph resources["Daemon 独占的本地资源"]
+    eventStore[("EventStore<br/>SQLite WAL")]
+    llama["node-llama-cpp<br/>GGUF 模型缓存"]
+    discovery["受保护的运行目录<br/>descriptor · token · lease"]
+  end
+
+  user --> tui
+  launcher -. "发现 / 必要时拉起" .-> discovery
+  control -. "发布 / 清理" .-> discovery
+  grpcClient <-->|"认证 loopback gRPC<br/>packages/protocol"| grpcServer
+  runtime -->|"先持久化领域事件"| eventStore
+  eventStore -->|"恢复"| runtime
+  localModel --> llama
+  modelAware -->|"版本化 Snapshot"| grpcServer
+
+  classDef clientNode fill:#102a2a,stroke:#54d2b0,color:#e8fffa;
+  classDef daemonNode fill:#221d2f,stroke:#b69cff,color:#f7f2ff;
+  classDef resourceNode fill:#2a2417,stroke:#e7b65c,color:#fff8e8;
+  class tui,launcher,grpcClient,uiModel clientNode;
+  class grpcServer,host,modelAware,runtime,domain,kernel,localModel,control daemonNode;
+  class eventStore,llama,discovery resourceNode;
 ```
 
 daemon 是 Session 与执行状态的唯一权威。TUI 只持有输入、渲染、locale、主题和
 短期展示偏好。关闭 TUI 不会停止 daemon 已接受的 turn 或模型下载。
+
+当前生产组合中的工具 registry 为空、审批策略为 default-deny、Secret resolver 为
+拒绝式实现，并且尚未连接 MCP。因此图中不把工具和 MCP 画成已交付能力；后续接入时
+仍必须归 `agentd` 所有，不能下沉到 TUI。
+
+## 命令与事件闭环
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User as 用户
+  participant TUI as agent TUI
+  participant Client as agent-client
+  participant Daemon as agentd
+  participant Runtime as agent-runtime
+  participant Store as EventStore
+  participant Pi as kernel-pi
+  participant Model as local-model
+
+  User->>TUI: 提交输入
+  TUI->>Client: 类型化命令
+  Client->>Daemon: 认证 gRPC + command/session/epoch
+  Daemon->>Daemon: 鉴权、边界校验、FIFO 串行化
+  Daemon->>Runtime: start turn
+  Runtime->>Store: append user_message_submitted
+  Store-->>Runtime: durable revision
+  Runtime->>Pi: startTurn
+  Pi->>Model: 流式推理
+
+  loop 每个执行事件
+    Model-->>Pi: token / 生命周期结果
+    Pi-->>Runtime: 规范化 KernelEvent
+    Runtime->>Store: 映射并 append Lyonbrown 领域事件
+    Store-->>Runtime: 持久化完成
+    Runtime-->>Daemon: 投影 Runtime Snapshot
+    Daemon-->>Client: Snapshot stream + daemon epoch/revision
+    Client-->>TUI: ui-model 状态更新
+    TUI-->>User: 增量渲染
+  end
+```
+
+这个顺序体现一条不可绕过的约束：执行结果必须先转换为 Lyonbrown 领域事件并成功
+写入 EventStore，随后才能投影为客户端 Snapshot。Pi 是执行引擎，EventStore 才是
+Session 与执行状态的持久真相源。
 
 ## 传输与发现
 
