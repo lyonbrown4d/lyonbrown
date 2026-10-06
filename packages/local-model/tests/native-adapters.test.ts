@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
+import { DEFAULT_PRESET, MODEL_CATALOG, modelDownloadUri } from "../src/internal/catalog.ts";
 import type { ModelFileDownloadRequest } from "../src/internal/model-download.ts";
 import { NodeModelIo } from "../src/internal/node-model-io.ts";
 import { TestNativeModelStorage } from "./support/native-storage.ts";
@@ -164,8 +164,9 @@ describe("model I/O adapter", () => {
     });
     const storage = new TestNativeModelStorage(root);
     const io = new NodeModelIo(storage, { downloadModelFile });
+    const catalogPreset = MODEL_CATALOG[1];
     const preset = {
-      ...DEFAULT_PRESET,
+      ...catalogPreset,
       sha256: "f16d05ec6b29248d2c61adb1e9263f78e4f7bace1b955014a2d17872cfe4064d",
       expectedDownloadBytes: content.byteLength,
       maxBytes: 1024,
@@ -180,9 +181,7 @@ describe("model I/O adapter", () => {
     });
     expect(downloadModelFile).toHaveBeenCalledOnce();
     const request = downloadModelFile.mock.calls[0]?.[0];
-    expect(request?.source).toBe(
-      "https://huggingface.co/Qwen/Qwen3-1.7B-GGUF/resolve/7fb011e9aee6e4dc7adf8430df9ea8de6a466aa3/Qwen3-1.7B-Q4_K_M.gguf",
-    );
+    expect(request?.source).toBe(modelDownloadUri(preset));
     expect(request?.targetPath).toContain(".staging-");
     expect(request?.maxBytes).toBe(1024);
     expect(request?.signal.aborted).toBe(false);

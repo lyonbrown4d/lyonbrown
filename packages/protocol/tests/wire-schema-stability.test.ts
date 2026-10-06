@@ -81,4 +81,18 @@ describe("wire schema stability", () => {
       COMMAND_ERROR_CODE_EPOCH_MISMATCH: 15,
     });
   });
+
+  it("keeps additive managed-model recommendation field tags and enum values", () => {
+    const managedModel = root.lookupType("lyonbrown.agent.v1.ManagedModel");
+    const reason = root.lookupEnum("lyonbrown.agent.v1.ModelRecommendationReason");
+
+    expect(managedModel.fields.display_name?.id).toBe(6);
+    expect(managedModel.fields.recommendation_reason?.id).toBe(7);
+    expect(reason.values).toMatchObject({
+      MODEL_RECOMMENDATION_REASON_UNSPECIFIED: 0,
+      MODEL_RECOMMENDATION_REASON_INSTALLED_PREFERRED: 1,
+      MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE: 2,
+      MODEL_RECOMMENDATION_REASON_CONSERVATIVE_FALLBACK: 3,
+    });
+  });
 });

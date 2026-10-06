@@ -1,11 +1,13 @@
 import type { NativeModelStorageCapability } from "../native-storage.ts";
 import type { LocalModelService } from "../types.ts";
-import { DEFAULT_PRESET } from "./catalog.ts";
-import type { LlamaEngineAdapter, LlamaLease } from "./contracts.ts";
+import { DEFAULT_PRESET, MODEL_CATALOG } from "./catalog.ts";
+import type { LlamaEngineAdapter, LlamaLease, ModelPreset, ModelSelector } from "./contracts.ts";
 import { verifyModelFile } from "./file-verification.ts";
 import { createLocalModelManager } from "./manager.ts";
-import { DEFAULT_MODEL_IDENTITY } from "./model-identity.ts";
+import { createHardwareAwareModelSelector } from "./model-selection.ts";
+import { modelIdentityFor } from "./model-identity.ts";
 import { createNodeLlamaEngine } from "./node-llama.ts";
+import { createNodeLlamaModelEvaluator } from "./node-llama-model-evaluator.ts";
 import {
   NodeModelIo,
   type ModelFileDownloader,
@@ -18,6 +20,8 @@ interface CompositionDependencies {
   readonly nodeLlamaEngine?: typeof createNodeLlamaEngine;
   readonly verifyFile?: ModelFileVerifier;
   readonly lockProcess?: ProcessLockAcquirer;
+  readonly modelCatalog?: readonly ModelPreset[];
+  readonly modelSelector?: ModelSelector;
 }
 
 export const createComposedLocalModelService = (
@@ -36,21 +40,27 @@ export const createComposedLocalModelService = (
     dependencies.nodeLlamaEngine ?? createNodeLlamaEngine,
     verifier,
   );
-  return createLocalModelManager(io, engine);
+  const selection = {
+    catalog: dependencies.modelCatalog ?? MODEL_CATALOG,
+    selector:
+      dependencies.modelSelector ??
+      createHardwareAwareModelSelector(createNodeLlamaModelEvaluator()),
+  };
+  return createLocalModelManager(io, engine, undefined, undefined, selection);
 };
 
 const createAnchoredLlamaEngine = (
   capability: NativeModelStorageCapability,
   engineFactory: typeof createNodeLlamaEngine,
   verifier: ModelFileVerifier,
-): LlamaEngineAdapter => ({
-  async loadDefault(signal: AbortSignal): Promise<LlamaLease> {
+): LlamaEngineAdapter => {
+  const load = async (preset: ModelPreset, signal: AbortSignal): Promise<LlamaLease> => {
     let callbackLease: LlamaLease | undefined;
     let callbackTask: Promise<LlamaLease> | undefined;
     const callbackState = { invoked: false, violation: false, closed: false };
     try {
       const result = await capability.withInstalledFile(
-        DEFAULT_MODEL_IDENTITY,
+        modelIdentityFor(preset),
         signal,
         (filePath) => {
           if (callbackState.closed || callbackState.invoked) {
@@ -61,7 +71,7 @@ const createAnchoredLlamaEngine = (
           }
           callbackState.invoked = true;
           callbackTask = (async () => {
-            await verifier(filePath, DEFAULT_PRESET, signal);
+            await verifier(filePath, preset, signal);
             callbackLease = await engineFactory(filePath).loadDefault(signal);
             return callbackLease;
           })();
@@ -85,8 +95,12 @@ const createAnchoredLlamaEngine = (
       await disposeQuietly(callbackLease);
       throw new Error("secure_model_anchor_invalid");
     }
-  },
-});
+  };
+  return {
+    load,
+    loadDefault: (signal) => load(DEFAULT_PRESET, signal),
+  };
+};
 
 const settleQuietly = async (task: Promise<unknown> | undefined): Promise<void> => {
   try {

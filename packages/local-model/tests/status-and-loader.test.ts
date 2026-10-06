@@ -78,12 +78,12 @@ describe("default local model status", () => {
 
   it("pins the small Qwen3 preset without exposing its URL or path", () => {
     expect(DEFAULT_LOCAL_MODEL).toEqual({
-      id: "qwen3-1.7b-q4_k_m",
-      displayName: "Qwen3 1.7B Q4_K_M",
-      expectedDownloadBytes: 1_107_408_544,
-      maxBytes: 2_147_483_648,
-      minimumMemoryBytes: 4_294_967_296,
-      sha256: "228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f",
+      id: "qwen3-0.6b-q8_0",
+      displayName: "Qwen3 0.6B Q8_0",
+      expectedDownloadBytes: 639_446_688,
+      maxBytes: 1_073_741_824,
+      minimumMemoryBytes: 2_147_483_648,
+      sha256: "9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031",
     });
     expect(Object.keys(DEFAULT_LOCAL_MODEL)).not.toContain("url");
     expect(Object.keys(DEFAULT_LOCAL_MODEL)).not.toContain("path");

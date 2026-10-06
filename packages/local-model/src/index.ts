@@ -12,6 +12,7 @@ export type {
   LocalModelMessage,
   LocalModelPhase,
   LocalModelService,
+  LocalModelSelectionReason,
   LocalModelStatus,
   StartModelDownloadResult,
 } from "./types.ts";

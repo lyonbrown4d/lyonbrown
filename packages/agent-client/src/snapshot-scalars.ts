@@ -3,6 +3,7 @@ import {
   ApprovalState,
   ModelLocality,
   ModelOptionDisabledReason,
+  ModelRecommendationReason,
   ModelSetupAction,
   ModelSetupPhase,
   ModelSetupSource,
@@ -210,6 +211,21 @@ export function modelAction(value: ModelSetupAction) {
       return "retry" as const;
     default:
       return unknown("model_setup.allowed_actions");
+  }
+}
+
+export function modelRecommendationReason(value: ModelRecommendationReason | undefined) {
+  switch (value) {
+    case undefined:
+      return null;
+    case ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_INSTALLED_PREFERRED:
+      return "installed-preferred" as const;
+    case ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE:
+      return "hardware-compatible" as const;
+    case ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_CONSERVATIVE_FALLBACK:
+      return "conservative-fallback" as const;
+    default:
+      return unknown("model_setup.managed_model.recommendation_reason");
   }
 }
 

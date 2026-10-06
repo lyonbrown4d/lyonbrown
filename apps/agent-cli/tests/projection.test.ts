@@ -15,6 +15,8 @@ describe("runtime projection", () => {
           phase: "downloading",
           managedModel: {
             id: "qwen3-1.7b-q4_k_m",
+            displayName: null,
+            recommendationReason: null,
             expectedDownloadBytes: 100n,
             maxBytes: 110n,
             minAvailableMemoryBytes: 1n,

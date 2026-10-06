@@ -7,7 +7,7 @@ import type {
   NativeModelStagingFile,
   NativeModelStorageCapability,
 } from "../native-storage.ts";
-import { MODEL_DOWNLOAD_URI } from "./catalog.ts";
+import { modelDownloadUri } from "./catalog.ts";
 import type {
   DownloadArtifact,
   DownloadProgress,
@@ -17,7 +17,7 @@ import type {
 } from "./contracts.ts";
 import { verifyModelFile } from "./file-verification.ts";
 import { downloadModelFile, type ModelFileDownloadRequest } from "./model-download.ts";
-import { DEFAULT_MODEL_IDENTITY } from "./model-identity.ts";
+import { modelIdentityFor } from "./model-identity.ts";
 
 export interface ModelFileDownloader {
   downloadModelFile(request: ModelFileDownloadRequest): Promise<void>;
@@ -46,7 +46,7 @@ export class NodeModelIo implements LocalModelIo {
   async inspectInstalled(preset: ModelPreset, signal: AbortSignal): Promise<boolean> {
     let verified = false;
     const result = await this.storage.withInstalledFile(
-      DEFAULT_MODEL_IDENTITY,
+      modelIdentityFor(preset),
       signal,
       async (filePath) => {
         await this.verifyFile(filePath, preset, signal);
@@ -60,7 +60,7 @@ export class NodeModelIo implements LocalModelIo {
   async acquireInstallLock(preset: ModelPreset, signal: AbortSignal): Promise<InstallLockLease> {
     void preset;
     throwIfAborted(signal);
-    const anchor = await this.storage.acquireInstallLockAnchor(DEFAULT_MODEL_IDENTITY, signal);
+    const anchor = await this.storage.acquireInstallLockAnchor(modelIdentityFor(preset), signal);
     try {
       const releaseLock = await anchor.withLockTarget((target) => this.lockProcess(target, signal));
       return combineLockReleases(releaseLock, anchor);
@@ -79,7 +79,7 @@ export class NodeModelIo implements LocalModelIo {
     },
   ): Promise<DownloadArtifact> {
     const staging = await this.storage.createStagingFile(
-      DEFAULT_MODEL_IDENTITY,
+      modelIdentityFor(preset),
       request.operationId,
       request.signal,
     );
@@ -142,7 +142,7 @@ export class NodeModelIo implements LocalModelIo {
     let previousTotalBytes = 0;
     try {
       await this.downloader.downloadModelFile({
-        source: MODEL_DOWNLOAD_URI,
+        source: modelDownloadUri(preset),
         targetPath: expectedPath,
         maxBytes: preset.maxBytes,
         signal: controller.signal,

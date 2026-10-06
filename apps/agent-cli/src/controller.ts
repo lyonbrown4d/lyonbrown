@@ -71,12 +71,14 @@ export class AgentTuiController {
     this.update({ activityOpen: !this.frame.activityOpen });
   }
 
-  public async submit(raw: string): Promise<void> {
+  public async submit(raw: string): Promise<boolean> {
     try {
       await this.handle(parseInput(raw));
       this.update({ notice: null, commandPaletteOpen: false });
+      return true;
     } catch (error: unknown) {
       this.update({ notice: publicMessage(error) });
+      return false;
     }
   }
 

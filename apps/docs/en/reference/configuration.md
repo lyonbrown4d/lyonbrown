@@ -30,7 +30,11 @@ The parser, schema library, and file format remain an implementation decision. U
 
 ## Default local model
 
-The default provider is daemon-owned llama.cpp and the default preset is `qwen3-1.7b-q4_k_m`. `node-llama-cpp` is a required dependency, but only verified prebuilt native binaries shipped with the artifact are allowed; there is no runtime source-build fallback.
+The default provider is daemon-owned llama.cpp. The daemon recommends a model
+for local hardware from a fixed trusted catalog instead of hard-coding one
+default preset. `node-llama-cpp` is a required dependency, but only verified
+prebuilt native binaries shipped with the artifact are allowed; there is no
+runtime source-build fallback.
 
 A missing model does not trigger download. The daemon checks its secure cache in the background and projects `ModelSetupRequired`; the user can explicitly start, retry, or cancel a download. URL, digest, and destination come from the daemon's built-in catalog and cannot be configured by a client. See [Local Models and Task Routing](local-models-routing.md).
 

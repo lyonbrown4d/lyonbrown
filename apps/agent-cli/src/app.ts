@@ -19,7 +19,7 @@ export async function runAgentTui(options: RunAgentTuiOptions): Promise<void> {
   });
   const screen: PiScreen = createPiScreen({
     frame: createInitialFrame(),
-    onSubmit: (text) => void controller.submit(text),
+    onSubmit: (text) => controller.submit(text),
     onLanguageToggle: () => {
       controller.toggleLanguage();
     },

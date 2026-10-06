@@ -1,16 +1,41 @@
 import type { LocalModelLease } from "../types.ts";
 
 export interface ModelPreset {
-  readonly id: "qwen3-1.7b-q4_k_m";
+  readonly id: string;
   readonly displayName: string;
-  readonly owner: "Qwen";
-  readonly repository: "Qwen3-1.7B-GGUF";
+  readonly owner: string;
+  readonly repository: string;
   readonly revision: string;
-  readonly filename: "Qwen3-1.7B-Q4_K_M.gguf";
+  readonly filename: string;
   readonly sha256: string;
   readonly expectedDownloadBytes: number;
   readonly maxBytes: number;
   readonly minimumMemoryBytes: number;
+  readonly minimumContextTokens: number;
+  readonly qualityRank: number;
+  readonly license: "apache-2.0";
+}
+
+export interface ModelCompatibilityEvaluation {
+  readonly modelId: string;
+  readonly compatibilityScore: number;
+  readonly bonusScore: number;
+}
+
+export interface ModelCompatibilityEvaluator {
+  evaluate(
+    presets: readonly ModelPreset[],
+    signal: AbortSignal,
+  ): Promise<readonly ModelCompatibilityEvaluation[]>;
+}
+
+export interface ModelSelection {
+  readonly preset: ModelPreset;
+  readonly source: "hardware" | "fallback";
+}
+
+export interface ModelSelector {
+  select(presets: readonly ModelPreset[], signal: AbortSignal): Promise<ModelSelection>;
 }
 
 export interface DownloadProgress {
@@ -47,4 +72,5 @@ export type LlamaLease = LocalModelLease;
 
 export interface LlamaEngineAdapter {
   loadDefault(signal: AbortSignal): Promise<LlamaLease>;
+  load?(preset: ModelPreset, signal: AbortSignal): Promise<LlamaLease>;
 }

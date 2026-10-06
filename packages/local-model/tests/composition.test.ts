@@ -8,10 +8,18 @@ import {
   type NativeModelStorageCapability,
 } from "../src/composition.ts";
 import { createComposedLocalModelService } from "../src/internal/composed-service.ts";
-import { DEFAULT_PRESET } from "../src/internal/catalog.ts";
+import { DEFAULT_PRESET, MODEL_CATALOG } from "../src/internal/catalog.ts";
 import { DEFAULT_MODEL_IDENTITY } from "../src/internal/model-identity.ts";
 import type { LocalModelLease, LocalModelService } from "../src/types.ts";
 import { createFakeLlamaLease, Deferred, flushTasks } from "./support/fakes.ts";
+
+const fallbackSelector = {
+  select: (catalog: readonly (typeof DEFAULT_PRESET)[]) => {
+    const preset = catalog[0];
+    if (preset === undefined) throw new Error("catalog fixture missing");
+    return Promise.resolve({ preset, source: "fallback" as const });
+  },
+};
 
 describe("secure local-model composition", () => {
   it("fails closed without a native secure capability", () => {
@@ -34,6 +42,7 @@ describe("secure local-model composition", () => {
       },
     }));
     const service = createComposedLocalModelService(storage, {
+      modelCatalog: [DEFAULT_PRESET],
       verifyFile: verifier,
       nodeLlamaEngine,
     });
@@ -49,10 +58,38 @@ describe("secure local-model composition", () => {
     expect(nodeLlamaEngine).toHaveBeenCalledWith("C:\\anchored\\Qwen.gguf");
   });
 
+  it("anchors, verifies, and loads the selected non-fallback catalog identity", async () => {
+    const selected = MODEL_CATALOG[1];
+    const storage = new MemoryStorage(true, selected.id);
+    const verifier = vi.fn(() => Promise.resolve(1));
+    const nodeLlamaEngine = vi.fn(() => ({
+      loadDefault: () => Promise.resolve(createFakeLlamaLease()),
+    }));
+    const service = createComposedLocalModelService(storage, {
+      modelCatalog: [selected],
+      verifyFile: verifier,
+      nodeLlamaEngine,
+    });
+    await flushTasks();
+
+    await expect(service.load()).resolves.toMatchObject({
+      kind: "ready",
+      model: { id: selected.id },
+    });
+    expect(storage.identities.every((identity) => identity.modelId === selected.id)).toBe(true);
+    expect(verifier).toHaveBeenLastCalledWith(
+      "C:\\anchored\\Qwen.gguf",
+      selected,
+      expect.any(AbortSignal),
+    );
+  });
+
   it("fails closed when a provider claims present without invoking the anchored callback", async () => {
     const storage = new MemoryStorage(true);
     storage.skipInstalledCallback = true;
     const service = createComposedLocalModelService(storage, {
+      modelCatalog: [DEFAULT_PRESET],
+      modelSelector: fallbackSelector,
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: () => ({
         loadDefault: () => Promise.resolve(createFakeLlamaLease()),
@@ -68,6 +105,7 @@ describe("secure local-model composition", () => {
     storage.rejectAfterCallbackOnAccess = 2;
     const dispose = vi.fn(() => Promise.resolve());
     const service = createComposedLocalModelService(storage, {
+      modelCatalog: [DEFAULT_PRESET],
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: () => ({
         loadDefault: () => Promise.resolve(createFakeLlamaLease(dispose)),
@@ -90,6 +128,7 @@ describe("secure local-model composition", () => {
       loadDefault: () => Promise.resolve(createFakeLlamaLease(dispose)),
     }));
     const service = createComposedLocalModelService(storage, {
+      modelCatalog: [DEFAULT_PRESET],
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine,
     });
@@ -108,6 +147,7 @@ describe("secure local-model composition", () => {
     storage.rejectAfterCallbackOnAccess = 2;
     const dispose = vi.fn(() => Promise.reject(new Error("C:\\private\\native lease")));
     const service = createComposedLocalModelService(storage, {
+      modelCatalog: [DEFAULT_PRESET],
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: () => ({
         loadDefault: () => Promise.resolve(createFakeLlamaLease(dispose)),
@@ -127,6 +167,7 @@ describe("secure local-model composition", () => {
     const storage = new MemoryStorage(false);
     let signalWasAborted = false;
     const service = createComposedLocalModelService(storage, {
+      modelCatalog: [DEFAULT_PRESET],
       modelFileDownloader: {
         downloadModelFile: (request) => {
           request.onProgress({
@@ -140,6 +181,7 @@ describe("secure local-model composition", () => {
       verifyFile: () => Promise.resolve(1),
       nodeLlamaEngine: vi.fn(),
       lockProcess: () => Promise.resolve(() => Promise.resolve()),
+      modelSelector: fallbackSelector,
     });
     await flushTasks();
 
@@ -155,10 +197,12 @@ describe("secure local-model composition", () => {
     async (verifiedBytes) => {
       const storage = new MemoryStorage(false);
       const service = createComposedLocalModelService(storage, {
+        modelCatalog: [DEFAULT_PRESET],
         modelFileDownloader: successfulDownloader(),
         verifyFile: () => Promise.resolve(verifiedBytes),
         nodeLlamaEngine: vi.fn(),
         lockProcess: () => Promise.resolve(() => Promise.resolve()),
+        modelSelector: fallbackSelector,
       });
       await flushTasks();
 
@@ -179,7 +223,10 @@ class MemoryStorage implements NativeModelStorageCapability {
   duplicateCallbackOnAccess: number | undefined;
   private installedAccesses = 0;
 
-  constructor(private readonly installed: boolean) {}
+  constructor(
+    private readonly installed: boolean,
+    private readonly installedModelId = DEFAULT_PRESET.id,
+  ) {}
 
   acquireInstallLockAnchor(identity: NativeModelIdentity) {
     this.identities.push(identity);
@@ -209,7 +256,7 @@ class MemoryStorage implements NativeModelStorageCapability {
     void _signal;
     this.identities.push(identity);
     this.installedAccesses += 1;
-    if (!this.installed) return { kind: "missing" };
+    if (!this.installed || identity.modelId !== this.installedModelId) return { kind: "missing" };
     if (this.skipInstalledCallback) {
       return { kind: "present", value: true as T };
     }

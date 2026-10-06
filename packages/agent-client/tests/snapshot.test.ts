@@ -2,6 +2,7 @@ import {
   ActivityPhase,
   ApprovalState,
   ModelLocality,
+  ModelRecommendationReason,
   ModelSetupAction,
   ModelSetupPhase,
   ModelSetupSource,
@@ -108,6 +109,9 @@ function fullSnapshot() {
       phase: ModelSetupPhase.MODEL_SETUP_PHASE_DOWNLOADING,
       managedModel: {
         id: "local-model",
+        displayName: "Local Model",
+        recommendationReason:
+          ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE,
         expectedDownloadBytes: 11n,
         maxBytes: 12n,
         minAvailableMemoryBytes: 13n,
@@ -172,7 +176,14 @@ describe("snapshot DTO mapping", () => {
         },
       ],
       pendingApproval: { requestId: "approval-1", state: "pending" },
-      modelSetup: { phase: "downloading", downloadedBytes: 14n },
+      modelSetup: {
+        phase: "downloading",
+        downloadedBytes: 14n,
+        managedModel: {
+          displayName: "Local Model",
+          recommendationReason: "hardware-compatible",
+        },
+      },
       modelCatalog: { models: [{ tier: "worker", locality: "local" }] },
       modelPolicy: { active: { kind: "auto" }, pending: { kind: "pinned" } },
     });
@@ -266,6 +277,39 @@ describe("snapshot DTO mapping", () => {
         failure: null,
       },
     });
+  });
+
+  it("maps absent managed-model recommendation metadata to explicit null fields", () => {
+    const wire = fullSnapshot();
+    const managedModel = wire.modelSetup?.managedModel;
+    if (managedModel === undefined) throw new Error("managed model fixture is missing");
+    managedModel.displayName = undefined;
+    managedModel.recommendationReason = undefined;
+
+    expect(mapSnapshot(wire).modelSetup?.managedModel).toMatchObject({
+      displayName: null,
+      recommendationReason: null,
+    });
+  });
+
+  it("rejects hostile managed-model recommendation metadata", () => {
+    const oversized = fullSnapshot();
+    const oversizedModel = oversized.modelSetup?.managedModel;
+    if (oversizedModel === undefined) throw new Error("managed model fixture is missing");
+    oversizedModel.displayName = "x".repeat(129);
+    expect(() => mapSnapshot(oversized)).toThrow(/display_name/u);
+
+    const terminalControl = fullSnapshot();
+    const terminalControlModel = terminalControl.modelSetup?.managedModel;
+    if (terminalControlModel === undefined) throw new Error("managed model fixture is missing");
+    terminalControlModel.displayName = "trusted\u001b[31m";
+    expect(() => mapSnapshot(terminalControl)).toThrow(/display_name/u);
+
+    const unknownReason = fullSnapshot();
+    const unknownModel = unknownReason.modelSetup?.managedModel;
+    if (unknownModel === undefined) throw new Error("managed model fixture is missing");
+    unknownModel.recommendationReason = 99 as ModelRecommendationReason;
+    expect(() => mapSnapshot(unknownReason)).toThrow(/unknown enum/u);
   });
 
   it("rejects incompatible, malformed, and internally conflicting snapshots", () => {

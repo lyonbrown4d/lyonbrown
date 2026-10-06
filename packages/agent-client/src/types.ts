@@ -201,6 +201,12 @@ export interface ApprovalSnapshotDto {
 
 export interface ManagedModelDto {
   readonly id: string;
+  readonly displayName: string | null;
+  readonly recommendationReason:
+    | "installed-preferred"
+    | "hardware-compatible"
+    | "conservative-fallback"
+    | null;
   readonly expectedDownloadBytes: bigint;
   readonly maxBytes: bigint;
   readonly minAvailableMemoryBytes: bigint;

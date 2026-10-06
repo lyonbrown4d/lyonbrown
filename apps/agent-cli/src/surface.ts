@@ -2,6 +2,7 @@ import { parseColor, styleText, truncateToWidth } from "@earendil-works/pi-tui";
 
 import type { AgentTuiFrame } from "./controller.ts";
 import { labels } from "./locales.ts";
+import { renderModelSetup } from "./model-setup-surface.ts";
 import { safeTerminalText } from "./text-safety.ts";
 import { THEMES } from "./themes.ts";
 
@@ -15,16 +16,19 @@ const COMMANDS = [
 ] as const;
 
 export function renderFrame(frame: AgentTuiFrame, width: number): string[] {
-  const safeWidth = Math.max(20, width);
+  const safeWidth = Math.max(1, width);
   const locale = frame.ui.preferences.locale;
   const text = labels(locale);
   const palette = THEMES[frame.ui.preferences.themeId];
   const accent = (value: string): string =>
-    styleText(value, { fg: parseColor(palette.accent), bold: true }, "truecolor");
+    styleText(value, { fg: parseColor(palette.accentPrimary), bold: true }, "truecolor");
   const muted = (value: string): string =>
-    styleText(value, { fg: parseColor(palette.muted), dim: true }, "truecolor");
+    styleText(value, { fg: parseColor(palette.textSecondary), dim: true }, "truecolor");
   const warning = (value: string): string =>
-    styleText(value, { fg: parseColor(palette.warning), bold: true }, "truecolor");
+    styleText(value, { fg: parseColor(palette.statusWarning), bold: true }, "truecolor");
+  const danger = (value: string): string =>
+    styleText(value, { fg: parseColor(palette.statusDanger), bold: true }, "truecolor");
+  if (width < 30) return [fit(warning(text.terminalTooSmall), safeWidth)];
   const lines: string[] = [
     fit(`${accent("Lyonbrown")}  ${muted(text.connection[frame.ui.remote.connection])}`, safeWidth),
     muted("─".repeat(safeWidth)),
@@ -43,11 +47,17 @@ export function renderFrame(frame: AgentTuiFrame, width: number): string[] {
 
   const setup = frame.snapshot?.modelSetup;
   if (setup !== null && setup !== undefined && setup.phase !== "ready") {
-    const progress = progressText(setup.downloadedBytes, setup.totalBytes);
+    const mutationsEnabled =
+      frame.ui.remote.connection === "ready" && frame.ui.remote.snapshotFresh;
     lines.push(
-      fit(`${warning(text.model)} · ${safeTerminalText(setup.phase)} ${progress}`, safeWidth),
+      ...renderModelSetup({
+        setup,
+        locale,
+        width: safeWidth,
+        mutationsEnabled,
+        styles: { heading: accent, muted, warning, danger },
+      }).map((line) => fit(line, safeWidth)),
     );
-    if (setup.failure !== null) lines.push(fit(safeTerminalText(setup.failure.message), safeWidth));
   }
 
   const approval = frame.snapshot?.pendingApproval;
@@ -76,18 +86,6 @@ export function renderFrame(frame: AgentTuiFrame, width: number): string[] {
   if (frame.notice !== null) lines.push(fit(warning(safeTerminalText(frame.notice)), safeWidth));
   lines.push(muted(text.footer));
   return lines;
-}
-
-function progressText(downloaded: bigint, total: bigint | null): string {
-  if (total === null || total <= 0n) return formatBytes(downloaded);
-  const percent = Number((downloaded * 100n) / total);
-  const filled = Math.max(0, Math.min(10, Math.floor(percent / 10)));
-  return `[${"█".repeat(filled)}${"░".repeat(10 - filled)}] ${String(percent)}%`;
-}
-
-function formatBytes(bytes: bigint): string {
-  const mebibytes = Number(bytes / (1024n * 1024n));
-  return `${String(mebibytes)} MiB`;
 }
 
 function fit(value: string, width: number): string {

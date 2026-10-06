@@ -81,6 +81,7 @@ function status(phase: LocalModelStatus["phase"]): LocalModelStatus {
     downloadedBytes: 0,
     totalBytes: null,
     failure: null,
+    selectionReason: phase === "checking" ? null : "hardware-compatible",
     allowedActions: phase === "setup-required" ? ["download"] : [],
   };
 }

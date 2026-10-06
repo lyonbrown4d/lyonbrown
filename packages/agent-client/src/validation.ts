@@ -57,6 +57,14 @@ export function protocolText(field: string, value: unknown): string {
   }
 }
 
+export function protocolDisplayName(field: string, value: unknown): string {
+  const displayName = protocolId(field, value);
+  if (/[\p{Cc}\p{Cf}]/u.test(displayName)) {
+    throw clientError("protocol", "INVALID_SNAPSHOT", `${field} is invalid`);
+  }
+  return displayName;
+}
+
 export function requiredField<T>(field: string, value: T | undefined): T {
   if (value === undefined) {
     throw clientError("protocol", "INVALID_SNAPSHOT", `${field} is missing`);

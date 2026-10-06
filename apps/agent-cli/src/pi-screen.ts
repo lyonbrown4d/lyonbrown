@@ -14,13 +14,14 @@ import {
 } from "@earendil-works/pi-tui";
 
 import type { AgentTuiFrame } from "./controller.ts";
+import { setupKeyIntent } from "./setup-input.ts";
 import { renderFrame } from "./surface.ts";
 import { THEMES } from "./themes.ts";
 
 export interface PiScreenOptions {
   readonly terminal?: Terminal;
   readonly frame: AgentTuiFrame;
-  readonly onSubmit: (text: string) => void;
+  readonly onSubmit: (text: string) => unknown;
   readonly onLanguageToggle: () => void;
   readonly onPaletteToggle: () => void;
   readonly onActivityToggle: () => void;
@@ -37,6 +38,9 @@ export interface PiScreen {
 export function createPiScreen(options: PiScreenOptions): PiScreen {
   const tui: TUI = new TuiMainScreen(options.terminal ?? new ProcessTerminal());
   const surface = new FrameComponent(options.frame);
+  let currentFrame = options.frame;
+  let setupCommandPending: Promise<boolean> | null = null;
+  let exitAfterSetupCommand = false;
   const editor = new Editor(tui, editorTheme(options.frame), { paddingX: 1 });
   editor.setAutocompleteProvider(new CombinedAutocompleteProvider([...COMMANDS], process.cwd()));
   editor.onSubmit = (text) => {
@@ -44,7 +48,7 @@ export function createPiScreen(options: PiScreenOptions): PiScreen {
     if (value.length === 0) return;
     editor.addToHistory(value);
     editor.setText("");
-    options.onSubmit(value);
+    void Promise.resolve(options.onSubmit(value)).catch(() => undefined);
   };
   tui.addChild(surface);
   tui.addChild(editor);
@@ -52,6 +56,27 @@ export function createPiScreen(options: PiScreenOptions): PiScreen {
   tui.addInputListener((data) => {
     if (matchesKey(data, Key.f2)) {
       options.onLanguageToggle();
+      return { consume: true };
+    }
+    const setupIntent = setupKeyIntent(data, currentFrame);
+    if (setupIntent !== null) {
+      if (setupIntent === "exit") {
+        if (setupCommandPending === null) options.onExit();
+        else exitAfterSetupCommand = true;
+      } else if (setupIntent !== "blocked" && setupCommandPending === null) {
+        const pending = Promise.resolve(options.onSubmit(`/${setupIntent}`)).then(
+          (result) => result !== false,
+          () => false,
+        );
+        setupCommandPending = pending;
+        void pending.then((succeeded) => {
+          if (setupCommandPending !== pending) return;
+          setupCommandPending = null;
+          const shouldExit = exitAfterSetupCommand;
+          exitAfterSetupCommand = false;
+          if (shouldExit && succeeded) options.onExit();
+        });
+      }
       return { consume: true };
     }
     if (matchesKey(data, Key.ctrl("p"))) {
@@ -77,8 +102,9 @@ export function createPiScreen(options: PiScreenOptions): PiScreen {
       tui.stop();
     },
     update: (frame) => {
+      currentFrame = frame;
       surface.update(frame);
-      editor.borderColor = colorizer(frame.ui.preferences.themeId, "accent");
+      editor.borderColor = colorizer(frame.ui.preferences.themeId, "focusRing");
       editor.invalidate();
       tui.requestRender();
     },
@@ -105,13 +131,13 @@ class FrameComponent implements Component {
 function editorTheme(frame: AgentTuiFrame): EditorTheme {
   const themeId = frame.ui.preferences.themeId;
   return {
-    borderColor: colorizer(themeId, "accent"),
+    borderColor: colorizer(themeId, "focusRing"),
     selectList: {
-      selectedPrefix: colorizer(themeId, "accent"),
-      selectedText: colorizer(themeId, "accent", true),
-      description: colorizer(themeId, "muted"),
-      scrollInfo: colorizer(themeId, "muted"),
-      noMatch: colorizer(themeId, "warning"),
+      selectedPrefix: colorizer(themeId, "accentPrimary"),
+      selectedText: colorizer(themeId, "accentPrimary", true),
+      description: colorizer(themeId, "textSecondary"),
+      scrollInfo: colorizer(themeId, "textFaint"),
+      noMatch: colorizer(themeId, "statusWarning"),
     },
   };
 }

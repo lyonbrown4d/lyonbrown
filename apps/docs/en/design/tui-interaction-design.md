@@ -122,7 +122,7 @@ For a managed preset in `Required`, the user has two explicit outcomes:
 
 ```text
 Local model  qwen3-1.7b-q4_k_m
-Recommended default · 1.03 GiB · download only after confirmation
+Recommended for this hardware · 1.03 GiB · download only after confirmation
 
 ████████████████░░░░░░░░░░░░░░░░  512 MiB / 1.03 GiB  50%
 

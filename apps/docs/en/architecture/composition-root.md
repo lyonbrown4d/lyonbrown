@@ -29,6 +29,27 @@ The current production kernel deliberately composes an empty tool registry,
 default-deny approval gate, rejecting secret resolver, and no MCP connections.
 Those are safe capability boundaries, not finished integrations.
 
+## Background work and scheduling
+
+`agentd` does not build a business scheduler. Native timers currently serve
+only RPC deadlines, bounded shutdown waits, cancellation propagation, and
+finite backoff; they do not provide restart-safe job semantics. When a real
+scheduled or background workload appears, selection follows its semantics:
+evaluate [Croner](https://github.com/Hexagon/croner) for process-local cron,
+[`p-retry`](https://github.com/sindresorhus/p-retry) for bounded async retry,
+and a narrow job port backed by [BullMQ](https://docs.bullmq.io/) or
+[Temporal](https://docs.temporal.io/develop/typescript) when persistence,
+multiple workers, retry state, and operational visibility are required. A
+recursive `setTimeout`, `setInterval`, or an ad hoc EventStore table must not
+become a job queue.
+
+The concrete dependency is added and exactly pinned only with its first real
+use case. Selecting BullMQ or Temporal also accepts the corresponding
+Redis/PostgreSQL or Temporal Service operating boundary; the zero-setup local
+daemon will not require those services speculatively. Job handlers must be
+idempotent, cancellable, and budgeted, and must write domain results to the
+EventStore before clients receive a projection.
+
 ## Startup order
 
 1. Parse and validate typed process configuration.

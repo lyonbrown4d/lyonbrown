@@ -9,7 +9,8 @@
 3. TypeScript 源文件的相对导入必须使用 `.ts` 扩展名，不得使用 `.js` 指向 TypeScript 源；构建产物扩展名由 TypeScript `rewriteRelativeImportExtensions` 自动改写。
 4. 统一使用 2 空格缩进，不使用 Tab。提交前运行根目录的格式、lint、类型、测试和构建门禁。
 5. 工具依赖放在 `devDependencies`；版本不得使用 `latest`、`*` 或 `~` 范围。复杂编排脚本放在 `scripts/*.ts`，通过 `tsx` 执行并使用 `zx` 管理子进程。
-6. moon 是 monorepo 任务图与缓存的唯一调度器，pnpm 仍是唯一包管理器。根目录的 `dev`、`dev:docs`、`lint`、`typecheck`、`test` 和 `build` 必须经 moon 执行；不得恢复并行的自制 workspace 调度器，也不得让 moon/proto 下载或替换仓库固定的 Node.js 与 pnpm。
+6. Node 后端的业务级延迟任务、周期任务、重试编排和持久化作业必须优先采用经过维护的第三方库，不得用 `setInterval`、递归 `setTimeout`、自建 cron 解析器或临时数据库表实现调度器。原生 timer 仅用于有界的进程内 deadline、取消、资源清理等待和短退避；需要跨重启、并发 worker、幂等重试或可观测状态时，必须先定义 job port，再选择成熟的持久化队列/工作流引擎。
+7. moon 是 monorepo 任务图与缓存的唯一调度器，pnpm 仍是唯一包管理器。根目录的 `dev`、`dev:docs`、`lint`、`typecheck`、`test` 和 `build` 必须经 moon 执行；不得恢复并行的自制 workspace 调度器，也不得让 moon/proto 下载或替换仓库固定的 Node.js 与 pnpm。
 
 ## 结构与边界
 

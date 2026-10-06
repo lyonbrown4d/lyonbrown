@@ -1,11 +1,16 @@
 export interface LocalModelDescriptor {
-  readonly id: "qwen3-1.7b-q4_k_m";
+  readonly id: string;
   readonly displayName: string;
   readonly expectedDownloadBytes: number;
   readonly maxBytes: number;
   readonly minimumMemoryBytes: number;
   readonly sha256: string;
 }
+
+export type LocalModelSelectionReason =
+  | "installed-preferred"
+  | "hardware-compatible"
+  | "conservative-fallback";
 
 export const LOCAL_MODEL_MAX_MESSAGE_BYTES = 64 * 1024;
 
@@ -32,6 +37,7 @@ export interface LocalModelStatus {
     readonly code: "cache_inspection_failed" | "download_failed";
     readonly retryable: true;
   };
+  readonly selectionReason: LocalModelSelectionReason | null;
   readonly allowedActions: readonly LocalModelAction[];
 }
 

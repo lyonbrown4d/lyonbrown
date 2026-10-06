@@ -1,15 +1,27 @@
 import { randomUUID } from "node:crypto";
 
-import { DEFAULT_LOCAL_MODEL } from "../public-model.ts";
 import type {
   CancelModelDownloadResult,
   LocalModelLoadResult,
   LocalModelService,
+  LocalModelSelectionReason,
   LocalModelStatus,
   StartModelDownloadResult,
 } from "../types.ts";
-import { DEFAULT_PRESET } from "./catalog.ts";
-import type { DownloadArtifact, LocalModelIo, LlamaEngineAdapter } from "./contracts.ts";
+import { waitForTasks } from "./background-tasks.ts";
+import { CATALOG_FALLBACK_PRESET } from "./catalog.ts";
+import type {
+  DownloadArtifact,
+  LocalModelIo,
+  LlamaEngineAdapter,
+  ModelPreset,
+} from "./contracts.ts";
+import {
+  createDeterministicSelectionOptions,
+  type ModelSelectionOptions,
+  selectInitialModel,
+} from "./initial-model-selection.ts";
+import { loadSelectedModel } from "./model-loader.ts";
 import { cloneStatus, statusFor, validProgress } from "./status.ts";
 
 interface ActiveOperation {
@@ -32,7 +44,16 @@ export const createLocalModelManager = (
   engine: LlamaEngineAdapter,
   operationId: () => string = randomUUID,
   shutdownTimeoutMs = DEFAULT_SHUTDOWN_TIMEOUT_MS,
-): LocalModelService => new LocalModelManager(io, engine, operationId, shutdownTimeoutMs);
+  selectionOptions: Partial<ModelSelectionOptions> = createDeterministicSelectionOptions(
+    CATALOG_FALLBACK_PRESET,
+  ),
+): LocalModelService => {
+  const defaults = createDeterministicSelectionOptions(CATALOG_FALLBACK_PRESET);
+  return new LocalModelManager(io, engine, operationId, shutdownTimeoutMs, {
+    catalog: selectionOptions.catalog ?? defaults.catalog,
+    selector: selectionOptions.selector ?? defaults.selector,
+  });
+};
 
 class LocalModelManager implements LocalModelService {
   private current: LocalModelStatus;
@@ -44,14 +65,18 @@ class LocalModelManager implements LocalModelService {
   private disposeTask: Promise<void> | undefined;
   private disposed = false;
   private readonly listeners = new Set<(status: LocalModelStatus) => void>();
+  private selectedPreset: ModelPreset;
+  private selectionReason: LocalModelSelectionReason | null = null;
 
   constructor(
     private readonly io: LocalModelIo,
     private readonly engine: LlamaEngineAdapter,
     private readonly operationId: () => string,
     private readonly shutdownTimeoutMs: number,
+    private readonly selectionOptions: ModelSelectionOptions,
   ) {
-    this.current = statusFor("checking");
+    this.selectedPreset = selectionOptions.catalog[0] ?? CATALOG_FALLBACK_PRESET;
+    this.current = statusFor(this.selectedPreset, null, "checking");
     this.inspectionTask = this.inspectInitialCache();
   }
 
@@ -81,7 +106,16 @@ class LocalModelManager implements LocalModelService {
       downloadedBytes: 0,
       totalBytes: null,
     };
-    this.publish(statusFor("waiting-for-lock", id, 0, DEFAULT_PRESET.expectedDownloadBytes));
+    this.publish(
+      statusFor(
+        this.selectedPreset,
+        this.selectionReason,
+        "waiting-for-lock",
+        id,
+        0,
+        this.selectedPreset.expectedDownloadBytes,
+      ),
+    );
     const task = this.runDownload(id, controller);
     this.operationTasks.add(task);
     void task.then(
@@ -131,15 +165,24 @@ class LocalModelManager implements LocalModelService {
 
   private async inspectInitialCache(): Promise<void> {
     try {
-      const installed = await this.io.inspectInstalled(
-        DEFAULT_PRESET,
+      const selection = await selectInitialModel(
+        this.io,
+        this.selectionOptions,
         this.inspectionController.signal,
       );
-      this.publish(statusFor(installed ? "ready" : "setup-required"));
+      this.selectedPreset = selection.preset;
+      this.selectionReason = selection.reason;
+      this.publish(
+        statusFor(
+          this.selectedPreset,
+          this.selectionReason,
+          selection.installed ? "ready" : "setup-required",
+        ),
+      );
     } catch {
       if (!this.inspectionController.signal.aborted) {
         this.publish(
-          statusFor("failed", null, 0, null, {
+          statusFor(this.selectedPreset, this.selectionReason, "failed", null, 0, null, {
             code: "cache_inspection_failed",
             retryable: true,
           }),
@@ -159,40 +202,28 @@ class LocalModelManager implements LocalModelService {
   }
 
   private async loadReady(signal: AbortSignal): Promise<LocalModelLoadResult> {
-    try {
-      const lease = await this.engine.loadDefault(signal);
-      if (this.disposed) {
-        try {
-          await lease.dispose();
-        } catch {
-          // A late native lease remains private; disposal failures are redacted.
-        }
-        return { kind: "unavailable", code: "service_disposed" };
-      }
-      return { kind: "ready", model: DEFAULT_LOCAL_MODEL, lease };
-    } catch {
-      return {
-        kind: "unavailable",
-        code: this.disposed || signal.aborted ? "service_disposed" : "native_runtime_unavailable",
-      };
-    }
+    return loadSelectedModel(this.engine, this.selectedPreset, signal, () => this.disposed);
   }
 
   private async runDownload(id: string, controller: AbortController): Promise<void> {
+    const preset = this.selectedPreset;
     let artifact: DownloadArtifact | undefined;
     let releaseLock: (() => Promise<void>) | undefined;
     try {
-      const lock = await this.io.acquireInstallLock(DEFAULT_PRESET, controller.signal);
+      const lock = await this.io.acquireInstallLock(preset, controller.signal);
       releaseLock = () => lock.release();
       this.throwIfCancelled(controller.signal);
-      if (await this.io.inspectInstalled(DEFAULT_PRESET, controller.signal)) {
+      if (await this.io.inspectInstalled(preset, controller.signal)) {
         if (!this.isActive(id)) return;
         this.active = undefined;
-        this.publish(statusFor("ready"));
+        this.publish(statusFor(preset, this.selectionReason, "ready"));
         return;
       }
-      this.publishFor(id, statusFor("downloading", id, 0, DEFAULT_PRESET.expectedDownloadBytes));
-      artifact = await this.io.download(DEFAULT_PRESET, {
+      this.publishFor(
+        id,
+        statusFor(preset, this.selectionReason, "downloading", id, 0, preset.expectedDownloadBytes),
+      );
+      artifact = await this.io.download(preset, {
         operationId: id,
         signal: controller.signal,
         onProgress: (progress) => {
@@ -200,16 +231,16 @@ class LocalModelManager implements LocalModelService {
         },
       });
       this.throwIfCancelled(controller.signal);
-      this.publishFor(id, statusFor("verifying", id));
-      const bytes = await this.io.verify(artifact, DEFAULT_PRESET, controller.signal);
-      if (!validVerifiedBytes(bytes)) throw new Error("model_integrity_failed");
+      this.publishFor(id, statusFor(preset, this.selectionReason, "verifying", id));
+      const bytes = await this.io.verify(artifact, preset, controller.signal);
+      if (!validVerifiedBytes(bytes, preset.maxBytes)) throw new Error("model_integrity_failed");
       this.throwIfCancelled(controller.signal);
-      this.publishFor(id, statusFor("installing", id, bytes, bytes));
+      this.publishFor(id, statusFor(preset, this.selectionReason, "installing", id, bytes, bytes));
       if (!this.isActive(id)) return;
-      await this.io.activate(artifact, DEFAULT_PRESET);
+      await this.io.activate(artifact, preset);
       if (!this.isActive(id)) return;
       this.active = undefined;
-      this.publish(statusFor("ready", null, bytes, bytes));
+      this.publish(statusFor(preset, this.selectionReason, "ready", null, bytes, bytes));
     } catch {
       const active = this.active;
       if (active?.id !== id) return;
@@ -217,8 +248,11 @@ class LocalModelManager implements LocalModelService {
       this.active = undefined;
       this.publish(
         cancelled
-          ? statusFor("cancelled", id)
-          : statusFor("failed", id, 0, null, { code: "download_failed", retryable: true }),
+          ? statusFor(preset, this.selectionReason, "cancelled", id)
+          : statusFor(preset, this.selectionReason, "failed", id, 0, null, {
+              code: "download_failed",
+              retryable: true,
+            }),
       );
     } finally {
       try {
@@ -237,14 +271,32 @@ class LocalModelManager implements LocalModelService {
   private onProgress(id: string, downloadedBytes: number, totalBytes: number | null): void {
     const active = this.active;
     if (active?.id !== id) return;
-    if (!validProgress(downloadedBytes, totalBytes, active.downloadedBytes, active.totalBytes)) {
+    if (
+      !validProgress(
+        downloadedBytes,
+        totalBytes,
+        active.downloadedBytes,
+        active.totalBytes,
+        this.selectedPreset.maxBytes,
+      )
+    ) {
       active.invalidBoundaryInput = true;
       active.controller.abort(new Error("model_download_limits_exceeded"));
       return;
     }
     active.downloadedBytes = downloadedBytes;
     active.totalBytes = totalBytes;
-    this.publishFor(id, statusFor("downloading", id, downloadedBytes, totalBytes));
+    this.publishFor(
+      id,
+      statusFor(
+        this.selectedPreset,
+        this.selectionReason,
+        "downloading",
+        id,
+        downloadedBytes,
+        totalBytes,
+      ),
+    );
   }
 
   private publishFor(id: string, status: LocalModelStatus): void {
@@ -272,18 +324,5 @@ class LocalModelManager implements LocalModelService {
   }
 }
 
-const waitForTasks = async (
-  tasks: readonly Promise<unknown>[],
-  timeoutMs: number,
-): Promise<void> => {
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, Math.max(0, timeoutMs));
-    void Promise.allSettled(tasks).then(() => {
-      clearTimeout(timer);
-      resolve();
-    });
-  });
-};
-
-const validVerifiedBytes = (bytes: number): boolean =>
-  Number.isSafeInteger(bytes) && bytes >= 0 && bytes <= DEFAULT_PRESET.maxBytes;
+const validVerifiedBytes = (bytes: number, maxBytes: number): boolean =>
+  Number.isSafeInteger(bytes) && bytes >= 0 && bytes <= maxBytes;

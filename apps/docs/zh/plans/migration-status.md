@@ -14,7 +14,8 @@
 - Node TUI 已替换原 Rust `apps/agent-cli`，并精确固定
   `@earendil-works/pi-tui@1.0.0`。
 - TUI 默认直接进入 chat，包含即时连接状态、Snapshot revision fencing、中文与
-  英文、六套主题、模型设置、审批、命令面板、Activity Inspector 和终端文本安全。
+  英文、六套主题、与设计稿一致的响应式模型设置界面、审批、命令面板、Activity
+  Inspector 和终端文本安全。
 - GUI/Desktop、根 Cargo 元数据、Rust crates/providers、Rust 构建脚本和最后的
   Rust TUI 快照均已删除。受跟踪仓库中不再包含产品 `.rs`、`Cargo.toml` 或
   `Cargo.lock` 文件。
@@ -36,8 +37,10 @@
   inference，使用固定 4096-token context，传递取消信号，并限制请求、输出、队列与
   关闭资源。Qwen3 的 `node-llama-cpp` 调用固定使用 `budgets.thoughtTokens=0`，防止
   隐藏 thought 消耗完对 client 可见的输出预算。
-- 模型发现与下载仍在后台执行。下载是可选的，只能由用户显式启动；TUI 会投影设置、
-  进度、取消、失败、激活与激活重试状态。
+- 模型发现与下载仍在后台执行。daemon 会使用固定可信目录与 `node-llama-cpp` 的
+  RAM/VRAM、GGUF 元数据评估推荐适配硬件的模型；评估失败时保守选择目录中最小模型。
+  下载是可选的，只能由用户显式启动；TUI 会投影推荐原因、设置、进度、取消、失败、
+  激活与激活重试状态。
 - client 可见 Snapshot 使用 daemon 自有的单调 transport revision，Runtime 恢复
   revision 与仅模型状态的更新不会破坏 client fencing。
 - 每条 user、follow-up 或 steering 消息在 daemon 命令入口限制为 64 KiB，与
@@ -55,8 +58,8 @@
   与字节上限校验，以及失败后的 staging 清理。
 - 聚焦的 TypeScript 测试已经覆盖生产组合、model-aware Runtime 激活与重试、
   transport revision、本地推理并发与清理、Session 轮换和重启恢复。
-- 当前聚焦测试数量为：`agentd` 180、`agent-cli` 28、`ui-model` 56、
-  `local-model` 103、`control-plane-native` 85。
+- 当前聚焦测试数量为：`agentd` 184、`agent-cli` 38、`ui-model` 56、
+  `local-model` 122、`control-plane-native` 85。
 - 构建后的生产 launcher/独立 `agentd` 启动黑盒已于 2026-10-06 通过：
   `source=spawned`、认证 health 为 `serving`、模型设置为 `required`、
   `allowedActions=[download]`、投影 revision 为 `2`。全程没有自动生成 GGUF，结束后

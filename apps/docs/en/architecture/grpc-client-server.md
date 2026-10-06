@@ -146,8 +146,11 @@ There is no direct Runtime call or embedded fallback.
 
 Daemon startup and TUI startup never force a model download. Cache inspection is
 background work. A missing model produces explicit setup state and disables only
-model-dependent submission. The user may start a smaller default model download,
-observe progress, cancel while allowed, retry a failure, or exit.
+model-dependent submission. In the background, the daemon recommends a model
+from its fixed trusted catalog for the current hardware. The user may explicitly
+confirm download, observe progress, cancel while allowed, retry a failure, or
+exit. Probe failure falls back to the smallest trusted candidate and never starts
+an automatic download.
 
 The daemon owns download locks, byte limits, checksum verification, secure staging,
 atomic activation, model epochs, and llama.cpp loading. The TUI renders the

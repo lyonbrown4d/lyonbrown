@@ -16,9 +16,9 @@
 - The Node TUI replaces the former Rust `apps/agent-cli` implementation and
   pins `@earendil-works/pi-tui@1.0.0`.
 - The TUI opens chat by default and includes immediate connection state,
-  snapshot revision fencing, English and Simplified Chinese, six themes, model
-  setup, approvals, command palette, Activity Inspector, and terminal text
-  safety.
+  snapshot revision fencing, English and Simplified Chinese, six themes, a
+  responsive model-setup surface aligned with the accepted design, approvals,
+  command palette, Activity Inspector, and terminal text safety.
 - GUI/Desktop code, root Cargo metadata, Rust crates/providers, Rust build
   scripts, and the final Rust TUI snapshot are removed. The tracked repository
   contains no `.rs`, `Cargo.toml`, or `Cargo.lock` product files.
@@ -48,9 +48,13 @@
   shutdown resources. Qwen3 calls through `node-llama-cpp` set
   `budgets.thoughtTokens=0`, preventing hidden thought from consuming the
   client-visible output budget.
-- Model discovery and download remain background operations. Download is
-  optional and starts only after explicit user action; the TUI projects setup,
-  progress, cancellation, failure, activation, and activation-retry states.
+- Model discovery and download remain background operations. The daemon uses a
+  pinned trusted catalog plus `node-llama-cpp` RAM/VRAM and GGUF metadata to
+  recommend a hardware-compatible model, falling back conservatively to the
+  smallest catalog entry when evaluation fails. Download is optional and starts
+  only after explicit user action; the TUI projects the recommendation reason,
+  setup, progress, cancellation, failure, activation, and activation-retry
+  states.
 - Client-visible snapshots use a daemon-owned monotonic transport revision, so
   Runtime recovery revisions and model-only updates cannot violate client
   fencing.
@@ -73,8 +77,8 @@
 - Focused TypeScript tests cover production composition, model-aware Runtime
   activation and retry, transport revisions, local inference concurrency and
   cleanup, session rotation, and restart recovery.
-- Current focused suite counts are `agentd` 180 tests, `agent-cli` 28,
-  `ui-model` 56, `local-model` 103, and `control-plane-native` 85.
+- Current focused suite counts are `agentd` 184 tests, `agent-cli` 38,
+  `ui-model` 56, `local-model` 122, and `control-plane-native` 85.
 - The built production launcher/independent `agentd` startup black box passed on
   2026-10-06: `source=spawned`, authenticated health was `serving`, model setup
   was `required`, `allowedActions=[download]`, and the projected revision was

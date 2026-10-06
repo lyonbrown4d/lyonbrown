@@ -30,7 +30,9 @@ Node 配置加载器落地时必须采用确定性的优先级，并在计算 fi
 
 ## 默认本地模型
 
-默认 Provider 是 daemon 内的 llama.cpp，默认 preset 为 `qwen3-1.7b-q4_k_m`。`node-llama-cpp` 是必需依赖，但只允许使用随制品验证的预编译 native binary，不允许运行时源码构建 fallback。
+默认 Provider 是 daemon 内的 llama.cpp；模型由 daemon 从固定可信目录中按本机硬件
+推荐，不再写死单一默认 preset。`node-llama-cpp` 是必需依赖，但只允许使用随制品验证
+的预编译 native binary，不允许运行时源码构建 fallback。
 
 模型缺失不会触发下载。daemon 在后台检查安全缓存并投影 `ModelSetupRequired`；用户可以显式开始、重试或取消下载。URL、摘要和目标路径来自 daemon 内置目录，不能由 client 配置。详见[本地模型与任务路由](local-models-routing.md)。
 

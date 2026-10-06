@@ -254,12 +254,21 @@ enum ModelSetupAction {
   MODEL_SETUP_ACTION_RETRY = 3;
 }
 
+enum ModelRecommendationReason {
+  MODEL_RECOMMENDATION_REASON_UNSPECIFIED = 0;
+  MODEL_RECOMMENDATION_REASON_INSTALLED_PREFERRED = 1;
+  MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE = 2;
+  MODEL_RECOMMENDATION_REASON_CONSERVATIVE_FALLBACK = 3;
+}
+
 message ManagedModel {
   string id = 1;
   uint64 expected_download_bytes = 2;
   uint64 max_bytes = 3;
   uint64 min_available_memory_bytes = 4;
   string sha256 = 5;
+  optional string display_name = 6;
+  optional ModelRecommendationReason recommendation_reason = 7;
 }
 
 message ModelSetupFailure {

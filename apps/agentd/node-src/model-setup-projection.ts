@@ -1,6 +1,7 @@
-import type { LocalModelStatus } from "@lyonbrown/local-model";
+import type { LocalModelSelectionReason, LocalModelStatus } from "@lyonbrown/local-model";
 import {
   ManagedModel,
+  ModelRecommendationReason,
   ModelSetupAction,
   ModelSetupFailure,
   ModelSetupPhase,
@@ -24,6 +25,8 @@ export function projectModelSetup(
       maxBytes: BigInt(status.model.maxBytes),
       minAvailableMemoryBytes: BigInt(status.model.minimumMemoryBytes),
       sha256: status.model.sha256,
+      displayName: status.model.displayName,
+      recommendationReason: recommendationReason(status.selectionReason),
     }),
     operationId: status.operationId ?? undefined,
     downloadedBytes: BigInt(status.downloadedBytes),
@@ -47,6 +50,23 @@ export function projectModelSetup(
         ? [ModelSetupAction.MODEL_SETUP_ACTION_RETRY]
         : status.allowedActions.map(action),
   });
+}
+
+function recommendationReason(
+  value: LocalModelSelectionReason | null,
+): ModelRecommendationReason | undefined {
+  switch (value) {
+    case null:
+      return undefined;
+    case "installed-preferred":
+      return ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_INSTALLED_PREFERRED;
+    case "hardware-compatible":
+      return ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE;
+    case "conservative-fallback":
+      return ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_CONSERVATIVE_FALLBACK;
+    default:
+      return exhaustive(value);
+  }
 }
 
 export function projectSetupRuntimePhase(
@@ -96,4 +116,8 @@ function action(value: LocalModelStatus["allowedActions"][number]): ModelSetupAc
     case "retry":
       return ModelSetupAction.MODEL_SETUP_ACTION_RETRY;
   }
+}
+
+function exhaustive(value: never): never {
+  throw new Error(`unsupported model recommendation reason: ${String(value)}`);
 }

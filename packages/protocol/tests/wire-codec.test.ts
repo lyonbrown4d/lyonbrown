@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   AgentServiceService,
   CommandErrorDetail,
+  ManagedModel,
   ModelOption,
   ModelOptionDisabledReason,
+  ModelRecommendationReason,
   ModelSelection,
   ModelSetupSnapshot,
   RuntimeEvent,
@@ -46,6 +48,27 @@ describe("generated wire contracts", () => {
 
     expect(absent.totalBytes).toBeUndefined();
     expect(present.totalBytes).toBe(0n);
+  });
+
+  it("round-trips managed model recommendation metadata without inventing a reason", () => {
+    const absent = ManagedModel.decode(ManagedModel.encode(ManagedModel.fromPartial({})).finish());
+    const present = ManagedModel.decode(
+      ManagedModel.encode(
+        ManagedModel.fromPartial({
+          id: "qwen3-1.7b-q4_k_m",
+          displayName: "Qwen3 1.7B Q4_K_M",
+          recommendationReason:
+            ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE,
+        }),
+      ).finish(),
+    );
+
+    expect(absent.recommendationReason).toBeUndefined();
+    expect(present).toMatchObject({
+      displayName: "Qwen3 1.7B Q4_K_M",
+      recommendationReason:
+        ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE,
+    });
   });
 
   it("preserves oneof presence even when the scalar carries its default value", () => {

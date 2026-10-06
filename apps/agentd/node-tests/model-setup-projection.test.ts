@@ -3,7 +3,12 @@ import {
   type LocalModelPhase,
   type LocalModelStatus,
 } from "@lyonbrown/local-model";
-import { ModelSetupAction, ModelSetupPhase, RuntimePhase } from "@lyonbrown/protocol";
+import {
+  ModelRecommendationReason,
+  ModelSetupAction,
+  ModelSetupPhase,
+  RuntimePhase,
+} from "@lyonbrown/protocol";
 import { describe, expect, it } from "vitest";
 
 import { projectModelSetup, projectSetupRuntimePhase } from "../node-src/model-setup-projection.ts";
@@ -19,6 +24,7 @@ function status(
     downloadedBytes: 0,
     totalBytes: null,
     failure: null,
+    selectionReason: null,
     allowedActions: [],
     ...overrides,
   };
@@ -72,6 +78,32 @@ describe("model setup projection", () => {
         ModelSetupAction.MODEL_SETUP_ACTION_CANCEL,
         ModelSetupAction.MODEL_SETUP_ACTION_RETRY,
       ],
+    });
+  });
+
+  it.each([
+    [
+      "installed-preferred",
+      ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_INSTALLED_PREFERRED,
+    ],
+    [
+      "hardware-compatible",
+      ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE,
+    ],
+    [
+      "conservative-fallback",
+      ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_CONSERVATIVE_FALLBACK,
+    ],
+    [null, undefined],
+  ] as const)("projects the %s model recommendation reason", (selectionReason, expected) => {
+    const modelStatus = {
+      ...status("setup-required"),
+      selectionReason,
+    };
+
+    expect(projectModelSetup(modelStatus, "inactive").managedModel).toMatchObject({
+      displayName: DEFAULT_LOCAL_MODEL.displayName,
+      recommendationReason: expected,
     });
   });
 

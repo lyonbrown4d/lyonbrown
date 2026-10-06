@@ -25,6 +25,22 @@ TUI 只能得到窄化后的 `agent-launch`、`agent-client` 与 `ui-model` 接�
 当前生产 Kernel 刻意组合空 tool registry、default-deny approval gate、拒绝式 Secret
 resolver，并且不连接 MCP。这些是安全的能力边界，不是已经完成的集成。
 
+## 后台任务与调度
+
+`agentd` 不自建业务调度器。当前仓库中的原生 timer 只承担 RPC deadline、关闭等待、
+取消传播和有限退避，不提供跨重启的作业语义。后续出现定时或后台业务任务时按语义
+选型：单进程 cron 优先评估 [Croner](https://github.com/Hexagon/croner)；有限 async
+重试优先评估 [`p-retry`](https://github.com/sindresorhus/p-retry)；需要持久化、多
+worker、重试状态和运维可见性时，通过窄化 job port 接入
+[BullMQ](https://docs.bullmq.io/) 或
+[Temporal](https://docs.temporal.io/develop/typescript)，不能把 `setInterval` 或
+EventStore 临时表扩展成队列。
+
+具体依赖只在首个真实用例出现时引入并精确锁定。选择 BullMQ/Temporal 也意味着接受
+对应的 Redis/PostgreSQL 或 Temporal Service 运维边界；本地开箱即用 daemon 不会仅为
+“可能以后需要”而强制附带这些服务。所有 job handler 必须幂等、可取消、有执行预算，
+并把领域结果先写入 EventStore，再投影给 client。
+
 ## 启动顺序
 
 1. 解析并校验类型化进程配置。

@@ -35,6 +35,7 @@ class ReadyModelService implements LocalModelService {
       downloadedBytes: 0,
       totalBytes: null,
       failure: null,
+      selectionReason: "hardware-compatible",
       allowedActions: [],
     };
   }

@@ -3,6 +3,7 @@ import {
   ApprovalState,
   ModelLocality,
   ModelOptionDisabledReason,
+  ModelRecommendationReason,
   ModelSetupAction,
   ModelSetupPhase,
   ModelSetupSource,
@@ -22,6 +23,7 @@ import {
   disabledReason,
   modelAction,
   modelLocality,
+  modelRecommendationReason,
   modelSetupPhase,
   modelSource,
   modelTier,
@@ -147,6 +149,24 @@ describe("snapshot semantic enum mapping", () => {
   });
 
   it.each([
+    [undefined, null],
+    [
+      ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_INSTALLED_PREFERRED,
+      "installed-preferred",
+    ],
+    [
+      ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_HARDWARE_COMPATIBLE,
+      "hardware-compatible",
+    ],
+    [
+      ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_CONSERVATIVE_FALLBACK,
+      "conservative-fallback",
+    ],
+  ])("maps model recommendation reason %s", (wire, dto) => {
+    expect(modelRecommendationReason(wire)).toBe(dto);
+  });
+
+  it.each([
     [ModelTier.MODEL_TIER_CONTROL, "control"],
     [ModelTier.MODEL_TIER_WORKER, "worker"],
     [ModelTier.MODEL_TIER_FRONTIER, "frontier"],
@@ -185,6 +205,7 @@ describe("snapshot semantic enum mapping", () => {
     [modelSource, ModelSetupSource.MODEL_SETUP_SOURCE_UNSPECIFIED],
     [modelSetupPhase, ModelSetupPhase.MODEL_SETUP_PHASE_UNSPECIFIED],
     [modelAction, ModelSetupAction.MODEL_SETUP_ACTION_UNSPECIFIED],
+    [modelRecommendationReason, ModelRecommendationReason.MODEL_RECOMMENDATION_REASON_UNSPECIFIED],
     [modelTier, ModelTier.MODEL_TIER_UNSPECIFIED],
     [modelLocality, ModelLocality.MODEL_LOCALITY_UNSPECIFIED],
     [disabledReason, ModelOptionDisabledReason.MODEL_OPTION_DISABLED_REASON_UNSPECIFIED],

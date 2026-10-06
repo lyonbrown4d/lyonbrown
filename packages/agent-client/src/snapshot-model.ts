@@ -13,6 +13,7 @@ import {
   disabledReason,
   modelAction,
   modelLocality,
+  modelRecommendationReason,
   modelSetupPhase,
   modelSource,
   modelTier,
@@ -26,7 +27,7 @@ import type {
   ModelSetupDto,
   RouteSummaryDto,
 } from "./types.ts";
-import { protocolId, protocolText, requiredField } from "./validation.ts";
+import { protocolDisplayName, protocolId, protocolText, requiredField } from "./validation.ts";
 
 export function mapSelection(value: ModelSelection | undefined): ModelSelectionDto {
   const selection = requiredField("model_selection", value).selection;
@@ -68,6 +69,16 @@ export function mapModelSetup(value: ModelSetupSnapshot | undefined): ModelSetup
         ? null
         : {
             id: protocolId("model_setup.managed_model.id", value.managedModel.id),
+            displayName:
+              value.managedModel.displayName === undefined
+                ? null
+                : protocolDisplayName(
+                    "model_setup.managed_model.display_name",
+                    value.managedModel.displayName,
+                  ),
+            recommendationReason: modelRecommendationReason(
+              value.managedModel.recommendationReason,
+            ),
             expectedDownloadBytes: value.managedModel.expectedDownloadBytes,
             maxBytes: value.managedModel.maxBytes,
             minAvailableMemoryBytes: value.managedModel.minAvailableMemoryBytes,

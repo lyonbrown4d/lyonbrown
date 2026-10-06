@@ -53,6 +53,9 @@ export class FakeModelIo implements LocalModelIo {
   cleanupCalls = 0;
   lockCalls = 0;
   lockReleaseCalls = 0;
+  readonly inspectedPresetIds: string[] = [];
+  readonly downloadedPresetIds: string[] = [];
+  readonly installedPresetIds = new Set<string>();
   inspection: Deferred<boolean> | undefined;
   readonly downloads: {
     operationId: string;
@@ -62,7 +65,7 @@ export class FakeModelIo implements LocalModelIo {
   }[] = [];
 
   inspectInstalled(preset: ModelPreset, signal: AbortSignal): Promise<boolean> {
-    void preset;
+    this.inspectedPresetIds.push(preset.id);
     this.inspectCalls += 1;
     if (this.inspection !== undefined) {
       const inspection = this.inspection;
@@ -75,7 +78,7 @@ export class FakeModelIo implements LocalModelIo {
       );
       return inspection.promise;
     }
-    return Promise.resolve(this.installed);
+    return Promise.resolve(this.installed || this.installedPresetIds.has(preset.id));
   }
 
   acquireInstallLock(preset: ModelPreset, signal: AbortSignal) {
@@ -98,7 +101,7 @@ export class FakeModelIo implements LocalModelIo {
       onProgress: (progress: DownloadProgress) => void;
     },
   ): Promise<DownloadArtifact> {
-    void preset;
+    this.downloadedPresetIds.push(preset.id);
     this.downloadCalls += 1;
     const completion = new Deferred<DownloadArtifact>();
     this.downloads.push({ ...request, completion });
@@ -133,11 +136,35 @@ export class FakeLlamaEngine implements LlamaEngineAdapter {
   error: Error | undefined;
   readonly lease: LlamaLease = createFakeLlamaLease();
 
-  loadDefault(signal: AbortSignal): Promise<LlamaLease> {
+  readonly loadedPresetIds: string[] = [];
+
+  load(preset: ModelPreset, signal: AbortSignal): Promise<LlamaLease> {
     void signal;
+    this.loadedPresetIds.push(preset.id);
     this.loadCalls += 1;
     if (this.error !== undefined) return Promise.reject(this.error);
     return Promise.resolve(this.lease);
+  }
+
+  loadDefault(signal: AbortSignal): Promise<LlamaLease> {
+    return this.load(
+      {
+        id: "legacy-test-default",
+        displayName: "Legacy test default",
+        owner: "Fixture",
+        repository: "Fixture-GGUF",
+        revision: "1111111111111111111111111111111111111111",
+        filename: "legacy.gguf",
+        sha256: "a".repeat(64),
+        expectedDownloadBytes: 1,
+        maxBytes: 1,
+        minimumMemoryBytes: 1,
+        minimumContextTokens: 1,
+        qualityRank: 1,
+        license: "apache-2.0",
+      },
+      signal,
+    );
   }
 }
 

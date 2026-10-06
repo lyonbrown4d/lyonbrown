@@ -11,18 +11,47 @@ Lyonbrown has one product architecture: `agentd` owns the runtime, models, tools
 
 The Node implementation uses an exactly pinned `node-llama-cpp` as a required product dependency. Release artifacts use only verified prebuilt native binaries. Runtime options set `build: "never"` and `skipDownload: true`, preventing first launch from silently compiling llama.cpp or fetching a native component. A missing or incompatible binary produces a structured unavailable state.
 
-There is currently one built-in managed preset, and it is the default:
+The daemon carries a bounded trusted candidate catalog rather than one
+hard-coded default model:
 
-| Field                    | Value                                                              |
-| ------------------------ | ------------------------------------------------------------------ |
-| Preset                   | `qwen3-1.7b-q4_k_m`                                                |
-| File                     | `Qwen3-1.7B-Q4_K_M.gguf`                                           |
-| Fixed artifact size      | 1,107,408,544 bytes                                                |
-| Minimum available memory | 4 GiB                                                              |
-| Source revision          | `7fb011e9aee6e4dc7adf8430df9ea8de6a466aa3`                         |
-| SHA-256                  | `228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f` |
+| Preset              | Quant  | Fixed artifact size | Conservative memory floor | License    |
+| ------------------- | ------ | ------------------- | ------------------------- | ---------- |
+| `qwen3-0.6b-q8_0`   | Q8_0   | 639,446,688 B       | 2 GiB                     | Apache-2.0 |
+| `qwen3-1.7b-q4_k_m` | Q4_K_M | 1,107,408,544 B     | 4 GiB                     | Apache-2.0 |
+| `qwen3-4b-q4_k_m`   | Q4_K_M | 2,497,280,256 B     | 8 GiB                     | Apache-2.0 |
 
-Both revision and digest are pinned in code; the catalog does not use `main`. A fixed resolve URL avoids depending on `X-Repo-Commit` from Hugging Face URI metadata resolution. Adding or upgrading a preset requires code review, a new digest, memory-threshold validation, and a real-model smoke test. A client cannot provide an arbitrary URL, destination, or digest.
+Repository, filename, revision, SHA-256, byte ceiling, minimum context, and
+license are pinned in code for every candidate; the catalog does not use
+`main`, and a client cannot supply a URL, destination, or digest. Adding or
+upgrading a candidate requires code review, digest and license validation,
+hardware evaluation, and a real-GGUF smoke test.
+
+## Hardware-aware recommendation
+
+Recommendation is neither a new model downloader nor a hand-maintained table
+of GPU product names. In the background, the daemon uses `node-llama-cpp` to
+read local RAM/VRAM state and trusted GGUF metadata, then uses its
+`GgufInsights` configuration resolver to score a fixed 4096-token context.
+Concrete `node-llama-cpp` types remain inside the local-model adapter; gRPC and
+the TUI receive only Lyonbrown-owned model descriptors and a finite
+recommendation reason.
+
+The selection order is deterministic:
+
+1. Prefer a catalog model that is already installed and digest-verified. An
+   offline start does not require downloading a different model merely because
+   remote evaluation is unavailable.
+2. With no installed model, score the trusted catalog for hardware fit and
+   select the highest-scoring candidate at the appropriate quality tier.
+3. If hardware probing or remote GGUF metadata fails, fall back to the smallest
+   trusted catalog candidate.
+4. Publish `setup-required` and its allowed actions after recommendation;
+   download still requires explicit confirmation in the TUI.
+
+Raw RAM, VRAM, GPU identifiers, and probe failures never enter the client
+contract. A model ID or URI outside the trusted catalog cannot participate in
+scoring. Recommendation work is bounded and cancellable, and fallback cannot
+expand network or filesystem authority.
 
 ## Non-blocking startup and explicit download
 
