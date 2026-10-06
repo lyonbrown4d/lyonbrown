@@ -76,7 +76,7 @@ describe("node-llama lease lifecycle", () => {
       const secondDispose = lease.dispose();
       expect(generationSignal?.aborted).toBe(true);
       const disposeResults = Promise.allSettled([firstDispose, secondDispose]);
-      await vi.advanceTimersByTimeAsync(10_000);
+      await vi.advanceTimersByTimeAsync(20_000);
       const settled = await disposeResults;
       const rejectionMessages = settled.map((result) => {
         if (result.status !== "rejected") throw new Error("dispose unexpectedly fulfilled");

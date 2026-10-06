@@ -83,8 +83,8 @@ Overlay 是临时上下文，不改变 Session，也不清空 Composer：
 已落地并可打开真实界面的是 `/model`、`/theme`、`/language`、`/status`、`/help`
 和 `/quit`；`/queue <消息>` 的 slash 形式可用。`/sessions`、`/new`、`/resume`
 仍明确标为不可用。`/queue` 需要消息参数，因此在命令面板中禁用，但其 slash 形式
-和 `Alt-Enter` 路径可用。模型选择只会发送 daemon 公布为可选的 route；当前生产
-daemon 尚未实现该变更命令，因此真实验收保持阻塞而不伪造成功。未知 slash 输入会
+和 `Alt-Enter` 路径可用。模型选择只会发送 daemon 公布为可选的 route；生产 daemon
+已经持久化并投影 pinned/auto 选择，真实 client 黑盒已通过。未知 slash 输入会
 由客户端本地拦截并显示本地化提示，绝不会作为普通 prompt 提交。
 
 在模型设置之外，Esc 只关闭最上层 overlay 或清除选择，不退出 TUI。模型设置是

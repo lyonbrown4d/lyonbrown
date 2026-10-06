@@ -72,7 +72,14 @@ describe("runtime snapshot projection", () => {
                   argumentsJson: '{"path":"notes.txt"}',
                   state: ToolActivityState.TOOL_ACTIVITY_STATE_FAILED,
                   approvedBy: undefined,
-                  result: undefined,
+                  result: {
+                    invocationId: "call-1",
+                    ok: false,
+                    output: "",
+                    truncated: false,
+                    durationMs: 0n,
+                    error: "tool outcome unknown",
+                  },
                 },
               ],
             },
@@ -247,7 +254,15 @@ describe("runtime snapshot projection", () => {
       ...terminal,
     ]);
     const snapshot = await createRuntimeHostAdapter(new FakeAgentRuntime(state)).snapshot();
-    expect(snapshot.turns[0]?.activities[0]?.tools[0]?.state).toBe(expected);
+    expect(snapshot.turns[0]?.activities[0]?.tools[0]).toMatchObject({
+      state: expected,
+      result:
+        status === "running"
+          ? undefined
+          : status === "succeeded"
+            ? { invocationId: "call-1", ok: true, output: "ok", error: undefined }
+            : { invocationId: "call-1", ok: false, output: "", error: "tool failed" },
+    });
   });
 
   test.each([

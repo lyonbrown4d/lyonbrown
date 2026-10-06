@@ -14,6 +14,7 @@ import { LatestSnapshotFeed } from "@lyonbrown/agent-runtime/internal/snapshot-f
 import type {
   AgentRuntime,
   CreateAgentRuntimeOptions,
+  RuntimeApprovalDecision,
   RuntimeSnapshotFeed,
 } from "@lyonbrown/agent-runtime/internal/types";
 
@@ -146,6 +147,47 @@ export class DefaultAgentRuntime implements AgentRuntime {
       this.#cancelRequested = wasRequested;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
     }
+  }
+
+  respondApproval(requestId: string, decision: RuntimeApprovalDecision): void {
+    this.#assertAvailable();
+    const pending = this.writer.state.pendingApproval;
+    if (pending === undefined) {
+      throw runtimeError("NO_PENDING_APPROVAL", "Runtime session has no pending approval");
+    }
+    if (pending.requestId !== requestId) {
+      throw runtimeError("APPROVAL_REQUEST_MISMATCH", "Approval request does not match");
+    }
+    const status = this.#kernel.respondApproval?.(requestId, decision) ?? "no-pending";
+    if (status === "accepted") return;
+    if (status === "mismatch") {
+      throw runtimeError("APPROVAL_REQUEST_MISMATCH", "Approval request does not match");
+    }
+    throw runtimeError("NO_PENDING_APPROVAL", "Runtime session has no pending approval");
+  }
+
+  async selectModel(selection: AgentRuntimeState["modelSelection"]): Promise<void> {
+    this.#assertAvailable();
+    if (this.#running || this.#claimPending || this.writer.state.pendingApproval !== undefined) {
+      throw runtimeError("SESSION_BUSY", "Cannot change model while a turn is active");
+    }
+    await this.writer.append(
+      parseAgentRuntimeEvent(
+        selection.kind === "auto"
+          ? {
+              type: "model_selection_changed",
+              sessionId: this.options.sessionId,
+              mode: "auto",
+            }
+          : {
+              type: "model_selection_changed",
+              sessionId: this.options.sessionId,
+              mode: "pinned",
+              provider: selection.provider,
+              model: selection.model,
+            },
+      ),
+    );
   }
 
   dispose(): Promise<void> {

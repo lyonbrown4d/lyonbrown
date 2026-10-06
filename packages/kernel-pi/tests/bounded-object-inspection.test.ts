@@ -42,7 +42,7 @@ function options(model: KernelModelAdapter, events: KernelEvent[]): PiKernelSess
     systemPrompt: "safe",
     model,
     toolRegistry: { list: () => [], get: () => undefined, hasPermission: () => false },
-    approvalGate: { request: () => Promise.resolve({ decision: "deny" }) },
+    approvalGate: { request: () => Promise.resolve({ decision: "deny-once" }) },
     eventSink: {
       append: (event) => {
         events.push(event);

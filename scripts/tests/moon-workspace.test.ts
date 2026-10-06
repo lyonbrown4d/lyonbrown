@@ -20,6 +20,7 @@ describe("moon workspace orchestration", () => {
     expect(packageJson.scripts).toMatchObject({
       dev: "moon run workspace:dev",
       "dev:docs": "moon run docs:dev",
+      "dependencies:build": "moon run agentd:build agent-launch:build",
       lint: "moon run :lint",
       typecheck: "moon run :typecheck",
       test: "moon run :test --concurrency 1",

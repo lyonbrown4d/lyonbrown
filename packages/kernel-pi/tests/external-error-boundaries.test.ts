@@ -41,7 +41,7 @@ function options(
       get: (name) => (name === tool?.name ? tool : undefined),
       hasPermission: () => true,
     },
-    approvalGate: { request: () => Promise.resolve({ decision: "approve" }) },
+    approvalGate: { request: () => Promise.resolve({ decision: "allow-once" }) },
     eventSink: {
       append: (event) => {
         events.push(event);

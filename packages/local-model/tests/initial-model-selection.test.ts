@@ -35,4 +35,66 @@ describe("initial model selection boundaries", () => {
     await expect(selection).rejects.toThrow("cache_inspection_failed");
     expect(selector).not.toHaveBeenCalled();
   });
+
+  it("limits a first-run hardware recommendation to the configured small-download budget", async () => {
+    const io = new FakeModelIo();
+    const selector = vi.fn((catalog: readonly (typeof MODEL_CATALOG)[number][]) =>
+      Promise.resolve({ preset: catalog.at(-1) ?? MODEL_CATALOG[0], source: "hardware" as const }),
+    );
+
+    const selection = await selectInitialModel(
+      io,
+      {
+        catalog: MODEL_CATALOG,
+        selector: { select: selector },
+        maxAutoDownloadBytes: 1024 ** 3,
+      },
+      new AbortController().signal,
+    );
+
+    expect(selector).toHaveBeenCalledWith([MODEL_CATALOG[0]], expect.any(AbortSignal));
+    expect(selection.preset).toBe(MODEL_CATALOG[0]);
+  });
+
+  it("fails closed when every first-run model exceeds the download budget", async () => {
+    const io = new FakeModelIo();
+    const selector = vi.fn(() =>
+      Promise.resolve({ preset: MODEL_CATALOG[0], source: "fallback" as const }),
+    );
+
+    await expect(
+      selectInitialModel(
+        io,
+        {
+          catalog: MODEL_CATALOG,
+          selector: { select: selector },
+          maxAutoDownloadBytes: 1,
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("auto_download_budget_exhausted");
+    expect(selector).not.toHaveBeenCalled();
+  });
+
+  it("still prefers an already-installed larger trusted model outside the download budget", async () => {
+    const io = new FakeModelIo();
+    const installed = MODEL_CATALOG[2];
+    io.installedPresetIds.add(installed.id);
+    const selector = vi.fn(() =>
+      Promise.resolve({ preset: installed, source: "hardware" as const }),
+    );
+
+    const selection = await selectInitialModel(
+      io,
+      {
+        catalog: MODEL_CATALOG,
+        selector: { select: selector },
+        maxAutoDownloadBytes: 1024 ** 3,
+      },
+      new AbortController().signal,
+    );
+
+    expect(selector).not.toHaveBeenCalled();
+    expect(selection).toMatchObject({ preset: installed, installed: true });
+  });
 });

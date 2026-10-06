@@ -1,6 +1,6 @@
 # 本地模型与任务路由
 
-> 已验证实现检查点：2026-10-06。composition 与有界 inference 路径已有聚焦测试
+> 已验证实现检查点：2026-10-07。composition 与有界 inference 路径已有聚焦测试
 > 覆盖；当前 Windows 开发机上的生产 composition 真实 GGUF smoke 已通过。发布打包
 > 与最终 release artifact 仍未验证。
 
@@ -34,8 +34,8 @@ daemon 内置一个有界、可信的候选目录，而不是写死单一默认�
 
 1. 优先复用目录中已经安装且摘要验证通过的模型；离线启动不会因为无法远程评估而
    要求重新下载另一个模型。
-2. 没有已安装模型时，对可信目录做硬件兼容性评分，并选择得分最高且质量层级合适的
-   候选。
+2. 没有已安装模型时，只对固定大小预算内的可信候选做硬件兼容性评分；当前首次下载
+   预算为 1 GiB，因此默认保持小模型，不会因瞬时空闲内存跳到多 GiB 下载。
 3. 硬件探测或远程 GGUF 元数据读取失败时，确定性回退到目录中最小的可信候选。
 4. 推荐完成后只发布 `setup-required` 和允许的动作；下载仍需用户在 TUI 中显式确认。
 
@@ -85,8 +85,9 @@ body 与文件写入共享取消信号；只有响应 headers 到达前的瞬时
 默认小模型 lease 只允许一个活跃 inference。第二个请求会立即以 `resource_busy`
 失败，不排队，也不会创建第二个 context。被接受的请求在固定 4096-token context
 中使用一个 sequence，传递取消信号，并限制消息数、总输入、输出 token、输出字节、
-事件队列与关闭清理。原生错误会脱敏；工具形态消息或 function-call 权限会 fail
-closed。Qwen3 inference 固定向 `node-llama-cpp` 传入 `budgets.thoughtTokens=0`，避免
+事件队列与关闭清理。原生错误会脱敏；工具定义、tool-call 与 tool-result history 在
+适配层映射并接受严格边界校验。Qwen3 inference 固定向 `node-llama-cpp` 传入
+`budgets.thoughtTokens=0`，避免
 隐藏 thought 用尽 client 可见的输出 token 预算。
 
 daemon 命令入口将每条 user、follow-up 或 steering 消息限制为 64 KiB，与
@@ -97,21 +98,22 @@ turn 或 4 MiB 用户文本处轮换；活跃 turn 的 follow-up 限制为 8 条
 限制。daemon 重启后，任何包含历史 turn 的 Session 都会安全轮换，因为 Pi history
 hydration 尚未实现；持久事件仍保留在 EventStore。
 
-当前 Windows 开发机上的生产 composition 真实 GGUF smoke 已验证固定
-`Qwen3-1.7B-Q4_K_M.gguf`（1,107,408,544 bytes，SHA-256
-`228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f`）。启动时没有自动
-下载；用户显式启动首个 operation，观察到进度后取消；新的 operation 随后完成下载、
-摘要校验与激活。测试还验证了 client 可见的短回答和 usage、长 turn 取消后继续、同一
-缓存重启时不重新下载且创建新 Session/空 turns，以及活跃 inference 在 15 秒界限内
-关闭。脚本输出 `REAL_GGUF_SMOKE_OK`，并清理了临时模型缓存。
+当前 Windows 开发机上的生产 composition 真实 GGUF smoke 会读取实际硬件选择结果，
+再从同一可信目录校验固定摘要，而不是在脚本中写死模型。2026-10-07 的运行验证了：
+启动不自动下载；显式 operation 的取消/重试、进度、摘要校验与激活；pinned/auto 模型
+选择；client 可见回答和 usage；真实 `write` tool-call、待审批投影、`allow-once` 与准确
+落盘；长 turn 取消后继续；缓存重启不重新下载并创建新 Session；以及 30 秒预算内的
+有界关闭。脚本输出 `REAL_GGUF_SMOKE_OK`，并清理了临时模型缓存。
 
 以上只是当前 Windows 开发机和生产 composition 的执行证据，不是发布打包或最终
 release artifact 的验证。GUI、Desktop、移动端与 MCP 仍不在本阶段范围内。
 
 ## 类型化任务路由
 
-任务路由位于 daemon 内。输入是包含能力、隐私、预算和用户显式选择的类型化步骤上下文，输出是有限的复杂度/模型层级，而不是自由文本计划。默认 Qwen3 路由与工具调用适配仍需在 Node Kernel/模型适配层完成并通过确定性事件测试；路由失败必须有明确 fallback，不能让控制模型成为单点故障。
+任务路由位于 daemon 内。输入是包含能力、隐私、预算和用户显式选择的类型化步骤上下文，输出是有限的复杂度/模型层级，而不是自由文本计划。Qwen3 工具调用适配已经接入；更完整的多模型任务路由仍需迭代。路由失败必须有明确 fallback，不能让控制模型成为单点故障。
 
-当前生产 Kernel 使用空 tool registry、default-deny approval、拒绝式 Secret
-resolver，并且不连接 MCP。模型文本是不受信任的输出，不会获得工具权限。GUI、
-Desktop 与移动端仍不在当前迭代范围内。
+当前生产 Kernel 使用受工作区约束的 `read`、`write`、`edit` registry 与显式审批门；
+文件能力由 native-required 的 `@openclaw/fs-safe` 根对象提供；如果可信目录中没有模型
+满足 1 GiB 首次自动下载预算，选择流程会 fail closed。Secret resolver 仍拒绝，MCP 尚未
+连接。模型文本是不受信任的输出，不会自行获得工具权限。GUI、Desktop 与移动端仍不在
+当前迭代范围内。

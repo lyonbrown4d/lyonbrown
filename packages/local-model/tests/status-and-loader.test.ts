@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   DEFAULT_LOCAL_MODEL,
+  TRUSTED_LOCAL_MODELS,
   type LocalModelLease,
   type LocalModelService,
 } from "@lyonbrown/local-model/internal/index";
@@ -91,6 +92,12 @@ describe("default local model status", () => {
     });
     expect(Object.keys(DEFAULT_LOCAL_MODEL)).not.toContain("url");
     expect(Object.keys(DEFAULT_LOCAL_MODEL)).not.toContain("path");
+    expect(TRUSTED_LOCAL_MODELS.map((model) => model.id)).toEqual([
+      "qwen3-0.6b-q8_0",
+      "qwen3-1.7b-q4_k_m",
+      "qwen3-4b-q4_k_m",
+    ]);
+    expect(TRUSTED_LOCAL_MODELS.every((model) => !Object.hasOwn(model, "url"))).toBe(true);
   });
 
   it("reports setup-required without starting a download", async () => {

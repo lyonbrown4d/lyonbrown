@@ -78,7 +78,7 @@ function createOptions(
       get: (name) => (name === tool.name ? tool : undefined),
       hasPermission: () => true,
     },
-    approvalGate: { request: () => Promise.resolve({ decision: "approve" }) },
+    approvalGate: { request: () => Promise.resolve({ decision: "allow-once" }) },
     eventSink: { append },
     secretResolver: { resolve: () => Promise.resolve("resolved") },
     budget,
@@ -159,7 +159,7 @@ describe("abort fences", () => {
       });
       options.approvalGate.request = () => {
         if (stage === "approval") controller.abort();
-        return Promise.resolve({ decision: "approve" });
+        return Promise.resolve({ decision: "allow-once" });
       };
       options.secretResolver.resolve = () => {
         controller.abort();

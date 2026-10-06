@@ -1,4 +1,4 @@
-import type { AgentRuntimeState, SessionId } from "@lyonbrown/agent-domain";
+import type { AgentRuntimeState, RuntimeModelSelection, SessionId } from "@lyonbrown/agent-domain";
 import type { KernelEventSink, KernelSession } from "@lyonbrown/kernel-pi";
 
 import type { RuntimeEventStorePort } from "@lyonbrown/agent-runtime/internal/event-store-port";
@@ -26,6 +26,12 @@ export interface RuntimeSnapshotFeed extends AsyncIterableIterator<AgentRuntimeS
   throw(error?: unknown): Promise<IteratorResult<AgentRuntimeState>>;
 }
 
+export type RuntimeApprovalDecision =
+  | "allow-once"
+  | "allow-for-session"
+  | "deny-once"
+  | "deny-remaining";
+
 export interface AgentRuntime {
   snapshot(): AgentRuntimeState;
   snapshots(): RuntimeSnapshotFeed;
@@ -33,5 +39,7 @@ export interface AgentRuntime {
   steer(input: string): Promise<void>;
   followUp(input: string): Promise<void>;
   cancel(): void;
+  respondApproval(requestId: string, decision: RuntimeApprovalDecision): void;
+  selectModel(selection: RuntimeModelSelection): Promise<void>;
   dispose(): Promise<void>;
 }

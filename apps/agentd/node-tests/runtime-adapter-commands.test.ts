@@ -32,6 +32,50 @@ describe("runtime host adapter commands", () => {
     expect(runtime.starts).toEqual(["hello"]);
   });
 
+  test("forwards a correlated approval decision to the runtime", async () => {
+    const runtime = new FakeAgentRuntime(
+      stateFrom([
+        { type: "session_opened" },
+        { type: "user_message_submitted", text: "write" },
+        { type: "run_started" },
+        { type: "turn_started", turn: 1 },
+        {
+          type: "approval_requested",
+          requestId: "call-1",
+          toolName: "write",
+          risk: "medium",
+          permissions: ["workspace.write"],
+          argumentsPreview: { path: "notes.txt" },
+        },
+      ]),
+    );
+    const host = createRuntimeHostAdapter(runtime);
+
+    await expect(
+      host.execute({
+        kind: "respond-approval",
+        requestId: "call-1",
+        decision: "allow-once",
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(runtime.approvalResponses).toEqual([{ requestId: "call-1", decision: "allow-once" }]);
+  });
+
+  test("persists session model selection through the runtime", async () => {
+    const runtime = new FakeAgentRuntime(openedState());
+    const host = createRuntimeHostAdapter(runtime);
+
+    await expect(
+      host.execute({
+        kind: "select-session-model",
+        selection: { kind: "pinned", provider: "local", model: "qwen-local" },
+      }),
+    ).resolves.toEqual({ ok: true });
+    expect(runtime.modelSelections).toEqual([
+      { kind: "pinned", provider: "local", model: "qwen-local" },
+    ]);
+  });
+
   test("rejects empty text and commands that conflict with projected state", async () => {
     const runtime = new FakeAgentRuntime(openedState());
     const host = createRuntimeHostAdapter(runtime);

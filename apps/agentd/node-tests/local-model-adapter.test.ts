@@ -56,12 +56,13 @@ describe("local model kernel adapter", () => {
     ]);
   });
 
-  it("fails closed before touching the model for tool-shaped input", async () => {
-    let called = false;
+  it("maps tool declarations, tool history, and function-call events", async () => {
+    let seen: Parameters<LocalModelLease["stream"]>[0] | undefined;
     const lease: LocalModelLease = {
-      async *stream() {
-        called = true;
-        yield* [];
+      async *stream(value) {
+        seen = value;
+        yield { type: "tool_call", name: "read", arguments: { path: "AGENTS.md" } };
+        yield { type: "done", reason: "tool_use" };
       },
       dispose: () => Promise.resolve(),
     };
@@ -70,13 +71,50 @@ describe("local model kernel adapter", () => {
     const events = await collect(
       adapter,
       request({
-        tools: [{ name: "shell", description: "unsafe", inputSchema: {} }],
+        messages: [
+          { role: "user", content: "read it" },
+          {
+            role: "assistant",
+            content: "",
+            toolCalls: [{ callId: "old-call", name: "read", arguments: { path: "README.md" } }],
+          },
+          {
+            role: "tool_result",
+            callId: "old-call",
+            name: "read",
+            content: "hello",
+            isError: false,
+          },
+        ],
+        tools: [{ name: "read", description: "Read a file", inputSchema: { type: "object" } }],
       }),
     );
-    expect(events).toEqual([
-      { type: "error", code: "model_error", message: "local model request rejected" },
-    ]);
-    expect(called).toBe(false);
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      type: "tool_call",
+      name: "read",
+      arguments: { path: "AGENTS.md" },
+    });
+    expect(events[0]?.type === "tool_call" ? typeof events[0].callId : undefined).toBe("string");
+    expect(events[1]).toEqual({ type: "done", reason: "tool_use" });
+    expect(seen).toMatchObject({
+      messages: [
+        { role: "user", content: "read it" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ callId: "old-call", name: "read", arguments: { path: "README.md" } }],
+        },
+        {
+          role: "tool_result",
+          callId: "old-call",
+          name: "read",
+          content: "hello",
+          isError: false,
+        },
+      ],
+      tools: [{ name: "read", description: "Read a file", inputSchema: { type: "object" } }],
+    });
   });
 
   it("maps cancellation and redacts every other model error", async () => {

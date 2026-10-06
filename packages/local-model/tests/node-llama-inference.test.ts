@@ -35,6 +35,113 @@ const request = (
 });
 
 describe("node-llama inference stream", () => {
+  it("passes declared tools to llama.cpp and emits validated function calls", async () => {
+    const generateResponse = vi.fn(() =>
+      Promise.resolve({
+        metadata: { stopReason: "functionCalls" as const },
+        functionCalls: [{ functionName: "read", params: { path: "AGENTS.md" }, raw: "ignored" }],
+      }),
+    );
+    const harness = createNodeLlamaHarness(generateResponse);
+    const lease = await createNodeLlamaEngine("C:\\trusted\\Qwen.gguf", harness.api).loadDefault(
+      new AbortController().signal,
+    );
+
+    await expect(
+      collect(
+        lease.stream(
+          request(undefined, {
+            tools: [
+              {
+                name: "read",
+                description: "Read a workspace file",
+                inputSchema: {
+                  type: "object",
+                  properties: { path: { type: "string" } },
+                  required: ["path"],
+                  additionalProperties: false,
+                },
+              },
+            ],
+          }),
+        ),
+      ),
+    ).resolves.toEqual([
+      { type: "tool_call", name: "read", arguments: { path: "AGENTS.md" } },
+      { type: "usage", inputTokens: 3, outputTokens: 2 },
+      { type: "done", reason: "tool_use" },
+    ]);
+    expect(generateResponse).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        functions: {
+          read: {
+            description: "Read a workspace file",
+            params: {
+              type: "object",
+              properties: { path: { type: "string" } },
+              required: ["path"],
+              additionalProperties: false,
+            },
+          },
+        },
+      }),
+    );
+    await lease.dispose();
+  });
+
+  it("replays completed tool results as model function-call history", async () => {
+    const generateResponse = vi.fn(() =>
+      Promise.resolve({ metadata: { stopReason: "eogToken" as const } }),
+    );
+    const harness = createNodeLlamaHarness(generateResponse);
+    const lease = await createNodeLlamaEngine("C:\\trusted\\Qwen.gguf", harness.api).loadDefault(
+      new AbortController().signal,
+    );
+
+    await collect(
+      lease.stream(
+        request(undefined, {
+          messages: [
+            { role: "user", content: "Read the policy" },
+            {
+              role: "assistant",
+              content: "",
+              toolCalls: [{ callId: "call-1", name: "read", arguments: { path: "AGENTS.md" } }],
+            },
+            {
+              role: "tool_result",
+              callId: "call-1",
+              name: "read",
+              content: "policy",
+              isError: false,
+            },
+          ],
+          tools: [],
+        }),
+      ),
+    );
+
+    expect(generateResponse).toHaveBeenCalledWith(
+      [
+        { type: "user", text: "Read the policy" },
+        {
+          type: "model",
+          response: [
+            {
+              type: "functionCall",
+              name: "read",
+              params: { path: "AGENTS.md" },
+              result: { content: "policy", isError: false },
+            },
+          ],
+        },
+      ],
+      expect.any(Object),
+    );
+    await lease.dispose();
+  });
+
   it("maps bounded messages and emits deltas, usage, and completion", async () => {
     const generateResponse = vi.fn(
       (_history: readonly unknown[], options: GenerationOptions): Promise<GenerationResult> => {

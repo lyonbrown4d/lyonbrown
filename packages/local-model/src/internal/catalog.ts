@@ -2,6 +2,9 @@ import type { ModelPreset } from "@lyonbrown/local-model/internal/internal/contr
 
 const GIB = 1024 ** 3;
 
+/** Keeps first-run downloads small while retaining larger trusted models for installed-model reuse. */
+export const DEFAULT_AUTO_DOWNLOAD_MAX_BYTES = GIB;
+
 export const MODEL_CATALOG = Object.freeze([
   Object.freeze({
     id: "qwen3-0.6b-q8_0",

@@ -10,6 +10,8 @@ import {
 export class CapturingKernelFactory {
   sink: KernelEventSink | undefined;
   readonly starts: string[] = [];
+  readonly approvalResponses: { readonly requestId: string; readonly decision: string }[] = [];
+  approvalResponseStatus: "accepted" | "no-pending" | "mismatch" = "accepted";
   startBehavior: ((input: string, sink: KernelEventSink) => Promise<void>) | undefined;
 
   create = ({ eventSink }: { readonly eventSink: KernelEventSink }): KernelSession => {
@@ -22,6 +24,10 @@ export class CapturingKernelFactory {
       steer: () => undefined,
       followUp: () => undefined,
       cancel: () => undefined,
+      respondApproval: (requestId, decision) => {
+        this.approvalResponses.push({ requestId, decision });
+        return this.approvalResponseStatus;
+      },
       subscribe: () => () => undefined,
       dispose: () => undefined,
     };

@@ -31,6 +31,7 @@
     "pnpm": "10.33.4"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.0.1",
     "@grpc/grpc-js": "1.14.5",
     "@lyonbrown/agent-domain": "workspace:*",
     "@lyonbrown/agent-runtime": "workspace:*",
@@ -39,7 +40,8 @@
     "@lyonbrown/kernel-pi": "workspace:*",
     "@lyonbrown/local-control-plane": "workspace:*",
     "@lyonbrown/local-model": "workspace:*",
-    "@lyonbrown/protocol": "workspace:*"
+    "@lyonbrown/protocol": "workspace:*",
+    "@openclaw/fs-safe": "0.23.0"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "4.1.11"

@@ -48,7 +48,7 @@ describe("secret pattern budgets", () => {
       systemPrompt: "safe",
       model,
       toolRegistry: { list: () => [tool], get: () => tool, hasPermission: () => true },
-      approvalGate: { request: () => Promise.resolve({ decision: "approve" }) },
+      approvalGate: { request: () => Promise.resolve({ decision: "allow-once" }) },
       eventSink: {
         append: (event) => {
           events.push(event);

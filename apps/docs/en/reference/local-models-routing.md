@@ -1,6 +1,6 @@
 # Local Models and Task Routing
 
-> Verified implementation checkpoint: 2026-10-06. The composition and bounded
+> Verified implementation checkpoint: 2026-10-07. The composition and bounded
 > inference path are covered by focused tests, and a production-composition
 > real-GGUF smoke passed on the current Windows development machine. Release
 > packaging and the final release artifact remain unverified.
@@ -41,8 +41,9 @@ The selection order is deterministic:
 1. Prefer a catalog model that is already installed and digest-verified. An
    offline start does not require downloading a different model merely because
    remote evaluation is unavailable.
-2. With no installed model, score the trusted catalog for hardware fit and
-   select the highest-scoring candidate at the appropriate quality tier.
+2. With no installed model, score only trusted candidates inside a fixed size
+   budget. The current 1 GiB first-download budget keeps the default small and
+   prevents transient free memory from selecting a multi-GiB download.
 3. If hardware probing or remote GGUF metadata fails, fall back to the smallest
    trusted catalog candidate.
 4. Publish `setup-required` and its allowed actions after recommendation;
@@ -103,7 +104,8 @@ request fails immediately with `resource_busy`, never queues, and never creates
 another context. Accepted requests use one sequence in a fixed 4096-token
 context, propagate cancellation, and enforce bounded messages, aggregate input,
 output tokens, output bytes, event queue, and shutdown cleanup. Native errors
-are sanitized, and tool-shaped messages or function-call authority fail closed.
+are sanitized; tool definitions, tool calls, and tool-result history are mapped
+and strictly validated at the adapter boundary.
 Qwen3 inference always passes `budgets.thoughtTokens=0` to `node-llama-cpp`,
 preventing hidden thought from exhausting the client-visible output-token
 budget.
@@ -119,17 +121,14 @@ bypass these limits. After daemon restart, any session with a historical turn
 is safely rotated because Pi history hydration is not implemented yet. Durable
 events remain in EventStore.
 
-The production-composition real-GGUF smoke on the current Windows development
-machine verified the pinned `Qwen3-1.7B-Q4_K_M.gguf` (1,107,408,544 bytes,
-SHA-256
-`228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f`). Startup
-did not download automatically. An explicit first operation was cancelled after
-progress, and a new operation completed download, digest verification, and
-activation. The smoke also verified a client-visible short answer and usage,
-continuation after cancelling a long turn, restart on the same cache without a
-redownload and with a new session/empty turns, and active-inference shutdown
-within the 15-second bound. It ended with `REAL_GGUF_SMOKE_OK` and removed its
-temporary model cache.
+The production-composition real-GGUF smoke reads the actual hardware selection
+and verifies its pinned digest from the same trusted catalog rather than
+hard-coding a model in the script. The 2026-10-07 run covered no automatic
+download; explicit cancel/retry, progress, digest verification, and activation;
+pinned/auto selection; client-visible answer and usage; a real `write` tool call,
+approval projection, `allow-once`, and exact file content; turn cancellation;
+cached restart with a new session; and shutdown within a 30-second budget. It
+ended with `REAL_GGUF_SMOKE_OK` and removed its temporary model cache.
 
 This is evidence for the current Windows development machine and production
 composition only. It is not verification of release packaging or the final
@@ -137,9 +136,11 @@ release artifact. GUI, Desktop, mobile, and MCP remain outside this phase.
 
 ## Typed task routing
 
-Task routing lives in the daemon. Its input is typed step context covering capabilities, privacy, budget, and explicit user selection; its output is a finite complexity/model tier rather than a free-form plan. The default Qwen3 routing and tool-call adapter still need to be completed in the Node Kernel/model adapter and verified through deterministic domain events. A routing failure must have an explicit fallback and cannot make the control model a single point of failure.
+Task routing lives in the daemon. Its input is typed step context covering capabilities, privacy, budget, and explicit user selection; its output is a finite complexity/model tier rather than a free-form plan. Qwen3 tool calling is integrated; broader multi-model task routing remains iterative. A routing failure must have an explicit fallback and cannot make the control model a single point of failure.
 
-The current production kernel has an empty tool registry, default-deny
-approvals, a rejecting secret resolver, and no MCP connections. Model text is
-untrusted output and does not gain tool authority. GUI, Desktop, and mobile
+The production kernel has workspace-confined `read`, `write`, and `edit` tools
+through a native-required `@openclaw/fs-safe` root plus explicit approval. The
+first automatic download also fails closed if no trusted model fits the 1 GiB
+budget. Its secret resolver still rejects and MCP is not connected. Model text
+is untrusted output and does not gain tool authority. GUI, Desktop, and mobile
 clients remain outside the current iteration.

@@ -23,6 +23,7 @@ import {
   type ModelAwareRuntime,
 } from "@lyonbrown/agentd/internal/model-aware-runtime";
 import { agentdProxyEnvironment } from "@lyonbrown/agentd/internal/proxy-environment";
+import { createProductionRuntime } from "@lyonbrown/agentd/internal/production-kernel";
 
 export interface ProductionRuntimeDependencies {
   readonly openStore: (options: {
@@ -63,7 +64,13 @@ export async function createProductionAgentdRuntime(
     modelService = dependencies.createModelService(
       dependencies.createModelStorage(join(context.dataDirectory, "models")),
     );
-    const runtime = dependencies.createRuntime({ sessionId, modelService, eventStore });
+    const runtime = dependencies.createRuntime({
+      sessionId,
+      modelService,
+      eventStore,
+      createRuntime: (lease, modelId, store, activeSessionId) =>
+        createProductionRuntime(lease, modelId, store, activeSessionId, context.canonicalWorkspace),
+    });
     return withProxyEnvironmentLease(runtime, releaseProxyEnvironment);
   } catch (error: unknown) {
     const failures: unknown[] = [error];

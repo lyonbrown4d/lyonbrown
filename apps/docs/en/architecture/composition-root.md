@@ -5,9 +5,9 @@ kept at the process boundary; domain objects do not resolve services from a
 container. The production launcher and executable entry point now use this
 composition; there is no second in-process or compatibility architecture.
 
-> Verified implementation checkpoint: 2026-10-06. The built launcher and
-> independent daemon startup black box passes; real-model execution and release
-> packaging remain pending.
+> Verified implementation checkpoint: 2026-10-07. The built launcher,
+> independent daemon startup, and production-composition real-GGUF black boxes
+> pass; final release-artifact verification remains pending.
 
 ## Ownership
 
@@ -25,9 +25,13 @@ provider secret, or Pi object. Snapshot ordering uses a daemon-owned monotonic
 transport revision rather than exposing EventStore revisions directly; this
 also orders model-only and activation updates.
 
-The current production kernel deliberately composes an empty tool registry,
-default-deny approval gate, rejecting secret resolver, and no MCP connections.
-Those are safe capability boundaries, not finished integrations.
+The production kernel composes workspace-confined `read`, `write`, and `edit`
+tools through a native-required `@openclaw/fs-safe` root plus an explicit
+approval gate. Reads are bounded to 1 MiB and writes use confined atomic
+replacement. Exact one-shot/session approval decisions are durable domain
+events. Its secret resolver still rejects and MCP is not connected. Tools and
+approval remain daemon-owned; the TUI only projects state and submits the
+user's decision.
 
 ## Workspace import boundary
 

@@ -81,19 +81,17 @@ export async function waitForCondition<T>(options: WaitOptions<T>): Promise<T> {
 }
 
 export async function bounded<T>(label: string, timeoutMs: number, task: Promise<T>): Promise<T> {
-  const timeout = AbortSignal.timeout(timeoutMs);
   return new Promise<T>((resolve, reject) => {
-    const onAbort = (): void => {
+    const timeout = setTimeout(() => {
       reject(new Error(`REAL_GGUF_TIMEOUT:${label}`));
-    };
-    timeout.addEventListener("abort", onAbort, { once: true });
+    }, timeoutMs);
     void task.then(
       (value) => {
-        timeout.removeEventListener("abort", onAbort);
+        clearTimeout(timeout);
         resolve(value);
       },
       (error: unknown) => {
-        timeout.removeEventListener("abort", onAbort);
+        clearTimeout(timeout);
         reject(errorFromUnknown(error));
       },
     );
@@ -141,7 +139,6 @@ export async function cleanupTemporaryAfterClose(
 
 function abortableDelay(durationMs: number): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, durationMs);
-    timer.unref();
+    setTimeout(resolve, durationMs);
   });
 }

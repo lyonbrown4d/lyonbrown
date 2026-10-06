@@ -90,6 +90,11 @@ export class FakeAgentRuntime implements AgentRuntime {
   readonly steering: string[] = [];
   readonly followUps: string[] = [];
   cancelCalls = 0;
+  readonly approvalResponses: {
+    requestId: string;
+    decision: Parameters<AgentRuntime["respondApproval"]>[1];
+  }[] = [];
+  readonly modelSelections: Parameters<AgentRuntime["selectModel"]>[0][] = [];
   disposeCalls = 0;
   startError: Error | undefined;
   controlError: Error | undefined;
@@ -125,6 +130,20 @@ export class FakeAgentRuntime implements AgentRuntime {
   cancel(): void {
     if (this.controlError !== undefined) throw this.controlError;
     this.cancelCalls += 1;
+  }
+
+  respondApproval(
+    requestId: string,
+    decision: Parameters<AgentRuntime["respondApproval"]>[1],
+  ): void {
+    if (this.controlError !== undefined) throw this.controlError;
+    this.approvalResponses.push({ requestId, decision });
+  }
+
+  selectModel(selection: Parameters<AgentRuntime["selectModel"]>[0]): Promise<void> {
+    if (this.controlError !== undefined) return Promise.reject(this.controlError);
+    this.modelSelections.push(selection);
+    return Promise.resolve();
   }
 
   dispose(): Promise<void> {

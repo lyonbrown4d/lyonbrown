@@ -1,6 +1,6 @@
 # 迁移进度
 
-> 已验证检查点：2026-10-06
+> 已验证检查点：2026-10-07
 >
 > 后续开发直接在 `main` 上继续。本页会区分“已经实现并有测试覆盖”和“发布验证”，
 > 不表示产品已经可以发布。
@@ -61,19 +61,16 @@
   与字节上限校验，以及失败后的 staging 清理。
 - 聚焦的 TypeScript 测试已经覆盖生产组合、model-aware Runtime 激活与重试、
   transport revision、本地推理并发与清理、Session 轮换和重启恢复。
-- 当前聚焦测试数量为：`agentd` 184、`agent-cli` 38、`ui-model` 56、
-  `local-model` 122、`control-plane-native` 85。
+- 当前本轮聚焦测试数量为：`agentd` 208、`local-model` 135、脚本编排 48；完整仓库门禁
+  仍以本页末尾列出的命令为准。
 - 构建后的生产 launcher/独立 `agentd` 启动黑盒已于 2026-10-06 通过：
   `source=spawned`、认证 health 为 `serving`、模型设置为 `required`、
   `allowedActions=[download]`、投影 revision 为 `2`。全程没有自动生成 GGUF，结束后
   临时 daemon 与目录均已清理。
-- Windows 开发机上的生产 composition 真实 GGUF smoke 已于 2026-10-06 通过。它对
-  固定的 `Qwen3-1.7B-Q4_K_M.gguf`（1,107,408,544 bytes，SHA-256
-  `228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f`）验证了：启动时
-  不自动下载；显式启动首个 operation、出现进度后取消；用新的 operation 完整下载、
-  校验并激活；生成 client 可见的短回答与 usage；取消长 turn 后继续完成下一 turn；
-  使用同一缓存重启时不重新下载，并创建新 Session 与空 turns；活跃 inference 在
-  15 秒界限内关闭。脚本最终输出 `REAL_GGUF_SMOKE_OK`，并清理临时模型缓存。
+- Windows 开发机上的生产 composition 真实 GGUF smoke 已于 2026-10-07 通过。脚本从
+  可信目录读取实际硬件选择及固定摘要，验证了不自动下载、显式取消/重试、进度、校验、
+  激活、pinned/auto 选择、真实回答和 usage、`write` 调用、审批与准确落盘、长 turn 取消、
+  缓存重启以及 30 秒预算内关闭。脚本最终输出 `REAL_GGUF_SMOKE_OK`，并清理临时缓存。
 - 重启测试会刻意轮换任何包含历史 turn 的 Session，包括已完成的 Session。这样既
   保留持久事件，也不会在 Pi 对话状态尚未完整恢复时静默续接；Pi history hydration
   仍未实现。
@@ -91,8 +88,8 @@
 gRPC 接到 daemon 持有的 EventStore、Pi Runtime 和本地模型。这是“已实现且有聚焦
 测试”的检查点，仍不是发布证据。
 
-生产 Kernel 当前刻意使用空 tool registry、默认拒绝审批，并拒绝 Secret 解析；MCP
-尚未接入。GUI、Desktop 和移动端仍不在当前范围。真实 GGUF 下载、激活、推理、取消、
+生产 Kernel 当前使用受工作区约束的文件工具和显式审批，仍拒绝 Secret 解析；MCP
+尚未接入。GUI、Desktop 和移动端仍不在当前范围。真实 GGUF 下载、激活、推理、工具、取消、
 缓存重启与有界关闭已经在当前 Windows 开发机的生产 composition 上通过；可移动开发
 目录已经验证，但归档、签名、安装后的最终 release artifact 仍未验证，不能据此声明
 产品可发布。
@@ -111,7 +108,7 @@ gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼�
 3. 将构建产物认证黑盒从已验证的 spawn 与 setup-required 检查点扩展到复用、重启
    fencing、模型进度、推理与取消。
 4. 在允许 daemon 重启后续接历史 Session 前实现 Pi history hydration。
-5. 逐步增加窄化的工具、审批执行、MCP、上下文与 Secret；各能力独立验证前继续
+5. 在现有窄化文件工具与审批基础上增加 MCP、上下文与 Secret；各能力独立验证前继续
    default deny。
 6. 对最终制品执行 frozen install、完整 format、lint、typecheck、test、build、docs
    与 `ci-gate`。

@@ -8,6 +8,7 @@ import type {
 export interface ModelSelectionOptions {
   readonly catalog: readonly ModelPreset[];
   readonly selector: ModelSelector;
+  readonly maxAutoDownloadBytes?: number;
 }
 
 export interface InitialModelSelection {
@@ -52,12 +53,23 @@ export const selectInitialModel = async (
   if (inspections.every((result) => result.status === "rejected")) {
     throw new Error("cache_inspection_failed");
   }
-  const selection = await options.selector.select(options.catalog, signal);
+  const selection = await options.selector.select(autoDownloadCandidates(options), signal);
   return {
     preset: selection.preset,
     reason: selection.source === "hardware" ? "hardware-compatible" : "conservative-fallback",
     installed: false,
   };
+};
+
+const autoDownloadCandidates = (options: ModelSelectionOptions): readonly ModelPreset[] => {
+  const maxBytes = options.maxAutoDownloadBytes;
+  if (maxBytes === undefined) return options.catalog;
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) {
+    throw new Error("auto_download_budget_invalid");
+  }
+  const candidates = options.catalog.filter((preset) => preset.expectedDownloadBytes <= maxBytes);
+  if (candidates.length > 0) return candidates;
+  throw new Error("auto_download_budget_exhausted");
 };
 
 const requireFirstPreset = (presets: readonly ModelPreset[]): ModelPreset => {

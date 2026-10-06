@@ -36,7 +36,47 @@ describe("inference request boundaries", () => {
     });
   });
 
-  it.each(["tools", "functions"])("rejects request-level %s authority", (field) => {
+  it("accepts a bounded tools declaration", () => {
+    expect(validateInferenceRequest(request({ tools: [] }))).toMatchObject({
+      valid: true,
+      tools: [],
+    });
+  });
+
+  it.each([
+    {
+      tools: Array.from({ length: 65 }, () => ({
+        name: "read",
+        description: "read",
+        inputSchema: {},
+      })),
+    },
+    { tools: [{ name: "bad name", description: "read", inputSchema: {} }] },
+    { tools: [{ name: "read", description: "x".repeat(4_097), inputSchema: {} }] },
+    { tools: [{ name: "read", description: "read", inputSchema: new Date() }] },
+    {
+      messages: [
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ callId: "bad id", name: "read", arguments: {} }],
+        },
+      ],
+    },
+    {
+      messages: [
+        { role: "tool_result", callId: "call-1", name: "read", content: "x", isError: "no" },
+      ],
+    },
+  ] as const)("rejects malformed tool contracts %#", (overrides) => {
+    expect(
+      validateInferenceRequest(
+        request(overrides as unknown as Partial<LocalModelInferenceRequest>),
+      ),
+    ).toMatchObject({ valid: false });
+  });
+
+  it.each(["functions"])("rejects request-level %s authority", (field) => {
     const unsafe = { ...request(), [field]: [] } as unknown as LocalModelInferenceRequest;
 
     expect(validateInferenceRequest(unsafe)).toEqual({

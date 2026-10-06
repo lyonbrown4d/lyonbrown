@@ -17,6 +17,23 @@ export interface RuntimeFailure {
   readonly message: string;
 }
 
+export interface RuntimePendingApproval {
+  readonly requestId: string;
+  readonly toolName: string;
+  readonly risk: "medium" | "high";
+  readonly permissions: readonly string[];
+  readonly argumentsPreview: RuntimeJsonValue;
+}
+
+export interface RuntimeApprovalPolicy {
+  readonly allowedTools: readonly string[];
+  readonly denyRemaining: boolean;
+}
+
+export type RuntimeModelSelection =
+  | { readonly kind: "auto" }
+  | { readonly kind: "pinned"; readonly provider: string; readonly model: string };
+
 export interface RuntimeToolState {
   readonly callId: string;
   readonly toolName: string;
@@ -53,6 +70,9 @@ export interface AgentRuntimeState {
   readonly queuedFollowUps: readonly string[];
   readonly usage: RuntimeUsage;
   readonly assistantTextBytes: number;
+  readonly modelSelection: RuntimeModelSelection;
+  readonly approvalPolicy: RuntimeApprovalPolicy;
+  readonly pendingApproval?: RuntimePendingApproval;
   readonly lastError?: RuntimeFailure;
   readonly outcomeUnknown: boolean;
 }
@@ -97,7 +117,21 @@ export function freezeState(state: AgentRuntimeState): AgentRuntimeState {
     tools: Object.freeze([...state.tools]),
     queuedFollowUps: Object.freeze([...state.queuedFollowUps]),
     usage: Object.freeze({ ...state.usage }),
+    modelSelection: Object.freeze({ ...state.modelSelection }),
+    approvalPolicy: Object.freeze({
+      allowedTools: Object.freeze([...state.approvalPolicy.allowedTools]),
+      denyRemaining: state.approvalPolicy.denyRemaining,
+    }),
+    ...(state.pendingApproval === undefined
+      ? {}
+      : {
+          pendingApproval: Object.freeze({
+            ...state.pendingApproval,
+            permissions: Object.freeze([...state.pendingApproval.permissions]),
+          }),
+        }),
   };
   if (result.lastError === undefined) delete result.lastError;
+  if (result.pendingApproval === undefined) delete result.pendingApproval;
   return Object.freeze(result);
 }

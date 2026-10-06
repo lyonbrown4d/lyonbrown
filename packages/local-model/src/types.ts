@@ -41,13 +41,43 @@ export interface LocalModelStatus {
   readonly allowedActions: readonly LocalModelAction[];
 }
 
+export type LocalModelJsonPrimitive = null | boolean | number | string;
+export type LocalModelJsonValue =
+  | LocalModelJsonPrimitive
+  | readonly LocalModelJsonValue[]
+  | { readonly [key: string]: LocalModelJsonValue };
+
+export interface LocalModelToolCall {
+  readonly callId: string;
+  readonly name: string;
+  readonly arguments: Readonly<Record<string, LocalModelJsonValue>>;
+}
+
+export interface LocalModelTool {
+  readonly name: string;
+  readonly description: string;
+  readonly inputSchema: Readonly<Record<string, LocalModelJsonValue>>;
+}
+
 export type LocalModelMessage =
   | { readonly role: "system"; readonly content: string }
   | { readonly role: "user"; readonly content: string }
-  | { readonly role: "assistant"; readonly content: string };
+  | {
+      readonly role: "assistant";
+      readonly content: string;
+      readonly toolCalls?: readonly LocalModelToolCall[];
+    }
+  | {
+      readonly role: "tool_result";
+      readonly callId: string;
+      readonly name: string;
+      readonly content: string;
+      readonly isError: boolean;
+    };
 
 export interface LocalModelInferenceRequest {
   readonly messages: readonly LocalModelMessage[];
+  readonly tools?: readonly LocalModelTool[];
   readonly signal: AbortSignal;
   readonly maxOutputTokens: number;
   readonly maxOutputBytes: number;
@@ -62,8 +92,13 @@ export type LocalModelInferenceErrorCode =
 
 export type LocalModelInferenceEvent =
   | { readonly type: "text_delta"; readonly text: string }
+  | {
+      readonly type: "tool_call";
+      readonly name: string;
+      readonly arguments: Readonly<Record<string, LocalModelJsonValue>>;
+    }
   | { readonly type: "usage"; readonly inputTokens: number; readonly outputTokens: number }
-  | { readonly type: "done"; readonly reason: "stop" | "length" | "cancelled" }
+  | { readonly type: "done"; readonly reason: "stop" | "length" | "cancelled" | "tool_use" }
   | {
       readonly type: "error";
       readonly code: LocalModelInferenceErrorCode;

@@ -1,7 +1,7 @@
 # TUI Local Real-Scenario Black-Box Validation
 
-> Status: Partially passed; production tool path blocked
-> Validation date: 2026-10-06
+> Status: Core TUI passed; production tool, approval, and model-selection blockers closed
+> Validation date: 2026-10-07
 > Environment: Windows PowerShell, local PTY, Node.js 24, real `agent` build, real local daemon
 
 ## 1. Scope
@@ -18,39 +18,43 @@ production daemon. Design renders are not runtime evidence for this document.
 
 ## 2. Real-scenario results
 
-| Scenario                    | Result      | Observed evidence                                                                                                                                           |
-| --------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Startup and connection      | Pass        | The TUI appeared first and then connected to the authenticated daemon; model transfer did not block startup.                                                |
-| Missing model               | Pass        | It recommended `qwen3-1.7b-q4_k_m` (about 1.03 GiB) without forcing a download.                                                                             |
-| English/Chinese switch      | Pass        | `F2` changed the model-setup copy immediately between Simplified Chinese and English.                                                                       |
-| Background download         | Pass        | After explicit `D`, the UI showed WaitingForLock, Downloading 0–100%, Verifying, Activating, and Ready while remaining responsive.                          |
-| Real local inference        | Pass        | An exact-response prompt returned `READY`; activity usage came from a real Snapshot.                                                                        |
-| Live steering               | Pass        | Plain Enter during an active turn sent steering and the following output obeyed the narrower instruction.                                                   |
-| Follow-up queue             | Pass        | `Alt-Enter` displayed the queued item, which became the next turn after the active turn completed.                                                          |
-| Activity Inspector          | Pass        | `Ctrl-O` showed freshness, activities, route, token usage, and assistant evidence, then closed cleanly.                                                     |
-| Theme control panel         | Pass        | `Ctrl-P` search opened the panel; all six themes appeared; Space preview kept saved and preview values distinct; Escape restored the saved theme.           |
-| Preference persistence      | Pass        | Slate Blue survived a clean exit and restart, then could be saved back to the default Hearth Teal.                                                          |
-| Session recovery            | Pass        | Restart reached Ready with the cached model and restored the existing transcript.                                                                           |
-| 80-column response          | Pass        | The model stayed in the context line, long output wrapped without loss and used one Agent label per response, and narrow control actions remained readable. |
-| Clean exit                  | Pass        | `/quit` returned exit code 0; exiting did not implicitly cancel an accepted daemon download.                                                                |
-| Tool call and real approval | **Blocked** | The model received no available tools, reported zero tool activity, and could not produce an approval through production.                                   |
-| Session model switch        | **Blocked** | The control UI exists, but production does not support `select-session-model`.                                                                              |
+| Scenario                    | Result       | Observed evidence                                                                                                                                              |
+| --------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Startup and connection      | Pass         | The TUI appeared first and then connected to the authenticated daemon; model transfer did not block startup.                                                   |
+| Missing model               | Pass         | The daemon recommended a model without forcing a download; first-run auto recommendation is capped by a 1 GiB download budget.                                 |
+| English/Chinese switch      | Pass         | `F2` changed the model-setup copy immediately between Simplified Chinese and English.                                                                          |
+| Background download         | Pass         | After explicit `D`, the UI showed WaitingForLock, Downloading 0–100%, Verifying, Activating, and Ready while remaining responsive.                             |
+| Real local inference        | Pass         | An exact-response prompt returned `READY`; activity usage came from a real Snapshot.                                                                           |
+| Live steering               | Pass         | Plain Enter during an active turn sent steering and the following output obeyed the narrower instruction.                                                      |
+| Follow-up queue             | Pass         | `Alt-Enter` displayed the queued item, which became the next turn after the active turn completed.                                                             |
+| Activity Inspector          | Pass         | `Ctrl-O` showed freshness, activities, route, token usage, and assistant evidence, then closed cleanly.                                                        |
+| Theme control panel         | Pass         | `Ctrl-P` search opened the panel; all six themes appeared; Space preview kept saved and preview values distinct; Escape restored the saved theme.              |
+| Preference persistence      | Pass         | Slate Blue survived a clean exit and restart, then could be saved back to the default Hearth Teal.                                                             |
+| Session recovery            | Pass         | Restart reached Ready with the cached model and restored the existing transcript.                                                                              |
+| 80-column response          | Pass         | The model stayed in the context line, long output wrapped without loss and used one Agent label per response, and narrow control actions remained readable.    |
+| Clean exit                  | Pass         | `/quit` returned exit code 0; exiting did not implicitly cancel an accepted daemon download.                                                                   |
+| Tool call and real approval | Layered pass | A real GGUF emitted `write`, the daemon projected approval, and client `allow-once` produced the exact file; TUI approval rendering and keys have regressions. |
+| Session model switch        | Layered pass | A real client pinned and restored auto selection through the daemon; the TUI sends only daemon-advertised routes.                                              |
 
-## 3. Blocking cause
+## 3. Closed production blockers
 
-The tool/approval failure is not a missing TUI renderer:
+The 2026-10-07 production-composition real-GGUF smoke closed the original blockers:
 
-- `apps/agentd/node-src/production-kernel.ts` currently composes production with
-  an empty tool registry and default-denied tool permission;
-- `apps/agentd/node-src/local-model-adapter.ts` explicitly rejects non-empty
-  tools, tool-call messages, and tool-result messages;
-- `apps/agentd/node-src/service.ts` does not yet implement `respond-approval` or
-  `select-session-model`.
+- production injects Pi Coding Agent `read`, `write`, and `edit` workspace tools;
+  `@openclaw/fs-safe` runs in native-required mode with rooted, identity-checked
+  I/O, atomic writes, a 1 MiB file cap, and fail-closed link/race handling;
+- the local-model adapter carries typed tool definitions, assistant tool calls,
+  and tool-result history;
+- exact approval decisions, model selection, and tool results become Lyonbrown
+  domain events before gRPC projection; session approval policy is replayable
+  instead of existing only in memory.
 
-This validation therefore does not relabel fixture-rendered approval or tool
-evidence as a real black-box pass. Closing the two blocked rows requires a real
-daemon tool registry, model tool-calling protocol, fail-closed approval gate,
-and the corresponding gRPC commands, followed by the same PTY run.
+The real smoke covers explicit download, cancel/retry, digest verification,
+activation, model selection, a short answer, approved `write` and exact file
+content, turn cancellation, cached restart, and bounded shutdown, ending in
+`REAL_GGUF_SMOKE_OK`. Evidence combines the prior real PTY run, TUI automation,
+and a production C/S black box; a design render or fixture alone is not treated
+as end-to-end evidence.
 
 ## 4. Automated regression complement
 

@@ -95,8 +95,8 @@ available. `/sessions`, `/new`, and `/resume` remain explicitly unavailable.
 `/queue` stays disabled in the palette because activation cannot supply its
 required message, while its slash and `Alt-Enter` paths work. Model selection
 only sends a route advertised as selectable by the daemon. The production
-daemon does not yet implement that mutation, so its real acceptance case
-remains blocked rather than being represented as a success. Unknown slash
+daemon now persists and projects pinned/auto selection, and its real-client
+black box passes. Unknown slash
 input is intercepted locally with a localized hint and is never submitted as
 a prompt.
 

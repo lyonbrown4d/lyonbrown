@@ -24,6 +24,8 @@ import { ToolExecutor } from "@lyonbrown/kernel-pi/internal/tools";
 import type {
   KernelEvent,
   KernelEventListener,
+  KernelApprovalDecision,
+  KernelApprovalResponseStatus,
   KernelSession,
   KernelToolDefinition,
   PiKernelSessionOptions,
@@ -145,6 +147,18 @@ export class PiKernelSession implements KernelSession {
   cancel(): void {
     this.#cancelled = true;
     this.#agent.abort();
+  }
+
+  respondApproval(
+    requestId: string,
+    decision: KernelApprovalDecision,
+  ): KernelApprovalResponseStatus {
+    this.assertControlAvailable();
+    try {
+      return this.options.approvalGate.respond?.(sanitizeText(requestId), decision) ?? "no-pending";
+    } catch {
+      return "no-pending";
+    }
   }
 
   subscribe(listener: KernelEventListener): () => void {

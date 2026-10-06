@@ -14,6 +14,7 @@
   "scripts": {
     "dev": "moon run workspace:dev",
     "dev:docs": "moon run docs:dev",
+    "dependencies:build": "moon run agentd:build agent-launch:build",
     "preflight": "tsx scripts/preflight.ts",
     "lint": "moon run :lint",
     "typecheck": "moon run :typecheck",
@@ -35,6 +36,7 @@
     "@lyonbrown/agentd": "workspace:*",
     "@lyonbrown/control-plane-native": "workspace:*",
     "@lyonbrown/local-control-plane": "workspace:*",
+    "@lyonbrown/local-model": "workspace:*",
     "@moonrepo/cli": "2.6.0",
     "@types/node": "24.10.1",
     "eslint": "9.39.1",

@@ -14,7 +14,10 @@ export type {
   AgentRuntimePhase,
   AgentRuntimeState,
   RuntimeActivityState,
+  RuntimeApprovalPolicy,
   RuntimeFailure,
+  RuntimeModelSelection,
+  RuntimePendingApproval,
   RuntimeToolState,
   RuntimeTurnState,
 } from "@lyonbrown/agent-domain/internal/runtime-state-types";
@@ -33,6 +36,8 @@ export function createInitialAgentRuntimeState(sessionId: SessionId): AgentRunti
     tools: [],
     queuedFollowUps: [],
     usage: ZERO_RUNTIME_USAGE,
+    modelSelection: { kind: "auto" },
+    approvalPolicy: { allowedTools: [], denyRemaining: false },
     assistantTextBytes: 0,
     outcomeUnknown: false,
   });

@@ -8,35 +8,45 @@ import {
   type AgentRuntime,
 } from "@lyonbrown/agent-runtime";
 import type { EventStore } from "@lyonbrown/event-store";
-import { createPiKernelSession, type KernelEventSink } from "@lyonbrown/kernel-pi";
+import {
+  createPiKernelSession,
+  type KernelEventSink,
+  type KernelToolRegistry,
+} from "@lyonbrown/kernel-pi";
 import type { LocalModelLease } from "@lyonbrown/local-model";
 
 import { createLocalKernelModelAdapter } from "@lyonbrown/agentd/internal/local-model-adapter";
+import { SessionApprovalGate } from "@lyonbrown/agentd/internal/approval-gate";
 import { KERNEL_MAX_INPUT_BYTES } from "@lyonbrown/agentd/internal/runtime-limits";
+import { createWorkspaceToolRegistry } from "@lyonbrown/agentd/internal/workspace-tools";
 
 export async function createProductionRuntime(
   lease: LocalModelLease,
   modelId: string,
   eventStore: EventStore,
   sessionId: string,
+  workspace = process.cwd(),
 ): Promise<AgentRuntime> {
   const model = createLocalKernelModelAdapter({ id: modelId, lease });
-  const recovered = await createRuntime(eventStore, sessionId, model);
+  const toolRegistry = await createWorkspaceToolRegistry(workspace);
+  const recovered = await createRuntime(eventStore, sessionId, model, toolRegistry);
   if (!unsafeToResume(recovered.snapshot())) return recovered;
   await recovered.dispose();
-  return createRuntime(eventStore, randomUUID(), model);
+  return createRuntime(eventStore, randomUUID(), model, toolRegistry);
 }
 
 function createRuntime(
   eventStore: EventStore,
   sessionId: string,
   model: ReturnType<typeof createLocalKernelModelAdapter>,
+  toolRegistry: KernelToolRegistry,
 ): Promise<AgentRuntime> {
   const safeSessionId = asSessionId(sessionId);
   return createAgentRuntime({
     sessionId: safeSessionId,
     eventStore: createRuntimeEventStorePort(eventStore),
-    createKernelSession: ({ eventSink }) => createKernel(eventSink, safeSessionId, model),
+    createKernelSession: ({ eventSink }) =>
+      createKernel(eventSink, safeSessionId, model, toolRegistry),
   });
 }
 
@@ -59,14 +69,16 @@ function createKernel(
   eventSink: KernelEventSink,
   sessionId: string,
   model: ReturnType<typeof createLocalKernelModelAdapter>,
+  toolRegistry: KernelToolRegistry,
 ) {
+  const approvalGate = new SessionApprovalGate();
   return createPiKernelSession({
     sessionId,
     systemPrompt: "You are Lyonbrown, a concise local coding assistant.",
     model,
     eventSink,
-    toolRegistry: { list: () => [], get: () => undefined, hasPermission: () => false },
-    approvalGate: { request: () => Promise.resolve({ decision: "deny" }) },
+    toolRegistry,
+    approvalGate,
     secretResolver: { resolve: async () => Promise.reject(new Error("secret access denied")) },
     budget: {
       maxInputBytes: KERNEL_MAX_INPUT_BYTES,

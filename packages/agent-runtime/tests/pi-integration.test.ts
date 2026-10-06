@@ -49,7 +49,7 @@ test("runs the real Pi kernel through the durable runtime adapter", async () => 
         model,
         systemPrompt: "Answer briefly.",
         toolRegistry: { list: () => [], get: () => undefined, hasPermission: () => false },
-        approvalGate: { request: () => Promise.resolve({ decision: "deny" }) },
+        approvalGate: { request: () => Promise.resolve({ decision: "deny-once" }) },
         secretResolver: { resolve: () => Promise.reject(new Error("not configured")) },
         budget,
       }),

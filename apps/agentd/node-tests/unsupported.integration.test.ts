@@ -1,7 +1,9 @@
 import { status } from "@grpc/grpc-js";
 import {
+  ApprovalDecision,
   CommandErrorCode,
   ForceStopRequest,
+  ModelSelection,
   RespondApprovalRequest,
   SelectSessionModelRequest,
   UnsupportedCommand,
@@ -48,38 +50,44 @@ describe("deferred command RPCs", () => {
     expect(state.host.execute).not.toHaveBeenCalled();
   });
 
-  it("returns the matching typed Unsupported variant from every deferred RPC", async () => {
+  it("forwards approval responses and model selection to RuntimeHost", async () => {
     const state = await start();
     const metadata = authorization(state.token);
     const client = state.client;
-    const calls = [
+    await expect(
       invokeUnary((callback) =>
         client.respondApproval(
-          RespondApprovalRequest.create({ metadata: requestMetadata("approval") }),
+          RespondApprovalRequest.create({
+            metadata: requestMetadata("approval"),
+            requestId: "call-1",
+            decision: ApprovalDecision.APPROVAL_DECISION_ALLOW_ONCE,
+          }),
           metadata,
           callback,
         ),
       ),
+    ).resolves.toMatchObject({ accepted: true });
+    expect(state.host.execute).toHaveBeenCalledWith({
+      kind: "respond-approval",
+      requestId: "call-1",
+      decision: "allow-once",
+    });
+
+    await expect(
       invokeUnary((callback) =>
         client.selectSessionModel(
-          SelectSessionModelRequest.create({ metadata: requestMetadata("model") }),
+          SelectSessionModelRequest.create({
+            metadata: requestMetadata("model"),
+            selection: ModelSelection.create({ selection: { $case: "auto", auto: true } }),
+          }),
           metadata,
           callback,
         ),
       ),
-    ];
-    const errors = await Promise.all(
-      calls.map(async (call) => call.catch((error: unknown) => error)),
-    );
-    expect(errors.map((error) => detailFrom(error).context)).toEqual([
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_RESPOND_APPROVAL,
-      },
-      {
-        $case: "unsupportedCommand",
-        unsupportedCommand: UnsupportedCommand.UNSUPPORTED_COMMAND_SELECT_SESSION_MODEL,
-      },
-    ]);
+    ).resolves.toMatchObject({ accepted: true });
+    expect(state.host.execute).toHaveBeenCalledWith({
+      kind: "select-session-model",
+      selection: { kind: "auto" },
+    });
   });
 });

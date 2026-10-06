@@ -29,6 +29,23 @@ export function mapKernelEvent(sessionId: SessionId, event: KernelEvent): AgentR
       });
     case "usage":
       return parseAgentRuntimeEvent({ type: "usage_recorded", sessionId, ...event.usage });
+    case "approval_requested":
+      return parseAgentRuntimeEvent({
+        type: event.type,
+        sessionId,
+        requestId: event.requestId,
+        toolName: event.toolName,
+        risk: event.risk,
+        permissions: event.permissions,
+        argumentsPreview: event.argumentsPreview,
+      });
+    case "approval_resolved":
+      return parseAgentRuntimeEvent({
+        type: event.type,
+        sessionId,
+        requestId: event.requestId,
+        decision: event.decision,
+      });
     case "tool_started":
       return parseAgentRuntimeEvent({
         type: event.type,

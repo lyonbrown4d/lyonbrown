@@ -3,6 +3,7 @@ import type { UnsupportedCommand } from "@lyonbrown/protocol";
 import {
   CommandErrorCode,
   CommandErrorDetail,
+  ApprovalRequestMismatchDetail,
   EpochMismatchDetail,
   InvalidModelIdDetail,
   ModelDownloadOperationMismatchDetail,
@@ -89,6 +90,25 @@ export function runtimeFailureStatus(failure: RuntimeFailure): ServerErrorRespon
         status.FAILED_PRECONDITION,
         "no active turn",
         CommandErrorCode.COMMAND_ERROR_CODE_NO_ACTIVE_TURN,
+      );
+    case "NO_PENDING_APPROVAL":
+      return typedCommandStatus(
+        status.FAILED_PRECONDITION,
+        "no pending approval",
+        CommandErrorCode.COMMAND_ERROR_CODE_NO_PENDING_APPROVAL,
+      );
+    case "APPROVAL_REQUEST_MISMATCH":
+      return typedCommandStatus(
+        status.FAILED_PRECONDITION,
+        "approval request changed",
+        CommandErrorCode.COMMAND_ERROR_CODE_APPROVAL_REQUEST_MISMATCH,
+        {
+          $case: "approvalRequestMismatch",
+          approvalRequestMismatch: ApprovalRequestMismatchDetail.create({
+            expectedRequestId: failure.expectedRequestId,
+            receivedRequestId: failure.receivedRequestId,
+          }),
+        },
       );
     case "EMPTY_TEXT":
       return typedCommandStatus(

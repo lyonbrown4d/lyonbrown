@@ -53,6 +53,7 @@ export {
 export { MAX_TEXT_BYTES, validateText } from "@lyonbrown/agent-domain/internal/text";
 export {
   parseAgentRuntimeEvent,
+  type ApprovalDecision,
   type AgentRuntimeEvent,
   type RuntimeUsage,
 } from "@lyonbrown/agent-domain/internal/runtime-events";
@@ -68,7 +69,10 @@ export {
   type AgentRuntimePhase,
   type AgentRuntimeState,
   type RuntimeActivityState,
+  type RuntimeApprovalPolicy,
   type RuntimeFailure,
+  type RuntimeModelSelection,
+  type RuntimePendingApproval,
   type RuntimeToolState,
   type RuntimeTurnState,
   type VersionedAgentRuntimeEvent,

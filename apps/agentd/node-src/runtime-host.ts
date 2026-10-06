@@ -5,6 +5,17 @@ export type RuntimeCommand =
   | { readonly kind: "steer-current-turn"; readonly text: string }
   | { readonly kind: "queue-follow-up"; readonly text: string }
   | { readonly kind: "cancel-turn" }
+  | {
+      readonly kind: "respond-approval";
+      readonly requestId: string;
+      readonly decision: "allow-once" | "allow-for-session" | "deny-once" | "deny-remaining";
+    }
+  | {
+      readonly kind: "select-session-model";
+      readonly selection:
+        | { readonly kind: "auto" }
+        | { readonly kind: "pinned"; readonly provider: string; readonly model: string };
+    }
   | { readonly kind: "start-model-download"; readonly modelId: string }
   | { readonly kind: "cancel-model-download"; readonly operationId: string };
 
@@ -12,6 +23,12 @@ export type RuntimeFailure =
   | { readonly code: "RUNTIME_STOPPED" }
   | { readonly code: "TURN_ALREADY_ACTIVE" }
   | { readonly code: "NO_ACTIVE_TURN" }
+  | { readonly code: "NO_PENDING_APPROVAL" }
+  | {
+      readonly code: "APPROVAL_REQUEST_MISMATCH";
+      readonly expectedRequestId: string;
+      readonly receivedRequestId: string;
+    }
   | { readonly code: "EMPTY_TEXT" }
   | { readonly code: "STEERING"; readonly reason: string }
   | { readonly code: "MODEL_SETUP_REQUIRED" }

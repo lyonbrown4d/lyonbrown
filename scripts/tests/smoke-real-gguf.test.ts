@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   assertProgress,
   assertSafeTemporaryRoot,
+  bounded,
   cleanupTemporaryAfterClose,
   parseRealGgufSmokeAuthorization,
   runAllAttemptCleanup,
@@ -71,6 +72,15 @@ describe("real GGUF progress validation", () => {
 });
 
 describe("real GGUF cleanup", () => {
+  test("keeps a referenced deadline until an unresolved operation times out", async () => {
+    const stalled = new Promise<void>((resolve) => {
+      void resolve;
+    });
+    await expect(bounded("stalled-close", 5, stalled)).rejects.toThrow(
+      "REAL_GGUF_TIMEOUT:stalled-close",
+    );
+  });
+
   test("preserves temporary data when close has not settled successfully", async () => {
     const remove = vi.fn(() => Promise.resolve());
     await expect(

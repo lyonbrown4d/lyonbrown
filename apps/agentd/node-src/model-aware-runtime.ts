@@ -3,7 +3,13 @@ import type { AgentRuntime } from "@lyonbrown/agent-runtime";
 import type { LocalModelLease, LocalModelStatus } from "@lyonbrown/local-model";
 import {
   ModelSelection,
+  ModelCatalog,
+  ModelLocality,
+  ModelOption,
+  ModelPolicy,
+  ModelTier,
   PROTOCOL_VERSION,
+  RouteSummary,
   RuntimeEvent,
   RuntimeSnapshot,
 } from "@lyonbrown/protocol";
@@ -42,7 +48,13 @@ import { shouldRotateSession } from "@lyonbrown/agentd/internal/runtime-session-
 import { rotateRuntimeSession } from "@lyonbrown/agentd/internal/runtime-session-rotation";
 import { nextTransportRevision } from "@lyonbrown/agentd/internal/transport-revision";
 
-const CAPABILITIES = Object.freeze(["runtime.pi-local.v1", "model-download.v1"]);
+const CAPABILITIES = Object.freeze([
+  "runtime.pi-local.v1",
+  "model-download.v1",
+  "approval.v1",
+  "session-model-selection.v1",
+  "tools.workspace-files.v1",
+]);
 const AUTO_SELECTION = ModelSelection.create({ selection: { $case: "auto", auto: true } });
 
 export type {
@@ -124,6 +136,18 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
     let runtime = this.runtime;
     if (runtime === undefined) {
       return failedRuntimeResult({ code: "MODEL_SETUP_REQUIRED" });
+    }
+    if (command.kind === "select-session-model" && command.selection.kind === "pinned") {
+      if (
+        command.selection.provider !== "local" ||
+        command.selection.model !== this.modelStatus.model.id
+      ) {
+        return failedRuntimeResult({
+          code: "INVALID_MODEL_ID",
+          requestedModelId: `${command.selection.provider}/${command.selection.model}`,
+          configuredModelId: `local/${this.modelStatus.model.id}`,
+        });
+      }
     }
     if (!runtimeCommandWithinBudget(runtime.snapshot(), command)) {
       return failedRuntimeResult({ code: "RESOURCE_EXHAUSTED" });
@@ -273,14 +297,22 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
   private composeSnapshot(): RuntimeSnapshot {
     const runtimeSnapshot =
       this.runtime === undefined ? undefined : projectRuntimeSnapshot(this.runtime.snapshot());
+    const modelSelection = runtimeSnapshot?.modelSelection ?? AUTO_SELECTION;
     return RuntimeSnapshot.create({
       ...(runtimeSnapshot ?? {}),
       protocolVersion: PROTOCOL_VERSION,
       revision: this.revision,
       sessionId: runtimeSnapshot?.sessionId ?? this.activeSessionId,
       phase: runtimeSnapshot?.phase ?? projectSetupRuntimePhase(this.modelStatus, this.activation),
-      modelSelection: runtimeSnapshot?.modelSelection ?? AUTO_SELECTION,
+      modelSelection,
       modelSetup: projectModelSetup(this.modelStatus, this.activation),
+      modelCatalog: modelCatalog(this.modelStatus),
+      modelPolicy: ModelPolicy.create({ active: modelSelection }),
+      route: RouteSummary.create({
+        selected: { provider: "local", model: this.modelStatus.model.id },
+        reason: modelSelection.selection?.$case === "pinned" ? "session pinned" : "local default",
+        fallbacks: [],
+      }),
     });
   }
 
@@ -306,4 +338,23 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
     });
     this.feeds.clear();
   }
+}
+
+function modelCatalog(status: LocalModelStatus): ModelCatalog {
+  return ModelCatalog.create({
+    models: [
+      ModelOption.create({
+        route: { provider: "local", model: status.model.id },
+        tier: ModelTier.MODEL_TIER_WORKER,
+        locality: ModelLocality.MODEL_LOCALITY_LOCAL,
+        contextWindow: 4_096,
+        maxOutputTokens: 2_048,
+        supportsTools: true,
+        supportsStreaming: true,
+        supportsJson: false,
+        supportsThinking: false,
+        selectableForWorker: true,
+      }),
+    ],
+  });
 }

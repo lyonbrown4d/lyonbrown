@@ -114,8 +114,18 @@ export interface KernelApprovalRequest {
   readonly signal: AbortSignal;
 }
 
+export type KernelApprovalDecision =
+  | "allow-once"
+  | "allow-for-session"
+  | "deny-once"
+  | "deny-remaining";
+
+export type KernelApprovalResponseStatus = "accepted" | "no-pending" | "mismatch";
+
 export interface KernelApprovalGate {
-  request(request: KernelApprovalRequest): Promise<{ readonly decision: "approve" | "deny" }>;
+  request(request: KernelApprovalRequest): Promise<{ readonly decision: KernelApprovalDecision }>;
+  respond?(requestId: string, decision: KernelApprovalDecision): KernelApprovalResponseStatus;
+  commit?(toolName: string, decision: KernelApprovalDecision): void;
 }
 
 export interface KernelSecretResolver {
@@ -151,6 +161,19 @@ export type KernelEvent =
   | { readonly type: "turn_completed"; readonly turn: number }
   | { readonly type: "text_delta"; readonly delta: string }
   | { readonly type: "usage"; readonly usage: KernelUsage }
+  | {
+      readonly type: "approval_requested";
+      readonly requestId: string;
+      readonly toolName: string;
+      readonly risk: Exclude<KernelToolRisk, "low">;
+      readonly permissions: readonly string[];
+      readonly argumentsPreview: KernelJsonValue;
+    }
+  | {
+      readonly type: "approval_resolved";
+      readonly requestId: string;
+      readonly decision: KernelApprovalDecision;
+    }
   | {
       readonly type: "tool_started";
       readonly callId: string;
@@ -195,6 +218,10 @@ export interface KernelSession {
   steer(input: string): void;
   followUp(input: string): void;
   cancel(): void;
+  respondApproval?(
+    requestId: string,
+    decision: KernelApprovalDecision,
+  ): KernelApprovalResponseStatus;
   subscribe(listener: KernelEventListener): () => void;
   dispose(): void;
 }

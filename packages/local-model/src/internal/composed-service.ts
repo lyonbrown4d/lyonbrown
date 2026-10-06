@@ -1,6 +1,10 @@
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/internal/native-storage";
 import type { LocalModelService } from "@lyonbrown/local-model/internal/types";
-import { DEFAULT_PRESET, MODEL_CATALOG } from "@lyonbrown/local-model/internal/internal/catalog";
+import {
+  DEFAULT_AUTO_DOWNLOAD_MAX_BYTES,
+  DEFAULT_PRESET,
+  MODEL_CATALOG,
+} from "@lyonbrown/local-model/internal/internal/catalog";
 import type {
   LlamaEngineAdapter,
   LlamaLease,
@@ -47,6 +51,7 @@ export const createComposedLocalModelService = (
   );
   const selection = {
     catalog: dependencies.modelCatalog ?? MODEL_CATALOG,
+    maxAutoDownloadBytes: DEFAULT_AUTO_DOWNLOAD_MAX_BYTES,
     selector:
       dependencies.modelSelector ??
       createHardwareAwareModelSelector(createNodeLlamaModelEvaluator()),

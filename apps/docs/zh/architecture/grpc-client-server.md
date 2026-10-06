@@ -62,9 +62,8 @@ flowchart LR
 daemon 是 Session 与执行状态的唯一权威。TUI 只持有输入、渲染、locale、主题和
 短期展示偏好。关闭 TUI 不会停止 daemon 已接受的 turn 或模型下载。
 
-当前生产组合中的工具 registry 为空、审批策略为 default-deny、Secret resolver 为
-拒绝式实现，并且尚未连接 MCP。因此图中不把工具和 MCP 画成已交付能力；后续接入时
-仍必须归 `agentd` 所有，不能下沉到 TUI。
+当前生产组合已接入受工作区约束的文件工具和显式审批；Secret resolver 仍为拒绝式
+实现，并且尚未连接 MCP。工具、审批与未来 MCP 都归 `agentd` 所有，不能下沉到 TUI。
 
 ## 命令与事件闭环
 

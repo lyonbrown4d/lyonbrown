@@ -2,11 +2,13 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   createPiKernelSession,
+  type KernelApprovalDecision,
   type KernelEvent,
   type KernelModelAdapter,
   type KernelModelRequest,
   type KernelModelStreamEvent,
   type KernelToolDefinition,
+  type PiKernelSessionOptions,
 } from "@lyonbrown/kernel-pi/internal/index";
 
 const budget = {
@@ -60,10 +62,12 @@ class ScriptedModel implements KernelModelAdapter {
   }
 }
 
+type Mutable<T> = { -readonly [Key in keyof T]: T[Key] };
+
 function createDependencies(
   model: KernelModelAdapter,
   tools: readonly KernelToolDefinition[] = [],
-) {
+): { readonly events: KernelEvent[]; readonly options: Mutable<PiKernelSessionOptions> } {
   const events: KernelEvent[] = [];
   return {
     events,
@@ -76,7 +80,7 @@ function createDependencies(
         get: (name: string) => tools.find((tool) => tool.name === name),
         hasPermission: () => true,
       },
-      approvalGate: { request: () => Promise.resolve({ decision: "approve" as const }) },
+      approvalGate: { request: () => Promise.resolve({ decision: "allow-once" as const }) },
       eventSink: {
         append: (event: KernelEvent) => {
           events.push(event);
@@ -90,6 +94,76 @@ function createDependencies(
 }
 
 describe("Pi kernel integration", () => {
+  test("persists approval lifecycle and accepts a correlated client decision", async () => {
+    let settle: ((value: { readonly decision: KernelApprovalDecision }) => void) | undefined;
+    const model = new ScriptedModel([
+      [
+        { type: "tool_call", callId: "call-approval", name: "write", arguments: { value: "x" } },
+        { type: "done", reason: "tool_use" },
+      ],
+      textResponse("done"),
+    ]);
+    const tool: KernelToolDefinition = {
+      name: "write",
+      label: "Write",
+      description: "Write a file",
+      inputSchema: {
+        type: "object",
+        properties: { value: { type: "string" } },
+        required: ["value"],
+        additionalProperties: false,
+      },
+      permissions: ["workspace.write"],
+      risk: "medium",
+      execute: () => Promise.resolve({ content: "written" }),
+    };
+    const { events, options } = createDependencies(model, [tool]);
+    const commit = vi.fn((toolName: string, decision: KernelApprovalDecision) => {
+      expect(events).toContainEqual({
+        type: "approval_resolved",
+        requestId: "call-approval",
+        decision,
+      });
+      expect(toolName).toBe("write");
+    });
+    options.approvalGate = {
+      request: () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+      respond: (requestId, decision) => {
+        if (requestId !== "call-approval") return "mismatch" as const;
+        settle?.({ decision });
+        return "accepted" as const;
+      },
+      commit,
+    };
+    const session = createPiKernelSession(options);
+    const run = session.startTurn("write it");
+    await vi.waitFor(() => {
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: "approval_requested",
+          requestId: "call-approval",
+          toolName: "write",
+        }),
+      );
+    });
+
+    expect(session.respondApproval?.("call-approval", "allow-once")).toBe("accepted");
+    await run;
+
+    expect(events).toContainEqual({
+      type: "approval_resolved",
+      requestId: "call-approval",
+      decision: "allow-once",
+    });
+    expect(commit).toHaveBeenCalledWith("write", "allow-once");
+    expect(events.findIndex((event) => event.type === "approval_requested")).toBeLessThan(
+      events.findIndex((event) => event.type === "tool_started"),
+    );
+  });
+
   test("streams normalized events through a real Pi Agent", async () => {
     const model = new ScriptedModel([textResponse("hello")]);
     const { events, options } = createDependencies(model);

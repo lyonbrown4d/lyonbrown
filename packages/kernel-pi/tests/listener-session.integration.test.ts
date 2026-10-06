@@ -33,7 +33,7 @@ describe("session listener isolation", () => {
       systemPrompt: "safe",
       model,
       toolRegistry: { list: () => [], get: () => undefined, hasPermission: () => false },
-      approvalGate: { request: () => Promise.resolve({ decision: "deny" }) },
+      approvalGate: { request: () => Promise.resolve({ decision: "deny-once" }) },
       eventSink: {
         append: (event) => {
           durable.push(event);
@@ -129,7 +129,7 @@ describe("session listener isolation", () => {
         get: (name) => (name === "effect" ? options.toolRegistry.list()[0] : undefined),
         hasPermission: () => true,
       },
-      approvalGate: { request: () => Promise.resolve({ decision: "approve" }) },
+      approvalGate: { request: () => Promise.resolve({ decision: "allow-once" }) },
       eventSink: {
         append: (event) => {
           durable.push(event);

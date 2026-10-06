@@ -48,11 +48,29 @@ describe("real GGUF smoke orchestration", () => {
         return Promise.resolve();
       }),
       startTurn: vi.fn((text: string) => {
-        calls.push(text.startsWith("Respond") ? "short-turn" : "long-turn");
+        calls.push(
+          text.startsWith("Respond")
+            ? "short-turn"
+            : text.startsWith("Call the write")
+              ? "tool-turn"
+              : "long-turn",
+        );
         return Promise.resolve();
       }),
       cancelTurn: vi.fn(() => {
         calls.push("cancel-turn");
+        return Promise.resolve();
+      }),
+      respondApproval: vi.fn((requestId: string) => {
+        calls.push(`approve:${requestId}`);
+        return Promise.resolve();
+      }),
+      selectModel: vi.fn((selection: SmokeSnapshot["modelSelection"]) => {
+        calls.push(`model:${selection.kind}`);
+        return Promise.resolve();
+      }),
+      verifyWorkspaceFile: vi.fn(() => {
+        calls.push("verify-workspace");
         return Promise.resolve();
       }),
       closeServer: vi.fn(() => {
@@ -79,14 +97,19 @@ describe("real GGUF smoke orchestration", () => {
       pollIntervalMs: 1,
       cancelAfterBytes: 64n,
       closeTimeoutMs: 1_000,
-      expectedSha256: "a".repeat(64),
+      trustedModelDigests: { "qwen3-1.7b-q4_k_m": "a".repeat(64) },
     });
 
     expect(calls).toEqual([
       "download:qwen3-1.7b-q4_k_m",
       "cancel-download:download-1",
       "download:qwen3-1.7b-q4_k_m",
+      "model:pinned",
+      "model:auto",
       "short-turn",
+      "tool-turn",
+      "approve:approval-1",
+      "verify-workspace",
       "long-turn",
       "cancel-turn",
       "short-turn",
@@ -111,6 +134,8 @@ function smokeSnapshots(): readonly SmokeSnapshot[] {
     revision: 1n,
     phase: phase === "ready" ? "ready" : "model-setup-required",
     sessionId,
+    pendingApproval: null,
+    modelSelection: { kind: "auto" },
     modelSetup: {
       phase,
       operationId,
@@ -153,11 +178,58 @@ function smokeSnapshots(): readonly SmokeSnapshot[] {
           {
             phase: !current || status === "completed" ? "completed" : "streaming",
             usage: !current || status === "completed" ? { input: 1, output: 1 } : null,
+            tools: [],
           },
         ],
       };
     }),
   });
+  const completedShortTurn = turn(1, "completed").turns[0];
+  if (completedShortTurn === undefined) throw new Error("missing completed turn fixture");
+  const toolTurn = (status: "pending" | "completed"): SmokeSnapshot => ({
+    ...setup("ready", null, 1_000n),
+    phase: status === "pending" ? "awaiting-approval" : "completed",
+    pendingApproval:
+      status === "pending"
+        ? {
+            requestId: "approval-1",
+            toolName: "write",
+            argumentsJson: '{"path":"lyonbrown-tool-proof.txt","content":"LYONBROWN_TOOL_OK"}',
+          }
+        : null,
+    turns: [
+      completedShortTurn,
+      {
+        userText:
+          'Call the write tool exactly once with path "lyonbrown-tool-proof.txt" and content ' +
+          '"LYONBROWN_TOOL_OK". Use a relative path. Do not answer until the tool succeeds.',
+        status: status === "pending" ? "running" : "completed",
+        assistantText: status === "pending" ? "" : "done",
+        activities: [
+          {
+            phase: status === "pending" ? "awaiting-approval" : "completed",
+            usage: status === "pending" ? null : { input: 1, output: 1 },
+            tools: [
+              {
+                name: "write",
+                argumentsJson: '{"path":"lyonbrown-tool-proof.txt","content":"LYONBROWN_TOOL_OK"}',
+                state: status === "pending" ? "requested" : "completed",
+                result: status === "pending" ? null : { ok: true, error: null },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  const pinned = {
+    ...setup("ready", null, 1_000n),
+    modelSelection: {
+      kind: "pinned" as const,
+      provider: "local",
+      model: "qwen3-1.7b-q4_k_m",
+    },
+  };
   return [
     setup("required", null, 0n),
     setup("downloading", "download-1", 128n),
@@ -166,13 +238,18 @@ function smokeSnapshots(): readonly SmokeSnapshot[] {
     setup("downloading", "download-2", 900n),
     setup("verifying", "download-2", 0n),
     setup("ready", null, 1_000n),
+    pinned,
+    setup("ready", null, 1_000n),
     setup("ready", null, 1_000n),
     turn(1, "completed"),
     turn(1, "completed"),
-    turn(2, "running"),
-    turn(2, "cancelled"),
-    turn(2, "cancelled"),
-    turn(3, "completed"),
+    toolTurn("pending"),
+    toolTurn("completed"),
+    toolTurn("completed"),
+    turn(3, "running"),
+    turn(3, "cancelled"),
+    turn(3, "cancelled"),
+    turn(4, "completed"),
     setup("ready", null, 1_000n, "session-2"),
     setup("ready", null, 1_000n, "session-2"),
     turn(1, "completed", "session-2"),

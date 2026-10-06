@@ -121,7 +121,12 @@ async function waitFor(
     if (predicate((await runtime.host.snapshot()).phase)) return;
     await new Promise<void>((resolve) => setTimeout(resolve, 5));
   }
-  throw new Error("runtime state did not converge");
+  throw new Error(
+    `runtime state did not converge: ${JSON.stringify(
+      await runtime.host.snapshot(),
+      (_key, value: unknown) => (typeof value === "bigint" ? value.toString() : value),
+    )}`,
+  );
 }
 
 async function waitForSnapshot(
@@ -178,6 +183,50 @@ describe("model-aware production runtime", () => {
       assistantText: "Hello from local.",
     });
     expect(await store.currentRevision(SESSION_ID)).toBeGreaterThan(1n);
+    await runtime.close();
+  });
+
+  it("exposes the local model catalog and validates session model selection", async () => {
+    const model = new FakeModelService(status("ready"), lease());
+    const store = openEventStore({ testOnlyMemory: true });
+    const agentRuntime = new FakeAgentRuntime(stateFrom([{ type: "session_opened" }], SESSION_ID));
+    const runtime = createModelAwareRuntime({
+      sessionId: SESSION_ID,
+      modelService: model,
+      eventStore: store,
+      createRuntime: async () => agentRuntime,
+    });
+    await waitFor(runtime, (phase) => phase === RuntimePhase.RUNTIME_PHASE_READY);
+
+    const snapshot = await runtime.host.snapshot();
+    expect(snapshot.modelCatalog?.models).toHaveLength(1);
+    expect(snapshot.modelCatalog?.models[0]).toMatchObject({
+      route: { provider: "local", model: DEFAULT_LOCAL_MODEL.id },
+      supportsTools: true,
+      selectableForWorker: true,
+    });
+    await expect(
+      runtime.host.execute({
+        kind: "select-session-model",
+        selection: { kind: "pinned", provider: "local", model: DEFAULT_LOCAL_MODEL.id },
+      }),
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      runtime.host.execute({
+        kind: "select-session-model",
+        selection: { kind: "pinned", provider: "remote", model: "unknown" },
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: {
+        code: "INVALID_MODEL_ID",
+        requestedModelId: "remote/unknown",
+        configuredModelId: `local/${DEFAULT_LOCAL_MODEL.id}`,
+      },
+    });
+    expect(agentRuntime.modelSelections).toEqual([
+      { kind: "pinned", provider: "local", model: DEFAULT_LOCAL_MODEL.id },
+    ]);
     await runtime.close();
   });
 

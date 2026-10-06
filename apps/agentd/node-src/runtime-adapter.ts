@@ -21,6 +21,7 @@ type SimpleRuntimeFailure = Extract<
       | "RUNTIME_STOPPED"
       | "TURN_ALREADY_ACTIVE"
       | "NO_ACTIVE_TURN"
+      | "NO_PENDING_APPROVAL"
       | "EMPTY_TEXT"
       | "MODEL_SETUP_REQUIRED"
       | "MODEL_DOWNLOAD_UNAVAILABLE"
@@ -40,6 +41,22 @@ class AgentRuntimeHostAdapter implements RuntimeHost {
       if (empty(command.text)) return failure("EMPTY_TEXT");
       try {
         await this.runtime.startTurn(command.text);
+        return OK;
+      } catch (error: unknown) {
+        return mapRuntimeFailure(error, command.kind);
+      }
+    }
+    if (command.kind === "respond-approval") {
+      try {
+        this.runtime.respondApproval(command.requestId, command.decision);
+        return OK;
+      } catch (error: unknown) {
+        return mapApprovalFailure(error, command.requestId, this.runtime);
+      }
+    }
+    if (command.kind === "select-session-model") {
+      try {
+        await this.runtime.selectModel(command.selection);
         return OK;
       } catch (error: unknown) {
         return mapRuntimeFailure(error, command.kind);
@@ -132,12 +149,39 @@ function mapRuntimeFailure(error: unknown, command: RuntimeCommand["kind"]): Run
       return command === "steer-current-turn"
         ? { ok: false, error: { code: "STEERING", reason: "runtime rejected steering" } }
         : failure("RUNTIME_STOPPED");
+    case "NO_PENDING_APPROVAL":
+      return failure("NO_PENDING_APPROVAL");
+    case "APPROVAL_REQUEST_MISMATCH":
+      return failure("NO_PENDING_APPROVAL");
     case "EVENT_SINK_UNAVAILABLE":
     case "EVENT_STREAM_CORRUPT":
     case "RUNTIME_DISPOSED":
     case "TERMINAL_SESSION":
       return failure("RUNTIME_STOPPED");
   }
+}
+
+function mapApprovalFailure(
+  error: unknown,
+  receivedRequestId: string,
+  runtime: AgentRuntime,
+): RuntimeResult {
+  if (!(error instanceof AgentRuntimeError)) return failure("RUNTIME_STOPPED");
+  if (error.code === "NO_PENDING_APPROVAL") return failure("NO_PENDING_APPROVAL");
+  if (error.code === "APPROVAL_REQUEST_MISMATCH") {
+    const expectedRequestId = runtime.snapshot().pendingApproval?.requestId;
+    return expectedRequestId === undefined
+      ? failure("NO_PENDING_APPROVAL")
+      : {
+          ok: false,
+          error: {
+            code: "APPROVAL_REQUEST_MISMATCH",
+            expectedRequestId,
+            receivedRequestId,
+          },
+        };
+  }
+  return failure("RUNTIME_STOPPED");
 }
 
 function failure(code: SimpleRuntimeFailure["code"]): RuntimeResult {

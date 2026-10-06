@@ -1,6 +1,6 @@
 # Migration Progress
 
-> Verified checkpoint: 2026-10-06
+> Verified checkpoint: 2026-10-07
 >
 > Development continues directly on `main`. This page distinguishes implemented
 > and test-covered behavior from release evidence; it does not claim that the
@@ -81,24 +81,21 @@
 - Focused TypeScript tests cover production composition, model-aware Runtime
   activation and retry, transport revisions, local inference concurrency and
   cleanup, session rotation, and restart recovery.
-- Current focused suite counts are `agentd` 184 tests, `agent-cli` 38,
-  `ui-model` 56, `local-model` 122, and `control-plane-native` 85.
+- Current focused counts for this increment are `agentd` 208, `local-model` 135,
+  and 48 script-orchestration tests. The complete repository gate remains the
+  command set listed below.
 - The built production launcher/independent `agentd` startup black box passed on
   2026-10-06: `source=spawned`, authenticated health was `serving`, model setup
   was `required`, `allowedActions=[download]`, and the projected revision was
   `2`. It created no GGUF automatically, then removed the temporary daemon and
   directories.
 - A production-composition real-GGUF smoke passed on the Windows development
-  machine on 2026-10-06. Against the pinned `Qwen3-1.7B-Q4_K_M.gguf`
-  (1,107,408,544 bytes, SHA-256
-  `228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f`), it
-  verified no automatic download; explicit first-operation download followed
-  by cancellation after progress; a new operation completing download,
-  verification, and activation; a client-visible short answer with usage;
-  continuation after cancelling a long turn; restart on the same cache without
-  redownload, with a new session and empty turns; and active-inference shutdown
-  within the 15-second bound. The script ended with `REAL_GGUF_SMOKE_OK` and
-  removed its temporary model cache.
+  machine on 2026-10-07. It read the actual trusted hardware selection and fixed
+  digest, then verified no automatic download; explicit cancel/retry, progress,
+  verification and activation; pinned/auto selection; real answer and usage;
+  `write`, approval, and exact file content; turn cancellation; cached restart;
+  and shutdown within 30 seconds. It ended with `REAL_GGUF_SMOKE_OK` and removed
+  its temporary cache.
 - Restart tests deliberately rotate every session containing a historical turn,
   including completed sessions. This preserves durable events without silently
   rebuilding incomplete Pi conversation state; Pi history hydration remains
@@ -121,8 +118,8 @@ composed from TUI launcher through authenticated gRPC to the daemon-owned
 EventStore, Pi Runtime, and local model. This is an implemented and focused-test
 checkpoint, not yet release evidence.
 
-The production kernel intentionally starts with an empty tool registry,
-default-deny approvals, and a rejecting secret resolver. MCP is not connected.
+The production kernel now has workspace-confined file tools and explicit
+approval, while its secret resolver still rejects. MCP is not connected.
 GUI, Desktop, and mobile clients remain out of scope. Real-GGUF download,
 activation, inference, cancellation, cached restart, and bounded shutdown are
 verified only on the current Windows development machine through production
@@ -149,7 +146,7 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
    progress, inference, and cancellation.
 4. Implement Pi history hydration before allowing a historical session to
    resume across daemon restart.
-5. Add narrowly scoped tools, approval execution, MCP, context, and secrets;
-   retain default-deny behavior until each capability is independently tested.
+5. Extend the existing narrow file-tool and approval path with MCP, context,
+   and secrets; retain default-deny behavior until each capability is independently tested.
 6. Run frozen install plus full format, lint, typecheck, test, build, docs, and
    `ci-gate` verification against the final artifacts.

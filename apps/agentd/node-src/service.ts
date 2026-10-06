@@ -20,6 +20,7 @@ import type {
 } from "@lyonbrown/protocol";
 import {
   CommandResponse,
+  ApprovalDecision,
   HandshakeResponse,
   HealthResponse,
   HealthStatus,
@@ -47,6 +48,7 @@ import { pumpSnapshotStream } from "@lyonbrown/agentd/internal/stream";
 import {
   requireBoundedText,
   requireEpoch,
+  requireIdentifier,
   requireMetadata,
   validateServerIdentity,
 } from "@lyonbrown/agentd/internal/validation";
@@ -182,12 +184,25 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
     forceStop: unary((request: ForceStopRequest) =>
       unsupported(request.metadata, UnsupportedCommand.UNSUPPORTED_COMMAND_FORCE_STOP),
     ),
-    respondApproval: unary((request: RespondApprovalRequest) =>
-      unsupported(request.metadata, UnsupportedCommand.UNSUPPORTED_COMMAND_RESPOND_APPROVAL),
-    ),
-    selectSessionModel: unary((request: SelectSessionModelRequest) =>
-      unsupported(request.metadata, UnsupportedCommand.UNSUPPORTED_COMMAND_SELECT_SESSION_MODEL),
-    ),
+    respondApproval: unary((request: RespondApprovalRequest) => {
+      requireIdentifier("request_id", request.requestId);
+      const decision = runtimeApprovalDecision(request.decision);
+      return execute(
+        request.metadata,
+        { kind: "respond-approval", requestId: request.requestId, decision },
+        commandFingerprint("respond_approval", [request.requestId, decision]),
+      );
+    }),
+    selectSessionModel: unary((request: SelectSessionModelRequest) => {
+      const selection = runtimeModelSelection(request.selection);
+      const fields =
+        selection.kind === "auto" ? ["auto"] : ["pinned", selection.provider, selection.model];
+      return execute(
+        request.metadata,
+        { kind: "select-session-model", selection },
+        commandFingerprint("select_session_model", fields),
+      );
+    }),
     startModelDownload: unary((request: StartModelDownloadRequest) => {
       requireBoundedText("model_id", request.modelId, 128);
       return execute(
@@ -223,4 +238,42 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
       ).catch((error: unknown) => call.destroy(internalStatus(error)));
     },
   };
+}
+
+function runtimeModelSelection(
+  selection: SelectSessionModelRequest["selection"],
+):
+  | { readonly kind: "auto" }
+  | { readonly kind: "pinned"; readonly provider: string; readonly model: string } {
+  if (selection?.selection?.$case === "auto" && selection.selection.auto) return { kind: "auto" };
+  if (selection?.selection?.$case === "pinned") {
+    requireIdentifier("provider", selection.selection.pinned.provider);
+    requireIdentifier("model", selection.selection.pinned.model);
+    return {
+      kind: "pinned",
+      provider: selection.selection.pinned.provider,
+      model: selection.selection.pinned.model,
+    };
+  }
+  throw trustedStatus(status.INVALID_ARGUMENT, "model selection is invalid");
+}
+
+function runtimeApprovalDecision(
+  decision: ApprovalDecision,
+): "allow-once" | "allow-for-session" | "deny-once" | "deny-remaining" {
+  switch (decision) {
+    case ApprovalDecision.APPROVAL_DECISION_ALLOW_ONCE:
+      return "allow-once";
+    case ApprovalDecision.APPROVAL_DECISION_ALLOW_FOR_SESSION:
+      return "allow-for-session";
+    case ApprovalDecision.APPROVAL_DECISION_DENY_ONCE:
+      return "deny-once";
+    case ApprovalDecision.APPROVAL_DECISION_DENY_REMAINING:
+      return "deny-remaining";
+    case ApprovalDecision.APPROVAL_DECISION_UNSPECIFIED:
+    case ApprovalDecision.UNRECOGNIZED:
+      throw trustedStatus(status.INVALID_ARGUMENT, "approval decision is invalid");
+    default:
+      throw trustedStatus(status.INVALID_ARGUMENT, "approval decision is invalid");
+  }
 }

@@ -219,7 +219,7 @@ describe("construction budgets", () => {
         get: () => tool,
         hasPermission: () => true,
       },
-      approvalGate: { request: () => Promise.resolve({ decision: "approve" }) },
+      approvalGate: { request: () => Promise.resolve({ decision: "allow-once" }) },
       eventSink: { append: () => Promise.resolve() },
       secretResolver: { resolve: () => Promise.resolve("secret") },
       budget: { ...limits, maxInputBytes: 32, maxValueStringBytes: 16 },

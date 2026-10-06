@@ -35,6 +35,26 @@ export type AgentRuntimeEvent =
   | ({ readonly type: "turn_completed"; readonly turn: number } & RuntimeEventBase)
   | ({ readonly type: "assistant_text_delta"; readonly delta: string } & RuntimeEventBase)
   | ({ readonly type: "usage_recorded" } & RuntimeEventBase & RuntimeUsage)
+  | ({ readonly type: "model_selection_changed"; readonly mode: "auto" } & RuntimeEventBase)
+  | ({
+      readonly type: "model_selection_changed";
+      readonly mode: "pinned";
+      readonly provider: string;
+      readonly model: string;
+    } & RuntimeEventBase)
+  | ({
+      readonly type: "approval_requested";
+      readonly requestId: string;
+      readonly toolName: string;
+      readonly risk: "medium" | "high";
+      readonly permissions: readonly string[];
+      readonly argumentsPreview: RuntimeJsonValue;
+    } & RuntimeEventBase)
+  | ({
+      readonly type: "approval_resolved";
+      readonly requestId: string;
+      readonly decision: ApprovalDecision;
+    } & RuntimeEventBase)
   | ({
       readonly type: "tool_started";
       readonly callId: string;
@@ -74,6 +94,17 @@ const FIELDS_BY_TYPE: Readonly<Record<AgentRuntimeEvent["type"], ReadonlySet<str
   turn_completed: new Set(["type", "sessionId", "turn"]),
   assistant_text_delta: new Set(["type", "sessionId", "delta"]),
   usage_recorded: new Set(["type", "sessionId", "inputTokens", "outputTokens", "totalTokens"]),
+  model_selection_changed: new Set(["type", "sessionId", "mode", "provider", "model"]),
+  approval_requested: new Set([
+    "type",
+    "sessionId",
+    "requestId",
+    "toolName",
+    "risk",
+    "permissions",
+    "argumentsPreview",
+  ]),
+  approval_resolved: new Set(["type", "sessionId", "requestId", "decision"]),
   tool_started: new Set(["type", "sessionId", "callId", "toolName", "argumentsPreview"]),
   tool_succeeded: new Set(["type", "sessionId", "callId", "toolName", "content", "details"]),
   tool_failed: new Set(["type", "sessionId", "callId", "toolName", "code", "message"]),
@@ -172,6 +203,42 @@ export function parseAgentRuntimeEvent(value: unknown): AgentRuntimeEvent {
         outputTokens: count(record, "outputTokens"),
         totalTokens: count(record, "totalTokens"),
       });
+    case "model_selection_changed": {
+      const mode = required(record, "mode");
+      if (mode === "auto") {
+        if (record.has("provider") || record.has("model")) {
+          return invalid("Auto model selection cannot include a route", "unexpected_field", "mode");
+        }
+        return Object.freeze({ type, sessionId, mode });
+      }
+      if (mode !== "pinned") {
+        return invalid("Unsupported model selection mode", "invalid_enum", "mode");
+      }
+      return Object.freeze({
+        type,
+        sessionId,
+        mode,
+        provider: identifier(record, "provider"),
+        model: identifier(record, "model"),
+      });
+    }
+    case "approval_requested":
+      return Object.freeze({
+        type,
+        sessionId,
+        requestId: identifier(record, "requestId"),
+        toolName: identifier(record, "toolName"),
+        risk: approvalRisk(record),
+        permissions: identifiers(record, "permissions"),
+        argumentsPreview: copyRuntimeJson(required(record, "argumentsPreview")),
+      });
+    case "approval_resolved":
+      return Object.freeze({
+        type,
+        sessionId,
+        requestId: identifier(record, "requestId"),
+        decision: approvalDecision(record),
+      });
     case "tool_started":
       return Object.freeze({
         type,
@@ -211,4 +278,35 @@ export function parseAgentRuntimeEvent(value: unknown): AgentRuntimeEvent {
         message: text(record, "message"),
       });
   }
+}
+
+function identifiers(record: DataRecord, field: string): readonly string[] {
+  const value = required(record, field);
+  if (!Array.isArray(value) || value.length > 128) {
+    return invalid(`${field} must be a bounded array`, "invalid_collection", field);
+  }
+  return Object.freeze(value.map((item) => assertIdentifier(item, field)));
+}
+
+function approvalRisk(record: DataRecord): "medium" | "high" {
+  const value = required(record, "risk");
+  if (value !== "medium" && value !== "high") {
+    return invalid("risk must be medium or high", "invalid_enum", "risk");
+  }
+  return value;
+}
+
+export type ApprovalDecision = "allow-once" | "allow-for-session" | "deny-once" | "deny-remaining";
+
+function approvalDecision(record: DataRecord): ApprovalDecision {
+  const value = required(record, "decision");
+  if (
+    value !== "allow-once" &&
+    value !== "allow-for-session" &&
+    value !== "deny-once" &&
+    value !== "deny-remaining"
+  ) {
+    return invalid("Unsupported approval decision", "invalid_enum", "decision");
+  }
+  return value;
 }

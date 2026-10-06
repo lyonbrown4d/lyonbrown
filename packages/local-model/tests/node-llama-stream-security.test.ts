@@ -23,7 +23,36 @@ const collect = async (
 };
 
 describe("node-llama stream authority boundaries", () => {
-  it("rejects a native function-call stop even when no calls are returned", async () => {
+  it.each([
+    [[{ functionName: "unknown", params: {} }]],
+    [[{ functionName: "read", params: new Date() }]],
+    [[{ params: {} }]],
+  ])("rejects untrusted native function call payload %#", async (functionCalls) => {
+    const harness = createNodeLlamaHarness(() =>
+      Promise.resolve({ metadata: { stopReason: "functionCalls" }, functionCalls }),
+    );
+    const lease = await createNodeLlamaEngine("C:\\trusted\\Qwen.gguf", harness.api).loadDefault(
+      new AbortController().signal,
+    );
+
+    await expect(
+      collect(
+        lease.stream({
+          ...request(),
+          tools: [{ name: "read", description: "Read", inputSchema: { type: "object" } }],
+        }),
+      ),
+    ).resolves.toEqual([
+      {
+        type: "error",
+        code: "native_inference_failed",
+        message: "Local model inference failed.",
+      },
+    ]);
+    await lease.dispose();
+  });
+
+  it("fails closed when native generation reports function calls without validated calls", async () => {
     const harness = createNodeLlamaHarness(() =>
       Promise.resolve({ metadata: { stopReason: "functionCalls" } }),
     );
@@ -34,8 +63,8 @@ describe("node-llama stream authority boundaries", () => {
     await expect(collect(lease.stream(request()))).resolves.toEqual([
       {
         type: "error",
-        code: "unsupported_tool_use",
-        message: "Tool calls are not supported by the local model.",
+        code: "native_inference_failed",
+        message: "Local model inference failed.",
       },
     ]);
     expect(harness.disposeContext).toHaveBeenCalledOnce();

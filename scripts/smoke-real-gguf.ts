@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -8,12 +8,14 @@ import type { createProductionAgentLauncher } from "@lyonbrown/agent-launch/comp
 import type { startProductionAgentd } from "@lyonbrown/agentd/composition";
 import type { RunningProductionAgentd } from "@lyonbrown/agentd/composition";
 import type { NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
+import type { LocalModelDescriptor } from "@lyonbrown/local-model";
 import { $, usePowerShell } from "zx";
 
 import { verifyInstalledModelCache } from "@lyonbrown/workspace/internal/smoke-real-gguf-cache";
 import {
   runRealGgufSmokeFlow,
   type RealGgufSmokePort,
+  type SmokeSnapshot,
 } from "@lyonbrown/workspace/internal/smoke-real-gguf-flow";
 import {
   safeSnapshot,
@@ -33,14 +35,13 @@ const DEPENDENCY_BUILD_TIMEOUT_MS = 15 * 60 * 1_000;
 const PHASE_TIMEOUT_MS = 120_000;
 const DOWNLOAD_TIMEOUT_MS = 60 * 60_000;
 const CLOSE_TIMEOUT_MS = 30_000;
-const ACTIVE_CLOSE_TIMEOUT_MS = 15_000;
-const EXPECTED_SHA256 = "228fb5627f7510b8b3516cdb6435e4b0d2a2bf330fe5b0ab19284a3570a8bb1f";
-
+const ACTIVE_CLOSE_TIMEOUT_MS = 30_000;
 configureZxPlatform(process.platform, usePowerShell);
 
 interface RuntimeModules {
   readonly createProductionAgentLauncher: typeof createProductionAgentLauncher;
   readonly startProductionAgentd: typeof startProductionAgentd;
+  readonly trustedLocalModels: readonly LocalModelDescriptor[];
 }
 
 class ProductionSmokePort implements RealGgufSmokePort {
@@ -112,6 +113,21 @@ class ProductionSmokePort implements RealGgufSmokePort {
   public async cancelTurn(): Promise<void> {
     this.reporter.stage("turn-cancel");
     await this.enqueue({ type: "cancel-turn" });
+  }
+
+  public async respondApproval(requestId: string): Promise<void> {
+    this.reporter.stage("approval-allow-once", { requestId });
+    await this.enqueue({ type: "respond-approval", requestId, decision: "allow-once" });
+  }
+
+  public async selectModel(selection: SmokeSnapshot["modelSelection"]): Promise<void> {
+    this.reporter.stage("model-select", { kind: selection.kind });
+    await this.enqueue({ type: "select-session-model", selection });
+  }
+
+  public async verifyWorkspaceFile(path: string, expectedContent: string): Promise<void> {
+    const content = await readFile(join(this.workspace, path), "utf8");
+    if (content !== expectedContent) throw new Error("REAL_GGUF_WORKSPACE_TOOL_OUTPUT_INVALID");
   }
 
   public async closeServer(): Promise<void> {
@@ -214,7 +230,9 @@ export async function main(
       pollIntervalMs: 100,
       cancelAfterBytes: 1024n * 1024n,
       closeTimeoutMs: ACTIVE_CLOSE_TIMEOUT_MS,
-      expectedSha256: EXPECTED_SHA256,
+      trustedModelDigests: Object.fromEntries(
+        runtimeModules.trustedLocalModels.map((model) => [model.id, model.sha256]),
+      ),
     });
   } catch (error: unknown) {
     failure = error;
@@ -234,12 +252,27 @@ export async function main(
     process.stderr.write(
       `${JSON.stringify({
         code: failure instanceof Error ? failure.message : "REAL_GGUF_SMOKE_FAILED",
+        errors: smokeFailureMessages(failure),
         snapshot: port?.safeLastSnapshot() ?? null,
       })}\n`,
     );
     throw failure instanceof Error ? failure : new Error("REAL_GGUF_SMOKE_FAILED");
   }
   process.stdout.write("REAL_GGUF_SMOKE_OK\n");
+}
+
+function smokeFailureMessages(value: unknown): readonly string[] {
+  const messages: string[] = [];
+  const visit = (current: unknown): void => {
+    if (current instanceof AggregateError) {
+      messages.push(current.message);
+      for (const nested of current.errors) visit(nested);
+      return;
+    }
+    messages.push(current instanceof Error ? current.message : "REAL_GGUF_UNKNOWN_FAILURE");
+  };
+  visit(value);
+  return messages;
 }
 
 function acceptedReceipt(value: unknown): boolean {
@@ -261,19 +294,21 @@ async function removeTemporaryRoot(path: string): Promise<void> {
 }
 
 async function loadRuntimeModules(): Promise<RuntimeModules> {
-  const [launcher, agentd] = await Promise.all([
+  const [launcher, agentd, localModel] = await Promise.all([
     import("@lyonbrown/agent-launch/composition"),
     import("@lyonbrown/agentd/composition"),
+    import("@lyonbrown/local-model"),
   ]);
   return {
     createProductionAgentLauncher: launcher.createProductionAgentLauncher,
     startProductionAgentd: agentd.startProductionAgentd,
+    trustedLocalModels: localModel.TRUSTED_LOCAL_MODELS,
   };
 }
 
 const entryUrl = process.argv[1] === undefined ? undefined : pathToFileURL(process.argv[1]).href;
 if (entryUrl === import.meta.url) {
-  void main().catch(() => {
+  await main().catch(() => {
     process.exitCode = 1;
   });
 }

@@ -2,7 +2,9 @@ export { KernelRuntimeError, type KernelErrorCode } from "@lyonbrown/kernel-pi/i
 export { createPiKernelSession, PiKernelSession } from "@lyonbrown/kernel-pi/internal/session";
 export type {
   KernelApprovalGate,
+  KernelApprovalDecision,
   KernelApprovalRequest,
+  KernelApprovalResponseStatus,
   KernelEvent,
   KernelEventListener,
   KernelEventSink,

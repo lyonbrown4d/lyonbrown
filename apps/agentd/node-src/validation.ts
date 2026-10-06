@@ -48,3 +48,7 @@ export function requireBoundedText(field: string, value: string, maximumBytes: n
     throw invalidArgument(`${field} exceeds ${String(maximumBytes)} bytes`);
   }
 }
+
+export function requireIdentifier(field: string, value: string): void {
+  if (!validateStringId(value).ok) throw invalidArgument(`${field} is invalid`);
+}

@@ -1,4 +1,9 @@
-import { LlamaChat, LlamaContextSequence, type ChatHistoryItem } from "node-llama-cpp";
+import {
+  LlamaChat,
+  LlamaContextSequence,
+  type ChatHistoryItem,
+  type ChatModelFunctions,
+} from "node-llama-cpp";
 
 import type {
   LocalModelInferenceEvent,
@@ -13,6 +18,11 @@ import {
   utf8Prefix,
   validateInferenceRequest,
 } from "@lyonbrown/local-model/internal/internal/inference-request";
+import {
+  normalizeNativeFunctionCalls,
+  toNativeFunctions,
+  toNativeHistory,
+} from "@lyonbrown/local-model/internal/internal/node-llama-function-calls";
 
 const LENGTH_ABORT = Object.freeze(new Error("local_model_output_limit"));
 export const DISPOSE_ABORT = Object.freeze(new Error("local_model_disposed"));
@@ -52,6 +62,7 @@ interface NativeGenerationOptions {
   readonly stopOnAbortSignal: true;
   readonly maxTokens: number;
   readonly budgets: { readonly thoughtTokens: 0 };
+  readonly functions?: ChatModelFunctions;
 }
 
 interface NativeGenerationResult {
@@ -78,18 +89,6 @@ export const createDefaultNativeChat = (sequence: NativeSequence): NativeChat =>
   }
   return new LlamaChat({ contextSequence: sequence, autoDisposeSequence: false });
 };
-
-const toHistory = (messages: readonly LocalModelMessage[]): ChatHistoryItem[] =>
-  messages.map((message): ChatHistoryItem => {
-    switch (message.role) {
-      case "system":
-        return { type: "system", text: message.content };
-      case "user":
-        return { type: "user", text: message.content };
-      case "assistant":
-        return { type: "model", response: [message.content] };
-    }
-  });
 
 const validUsage = (usage: TokenMeterState): boolean =>
   Number.isSafeInteger(usage.usedInputTokens) &&
@@ -146,11 +145,13 @@ const executeInference = async (
     sequence = context.getSequence();
     const initialUsage = sequence.tokenMeter.getState();
     chat = createChat(sequence);
-    const response = await chat.generateResponse(toHistory(messages), {
+    const functions = toNativeFunctions(request.tools ?? []);
+    const response = await chat.generateResponse(toNativeHistory(messages), {
       maxTokens: request.maxOutputTokens,
       budgets: { thoughtTokens: 0 },
       signal: controller.signal,
       stopOnAbortSignal: true,
+      ...(functions === undefined ? {} : { functions }),
       onTextChunk(text): void {
         if (controller.signal.aborted) return;
         const accepted = utf8Prefix(text, request.maxOutputBytes - outputBytes);
@@ -163,30 +164,26 @@ const executeInference = async (
         }
       },
     });
-    if (
-      response.metadata.stopReason === "functionCalls" ||
-      (response.functionCalls !== undefined && response.functionCalls.length > 0)
-    ) {
-      terminal = {
-        type: "error",
-        code: "unsupported_tool_use",
-        message: "Tool calls are not supported by the local model.",
-      };
-    } else {
-      usage = sequence.tokenMeter.diff(initialUsage);
-      if (!validUsage(usage)) throw new Error("native_usage_invalid");
-      terminal = {
-        type: "done",
-        reason:
-          controller.signal.reason === LENGTH_ABORT
+    const functionCalls = normalizeNativeFunctionCalls(response.functionCalls, request.tools ?? []);
+    if (response.metadata.stopReason === "functionCalls" && functionCalls.length === 0) {
+      throw new Error("native_function_calls_missing");
+    }
+    for (const call of functionCalls) channel.push(call);
+    usage = sequence.tokenMeter.diff(initialUsage);
+    if (!validUsage(usage)) throw new Error("native_usage_invalid");
+    terminal = {
+      type: "done",
+      reason:
+        functionCalls.length > 0
+          ? "tool_use"
+          : controller.signal.reason === LENGTH_ABORT
             ? "length"
             : controller.signal.aborted
               ? "cancelled"
               : response.metadata.stopReason === "maxTokens"
                 ? "length"
                 : "stop",
-      };
-    }
+    };
   } catch {
     terminal = controller.signal.aborted
       ? {

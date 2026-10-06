@@ -67,6 +67,45 @@ export function applyRuntimeEvent(
     case "usage_recorded":
       assertActiveTurn(state);
       return recordUsage(state, revision, event);
+    case "model_selection_changed":
+      return freezeState({
+        ...state,
+        revision,
+        modelSelection:
+          event.mode === "auto"
+            ? { kind: "auto" }
+            : { kind: "pinned", provider: event.provider, model: event.model },
+      });
+    case "approval_requested":
+      assertActiveTurn(state);
+      if (state.pendingApproval !== undefined) {
+        throw domainError("failed_precondition", "Runtime session already has a pending approval", {
+          reason: "approval_already_pending",
+        });
+      }
+      return freezeState({
+        ...state,
+        revision,
+        pendingApproval: {
+          requestId: event.requestId,
+          toolName: event.toolName,
+          risk: event.risk,
+          permissions: event.permissions,
+          argumentsPreview: event.argumentsPreview,
+        },
+      });
+    case "approval_resolved":
+      assertActiveTurn(state);
+      if (state.pendingApproval?.requestId !== event.requestId) {
+        throw domainError(
+          "failed_precondition",
+          "Approval resolution does not match pending approval",
+          {
+            reason: "approval_request_mismatch",
+          },
+        );
+      }
+      return resolveApproval(state, revision, event.decision);
     case "turn_completed":
       assertActiveTurn(state);
       return updateLastTurn(state, revision, (turn) => ({
@@ -153,6 +192,28 @@ export function applyRuntimeEvent(
       );
     }
   }
+}
+
+function resolveApproval(
+  state: AgentRuntimeState,
+  revision: Revision,
+  decision: Extract<AgentRuntimeEvent, { readonly type: "approval_resolved" }>["decision"],
+): AgentRuntimeState {
+  const { pendingApproval, ...remaining } = state;
+  if (pendingApproval === undefined) throw noActiveTurn();
+  const allowedTools =
+    decision === "allow-for-session" &&
+    !state.approvalPolicy.allowedTools.includes(pendingApproval.toolName)
+      ? [...state.approvalPolicy.allowedTools, pendingApproval.toolName]
+      : state.approvalPolicy.allowedTools;
+  return freezeState({
+    ...remaining,
+    revision,
+    approvalPolicy: {
+      allowedTools,
+      denyRemaining: state.approvalPolicy.denyRemaining || decision === "deny-remaining",
+    },
+  });
 }
 
 function recordUsage(

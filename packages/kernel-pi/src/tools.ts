@@ -32,6 +32,7 @@ import {
   toSafeToolError,
 } from "@lyonbrown/kernel-pi/internal/tool-support";
 import type {
+  KernelApprovalDecision,
   KernelEvent,
   KernelJsonValue,
   KernelToolDefinition,
@@ -242,6 +243,17 @@ export class ToolExecutor {
     signal: AbortSignal,
   ): Promise<void> {
     if (tool.risk === "low") return;
+    const requestId = callId;
+    await this.emit({
+      type: "approval_requested",
+      requestId,
+      toolName: sanitizeText(tool.name),
+      risk: tool.risk,
+      permissions: tool.permissions.map(sanitizeText),
+      argumentsPreview: preview,
+    });
+    let decision: KernelApprovalDecision = "deny-once";
+    let available = false;
     try {
       signal.throwIfAborted();
       const pending = this.options.approvalGate.request({
@@ -256,12 +268,23 @@ export class ToolExecutor {
       const response = await raceAbort(pending, signal);
       signal.throwIfAborted();
       const normalizedResponse = sanitizeJson(response, this.#limits);
-      if (!isJsonObject(normalizedResponse) || normalizedResponse.decision !== "approve") {
-        throw kernelError("TOOL_DENIED", "Tool approval denied");
+      if (!isJsonObject(normalizedResponse) || !isApprovalDecision(normalizedResponse.decision)) {
+        throw kernelError("TOOL_DENIED", "Tool approval unavailable");
       }
+      decision = normalizedResponse.decision;
+      available = true;
     } catch {
-      throw kernelError("TOOL_DENIED", "Tool approval unavailable");
+      available = false;
+    } finally {
+      await this.emit({
+        type: "approval_resolved",
+        requestId,
+        decision,
+      });
     }
+    this.options.approvalGate.commit?.(tool.name, decision);
+    if (!available) throw kernelError("TOOL_DENIED", "Tool approval unavailable");
+    if (!allowsTool(decision)) throw kernelError("TOOL_DENIED", "Tool approval denied");
   }
 
   private async emitFailure(
@@ -298,4 +321,17 @@ export class ToolExecutor {
     this.markFatal(fatal);
     throw fatal;
   }
+}
+
+function isApprovalDecision(value: unknown): value is KernelApprovalDecision {
+  return (
+    value === "allow-once" ||
+    value === "allow-for-session" ||
+    value === "deny-once" ||
+    value === "deny-remaining"
+  );
+}
+
+function allowsTool(decision: KernelApprovalDecision): boolean {
+  return decision === "allow-once" || decision === "allow-for-session";
 }

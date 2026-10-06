@@ -20,6 +20,14 @@ export interface SmokeSnapshot {
   readonly revision: bigint;
   readonly phase: string;
   readonly sessionId: string | null;
+  readonly pendingApproval: {
+    readonly requestId: string;
+    readonly toolName: string;
+    readonly argumentsJson: string;
+  } | null;
+  readonly modelSelection:
+    | { readonly kind: "auto" }
+    | { readonly kind: "pinned"; readonly provider: string; readonly model: string };
   readonly modelSetup: {
     readonly phase: string;
     readonly operationId: string | null;
@@ -40,6 +48,12 @@ export interface SmokeSnapshot {
     readonly activities: readonly {
       readonly phase: string;
       readonly usage: { readonly input: number; readonly output: number } | null;
+      readonly tools: readonly {
+        readonly name: string;
+        readonly argumentsJson: string;
+        readonly state: string;
+        readonly result: { readonly ok: boolean; readonly error: string | null } | null;
+      }[];
     }[];
   }[];
 }
@@ -50,6 +64,9 @@ export interface RealGgufSmokePort {
   cancelDownload(operationId: string): Promise<void>;
   startTurn(text: string): Promise<void>;
   cancelTurn(): Promise<void>;
+  respondApproval(requestId: string): Promise<void>;
+  selectModel(selection: SmokeSnapshot["modelSelection"]): Promise<void>;
+  verifyWorkspaceFile(path: string, expectedContent: string): Promise<void>;
   closeServer(): Promise<void>;
   restartServer(): Promise<void>;
   verifyInstalledCache(expectedSha256: string): Promise<void>;
@@ -62,10 +79,14 @@ export interface RealGgufSmokeFlowOptions {
   readonly pollIntervalMs: number;
   readonly cancelAfterBytes: bigint;
   readonly closeTimeoutMs: number;
-  readonly expectedSha256: string;
+  readonly trustedModelDigests: Readonly<Record<string, string>>;
 }
 
 const SHORT_PROMPT = "Respond with exactly one short sentence confirming the smoke test.";
+const TOOL_PROOF_FILE = "lyonbrown-tool-proof.txt";
+const TOOL_PROMPT =
+  `Call the write tool exactly once with path "${TOOL_PROOF_FILE}" and content ` +
+  '"LYONBROWN_TOOL_OK". Use a relative path. Do not answer until the tool succeeds.';
 const LONG_PROMPT =
   "Write a detailed numbered explanation with at least 500 items. Continue until cancelled.";
 
@@ -79,7 +100,8 @@ export async function runRealGgufSmokeFlow(
       isSetup(snapshot, "required"),
     );
     const model = requireManagedModel(initial);
-    if (model.sha256 !== options.expectedSha256) {
+    const expectedSha256 = options.trustedModelDigests[model.id];
+    if (expectedSha256 === undefined || model.sha256 !== expectedSha256) {
       throw new Error("REAL_GGUF_CATALOG_DIGEST_MISMATCH");
     }
     const initialSetup = initial.modelSetup;
@@ -139,15 +161,17 @@ export async function runRealGgufSmokeFlow(
       throw new Error("REAL_GGUF_PROGRESS_NOT_OBSERVED");
     }
 
+    await verifyModelSelection(port, options, model.id);
     await completeShortTurn(port, options);
+    await completeApprovedWorkspaceWrite(port, options);
     await cancelStreamingTurn(port, options);
     const completedBeforeRestart = await completeShortTurn(port, options);
     const previousSessionId = requireSessionId(completedBeforeRestart);
-    if (requireManagedModel(ready).sha256 !== options.expectedSha256) {
+    if (requireManagedModel(ready).sha256 !== expectedSha256) {
       throw new Error("REAL_GGUF_READY_DIGEST_MISMATCH");
     }
     await bounded("first-close", options.closeTimeoutMs, port.closeServer());
-    await port.verifyInstalledCache(options.expectedSha256);
+    await port.verifyInstalledCache(expectedSha256);
 
     await port.restartServer();
     await waitSnapshot(port, options, "cached-restart-ready", (snapshot) => {
@@ -178,6 +202,87 @@ export async function runRealGgufSmokeFlow(
     throw errorFromUnknown(cleanupFailure);
   }
   if (primaryFailure !== undefined) throw errorFromUnknown(primaryFailure);
+}
+
+async function verifyModelSelection(
+  port: RealGgufSmokePort,
+  options: RealGgufSmokeFlowOptions,
+  modelId: string,
+): Promise<void> {
+  await port.selectModel({ kind: "pinned", provider: "local", model: modelId });
+  await waitSnapshot(port, options, "model-pinned", (snapshot) => {
+    const selection = snapshot.modelSelection;
+    return (
+      selection.kind === "pinned" && selection.provider === "local" && selection.model === modelId
+    );
+  });
+  await port.selectModel({ kind: "auto" });
+  await waitSnapshot(
+    port,
+    options,
+    "model-auto",
+    (snapshot) => snapshot.modelSelection.kind === "auto",
+  );
+}
+
+async function completeApprovedWorkspaceWrite(
+  port: RealGgufSmokePort,
+  options: RealGgufSmokeFlowOptions,
+): Promise<void> {
+  const baseline = (await port.readSnapshot()).turns.length;
+  await port.startTurn(TOOL_PROMPT);
+  const pending = await waitSnapshot(port, options, "tool-approval", (snapshot) => {
+    return snapshot.phase === "awaiting-approval" && snapshot.pendingApproval?.toolName === "write";
+  });
+  const approval = pending.pendingApproval;
+  if (approval === null) throw new Error("REAL_GGUF_APPROVAL_REQUEST_MISSING");
+  const requestId = approval.requestId;
+  assertExpectedWriteArguments(approval.argumentsJson);
+  await port.respondApproval(requestId);
+  await waitSnapshot(port, options, "approved-tool-complete", (snapshot) => {
+    const turn = snapshot.turns.at(-1);
+    return (
+      snapshot.phase === "completed" &&
+      snapshot.pendingApproval === null &&
+      snapshot.turns.length > baseline &&
+      turn?.userText === TOOL_PROMPT &&
+      turn.status === "completed" &&
+      hasCompletedWriteTool(turn.activities)
+    );
+  });
+  await port.verifyWorkspaceFile(TOOL_PROOF_FILE, "LYONBROWN_TOOL_OK");
+}
+
+function assertExpectedWriteArguments(argumentsJson: string): void {
+  let value: unknown;
+  try {
+    value = JSON.parse(argumentsJson);
+  } catch {
+    throw new Error("REAL_GGUF_WORKSPACE_TOOL_ARGUMENTS_INVALID");
+  }
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    Array.isArray(value) ||
+    !("path" in value) ||
+    !("content" in value) ||
+    value.path !== TOOL_PROOF_FILE ||
+    value.content !== "LYONBROWN_TOOL_OK"
+  ) {
+    throw new Error(`REAL_GGUF_WORKSPACE_TOOL_ARGUMENTS_UNEXPECTED:${argumentsJson}`);
+  }
+}
+
+function hasCompletedWriteTool(activities: SmokeSnapshot["turns"][number]["activities"]): boolean {
+  return activities.some((activity) =>
+    activity.tools.some(
+      (tool) =>
+        tool.name === "write" &&
+        tool.state === "completed" &&
+        tool.result?.ok === true &&
+        tool.result.error === null,
+    ),
+  );
 }
 
 async function completeShortTurn(

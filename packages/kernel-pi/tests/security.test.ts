@@ -56,7 +56,7 @@ function createOptions(
       get: (name: string) => (tool?.name === name ? tool : undefined),
       hasPermission: (permission: string) => permission === "granted",
     },
-    approvalGate: { request: () => Promise.resolve({ decision: "deny" as const }) },
+    approvalGate: { request: () => Promise.resolve({ decision: "deny-once" as const }) },
     eventSink: {
       append: (event: KernelEvent) => {
         events.push(event);
@@ -122,8 +122,7 @@ describe("security boundaries", () => {
       dangerousTool,
       hostileEvents,
     );
-    hostileOptions.approvalGate.request = () =>
-      Promise.resolve(hostileResponse as { decision: "approve" });
+    hostileOptions.approvalGate.request = () => Promise.resolve(hostileResponse as never);
     await createPiKernelSession(hostileOptions).startTurn("hostile approval response");
     expect(getter).not.toHaveBeenCalled();
     expect(hostileEvents.some((event) => event.type === "tool_started")).toBe(false);
@@ -151,7 +150,7 @@ describe("security boundaries", () => {
     const events: KernelEvent[] = [];
     const model = toolCallingModel({ token: { kind: "secretRef", reference: "api-token" } });
     const options = createOptions(model, tool, events);
-    options.approvalGate.request = () => Promise.resolve({ decision: "approve" as const });
+    options.approvalGate.request = () => Promise.resolve({ decision: "allow-once" as const });
     const session = createPiKernelSession(options);
 
     await session.startTurn("use stored token");

@@ -4,8 +4,8 @@
 主动解析服务。生产 launcher 与可执行入口已经使用该组合；不存在第二套进程内或
 兼容架构。
 
-> 已验证实现检查点：2026-10-06。构建后的 launcher 与独立 daemon 启动黑盒已通过；
-> 真实模型执行与发布打包仍待验证。
+> 已验证实现检查点：2026-10-07。构建后的 launcher、独立 daemon 启动与生产
+> composition 真实 GGUF 黑盒已通过；发布打包仍待最终制品复验。
 
 ## 所有权
 
@@ -22,8 +22,10 @@ TUI 只能得到窄化后的 `agent-launch`、`agent-client` 与 `ui-model` 接�
 顺序使用 daemon 自有的单调 transport revision，不直接暴露 EventStore revision；
 仅模型状态与激活状态的更新也进入同一顺序。
 
-当前生产 Kernel 刻意组合空 tool registry、default-deny approval gate、拒绝式 Secret
-resolver，并且不连接 MCP。这些是安全的能力边界，不是已经完成的集成。
+当前生产 Kernel 组合受工作区约束的 `read`、`write`、`edit` registry 和显式审批门；
+文件能力由 native-required 的 `@openclaw/fs-safe` 根对象提供，读取限制为 1 MiB，
+写入使用受约束的原子替换；一次性/会话级审批的完整决策进入领域事件。Secret resolver
+仍为拒绝式实现，MCP 尚未连接。工具与审批归 daemon 所有，TUI 只投影状态并提交用户决定。
 
 ## Workspace 导入边界
 

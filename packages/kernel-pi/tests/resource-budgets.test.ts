@@ -72,7 +72,7 @@ function createOptions(
       get: (name) => (tool?.name === name ? tool : undefined),
       hasPermission: () => true,
     },
-    approvalGate: { request: () => Promise.resolve({ decision: "approve" }) },
+    approvalGate: { request: () => Promise.resolve({ decision: "allow-once" }) },
     eventSink: {
       append: (event) => {
         events.push(event);

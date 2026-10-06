@@ -18,7 +18,7 @@ import {
   type NativeSequence,
 } from "@lyonbrown/local-model/internal/internal/node-llama-inference";
 
-const SHUTDOWN_TIMEOUT_MS = 5_000;
+const SHUTDOWN_TIMEOUT_MS = 15_000;
 
 interface LoadedLlama {
   loadModel(options: { modelPath: string; loadSignal: AbortSignal }): Promise<NativeModel>;

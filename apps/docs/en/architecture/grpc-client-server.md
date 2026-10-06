@@ -64,10 +64,10 @@ The daemon is the sole authority for sessions and execution. The TUI owns input,
 rendering, locale, theme, and short-lived presentation preferences only. Closing
 the TUI does not stop a turn or a model download already accepted by the daemon.
 
-The current production composition has an empty tool registry, a default-deny
-approval policy, a rejecting secret resolver, and no MCP connection. The diagram
-therefore does not present tools or MCP as delivered capabilities. When added,
-they remain owned by `agentd` and must not move into the TUI.
+Production now includes workspace-confined file tools and explicit approval.
+The secret resolver still rejects and MCP is not connected. Tools, approval,
+and future MCP connections remain owned by `agentd` and must not move into the
+TUI.
 
 ## Command and event loop
 

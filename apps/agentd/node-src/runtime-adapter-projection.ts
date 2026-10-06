@@ -2,13 +2,18 @@ import type { AgentRuntime } from "@lyonbrown/agent-runtime";
 import {
   ActivityPhase,
   ActivitySnapshot,
+  ApprovalSnapshot,
+  ApprovalState,
   ModelSelection,
   PROTOCOL_VERSION,
   RuntimePhase,
   RuntimeSnapshot,
+  RiskLevel,
+  SandboxStatus,
   TokenUsage,
   ToolActivity,
   ToolActivityState,
+  ToolResult,
   TurnSnapshot,
   TurnStatus,
   validateStringId,
@@ -22,7 +27,6 @@ type RuntimeTool = RuntimeActivity["tools"][number];
 
 const MAX_UINT32 = 0xffff_ffff;
 const MAX_UINT64 = 0xffff_ffff_ffff_ffffn;
-const AUTO_SELECTION = ModelSelection.create({ selection: { $case: "auto", auto: true } });
 
 export function projectRuntimeSnapshot(state: RuntimeState): RuntimeSnapshot {
   try {
@@ -57,8 +61,20 @@ function projectTrustedState(state: RuntimeState): RuntimeSnapshot {
     turns,
     queuedFollowUps,
     lastError: projectLastError(state.lastError),
-    modelSelection: AUTO_SELECTION,
+    modelSelection: projectModelSelection(state.modelSelection),
+    pendingApproval: projectApproval(state),
   });
+}
+
+function projectModelSelection(selection: RuntimeState["modelSelection"]): ModelSelection {
+  return selection.kind === "auto"
+    ? ModelSelection.create({ selection: { $case: "auto", auto: true } })
+    : ModelSelection.create({
+        selection: {
+          $case: "pinned",
+          pinned: { provider: selection.provider, model: selection.model },
+        },
+      });
 }
 
 function projectTurn(turn: RuntimeTurn, index: number): TurnSnapshot {
@@ -76,6 +92,44 @@ function projectTurn(turn: RuntimeTurn, index: number): TurnSnapshot {
     steering: requireArray(turn.steering).map(requiredText),
     activities,
   });
+}
+
+function projectApproval(state: RuntimeState): ApprovalSnapshot | undefined {
+  const approval = state.pendingApproval;
+  if (approval === undefined) return undefined;
+  const argumentsJson = JSON.stringify(requiredJson(approval.argumentsPreview));
+  const target = approvalTarget(approval.argumentsPreview);
+  return ApprovalSnapshot.create({
+    requestId: requiredIdentifier(approval.requestId),
+    toolName: requiredIdentifier(approval.toolName),
+    argumentsJson,
+    stepId: currentStepId(state),
+    state: ApprovalState.APPROVAL_STATE_PENDING,
+    preview: {
+      tool: approval.toolName,
+      action: approval.toolName,
+      target,
+      impact:
+        approval.risk === "high"
+          ? "Executes a high-risk workspace action"
+          : "Changes workspace contents",
+      risk: approval.risk === "high" ? RiskLevel.RISK_LEVEL_EXECUTE : RiskLevel.RISK_LEVEL_WRITE,
+      sandbox: SandboxStatus.SANDBOX_STATUS_WORKSPACE_RESTRICTED,
+      requiredSecrets: [],
+    },
+  });
+}
+
+function currentStepId(state: RuntimeState): string {
+  const turnIndex = state.turns.length;
+  const step = state.turns.at(-1)?.activities.at(-1)?.turn ?? 1;
+  return `turn-${String(Math.max(turnIndex, 1))}-step-${String(step)}`;
+}
+
+function approvalTarget(value: unknown): string {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return "workspace";
+  const path = (value as { readonly path?: unknown }).path;
+  return typeof path === "string" && path.length > 0 ? path : "workspace";
 }
 
 function projectActivity(
@@ -111,6 +165,20 @@ function projectTool(tool: RuntimeTool): ToolActivity {
     name: requiredIdentifier(tool.toolName),
     argumentsJson,
     state: toolState(tool.status),
+    result: projectToolResult(tool),
+  });
+}
+
+function projectToolResult(tool: RuntimeTool): ToolResult | undefined {
+  if (tool.status === "running") return undefined;
+  const succeeded = tool.status === "succeeded";
+  return ToolResult.create({
+    invocationId: requiredIdentifier(tool.callId),
+    ok: succeeded,
+    output: succeeded ? requiredText(tool.content) : "",
+    truncated: false,
+    durationMs: 0n,
+    ...(succeeded ? {} : { error: requiredText(tool.error?.message) }),
   });
 }
 
@@ -121,6 +189,9 @@ function projectLastError(error: RuntimeState["lastError"]): string | undefined 
 }
 
 function runtimePhase(state: RuntimeState): RuntimePhase {
+  if (state.pendingApproval !== undefined) {
+    return RuntimePhase.RUNTIME_PHASE_AWAITING_APPROVAL;
+  }
   switch (state.phase) {
     case "uninitialized":
       return RuntimePhase.RUNTIME_PHASE_INITIALIZING;

@@ -91,11 +91,14 @@ describe("production runtime composition", () => {
       join(CONTEXT.dataDirectory, "models"),
     );
     expect(state.values.createModelService).toHaveBeenCalledWith(state.storage);
-    expect(state.values.createRuntime).toHaveBeenCalledWith({
+    expect(state.values.createRuntime).toHaveBeenCalledOnce();
+    const runtimeOptions = vi.mocked(state.values.createRuntime).mock.calls[0]?.[0];
+    expect(runtimeOptions).toMatchObject({
       sessionId: CONTEXT.scopeId,
       modelService: state.modelService,
       eventStore: state.store,
     });
+    expect(typeof runtimeOptions?.createRuntime).toBe("function");
 
     await runtime.close();
     await runtime.close();
@@ -155,11 +158,13 @@ describe("production runtime composition", () => {
     ]);
 
     await createProductionAgentdRuntime(CONTEXT, state.values);
-    expect(state.values.createRuntime).toHaveBeenCalledWith({
+    const runtimeOptions = vi.mocked(state.values.createRuntime).mock.calls[0]?.[0];
+    expect(runtimeOptions).toMatchObject({
       sessionId: "recovered-session",
       modelService: state.modelService,
       eventStore: state.store,
     });
+    expect(typeof runtimeOptions?.createRuntime).toBe("function");
   });
 
   it("attempts rollback in reverse order and aggregates every cleanup failure", async () => {
