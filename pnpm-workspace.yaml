@@ -14,4 +14,5 @@ ignoredBuiltDependencies:
   - better-sqlite3
   - koffi
   - node-llama-cpp
+  - onnxruntime-node
   - protobufjs

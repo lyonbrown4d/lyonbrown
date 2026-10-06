@@ -136,17 +136,20 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
 
 ## Next order
 
-1. Decide and implement CPU/Vulkan/CUDA artifact variants,
+1. Complete daemon composition, protected model storage, domain events, and a real Windows model
+   benchmark for the [System One decision layer](../architecture/system-one-decision-layer.md).
+   Enable pre-Pi execution by default only after its acceptance gate passes.
+2. Decide and implement CPU/Vulkan/CUDA artifact variants,
    archive/checksum/SBOM/signing, and clean-machine installer behavior. Then
    repeat pinned real-GGUF download, activation, cancellation, inference,
    cached restart, and bounded shutdown against the final release artifact on
    supported release hardware.
-2. Extend the authenticated built-artifact black box beyond the verified spawn
+3. Extend the authenticated built-artifact black box beyond the verified spawn
    and setup-required checkpoint to cover reuse, restart fencing, model
    progress, inference, and cancellation.
-3. Implement Pi history hydration before allowing a historical session to
+4. Implement Pi history hydration before allowing a historical session to
    resume across daemon restart.
-4. Add narrowly scoped tools, approval execution, MCP, context, and secrets;
+5. Add narrowly scoped tools, approval execution, MCP, context, and secrets;
    retain default-deny behavior until each capability is independently tested.
-5. Run frozen install plus full format, lint, typecheck, test, build, docs, and
+6. Run frozen install plus full format, lint, typecheck, test, build, docs, and
    `ci-gate` verification against the final artifacts.

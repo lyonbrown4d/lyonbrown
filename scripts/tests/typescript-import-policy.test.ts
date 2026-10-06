@@ -21,6 +21,7 @@ const workspaceRoots = new Map<string, string>([
   ["agent-launch", "packages/agent-launch/"],
   ["agent-runtime", "packages/agent-runtime/"],
   ["control-plane-native", "packages/control-plane-native/"],
+  ["decision-engine", "packages/decision-engine/"],
   ["event-store", "packages/event-store/"],
   ["kernel-pi", "packages/kernel-pi/"],
   ["local-control-plane", "packages/local-control-plane/"],

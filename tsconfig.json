@@ -26,6 +26,8 @@
       "@lyonbrown/control-plane-native/config/vitest": [
         "packages/control-plane-native/vitest.config.ts"
       ],
+      "@lyonbrown/decision-engine/internal/*": ["packages/decision-engine/src/*.ts"],
+      "@lyonbrown/decision-engine/test/*": ["packages/decision-engine/tests/*.ts"],
       "@lyonbrown/event-store/internal/*": ["packages/event-store/src/*.ts"],
       "@lyonbrown/event-store/test/*": ["packages/event-store/tests/*.ts"],
       "@lyonbrown/kernel-pi/internal/*": ["packages/kernel-pi/src/*.ts"],

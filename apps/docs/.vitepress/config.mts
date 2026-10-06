@@ -8,6 +8,7 @@ const englishSidebar = [
     items: [
       { text: "Local gRPC Client/Server", link: "/en/architecture/grpc-client-server" },
       { text: "Composition Root", link: "/en/architecture/composition-root" },
+      { text: "System One Decision Layer", link: "/en/architecture/system-one-decision-layer" },
     ],
   },
   {
@@ -38,6 +39,7 @@ const chineseSidebar = [
     items: [
       { text: "本地 gRPC C/S", link: "/zh/architecture/grpc-client-server" },
       { text: "组合根", link: "/zh/architecture/composition-root" },
+      { text: "System One 决策层", link: "/zh/architecture/system-one-decision-layer" },
     ],
   },
   {

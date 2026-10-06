@@ -7,6 +7,7 @@ projects:
     agent-runtime: ".moon/projects/agent-runtime"
     agentd: ".moon/projects/agentd"
     control-plane-native: ".moon/projects/control-plane-native"
+    decision-engine: ".moon/projects/decision-engine"
     docs: ".moon/projects/docs"
     event-store: ".moon/projects/event-store"
     kernel-pi: ".moon/projects/kernel-pi"

@@ -102,13 +102,16 @@ gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼�
 
 ## 后续顺序
 
-1. 决策并实现 CPU/Vulkan/CUDA 制品变体、归档/checksum/SBOM/签名和干净机器安装器，
+1. 完成 [System One 决策层](../architecture/system-one-decision-layer.md) 的 daemon
+   组合、受保护模型存储、领域事件与 Windows 真实模型 benchmark；达到验收门槛后才
+   默认在 Pi Kernel 前执行。
+2. 决策并实现 CPU/Vulkan/CUDA 制品变体、归档/checksum/SBOM/签名和干净机器安装器，
    并基于最终 release artifact 在支持的发布硬件上重复固定真实 GGUF 的下载、激活、
    取消、推理、缓存重启与有界关闭验证。
-2. 将构建产物认证黑盒从已验证的 spawn 与 setup-required 检查点扩展到复用、重启
+3. 将构建产物认证黑盒从已验证的 spawn 与 setup-required 检查点扩展到复用、重启
    fencing、模型进度、推理与取消。
-3. 在允许 daemon 重启后续接历史 Session 前实现 Pi history hydration。
-4. 逐步增加窄化的工具、审批执行、MCP、上下文与 Secret；各能力独立验证前继续
+4. 在允许 daemon 重启后续接历史 Session 前实现 Pi history hydration。
+5. 逐步增加窄化的工具、审批执行、MCP、上下文与 Secret；各能力独立验证前继续
    default deny。
-5. 对最终制品执行 frozen install、完整 format、lint、typecheck、test、build、docs
+6. 对最终制品执行 frozen install、完整 format、lint、typecheck、test、build、docs
    与 `ci-gate`。
