@@ -100,13 +100,14 @@ gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼�
 ## 后续顺序
 
 1. 在已完成的 [System One 决策层](../architecture/system-one-decision-layer.md) daemon
-   组合、受保护模型存储、领域事件和 Windows 真实 smoke 基础上，增加 TUI 安装/状态投影与
-   大样本中英文准确率、校准 benchmark；达到质量门槛前保持 `continue_pi` advisory 策略。
+   组合、受保护模型存储、领域事件、独立 daemon、真实 gRPC 和 ConPTY TUI smoke 基础上，
+   增加决策模型的 TUI 安装/状态投影与大样本中英文准确率、校准 benchmark；达到质量门槛前
+   保持 `continue_pi` advisory 策略。
 2. 决策并实现 CPU/Vulkan/CUDA 制品变体、归档/checksum/SBOM/签名和干净机器安装器，
    并基于最终 release artifact 在支持的发布硬件上重复固定真实 GGUF 的下载、激活、
    取消、推理、缓存重启与有界关闭验证。
-3. 将构建产物认证黑盒从已验证的 spawn 与 setup-required 检查点扩展到复用、重启
-   fencing、模型进度、推理与取消。
+3. 将构建产物认证黑盒从已验证的独立 daemon、gRPC handshake、setup-required TUI 渲染
+   检查点扩展到复用、重启 fencing、模型进度、推理与取消。
 4. 在已落地的有界 Pi history hydration 基础上实现运行时 context pruning/compaction，
    并用多 turn 真实 GGUF 场景验证 4096-token 窗口。
 5. 在现有窄化文件工具与审批基础上增加 MCP 与 Secret；各能力独立验证前继续

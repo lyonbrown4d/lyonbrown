@@ -102,3 +102,29 @@ bilingual accuracy and calibration gate. Until that benchmark passes, the daemon
 decision and adopts `continue_pi`; it never uses the classification to relax authority, skip
 approval, or select a higher-risk execution path. The next slice is TUI install/status projection
 and a larger bilingual benchmark set.
+
+## Independent daemon, real gRPC, and TUI black box
+
+`pnpm smoke:real-tui` creates a disposable home under the dotenv-injected
+`LYONBROWN_BLACKBOX_ROOT`, starts an independent `agentd` process from built artifacts, reads its
+protected discovery descriptor, and performs authenticated loopback gRPC health, handshake, and
+snapshot calls. It then starts the real CLI entry through Windows ConPTY instead of using an
+in-memory terminal or fake launcher.
+
+The 2026-10-08 local run returned `REAL_AGENTD_GRPC_TUI_SMOKE_OK`:
+
+- the discovery PID matched the independent child process, gRPC health was `serving`, and the
+  handshake server epoch and scope matched discovery;
+- Pi TUI emitted real ANSI redraws, first rendered `Connecting`, and then rendered authenticated
+  gRPC `Ready`;
+- the TUI rendered the daemon-snapshot model setup projection and accepted installed-preferred,
+  hardware-compatible, or conservative-fallback recommendations without automatically confirming
+  or downloading a chat model;
+- a real `Q` interaction exited model setup with CLI exit code `0`; the smoke closed the gRPC
+  client, stopped the daemon, and removed its per-run F-drive scratch directory;
+- discovery polling reopens, reads, and closes the secure directory on each attempt and performs a
+  bounded retry for transient Windows `read_descriptor` conflicts during atomic publication.
+
+This covers an independent daemon, the real transport, and real terminal rendering. It does not yet
+cover Pi response text, tool approval, or cancellation after downloading the roughly 1 GiB chat
+model; those remain follow-up process-level black-box scenarios.

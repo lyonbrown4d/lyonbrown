@@ -83,3 +83,25 @@ run_completed`，且每次只启动一次 Pi；
 因此当前实现满足安全前置执行与可用性 smoke，但尚未通过大样本中英文准确率和校准门槛。
 在完成该基准前，daemon 只记录结果并采用 `continue_pi`，不依据模型分类放宽权限、跳过审批或
 选择高风险执行路径。下一切片是把安装/状态投影加入 TUI，并扩大双语基准集。
+
+## 独立 daemon、真实 gRPC 与 TUI 黑盒
+
+`pnpm smoke:real-tui` 在 dotenv 注入的 `LYONBROWN_BLACKBOX_ROOT` 下创建一次性 home，先从
+构建产物启动独立 `agentd` 进程，再读取受保护 discovery、建立 authenticated loopback gRPC
+连接并执行 health、handshake 与 snapshot。随后测试通过 Windows ConPTY 启动真实 CLI 入口，
+而不是内存 Terminal 或伪造 launcher。
+
+2026-10-08 本机运行返回 `REAL_AGENTD_GRPC_TUI_SMOKE_OK`：
+
+- daemon discovery PID 与独立子进程一致，gRPC health 为 `serving`，handshake 的 server epoch
+  和 scope 均与 discovery 一致；
+- Pi TUI 产生真实 ANSI 重绘，先显示 `Connecting`，随后显示 authenticated gRPC `Ready`；
+- TUI 渲染了 daemon snapshot 投影的模型设置界面，并接受合法的已安装优先、硬件推荐或
+  保守兼容选择；测试不会自动确认或下载聊天模型；
+- 在模型设置阶段通过真实 `Q` 交互退出，CLI 退出码为 `0`；测试关闭 gRPC client、终止
+  daemon 并删除该次 F 盘临时目录；
+- discovery 探测按生产语义每轮重新打开、读取并关闭安全目录，并对 Windows 原子发布期间的
+  瞬时 `read_descriptor` 冲突做有界重试。
+
+这覆盖了独立 daemon、真实传输协议和真实终端渲染，但尚未覆盖下载约 1 GiB 聊天模型后的
+Pi 回答文本、工具审批和取消流程；这些继续属于后续进程级黑盒场景。

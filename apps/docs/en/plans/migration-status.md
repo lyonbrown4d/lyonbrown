@@ -133,18 +133,19 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
 
 ## Next order
 
-1. Build TUI install/status projection and a larger bilingual accuracy and calibration benchmark on
-   top of the completed daemon composition, protected storage, domain events, and Windows real
-   smoke for the [System One decision layer](../architecture/system-one-decision-layer.md). Keep the
-   `continue_pi` advisory policy until the quality gate passes.
+1. Build decision-model TUI install/status projection and a larger bilingual accuracy and
+   calibration benchmark on top of the completed daemon composition, protected storage, domain
+   events, independent-daemon gRPC, and ConPTY TUI smoke for the
+   [System One decision layer](../architecture/system-one-decision-layer.md). Keep the `continue_pi`
+   advisory policy until the quality gate passes.
 2. Decide and implement CPU/Vulkan/CUDA artifact variants,
    archive/checksum/SBOM/signing, and clean-machine installer behavior. Then
    repeat pinned real-GGUF download, activation, cancellation, inference,
    cached restart, and bounded shutdown against the final release artifact on
    supported release hardware.
-3. Extend the authenticated built-artifact black box beyond the verified spawn
-   and setup-required checkpoint to cover reuse, restart fencing, model
-   progress, inference, and cancellation.
+3. Extend the authenticated built-artifact black box beyond the verified independent daemon, gRPC
+   handshake, and setup-required TUI checkpoint to cover reuse, restart fencing, model progress,
+   inference, and cancellation.
 4. Add runtime context pruning/compaction on top of bounded Pi history
    hydration, then validate the 4096-token window with a multi-turn real-GGUF
    scenario.

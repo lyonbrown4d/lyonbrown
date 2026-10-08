@@ -28,6 +28,7 @@
     "smoke:release-artifact": "tsx scripts/smoke-release-artifact.ts",
     "smoke:real-gguf": "tsx scripts/smoke-real-gguf.ts",
     "smoke:real-decision": "tsx scripts/smoke-real-decision-model.ts",
+    "smoke:real-tui": "tsx scripts/smoke-real-tui.ts",
     "decision-model:install": "tsx scripts/smoke-real-decision-model.ts --install-only",
     "audit": "pnpm audit --registry=https://registry.npmjs.org"
   },
@@ -48,6 +49,7 @@
     "dotenv": "18.0.5",
     "eslint": "9.39.1",
     "globals": "16.5.0",
+    "node-pty": "1.1.0",
     "prettier": "3.6.2",
     "tsc-alias": "1.9.7",
     "tsx": "4.20.6",
