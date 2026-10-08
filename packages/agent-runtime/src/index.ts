@@ -15,6 +15,8 @@ export type {
   CreateAgentRuntimeOptions,
   KernelSessionFactory,
   KernelSessionFactoryInput,
-  RuntimeSnapshotFeed,
   RuntimeApprovalDecision,
+  RuntimeDecisionPort,
+  RuntimePreKernelDecision,
+  RuntimeSnapshotFeed,
 } from "@lyonbrown/agent-runtime/internal/types";

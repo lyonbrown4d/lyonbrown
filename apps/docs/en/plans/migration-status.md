@@ -133,9 +133,10 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
 
 ## Next order
 
-1. Complete daemon composition, protected model storage, domain events, and a real Windows model
-   benchmark for the [System One decision layer](../architecture/system-one-decision-layer.md).
-   Enable pre-Pi execution by default only after its acceptance gate passes.
+1. Build TUI install/status projection and a larger bilingual accuracy and calibration benchmark on
+   top of the completed daemon composition, protected storage, domain events, and Windows real
+   smoke for the [System One decision layer](../architecture/system-one-decision-layer.md). Keep the
+   `continue_pi` advisory policy until the quality gate passes.
 2. Decide and implement CPU/Vulkan/CUDA artifact variants,
    archive/checksum/SBOM/signing, and clean-machine installer behavior. Then
    repeat pinned real-GGUF download, activation, cancellation, inference,

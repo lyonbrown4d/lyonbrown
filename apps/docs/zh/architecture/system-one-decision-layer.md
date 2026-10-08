@@ -1,7 +1,8 @@
 # System One 前置决策层
 
-> 状态：已选择 `open-jev@0.1.2`，端口与本地 Provider adapter 已进入仓库；daemon
-> 组合、受保护权重下载和真实模型验收仍未完成，因此当前不能宣称默认前置执行已开启。
+> 状态：`open-jev@0.1.2`、daemon 前置组合、受保护权重安装和 Windows 真实模型 smoke
+> 已落地。模型已安装且配置有效时，System One 在 Pi 之前执行；缺失、损坏或失败时先持久化
+> 安全回退，再继续 Pi。当前采用动作固定为 `continue_pi`，尚不让模型分类改变权限或路由。
 
 ## 目标架构
 
@@ -44,7 +45,9 @@ Kernel → 工具策略与审批。模型决策不能授予权限、绕过审批
 首选 `kev-0.6b` 的 q4 变体，模型约 340–380 MB。OpenJev 自带的 Hub 下载不会用于生产
 composition。权重必须复用原生安全存储能力，通过固定 revision、文件清单、SHA-256、
 最大字节数、同文件系统 staging 和原子激活进入独立的 decision-model 目录。下载由用户
-显式启动并在后台运行，不能阻塞 daemon 或普通 chat 启动。
+显式启动并在独立进程运行，不能阻塞 daemon 或普通 chat 启动。仓库提供
+`pnpm decision-model:install`，安装命令会构建必要产物、复用环境代理并输出进度；它不会把权重
+写入仓库，也不会使用 OpenJev 的隐式 Hub 缓存。
 
 模型根目录通过 dotenv 兼容变量 `LYONBROWN_DECISION_MODEL_ROOT` 注入，并且必须是完整限定的
 本地绝对路径。Windows 必须包含盘符，拒绝当前盘根路径、UNC 和 device namespace。本机开发
@@ -60,5 +63,23 @@ composition。权重必须复用原生安全存储能力，通过固定 revision
 - 构建制品在断网且禁止原生编译时通过缓存复用、决策、回退和清理 smoke；
 - 未安装或未通过验证时显式回退到已记录的 Pi 路径，安全场景继续 fail closed。
 
-下一实现切片是 decision model 的受保护后台安装状态机，以及 decision-before-kernel
-的领域事件与恢复测试。
+## 2026-10-08 Windows x64 真实 smoke
+
+使用固定 revision `5a827091b3d58fe4fdfc02a5a5b2ce364047d678` 的 q4 清单，在
+`F:\Lyonbrown\models\decision` 完成了真实下载、SHA-256、原子激活、断网缓存复用、锚定加载、
+中英文推理和有界释放。黑盒测试从 agentd 的公开生产 composition 入口创建决策服务，并串联
+真实 `AgentRuntime`、内存 EventStore 与可观测 Pi Kernel，而不是直接调用模型 adapter。
+`pnpm smoke:real-decision` 的本次结果为：
+
+- 安装与缓存复用均为 `already_installed`；
+- 首次懒加载推理约 `13707.70 ms`，后续三次约 `109.96–164.45 ms`，四样本 P50 为
+  `153.80 ms`；
+- 进程观测峰值 RSS 为 `840,572,928` 字节；
+- 四次执行均先持久化 `user_message_submitted → decision_recorded → run_started →
+run_completed`，且每次只启动一次 Pi；
+- 四个 fixture 均返回完整、受校验的三问题答案；中文“修改并测试”正确落在
+  `code-change`，但中英文解释场景仍存在分类误差。
+
+因此当前实现满足安全前置执行与可用性 smoke，但尚未通过大样本中英文准确率和校准门槛。
+在完成该基准前，daemon 只记录结果并采用 `continue_pi`，不依据模型分类放宽权限、跳过审批或
+选择高风险执行路径。下一切片是把安装/状态投影加入 TUI，并扩大双语基准集。

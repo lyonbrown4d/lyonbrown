@@ -22,7 +22,10 @@ describe("public production composition", () => {
   });
 
   it("starts a supervised daemon with the production runtime factory", async () => {
-    expect(Object.keys(composition)).toEqual(["startProductionAgentd"]);
+    expect(Object.keys(composition)).toEqual([
+      "createProductionDecisionService",
+      "startProductionAgentd",
+    ]);
     const nativeProvider = Object.freeze({}) as NativeControlPlaneProvider;
     const options = {
       workspace: "C:\\work\\lyonbrown",

@@ -6,6 +6,7 @@ import {
 import { createFailClosedPosixSecurity } from "@lyonbrown/control-plane-native/internal/posix-provider";
 import type { WindowsEventStoreVerifierOptions } from "@lyonbrown/control-plane-native/internal/windows/store-verifier";
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
+import type { NativeModelBundleStorageCapability } from "@lyonbrown/control-plane-native/internal/model-bundle-storage";
 
 type SecurityFactory = () => PlatformControlPlaneSecurity;
 
@@ -17,6 +18,12 @@ type ModelStorageFactory = (modelsDirectory: string) => NativeModelStorageCapabi
 
 interface WindowsModelStorageModule {
   readonly createWindowsModelStorageCapability: ModelStorageFactory;
+}
+
+type ModelBundleStorageFactory = (modelsDirectory: string) => NativeModelBundleStorageCapability;
+
+interface WindowsModelBundleStorageModule {
+  readonly createWindowsModelBundleStorageCapability: ModelBundleStorageFactory;
 }
 
 export function selectPlatformSecurity(
@@ -45,6 +52,15 @@ export async function selectWindowsModelStorageFactory(
   return (await loadWindows()).createWindowsModelStorageCapability;
 }
 
+export async function selectWindowsModelBundleStorageFactory(
+  platform: NodeJS.Platform,
+  loadWindows: () => Promise<WindowsModelBundleStorageModule>,
+  unavailable: ModelBundleStorageFactory,
+): Promise<ModelBundleStorageFactory> {
+  if (platform !== "win32") return unavailable;
+  return (await loadWindows()).createWindowsModelBundleStorageCapability;
+}
+
 const unavailableWindows: SecurityFactory = () => {
   throw new Error("Windows native provider is unavailable");
 };
@@ -71,6 +87,16 @@ const windowsModelStorageFactory = await selectWindowsModelStorageFactory(
   unavailableModelStorage,
 );
 
+const unavailableModelBundleStorage: ModelBundleStorageFactory = () => {
+  throw new Error("native_model_bundle_storage_unavailable");
+};
+
+const windowsModelBundleStorageFactory = await selectWindowsModelBundleStorageFactory(
+  process.platform,
+  () => import("@lyonbrown/control-plane-native/internal/windows/model-bundle-storage"),
+  unavailableModelBundleStorage,
+);
+
 export function createPlatformSecurity(): PlatformControlPlaneSecurity {
   return selectPlatformSecurity(process.platform, windowsFactory, createFailClosedPosixSecurity);
 }
@@ -87,4 +113,10 @@ export function createPlatformModelStorageCapability(
   modelsDirectory: string,
 ): NativeModelStorageCapability {
   return windowsModelStorageFactory(modelsDirectory);
+}
+
+export function createPlatformModelBundleStorageCapability(
+  modelsDirectory: string,
+): NativeModelBundleStorageCapability {
+  return windowsModelBundleStorageFactory(modelsDirectory);
 }

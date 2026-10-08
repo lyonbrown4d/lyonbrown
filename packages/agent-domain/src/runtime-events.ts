@@ -22,6 +22,15 @@ export interface RuntimeUsage {
   readonly totalTokens: number;
 }
 
+export type RuntimeDecisionIntent = "chat" | "code-change" | "system-operation";
+export type RuntimeDecisionRisk = "low" | "medium" | "high";
+export type RuntimeDecisionFallbackReason =
+  | "aborted"
+  | "invalid_response"
+  | "model_corrupted"
+  | "model_missing"
+  | "provider_unavailable";
+
 export type AgentRuntimeEvent =
   | ({ readonly type: "session_opened" } & RuntimeEventBase)
   | ({ readonly type: "user_message_submitted"; readonly text: string } & RuntimeEventBase)
@@ -35,6 +44,25 @@ export type AgentRuntimeEvent =
   | ({ readonly type: "turn_completed"; readonly turn: number } & RuntimeEventBase)
   | ({ readonly type: "assistant_text_delta"; readonly delta: string } & RuntimeEventBase)
   | ({ readonly type: "usage_recorded" } & RuntimeEventBase & RuntimeUsage)
+  | ({
+      readonly type: "decision_recorded";
+      readonly questionVersion: string;
+      readonly providerId: string;
+      readonly modelId: string;
+      readonly modelRevision: string;
+      readonly intent: RuntimeDecisionIntent;
+      readonly risk: RuntimeDecisionRisk;
+      readonly requiresTools: boolean;
+      readonly confidence: number;
+      readonly probabilities: RuntimeJsonValue;
+      readonly action: "continue_pi";
+    } & RuntimeEventBase)
+  | ({
+      readonly type: "decision_fallback_recorded";
+      readonly questionVersion: string;
+      readonly reason: RuntimeDecisionFallbackReason;
+      readonly action: "continue_pi";
+    } & RuntimeEventBase)
   | ({ readonly type: "model_selection_changed"; readonly mode: "auto" } & RuntimeEventBase)
   | ({
       readonly type: "model_selection_changed";
@@ -94,6 +122,21 @@ const FIELDS_BY_TYPE: Readonly<Record<AgentRuntimeEvent["type"], ReadonlySet<str
   turn_completed: new Set(["type", "sessionId", "turn"]),
   assistant_text_delta: new Set(["type", "sessionId", "delta"]),
   usage_recorded: new Set(["type", "sessionId", "inputTokens", "outputTokens", "totalTokens"]),
+  decision_recorded: new Set([
+    "type",
+    "sessionId",
+    "questionVersion",
+    "providerId",
+    "modelId",
+    "modelRevision",
+    "intent",
+    "risk",
+    "requiresTools",
+    "confidence",
+    "probabilities",
+    "action",
+  ]),
+  decision_fallback_recorded: new Set(["type", "sessionId", "questionVersion", "reason", "action"]),
   model_selection_changed: new Set(["type", "sessionId", "mode", "provider", "model"]),
   approval_requested: new Set([
     "type",
@@ -203,6 +246,29 @@ export function parseAgentRuntimeEvent(value: unknown): AgentRuntimeEvent {
         outputTokens: count(record, "outputTokens"),
         totalTokens: count(record, "totalTokens"),
       });
+    case "decision_recorded":
+      return Object.freeze({
+        type,
+        sessionId,
+        questionVersion: identifier(record, "questionVersion"),
+        providerId: identifier(record, "providerId"),
+        modelId: identifier(record, "modelId"),
+        modelRevision: identifier(record, "modelRevision"),
+        intent: decisionIntent(record),
+        risk: decisionRisk(record),
+        requiresTools: boolean(record, "requiresTools"),
+        confidence: probability(record, "confidence"),
+        probabilities: copyRuntimeJson(required(record, "probabilities")),
+        action: decisionAction(record),
+      });
+    case "decision_fallback_recorded":
+      return Object.freeze({
+        type,
+        sessionId,
+        questionVersion: identifier(record, "questionVersion"),
+        reason: decisionFallbackReason(record),
+        action: decisionAction(record),
+      });
     case "model_selection_changed": {
       const mode = required(record, "mode");
       if (mode === "auto") {
@@ -286,6 +352,60 @@ function identifiers(record: DataRecord, field: string): readonly string[] {
     return invalid(`${field} must be a bounded array`, "invalid_collection", field);
   }
   return Object.freeze(value.map((item) => assertIdentifier(item, field)));
+}
+
+function boolean(record: DataRecord, field: string): boolean {
+  const value = required(record, field);
+  if (typeof value !== "boolean") {
+    return invalid(`${field} must be a boolean`, "invalid_type", field);
+  }
+  return value;
+}
+
+function probability(record: DataRecord, field: string): number {
+  const value = required(record, field);
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    return invalid(`${field} must be a finite probability`, "invalid_probability", field);
+  }
+  return value;
+}
+
+function decisionIntent(record: DataRecord): RuntimeDecisionIntent {
+  const value = required(record, "intent");
+  if (value !== "chat" && value !== "code-change" && value !== "system-operation") {
+    return invalid("Unsupported decision intent", "invalid_enum", "intent");
+  }
+  return value;
+}
+
+function decisionRisk(record: DataRecord): RuntimeDecisionRisk {
+  const value = required(record, "risk");
+  if (value !== "low" && value !== "medium" && value !== "high") {
+    return invalid("Unsupported decision risk", "invalid_enum", "risk");
+  }
+  return value;
+}
+
+function decisionFallbackReason(record: DataRecord): RuntimeDecisionFallbackReason {
+  const value = required(record, "reason");
+  if (
+    value !== "aborted" &&
+    value !== "invalid_response" &&
+    value !== "model_corrupted" &&
+    value !== "model_missing" &&
+    value !== "provider_unavailable"
+  ) {
+    return invalid("Unsupported decision fallback reason", "invalid_enum", "reason");
+  }
+  return value;
+}
+
+function decisionAction(record: DataRecord): "continue_pi" {
+  const value = required(record, "action");
+  if (value !== "continue_pi") {
+    return invalid("Unsupported decision action", "invalid_enum", "action");
+  }
+  return value;
 }
 
 function approvalRisk(record: DataRecord): "medium" | "high" {

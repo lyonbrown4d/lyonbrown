@@ -55,6 +55,9 @@ export {
   parseAgentRuntimeEvent,
   type ApprovalDecision,
   type AgentRuntimeEvent,
+  type RuntimeDecisionFallbackReason,
+  type RuntimeDecisionIntent,
+  type RuntimeDecisionRisk,
   type RuntimeUsage,
 } from "@lyonbrown/agent-domain/internal/runtime-events";
 export {

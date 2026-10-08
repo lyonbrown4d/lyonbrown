@@ -15,6 +15,7 @@ import type {
   AgentRuntime,
   CreateAgentRuntimeOptions,
   RuntimeApprovalDecision,
+  RuntimePreKernelDecision,
   RuntimeSnapshotFeed,
 } from "@lyonbrown/agent-runtime/internal/types";
 
@@ -25,6 +26,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   #claimPending = false;
   #cancelRequested = false;
   #pendingFollowUps = 0;
+  #decisionAbortController: AbortController | undefined;
   #disposed = false;
   #disposePromise: Promise<void> | undefined;
 
@@ -82,6 +84,27 @@ export class DefaultAgentRuntime implements AgentRuntime {
       throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
     }
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- cancel can race while append awaits.
+    if (this.#cancelRequested) {
+      await this.#finishPendingCancellation();
+      return;
+    }
+    try {
+      await this.#recordPreKernelDecision(text, options?.signal ?? new AbortController().signal);
+    } catch {
+      this.#running = false;
+      if (this.writer.fatal !== undefined) throw this.writer.fatal;
+      throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- dispose can race while decision evaluation awaits.
+    if (this.#disposed) {
+      this.#running = false;
+      throw runtimeError("RUNTIME_DISPOSED", "Agent runtime is disposed");
+    }
+    if (options?.signal?.aborted === true) {
+      await this.#finishPendingCancellation();
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- cancel can race while decision evaluation awaits.
     if (this.#cancelRequested) {
       await this.#finishPendingCancellation();
       return;
@@ -148,6 +171,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
       this.#cancelRequested = wasRequested;
       throw runtimeError("KERNEL_FAILURE", "Kernel session failed");
     }
+    this.#decisionAbortController?.abort();
   }
 
   respondApproval(requestId: string, decision: RuntimeApprovalDecision): void {
@@ -194,6 +218,7 @@ export class DefaultAgentRuntime implements AgentRuntime {
   dispose(): Promise<void> {
     if (this.#disposePromise !== undefined) return this.#disposePromise;
     this.#disposed = true;
+    this.#decisionAbortController?.abort();
     this.#disposePromise = this.#disposeResources();
     return this.#disposePromise;
   }
@@ -276,7 +301,71 @@ export class DefaultAgentRuntime implements AgentRuntime {
       await this.#finishPendingCancellation();
       return;
     }
+    try {
+      await this.#recordPreKernelDecision(text, new AbortController().signal);
+    } catch {
+      this.#running = false;
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- dispose can race while decision evaluation awaits.
+    if (this.#disposed) {
+      this.#running = false;
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- cancel can race while decision evaluation awaits.
+    if (this.#cancelRequested) {
+      await this.#finishPendingCancellation();
+      return;
+    }
     if (!this.#launchKernel(text)) this.#running = false;
+  }
+
+  async #recordPreKernelDecision(input: string, signal: AbortSignal): Promise<void> {
+    if (this.options.decision === undefined) return;
+    const controller = new AbortController();
+    this.#decisionAbortController = controller;
+    const decisionSignal = runtimeHelpers.combineRuntimeSignal(signal, controller.signal);
+    try {
+      let outcome: RuntimePreKernelDecision;
+      try {
+        outcome = await this.options.decision.evaluate({ input, signal: decisionSignal });
+      } catch {
+        outcome = {
+          kind: "fallback" as const,
+          questionVersion: "system-one-v1",
+          reason: decisionSignal.aborted ? ("aborted" as const) : ("provider_unavailable" as const),
+          action: "continue_pi" as const,
+        };
+      }
+      await this.writer.append(
+        parseAgentRuntimeEvent(
+          outcome.kind === "decided"
+            ? {
+                type: "decision_recorded",
+                sessionId: this.options.sessionId,
+                questionVersion: outcome.questionVersion,
+                providerId: outcome.providerId,
+                modelId: outcome.modelId,
+                modelRevision: outcome.modelRevision,
+                intent: outcome.intent,
+                risk: outcome.risk,
+                requiresTools: outcome.requiresTools,
+                confidence: outcome.confidence,
+                probabilities: outcome.probabilities,
+                action: outcome.action,
+              }
+            : {
+                type: "decision_fallback_recorded",
+                sessionId: this.options.sessionId,
+                questionVersion: outcome.questionVersion,
+                reason: outcome.reason,
+                action: outcome.action,
+              },
+        ),
+      );
+    } finally {
+      if (this.#decisionAbortController === controller) this.#decisionAbortController = undefined;
+    }
   }
 
   async #finishPendingCancellation(): Promise<void> {

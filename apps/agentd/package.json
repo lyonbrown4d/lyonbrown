@@ -36,6 +36,7 @@
     "@lyonbrown/agent-domain": "workspace:*",
     "@lyonbrown/agent-runtime": "workspace:*",
     "@lyonbrown/control-plane-native": "workspace:*",
+    "@lyonbrown/decision-engine": "workspace:*",
     "@lyonbrown/event-store": "workspace:*",
     "@lyonbrown/kernel-pi": "workspace:*",
     "@lyonbrown/local-control-plane": "workspace:*",

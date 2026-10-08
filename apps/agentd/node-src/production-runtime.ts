@@ -18,6 +18,10 @@ import type {
 } from "@lyonbrown/agentd/internal/bootstrap";
 import { collectCleanupFailure } from "@lyonbrown/agentd/internal/cleanup";
 import {
+  createProductionDecisionService,
+  type ProductionDecisionService,
+} from "@lyonbrown/agentd/internal/decision-service";
+import {
   createModelAwareRuntime,
   type CreateModelAwareRuntimeOptions,
   type ModelAwareRuntime,
@@ -34,6 +38,10 @@ export interface ProductionRuntimeDependencies {
   readonly createModelStorage: (modelsDirectory: string) => NativeModelStorageCapability;
   readonly createModelService: (storage: NativeModelStorageCapability) => LocalModelService;
   readonly createRuntime: (options: CreateModelAwareRuntimeOptions) => ModelAwareRuntime;
+  readonly createDecisionService: (
+    environment: Readonly<NodeJS.ProcessEnv>,
+  ) => ProductionDecisionService;
+  readonly environment: Readonly<NodeJS.ProcessEnv>;
   readonly acquireProxyEnvironment: () => () => void;
 }
 
@@ -44,6 +52,8 @@ const DEFAULT_DEPENDENCIES: ProductionRuntimeDependencies = Object.freeze({
   createModelStorage: createNativeModelStorageCapability,
   createModelService: createLocalModelService,
   createRuntime: createModelAwareRuntime,
+  createDecisionService: createProductionDecisionService,
+  environment: process.env,
   acquireProxyEnvironment: () => agentdProxyEnvironment.acquire(),
 });
 
@@ -56,11 +66,13 @@ export async function createProductionAgentdRuntime(
     pathVerifier: dependencies.createPathVerifier(context.dataDirectory),
   });
   let modelService: LocalModelService | undefined;
+  let decisionService: ProductionDecisionService | undefined;
   let releaseProxyEnvironment: (() => void) | undefined;
   try {
     releaseProxyEnvironment = dependencies.acquireProxyEnvironment();
     const recent = await eventStore.listSessions({ limit: 1 });
     const sessionId = recent[0]?.sessionId ?? context.scopeId;
+    decisionService = dependencies.createDecisionService(dependencies.environment);
     modelService = dependencies.createModelService(
       dependencies.createModelStorage(join(context.dataDirectory, "models")),
     );
@@ -69,14 +81,25 @@ export async function createProductionAgentdRuntime(
       modelService,
       eventStore,
       createRuntime: (lease, modelId, store, activeSessionId) =>
-        createProductionRuntime(lease, modelId, store, activeSessionId, context.canonicalWorkspace),
+        createProductionRuntime(
+          lease,
+          modelId,
+          store,
+          activeSessionId,
+          context.canonicalWorkspace,
+          decisionService?.port,
+        ),
     });
-    return withProxyEnvironmentLease(runtime, releaseProxyEnvironment);
+    return withOwnedProductionResources(runtime, decisionService, releaseProxyEnvironment);
   } catch (error: unknown) {
     const failures: unknown[] = [error];
     if (modelService !== undefined) {
       const ownedModelService = modelService;
       await collectCleanupFailure(() => ownedModelService.dispose(), failures);
+    }
+    if (decisionService !== undefined) {
+      const ownedDecisionService = decisionService;
+      await collectCleanupFailure(() => ownedDecisionService.dispose(), failures);
     }
     if (releaseProxyEnvironment !== undefined) {
       await collectCleanupFailure(releaseProxyEnvironment, failures);
@@ -88,26 +111,29 @@ export async function createProductionAgentdRuntime(
   }
 }
 
-function withProxyEnvironmentLease(
+function withOwnedProductionResources(
   runtime: ModelAwareRuntime,
+  decisionService: ProductionDecisionService,
   releaseProxyEnvironment: () => void,
 ): ProductionAgentdRuntime {
   let closeTask: Promise<void> | undefined;
   return Object.freeze({
     host: runtime.host,
     close(): Promise<void> {
-      closeTask ??= closeRuntimeAndProxy(runtime, releaseProxyEnvironment);
+      closeTask ??= closeRuntimeAndDecision(runtime, decisionService, releaseProxyEnvironment);
       return closeTask;
     },
   });
 }
 
-async function closeRuntimeAndProxy(
+async function closeRuntimeAndDecision(
   runtime: ModelAwareRuntime,
+  decisionService: ProductionDecisionService,
   releaseProxyEnvironment: () => void,
 ): Promise<void> {
   const failures: unknown[] = [];
   await collectCleanupFailure(() => runtime.close(), failures);
+  await collectCleanupFailure(() => decisionService.dispose(), failures);
   await collectCleanupFailure(releaseProxyEnvironment, failures);
   if (failures.length > 0) {
     throw new AggregateError(failures, "production runtime cleanup failed");

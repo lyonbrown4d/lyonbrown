@@ -19,16 +19,19 @@ describe("hermetic protobuf toolchain", () => {
       "win32-x64",
     ];
 
-    expect(lockfile).toMatch(/'@bufbuild\/buf@1\.73\.0':\r?\n\s+resolution: \{integrity: sha512-/u);
+    expect(lockfile).toMatch(lockEntryWithIntegrity("@bufbuild/buf@1.73.0"));
     for (const platformPackage of platformPackages) {
-      expect(lockfile).toMatch(
-        new RegExp(
-          `'@bufbuild/buf-${platformPackage}@1\\.73\\.0':\\r?\\n\\s+resolution: \\{integrity: sha512-`,
-          "u",
-        ),
-      );
+      expect(lockfile).toMatch(lockEntryWithIntegrity(`@bufbuild/buf-${platformPackage}@1.73.0`));
     }
     expect(lockfile).not.toContain("grpc-tools@");
     expect(lockfile).not.toContain("node-pre-gyp");
   });
 });
+
+function lockEntryWithIntegrity(packageId: string): RegExp {
+  const escapedPackageId = packageId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(
+    `["']${escapedPackageId}["']:\\r?\\n\\s+resolution:(?: \\{integrity: sha512-|\\r?\\n\\s+\\{\\r?\\n\\s+integrity: sha512-)`,
+    "u",
+  );
+}

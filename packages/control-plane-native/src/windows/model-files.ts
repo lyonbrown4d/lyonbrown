@@ -167,6 +167,17 @@ export function openStagedModel(path: string): OwnedHandle {
   }
 }
 
+export function openSealedBundleFile(path: string): OwnedHandle {
+  const handle = openRegularFile(path, ACCESS.genericRead, SHARE.read);
+  try {
+    verifyFile(handle);
+    return handle;
+  } catch (error) {
+    handle.close();
+    throw error;
+  }
+}
+
 export function deleteStagedModelIfPresent(path: string): void {
   let handle: OwnedHandle;
   try {

@@ -43,6 +43,52 @@ describe("runtime event boundary", () => {
     });
   });
 
+  test("accepts and freezes a bounded pre-kernel decision event", () => {
+    const event = parseAgentRuntimeEvent({
+      type: "decision_recorded",
+      sessionId: "session-1",
+      questionVersion: "system-one-v1",
+      providerId: "open-jev",
+      modelId: "kev-0.6b",
+      modelRevision: "5a827091b3d58fe4fdfc02a5a5b2ce364047d678",
+      intent: "code-change",
+      risk: "medium",
+      requiresTools: true,
+      confidence: 0.8,
+      probabilities: { intent: { chat: 0.2, "code-change": 0.8 } },
+      action: "continue_pi",
+    });
+
+    expect(event).toMatchObject({ type: "decision_recorded", confidence: 0.8 });
+    if (event.type !== "decision_recorded") throw new Error("expected decision_recorded");
+    expect(Object.isFrozen(event.probabilities)).toBe(true);
+  });
+
+  test.each([
+    { confidence: Number.NaN },
+    { confidence: 1.1 },
+    { confidence: -0.1 },
+    { confidence: 0.8, intent: "unknown" },
+    { confidence: 0.8, action: "grant_authority" },
+  ])("rejects malformed decision data %#", (overrides) => {
+    expect(() =>
+      parseAgentRuntimeEvent({
+        type: "decision_recorded",
+        sessionId: "session-1",
+        questionVersion: "system-one-v1",
+        providerId: "open-jev",
+        modelId: "kev-0.6b",
+        modelRevision: "5a827091b3d58fe4fdfc02a5a5b2ce364047d678",
+        intent: "code-change",
+        risk: "medium",
+        requiresTools: true,
+        probabilities: { intent: { "code-change": 1 } },
+        action: "continue_pi",
+        ...overrides,
+      }),
+    ).toThrow();
+  });
+
   test.each([
     { value: { type: "unknown", sessionId: "session-1" }, reason: /event type/u },
     { value: { type: "__proto__", sessionId: "session-1" }, reason: /event type/u },

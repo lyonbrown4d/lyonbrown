@@ -99,9 +99,9 @@ gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼�
 
 ## 后续顺序
 
-1. 完成 [System One 决策层](../architecture/system-one-decision-layer.md) 的 daemon
-   组合、受保护模型存储、领域事件与 Windows 真实模型 benchmark；达到验收门槛后才
-   默认在 Pi Kernel 前执行。
+1. 在已完成的 [System One 决策层](../architecture/system-one-decision-layer.md) daemon
+   组合、受保护模型存储、领域事件和 Windows 真实 smoke 基础上，增加 TUI 安装/状态投影与
+   大样本中英文准确率、校准 benchmark；达到质量门槛前保持 `continue_pi` advisory 策略。
 2. 决策并实现 CPU/Vulkan/CUDA 制品变体、归档/checksum/SBOM/签名和干净机器安装器，
    并基于最终 release artifact 在支持的发布硬件上重复固定真实 GGUF 的下载、激活、
    取消、推理、缓存重启与有界关闭验证。

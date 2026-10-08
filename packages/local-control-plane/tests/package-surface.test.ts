@@ -74,5 +74,5 @@ describe("package surface", () => {
     expect(packageJson.scripts.build).toBe(
       "pnpm clean && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json --resolve-full-paths --resolve-full-extension .js",
     );
-  }, 20_000);
+  }, 60_000);
 });

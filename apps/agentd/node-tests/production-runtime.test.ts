@@ -8,6 +8,7 @@ import type { NativeModelStorageCapability } from "@lyonbrown/local-model/compos
 import { describe, expect, it, vi } from "vitest";
 
 import type { ModelAwareRuntime } from "@lyonbrown/agentd/internal/model-aware-runtime";
+import type { ProductionDecisionService } from "@lyonbrown/agentd/internal/decision-service";
 import {
   createProductionAgentdRuntime,
   type ProductionRuntimeDependencies,
@@ -32,6 +33,11 @@ function dependencies() {
   const modelService = { dispose: modelDispose } as unknown as LocalModelService;
   const runtimeClose = vi.fn(async () => undefined);
   const runtime = { host: {}, close: runtimeClose } as unknown as ModelAwareRuntime;
+  const decisionDispose = vi.fn(() => Promise.resolve());
+  const decisionService = {
+    port: { evaluate: vi.fn() },
+    dispose: decisionDispose,
+  } as unknown as ProductionDecisionService;
   const releaseProxyEnvironment = vi.fn();
   const values: ProductionRuntimeDependencies = {
     openStore: vi.fn(() => store),
@@ -39,6 +45,8 @@ function dependencies() {
     createModelStorage: vi.fn(() => storage),
     createModelService: vi.fn(() => modelService),
     createRuntime: vi.fn(() => runtime),
+    createDecisionService: vi.fn(() => decisionService),
+    environment: {},
     acquireProxyEnvironment: vi.fn(() => releaseProxyEnvironment),
   };
   return {
@@ -52,6 +60,8 @@ function dependencies() {
     modelDispose,
     runtime,
     runtimeClose,
+    decisionService,
+    decisionDispose,
     releaseProxyEnvironment,
   };
 }
@@ -74,6 +84,7 @@ describe("production runtime composition", () => {
         await rm(parent, { recursive: true, force: true });
       }
     },
+    30_000,
   );
 
   it("uses native capabilities under the scoped data directory", async () => {
@@ -91,6 +102,7 @@ describe("production runtime composition", () => {
       join(CONTEXT.dataDirectory, "models"),
     );
     expect(state.values.createModelService).toHaveBeenCalledWith(state.storage);
+    expect(state.values.createDecisionService).toHaveBeenCalledWith({});
     expect(state.values.createRuntime).toHaveBeenCalledOnce();
     const runtimeOptions = vi.mocked(state.values.createRuntime).mock.calls[0]?.[0];
     expect(runtimeOptions).toMatchObject({
@@ -103,6 +115,7 @@ describe("production runtime composition", () => {
     await runtime.close();
     await runtime.close();
     expect(state.runtimeClose).toHaveBeenCalledOnce();
+    expect(state.decisionDispose).toHaveBeenCalledOnce();
     expect(state.releaseProxyEnvironment).toHaveBeenCalledOnce();
   });
 
@@ -142,6 +155,7 @@ describe("production runtime composition", () => {
     expect(caught).toBeInstanceOf(AggregateError);
     expect((caught as AggregateError).errors).toEqual([failure]);
     expect(state.modelDispose).toHaveBeenCalledOnce();
+    expect(state.decisionDispose).toHaveBeenCalledOnce();
     expect(state.storeClose).toHaveBeenCalledOnce();
     expect(state.releaseProxyEnvironment).toHaveBeenCalledOnce();
   });

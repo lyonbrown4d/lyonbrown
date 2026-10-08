@@ -52,7 +52,7 @@ describe("node-llama-cpp supply-chain policy", () => {
   it("locks the matching official Windows CPU prebuild", async () => {
     const lockfile = await readFile(new URL("pnpm-lock.yaml", repositoryRoot), "utf8");
 
-    expect(lockfile).toContain("'@node-llama-cpp/win-x64@3.22.1':");
+    expect(lockfile).toMatch(/["']@node-llama-cpp\/win-x64@3\.22\.1["']:/u);
     expect(lockfile).toContain("node-llama-cpp@3.22.1");
   });
 

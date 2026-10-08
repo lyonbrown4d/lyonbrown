@@ -6,6 +6,7 @@ import {
   createAgentRuntime,
   createRuntimeEventStorePort,
   type AgentRuntime,
+  type RuntimeDecisionPort,
 } from "@lyonbrown/agent-runtime";
 import type { EventStore } from "@lyonbrown/event-store";
 import {
@@ -27,13 +28,14 @@ export async function createProductionRuntime(
   eventStore: EventStore,
   sessionId: string,
   workspace = process.cwd(),
+  decision?: RuntimeDecisionPort,
 ): Promise<AgentRuntime> {
   const model = createLocalKernelModelAdapter({ id: modelId, lease });
   const toolRegistry = await createWorkspaceToolRegistry(workspace);
-  const recovered = await createRuntime(eventStore, sessionId, model, toolRegistry);
+  const recovered = await createRuntime(eventStore, sessionId, model, toolRegistry, decision);
   if (!unsafeToResume(recovered.snapshot())) return recovered;
   await recovered.dispose();
-  return createRuntime(eventStore, randomUUID(), model, toolRegistry);
+  return createRuntime(eventStore, randomUUID(), model, toolRegistry, decision);
 }
 
 function createRuntime(
@@ -41,11 +43,13 @@ function createRuntime(
   sessionId: string,
   model: ReturnType<typeof createLocalKernelModelAdapter>,
   toolRegistry: KernelToolRegistry,
+  decision: RuntimeDecisionPort | undefined,
 ): Promise<AgentRuntime> {
   const safeSessionId = asSessionId(sessionId);
   return createAgentRuntime({
     sessionId: safeSessionId,
     eventStore: createRuntimeEventStorePort(eventStore),
+    ...(decision === undefined ? {} : { decision }),
     createKernelSession: ({ eventSink, state }) =>
       createKernel(eventSink, safeSessionId, model, toolRegistry, state),
   });

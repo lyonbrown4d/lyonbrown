@@ -67,6 +67,10 @@ export function applyRuntimeEvent(
     case "usage_recorded":
       assertActiveTurn(state);
       return recordUsage(state, revision, event);
+    case "decision_recorded":
+    case "decision_fallback_recorded":
+      assertActiveTurn(state);
+      return freezeState({ ...state, revision });
     case "model_selection_changed":
       return freezeState({
         ...state,

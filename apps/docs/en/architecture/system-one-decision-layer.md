@@ -1,8 +1,10 @@
 # System One pre-kernel decision layer
 
-> Status: `open-jev@0.1.2` is selected and the port plus local provider adapter are in the
-> repository. Daemon composition, protected weight download, and real-model acceptance remain
-> incomplete, so default pre-kernel execution is not yet claimed.
+> Status: `open-jev@0.1.2`, daemon pre-kernel composition, protected weight installation, and a
+> real Windows model smoke are implemented. System One runs before Pi when the configured model is
+> installed and valid. Missing, corrupt, or failed providers persist a safe fallback before Pi.
+> The adopted action is currently fixed to `continue_pi`; model classifications cannot change
+> authority or routing yet.
 
 ## Target architecture
 
@@ -51,8 +53,10 @@ replace input budgets.
 The initial target is the q4 `kev-0.6b` variant, roughly 340–380 MB. Production composition will not
 use OpenJev's Hub downloader. Weights must reuse native secure storage with a pinned revision, file
 manifest, SHA-256, byte ceiling, same-filesystem staging, and atomic activation under a separate
-decision-model directory. Download is explicit, background work and never blocks daemon or ordinary
-chat startup.
+decision-model directory. Download is explicit and runs in a separate process, so it never blocks
+daemon or ordinary chat startup. The repository provides `pnpm decision-model:install`; it builds
+the required artifacts, uses the environment proxy, reports progress, and never writes weights
+into the repository or uses OpenJev's implicit Hub cache.
 
 The model root is injected with the dotenv-compatible `LYONBROWN_DECISION_MODEL_ROOT` variable and
 must be a fully qualified local path. Windows requires a drive-qualified path and rejects current-
@@ -74,5 +78,27 @@ explicitly unavailable and never falls back to the home directory or system driv
 - a missing or unverified model follows an explicit recorded Pi fallback while security-sensitive
   paths remain fail closed.
 
-The next slice is protected background installation for decision weights plus decision-before-
-kernel domain-event and recovery tests.
+## 2026-10-08 Windows x64 real smoke
+
+The q4 manifest at revision `5a827091b3d58fe4fdfc02a5a5b2ce364047d678` completed a real
+download, SHA-256 verification, atomic activation, offline cache reuse, anchored loading, bilingual
+inference, and bounded disposal under `F:\Lyonbrown\models\decision`.
+The black-box smoke creates the decision service through agentd's public production composition and
+connects a real `AgentRuntime`, in-memory EventStore, and observable Pi Kernel instead of invoking
+the model adapter directly. `pnpm smoke:real-decision` reported:
+
+- both installation inspection and offline reuse returned `already_installed`;
+- first lazy-load inference took about `13707.70 ms`; the next three took `109.96–164.45 ms`, with a
+  four-sample P50 of `153.80 ms`;
+- observed process peak RSS was `840,572,928` bytes;
+- every run persisted `user_message_submitted → decision_recorded → run_started → run_completed`
+  before projection and started Pi exactly once;
+- all four fixtures returned complete validated answers; the Chinese change-and-test fixture was
+  classified as `code-change`, while explanation fixtures still expose classification errors in
+  both languages.
+
+The implementation therefore passes the safety and availability smoke, but not yet the larger
+bilingual accuracy and calibration gate. Until that benchmark passes, the daemon records the
+decision and adopts `continue_pi`; it never uses the classification to relax authority, skip
+approval, or select a higher-risk execution path. The next slice is TUI install/status projection
+and a larger bilingual benchmark set.

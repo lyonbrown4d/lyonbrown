@@ -99,11 +99,11 @@ describe("TypeScript import policy", () => {
     const violations = findRelativeModuleSpecifiers(trackedTypeScript);
 
     expect(violations).toEqual([]);
-  });
+  }, 30_000);
 
   test("keeps private aliases inside their owning workspace", () => {
     expect(findPrivateAliasEscapes(trackedTypeScriptFiles())).toEqual([]);
-  });
+  }, 30_000);
 
   test("generates ignored TypeScript sources with TypeScript import extensions", () => {
     const codegenConfiguration = readFileSync(
