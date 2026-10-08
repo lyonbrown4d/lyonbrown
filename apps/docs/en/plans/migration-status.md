@@ -1,6 +1,6 @@
 # Migration Progress
 
-> Verified checkpoint: 2026-10-07
+> Verified checkpoint: 2026-10-08
 >
 > Development continues directly on `main`. This page distinguishes implemented
 > and test-covered behavior from release evidence; it does not claim that the
@@ -24,7 +24,8 @@
   contains no `.rs`, `Cargo.toml`, or `Cargo.lock` product files.
 - Windows native model storage now covers private ACLs, reparse-point and file
   identity checks, install locking, bounded staging, atomic activation, and
-  installed-file anchoring.
+  installed-file anchoring. Successful activation also safely removes
+  same-model staging left by a crashed process.
 - Model downloads use the Node 24 built-in `fetch` to stream into
   same-filesystem staging supplied by native storage. The request and write
   share one cancellation signal, with finitely bounded transient retries before
@@ -89,13 +90,14 @@
   was `required`, `allowedActions=[download]`, and the projected revision was
   `2`. It created no GGUF automatically, then removed the temporary daemon and
   directories.
-- A production-composition real-GGUF smoke passed on the Windows development
-  machine on 2026-10-07. It read the actual trusted hardware selection and fixed
+- An independent-`agentd` real-GGUF smoke passed on the Windows development
+  machine on 2026-10-08. It read the actual trusted hardware selection and fixed
   digest, then verified no automatic download; explicit cancel/retry, progress,
   verification and activation; pinned/auto selection; real answer and usage;
   `write`, approval, and exact file content; turn cancellation; cached restart;
-  and shutdown within 30 seconds. It ended with `REAL_GGUF_SMOKE_OK` and removed
-  its temporary cache.
+  a new PID/server epoch; and shutdown within 30 seconds. The verified model
+  remains under the dotenv-injected `F:\Lyonbrown\models\chat`; the run ended
+  with `REAL_GGUF_SMOKE_OK` and removed only its per-run scratch.
 - Daemon restart now rebuilds completed, unambiguous Pi history, including tool
   calls, tool results, and session approval policy. Running, failed, cancelled,
   steered, pending, uncertain, or histories beyond 128 messages/256 KiB still
@@ -143,9 +145,10 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
    repeat pinned real-GGUF download, activation, cancellation, inference,
    cached restart, and bounded shutdown against the final release artifact on
    supported release hardware.
-3. Extend the authenticated built-artifact black box beyond the verified independent daemon, gRPC
-   handshake, and setup-required TUI checkpoint to cover reuse, restart fencing, model progress,
-   inference, and cancellation.
+3. Extend the ConPTY TUI black box beyond the verified independent daemon, gRPC handshake, and
+   setup-required rendering to assert visible response, tool approval, and cancellation interactions
+   with an already-ready real model. Independent gRPC reuse, restart fencing, inference, and
+   cancellation are now covered by the GGUF black box.
 4. Add runtime context pruning/compaction on top of bounded Pi history
    hydration, then validate the 4096-token window with a multi-turn real-GGUF
    scenario.

@@ -38,4 +38,18 @@ describe("real GGUF smoke main guard", () => {
     expect(mocks.makeTemporaryRoot).not.toHaveBeenCalled();
     expect(write).toHaveBeenCalledWith(expect.stringContaining("REAL_GGUF_SMOKE_DISABLED"));
   });
+
+  test("requires F-drive-capable storage configuration before building", async () => {
+    const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    await expect(
+      main(["--confirm-download"], {
+        LYONBROWN_REAL_GGUF_SMOKE: "1",
+      }),
+    ).rejects.toThrow("LYONBROWN_BLACKBOX_ROOT");
+
+    expect(mocks.command).not.toHaveBeenCalled();
+    expect(mocks.makeTemporaryRoot).not.toHaveBeenCalled();
+    expect(write).toHaveBeenCalledWith(expect.stringContaining("LYONBROWN_BLACKBOX_ROOT"));
+  });
 });

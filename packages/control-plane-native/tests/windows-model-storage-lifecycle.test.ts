@@ -7,6 +7,12 @@ import type { NativeModelIdentity } from "@lyonbrown/local-model/composition";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createNativeModelStorageCapability } from "@lyonbrown/control-plane-native/internal/index";
+import {
+  createPrivateChildDirectory,
+  openModelsDirectory,
+} from "@lyonbrown/control-plane-native/internal/windows/model-directory";
+import { createPrivateModelFile } from "@lyonbrown/control-plane-native/internal/windows/model-files";
+import { identityKey } from "@lyonbrown/control-plane-native/internal/windows/model-identity";
 
 const windows = process.platform === "win32";
 const roots: string[] = [];
@@ -162,6 +168,38 @@ describe.runIf(windows)("Windows native model storage lifecycle", () => {
         return Promise.resolve(true);
       }),
     ).rejects.toThrow("model_download_cancelled");
+  });
+
+  it("removes a verified stale staging directory after a successful activation", async () => {
+    const models = await modelsPath();
+    const storage = createNativeModelStorageCapability(models);
+    await storage.withInstalledFile(identity, new AbortController().signal, () =>
+      Promise.resolve(undefined),
+    );
+    const staleDirectory = join(models, `.staging-${identityKey(identity)}-${"a".repeat(32)}`);
+    const directory = openModelsDirectory(models);
+    const staleDirectoryHandle = createPrivateChildDirectory(directory, staleDirectory);
+    const staleFileHandle = createPrivateModelFile(join(staleDirectory, identity.filename));
+    staleFileHandle.close();
+    staleDirectoryHandle.close();
+    directory.close();
+    await writeFile(join(staleDirectory, identity.filename), "abandoned");
+    const staging = await storage.createStagingFile(
+      identity,
+      "operation-after-crash",
+      new AbortController().signal,
+    );
+
+    await staging.withFilePath((filePath) => writeFile(filePath, "replacement"));
+    await staging.activate();
+    try {
+      await expect(
+        readFile(join(models, `model-${identityKey(identity)}.gguf`), "utf8"),
+      ).resolves.toBe("replacement");
+      await expect(rm(staleDirectory)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      await staging.cleanup();
+    }
   });
 
   it("detects models directory replacement across privileged operations", async () => {

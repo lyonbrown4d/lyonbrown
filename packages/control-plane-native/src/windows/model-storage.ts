@@ -104,6 +104,7 @@ export class WindowsModelStorageCapability implements NativeModelStorageCapabili
           directory.canonicalPath,
           `.staging-${identityKey(identity)}-${randomBytes(16).toString("hex")}`,
         );
+        const stagingPrefix = `.staging-${identityKey(identity)}-`;
         stagingDirectory = createPrivateChildDirectory(directory, stagingPath);
         const filePath = child(stagingPath, identity.filename);
         file = createPrivateModelFile(filePath);
@@ -115,6 +116,8 @@ export class WindowsModelStorageCapability implements NativeModelStorageCapabili
           file,
           filePath,
           stagingPath,
+          stagingPrefix,
+          identity.filename,
           child(directory.canonicalPath, installedName(identity)),
           installedName(identity),
           identity.maxBytes,

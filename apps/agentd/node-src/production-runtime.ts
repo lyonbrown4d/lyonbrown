@@ -26,6 +26,7 @@ import {
   type CreateModelAwareRuntimeOptions,
   type ModelAwareRuntime,
 } from "@lyonbrown/agentd/internal/model-aware-runtime";
+import { resolveLocalModelStorageDirectory } from "@lyonbrown/agentd/internal/model-storage-configuration";
 import { agentdProxyEnvironment } from "@lyonbrown/agentd/internal/proxy-environment";
 import { createProductionRuntime } from "@lyonbrown/agentd/internal/production-kernel";
 
@@ -74,7 +75,12 @@ export async function createProductionAgentdRuntime(
     const sessionId = recent[0]?.sessionId ?? context.scopeId;
     decisionService = dependencies.createDecisionService(dependencies.environment);
     modelService = dependencies.createModelService(
-      dependencies.createModelStorage(join(context.dataDirectory, "models")),
+      dependencies.createModelStorage(
+        resolveLocalModelStorageDirectory(
+          dependencies.environment,
+          join(context.dataDirectory, "models"),
+        ),
+      ),
     );
     const runtime = dependencies.createRuntime({
       sessionId,

@@ -49,6 +49,7 @@ export async function waitForDiscovery(
   daemon: ChildProcess,
   exited: Promise<ProcessExit>,
   timeoutMs: number,
+  acceptDescriptor?: (descriptor: DiscoveryDescriptor) => boolean,
 ): Promise<DiscoveryDescriptor> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -61,7 +62,8 @@ export async function waitForDiscovery(
     let directory: SecureRunDirectory | undefined;
     try {
       directory = await openDirectory();
-      return await directory.discovery.read();
+      const descriptor = await directory.discovery.read();
+      if (acceptDescriptor === undefined || acceptDescriptor(descriptor)) return descriptor;
     } catch (error: unknown) {
       const pending =
         error instanceof ControlPlaneError &&

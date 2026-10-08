@@ -1,237 +1,89 @@
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { access, mkdtemp, mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import type { AgentClient, RuntimeSnapshotDto } from "@lyonbrown/agent-client";
-import type { createProductionAgentLauncher } from "@lyonbrown/agent-launch/composition";
-import type { startProductionAgentd } from "@lyonbrown/agentd/composition";
-import type { RunningProductionAgentd } from "@lyonbrown/agentd/composition";
-import type { NativeControlPlaneProvider } from "@lyonbrown/local-control-plane";
+import type { createControlPlaneNativeProvider } from "@lyonbrown/control-plane-native";
+import type { deriveScopedDaemonPaths } from "@lyonbrown/local-control-plane";
 import type { LocalModelDescriptor } from "@lyonbrown/local-model";
+import { config as loadEnvironment } from "dotenv";
 import { $, usePowerShell } from "zx";
 
-import { verifyInstalledModelCache } from "@lyonbrown/workspace/internal/smoke-real-gguf-cache";
+import { runRealGgufSmokeFlow } from "@lyonbrown/workspace/internal/smoke-real-gguf-flow";
+import { parseRealGgufSmokeAuthorization } from "@lyonbrown/workspace/internal/smoke-real-gguf-lib";
+import type { IndependentGgufSmokePort } from "@lyonbrown/workspace/internal/smoke-real-gguf-port";
 import {
-  runRealGgufSmokeFlow,
-  type RealGgufSmokePort,
-  type SmokeSnapshot,
-} from "@lyonbrown/workspace/internal/smoke-real-gguf-flow";
-import {
-  safeSnapshot,
-  SnapshotReporter,
-} from "@lyonbrown/workspace/internal/smoke-real-gguf-report";
+  childEnvironment,
+  removeOwnedRunDirectory,
+  requiredAbsoluteEnvironmentPath,
+} from "@lyonbrown/workspace/internal/real-tui-blackbox-process";
 import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
-import {
-  assertSafeTemporaryRoot,
-  bounded,
-  cleanupTemporaryAfterClose,
-  parseRealGgufSmokeAuthorization,
-  runAllAttemptCleanup,
-} from "@lyonbrown/workspace/internal/smoke-real-gguf-lib";
 
-const FINGERPRINT = "real-gguf-release-smoke-v1";
+const FINGERPRINT = "real-gguf-release-smoke-v2";
 const DEPENDENCY_BUILD_TIMEOUT_MS = 15 * 60 * 1_000;
 const PHASE_TIMEOUT_MS = 120_000;
 const DOWNLOAD_TIMEOUT_MS = 60 * 60_000;
 const CLOSE_TIMEOUT_MS = 30_000;
-const ACTIVE_CLOSE_TIMEOUT_MS = 30_000;
+const require = createRequire(import.meta.url);
 configureZxPlatform(process.platform, usePowerShell);
-
-interface RuntimeModules {
-  readonly createProductionAgentLauncher: typeof createProductionAgentLauncher;
-  readonly startProductionAgentd: typeof startProductionAgentd;
-  readonly trustedLocalModels: readonly LocalModelDescriptor[];
-}
-
-class ProductionSmokePort implements RealGgufSmokePort {
-  private server: RunningProductionAgentd | undefined;
-  private client: AgentClient | undefined;
-  private lastSnapshot: RuntimeSnapshotDto | undefined;
-  private cleanupRemoved = false;
-  private readonly reporter = new SnapshotReporter();
-
-  public constructor(
-    private readonly modules: RuntimeModules,
-    private readonly nativeProvider: NativeControlPlaneProvider,
-    private readonly homeDirectory: string,
-    private readonly workspace: string,
-    private readonly modelsDirectory: string,
-    private readonly scopeId: string,
-    private readonly cleanupRoot: string,
-  ) {}
-
-  public async start(): Promise<void> {
-    this.reporter.stage("server-start");
-    this.server = await this.modules.startProductionAgentd({
-      workspace: this.workspace,
-      homeDirectory: this.homeDirectory,
-      effectiveConfigFingerprint: FINGERPRINT,
-      expectedScopeId: this.scopeId,
-      nativeProvider: this.nativeProvider,
-    });
-    const launcher = this.modules.createProductionAgentLauncher({
-      nativeProvider: this.nativeProvider,
-      workspace: this.workspace,
-      homeDirectory: this.homeDirectory,
-      effectiveConfigFingerprint: FINGERPRINT,
-      client: { name: "real-gguf-release-smoke", version: "1" },
-      agentd: { command: process.execPath },
-      deadlines: {
-        startupMs: PHASE_TIMEOUT_MS,
-        cleanupMs: CLOSE_TIMEOUT_MS,
-        client: { unaryMs: PHASE_TIMEOUT_MS, commandAttempts: 1 },
-      },
-    });
-    const connection = await launcher.connect({ autoStart: false });
-    this.client = connection.client;
-    this.lastSnapshot = connection.snapshot;
-  }
-
-  public async readSnapshot(): Promise<RuntimeSnapshotDto> {
-    const snapshot = await this.requireClient().getSnapshot();
-    this.lastSnapshot = snapshot;
-    this.reporter.snapshot(snapshot);
-    return snapshot;
-  }
-
-  public async startDownload(modelId: string): Promise<void> {
-    this.reporter.stage("download-start");
-    await this.enqueue({ type: "start-model-download", modelId });
-  }
-
-  public async cancelDownload(operationId: string): Promise<void> {
-    this.reporter.stage("download-cancel");
-    await this.enqueue({ type: "cancel-model-download", operationId });
-  }
-
-  public async startTurn(text: string): Promise<void> {
-    this.reporter.stage("turn-start");
-    await this.enqueue({ type: "start-turn", text });
-  }
-
-  public async cancelTurn(): Promise<void> {
-    this.reporter.stage("turn-cancel");
-    await this.enqueue({ type: "cancel-turn" });
-  }
-
-  public async respondApproval(requestId: string): Promise<void> {
-    this.reporter.stage("approval-allow-once", { requestId });
-    await this.enqueue({ type: "respond-approval", requestId, decision: "allow-once" });
-  }
-
-  public async selectModel(selection: SmokeSnapshot["modelSelection"]): Promise<void> {
-    this.reporter.stage("model-select", { kind: selection.kind });
-    await this.enqueue({ type: "select-session-model", selection });
-  }
-
-  public async verifyWorkspaceFile(path: string, expectedContent: string): Promise<void> {
-    const content = await readFile(join(this.workspace, path), "utf8");
-    if (content !== expectedContent) throw new Error("REAL_GGUF_WORKSPACE_TOOL_OUTPUT_INVALID");
-  }
-
-  public async closeServer(): Promise<void> {
-    const client = this.client;
-    const server = this.server;
-    await runAllAttemptCleanup([
-      ...(server === undefined
-        ? []
-        : [
-            async () => {
-              await server.close();
-              if (this.server === server) this.server = undefined;
-            },
-          ]),
-      ...(client === undefined
-        ? []
-        : [
-            async () => {
-              await client.close();
-              if (this.client === client) this.client = undefined;
-            },
-          ]),
-    ]);
-  }
-
-  public async restartServer(): Promise<void> {
-    await this.start();
-  }
-
-  public verifyInstalledCache(expectedSha256: string): Promise<void> {
-    return verifyInstalledModelCache(this.modelsDirectory, expectedSha256);
-  }
-
-  public cleanup(): Promise<void> {
-    return cleanupTemporaryAfterClose(
-      () => bounded("final-server-close", CLOSE_TIMEOUT_MS, this.closeServer()),
-      () => bounded("temporary-directory-cleanup", CLOSE_TIMEOUT_MS, this.removeTemporaryRoot()),
-    );
-  }
-
-  public safeLastSnapshot(): unknown {
-    return safeSnapshot(this.lastSnapshot);
-  }
-
-  private requireClient(): AgentClient {
-    if (this.client === undefined) throw new Error("REAL_GGUF_CLIENT_UNAVAILABLE");
-    return this.client;
-  }
-
-  private async enqueue(command: Parameters<AgentClient["enqueue"]>[0]): Promise<void> {
-    const receipt = await this.requireClient().enqueue(command);
-    if (!acceptedReceipt(receipt)) throw new Error("REAL_GGUF_COMMAND_NOT_ACCEPTED");
-  }
-
-  private async removeTemporaryRoot(): Promise<void> {
-    if (this.cleanupRemoved) return;
-    await assertSafeTemporaryRoot(this.cleanupRoot);
-    await rm(this.cleanupRoot, { recursive: true, force: true });
-    this.cleanupRemoved = true;
-  }
-}
 
 export async function main(
   arguments_: readonly string[] = process.argv.slice(2),
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): Promise<void> {
+  let scratchRoot: string | undefined;
   let temporaryRoot: string | undefined;
-  let port: ProductionSmokePort | undefined;
+  let port: IndependentGgufSmokePort | undefined;
   let failure: unknown;
   try {
     parseRealGgufSmokeAuthorization(environment, arguments_);
+    scratchRoot = requiredAbsoluteEnvironmentPath(environment, "LYONBROWN_BLACKBOX_ROOT");
+    const modelsDirectory = requiredAbsoluteEnvironmentPath(
+      environment,
+      "LYONBROWN_LOCAL_MODEL_ROOT",
+    );
     await buildRuntimeDependencies();
+    const agentdEntry = require.resolve("@lyonbrown/agentd/daemon");
+    await access(agentdEntry);
     const runtimeModules = await loadRuntimeModules();
-    temporaryRoot = await mkdtemp(join(tmpdir(), "lyonbrown-real-gguf-"));
+    await mkdir(scratchRoot, { recursive: true });
+    temporaryRoot = await mkdtemp(join(scratchRoot, "real-gguf-"));
     const homeDirectory = join(temporaryRoot, "home");
     const workspace = join(temporaryRoot, "workspace");
     await Promise.all([mkdir(homeDirectory), mkdir(workspace)]);
-    const providerModule = await import("@lyonbrown/control-plane-native");
-    const controlPlane = await import("@lyonbrown/local-control-plane");
-    const provider = providerModule.createControlPlaneNativeProvider();
-    const paths = await controlPlane.deriveScopedDaemonPaths(
+    const provider = runtimeModules.createControlPlaneNativeProvider();
+    const paths = await runtimeModules.deriveScopedDaemonPaths(
       homeDirectory,
       workspace,
       FINGERPRINT,
       provider,
     );
-    port = new ProductionSmokePort(
-      runtimeModules,
-      provider,
+    const environmentForDaemon = childEnvironment({ ...environment }, homeDirectory);
+    environmentForDaemon.LYONBROWN_LOCAL_MODEL_ROOT = modelsDirectory;
+    port = new runtimeModules.IndependentGgufSmokePort({
+      agentdEntry,
+      environment: environmentForDaemon,
+      fingerprint: FINGERPRINT,
       homeDirectory,
-      workspace,
-      join(paths.dataDirectory, "models"),
-      paths.scopeId,
-      temporaryRoot,
-    );
+      modelsDirectory,
+      nativeProvider: provider,
+      runDirectory: paths.runDirectory,
+      scopeId: paths.scopeId,
+      scratchRoot,
+      cleanupRoot: temporaryRoot,
+      workspace: paths.canonicalWorkspace,
+      startupTimeoutMs: PHASE_TIMEOUT_MS,
+      closeTimeoutMs: CLOSE_TIMEOUT_MS,
+    });
     await port.start();
     await runRealGgufSmokeFlow(port, {
       phaseTimeoutMs: PHASE_TIMEOUT_MS,
       downloadTimeoutMs: DOWNLOAD_TIMEOUT_MS,
       pollIntervalMs: 100,
       cancelAfterBytes: 1024n * 1024n,
-      closeTimeoutMs: ACTIVE_CLOSE_TIMEOUT_MS,
+      closeTimeoutMs: CLOSE_TIMEOUT_MS,
       trustedModelDigests: Object.fromEntries(
-        runtimeModules.trustedLocalModels.map((model) => [model.id, model.sha256]),
+        runtimeModules.trustedModels.map((model) => [model.id, model.sha256]),
       ),
     });
   } catch (error: unknown) {
@@ -239,7 +91,9 @@ export async function main(
   }
   try {
     if (port !== undefined) await port.cleanup();
-    else if (temporaryRoot !== undefined) await removeTemporaryRoot(temporaryRoot);
+    else if (scratchRoot !== undefined && temporaryRoot !== undefined) {
+      await removeOwnedRunDirectory(scratchRoot, temporaryRoot);
+    }
   } catch (cleanupError: unknown) {
     failure =
       failure === undefined
@@ -254,11 +108,18 @@ export async function main(
         code: failure instanceof Error ? failure.message : "REAL_GGUF_SMOKE_FAILED",
         errors: smokeFailureMessages(failure),
         snapshot: port?.safeLastSnapshot() ?? null,
+        daemonOutput: port?.safeDaemonOutput() ?? "",
       })}\n`,
     );
     throw failure instanceof Error ? failure : new Error("REAL_GGUF_SMOKE_FAILED");
   }
-  process.stdout.write("REAL_GGUF_SMOKE_OK\n");
+  process.stdout.write(
+    `${JSON.stringify({
+      marker: "REAL_GGUF_SMOKE_OK",
+      transport: "independent-agentd-grpc",
+      modelsDirectory: requiredAbsoluteEnvironmentPath(environment, "LYONBROWN_LOCAL_MODEL_ROOT"),
+    })}\n`,
+  );
 }
 
 function smokeFailureMessages(value: unknown): readonly string[] {
@@ -275,12 +136,6 @@ function smokeFailureMessages(value: unknown): readonly string[] {
   return messages;
 }
 
-function acceptedReceipt(value: unknown): boolean {
-  return (
-    typeof value === "object" && value !== null && "accepted" in value && value.accepted === true
-  );
-}
-
 async function buildRuntimeDependencies(): Promise<void> {
   await $({
     stdio: "inherit",
@@ -288,27 +143,43 @@ async function buildRuntimeDependencies(): Promise<void> {
   })`pnpm dependencies:build`;
 }
 
-async function removeTemporaryRoot(path: string): Promise<void> {
-  await assertSafeTemporaryRoot(path);
-  await rm(path, { recursive: true, force: true });
+interface RuntimeModules {
+  readonly IndependentGgufSmokePort: typeof IndependentGgufSmokePort;
+  readonly createControlPlaneNativeProvider: typeof createControlPlaneNativeProvider;
+  readonly deriveScopedDaemonPaths: typeof deriveScopedDaemonPaths;
+  readonly trustedModels: readonly LocalModelDescriptor[];
 }
 
 async function loadRuntimeModules(): Promise<RuntimeModules> {
-  const [launcher, agentd, localModel] = await Promise.all([
-    import("@lyonbrown/agent-launch/composition"),
-    import("@lyonbrown/agentd/composition"),
+  const [port, native, controlPlane, localModel] = await Promise.all([
+    import("@lyonbrown/workspace/internal/smoke-real-gguf-port"),
+    import("@lyonbrown/control-plane-native"),
+    import("@lyonbrown/local-control-plane"),
     import("@lyonbrown/local-model"),
   ]);
   return {
-    createProductionAgentLauncher: launcher.createProductionAgentLauncher,
-    startProductionAgentd: agentd.startProductionAgentd,
-    trustedLocalModels: localModel.TRUSTED_LOCAL_MODELS,
+    IndependentGgufSmokePort: port.IndependentGgufSmokePort,
+    createControlPlaneNativeProvider: native.createControlPlaneNativeProvider,
+    deriveScopedDaemonPaths: controlPlane.deriveScopedDaemonPaths,
+    trustedModels: localModel.TRUSTED_LOCAL_MODELS,
   };
 }
 
 const entryUrl = process.argv[1] === undefined ? undefined : pathToFileURL(process.argv[1]).href;
 if (entryUrl === import.meta.url) {
-  await main().catch(() => {
-    process.exitCode = 1;
-  });
+  loadEnvironment({ path: resolve(".env.local"), override: false, quiet: true });
+  await main().then(
+    () => {
+      process.stdout.write("", () => process.exit(0));
+    },
+    (error: unknown) => {
+      process.stderr.write(`${JSON.stringify({ entryFailure: safeErrorMessage(error) })}\n`, () =>
+        process.exit(1),
+      );
+    },
+  );
+}
+
+function safeErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "REAL_GGUF_UNKNOWN_FAILURE";
 }

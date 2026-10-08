@@ -93,4 +93,39 @@ describe("real TUI black-box evidence", () => {
     expect(read).toHaveBeenCalledTimes(2);
     expect(close).toHaveBeenCalledTimes(2);
   });
+
+  it("waits for a restarted daemon to replace the previous epoch descriptor", async () => {
+    const previous = createDiscoveryDescriptor({
+      endpoint: "127.0.0.1:43123",
+      pid: 41,
+      scopeId: "a".repeat(64),
+    });
+    const replacement = createDiscoveryDescriptor({
+      endpoint: "127.0.0.1:43124",
+      pid: 42,
+      scopeId: "a".repeat(64),
+    });
+    const read = vi
+      .fn<() => Promise<typeof replacement>>()
+      .mockResolvedValueOnce(previous)
+      .mockResolvedValue(replacement);
+    const close = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const directory = {
+      discovery: { read },
+      close,
+    } as unknown as SecureRunDirectory;
+    const daemon = { pid: 42, exitCode: null, signalCode: null } as ChildProcess;
+
+    await expect(
+      waitForDiscovery(
+        () => Promise.resolve(directory),
+        daemon,
+        new Promise(() => undefined),
+        1_000,
+        (descriptor) => descriptor.pid === daemon.pid,
+      ),
+    ).resolves.toBe(replacement);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(close).toHaveBeenCalledTimes(2);
+  });
 });

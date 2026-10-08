@@ -104,4 +104,28 @@ run_completed`，且每次只启动一次 Pi；
   瞬时 `read_descriptor` 冲突做有界重试。
 
 这覆盖了独立 daemon、真实传输协议和真实终端渲染，但尚未覆盖下载约 1 GiB 聊天模型后的
-Pi 回答文本、工具审批和取消流程；这些继续属于后续进程级黑盒场景。
+Pi 回答文本、工具审批和取消流程；这些由下面独立的真实 GGUF 场景覆盖。
+
+## 独立 agentd 的真实 GGUF 全流程
+
+聊天模型持久根目录通过 `LYONBROWN_LOCAL_MODEL_ROOT` 注入；缺省仍使用 workspace scoped
+目录，但本机黑盒通过未提交的 `.env.local` 指向 `F:\Lyonbrown\models\chat`，没有把盘符
+写死进产品代码或测试 fixture。`pnpm smoke:real-gguf -- --confirm-download` 还要求显式设置
+`LYONBROWN_REAL_GGUF_SMOKE=1`，避免普通测试意外触发网络和大文件下载。
+
+2026-10-08 的进程级运行最终返回 `REAL_GGUF_SMOKE_OK`：
+
+- 硬件策略选择固定 revision 与 SHA-256 的 `Qwen3 0.6B Q8_0`，实际下载
+  `639,446,688` 字节到 F 盘；测试先真实取消一次，再重试、校验并原子激活；
+- 验收器从构建产物启动独立 `agentd`，通过受保护 discovery 建立认证 gRPC，而不是把
+  daemon composition 嵌入测试进程；
+- 完成真实短回答、`write` 工具调用、显式 `allow-once` 审批、精确文件内容验证、长输出
+  流式取消和取消后的再次推理；
+- 关闭第一个 daemon 后验证已安装文件摘要，再启动新的 PID/server epoch；discovery 轮询
+  会忽略旧 descriptor，等待新 PID 与 scope 后完成缓存复用推理；
+- 在第二个 daemon 活跃推理期间执行有界关闭，最后清理 F 盘单次 scratch，不删除持久模型；
+- Windows native storage 会在成功激活事务内给当前 staging 设置 delete-on-close，并在
+  私有 ACL、非 reparse 和严格名称校验后有界清理同模型的崩溃残留 staging。
+
+这证明开发机上的独立 C/S 运行路径可用，但还不是归档、签名、安装器或干净机器上的最终
+release artifact 证据。

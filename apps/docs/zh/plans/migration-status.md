@@ -1,6 +1,6 @@
 # 迁移进度
 
-> 已验证检查点：2026-10-07
+> 已验证检查点：2026-10-08
 >
 > 后续开发直接在 `main` 上继续。本页会区分“已经实现并有测试覆盖”和“发布验证”，
 > 不表示产品已经可以发布。
@@ -20,7 +20,8 @@
   Rust TUI 快照均已删除。受跟踪仓库中不再包含产品 `.rs`、`Cargo.toml` 或
   `Cargo.lock` 文件。
 - Windows 原生模型存储已经覆盖私有 ACL、reparse point 与文件身份校验、安装锁、
-  有界 staging、原子激活和 installed-file anchoring。
+  有界 staging、原子激活和 installed-file anchoring；成功激活还会安全清理同模型的
+  崩溃残留 staging。
 - 模型下载使用 Node 24 内建 `fetch` 流式写入原生存储提供的同文件系统 staging；请求
   与写入共用取消信号，并在收到响应 headers 前执行有限次数的瞬时故障重试。
 - Protocol `.proto` schema 与版本化 wire fixture 继续作为受跟踪的契约源；生成的
@@ -67,10 +68,11 @@
   `source=spawned`、认证 health 为 `serving`、模型设置为 `required`、
   `allowedActions=[download]`、投影 revision 为 `2`。全程没有自动生成 GGUF，结束后
   临时 daemon 与目录均已清理。
-- Windows 开发机上的生产 composition 真实 GGUF smoke 已于 2026-10-07 通过。脚本从
+- Windows 开发机上的独立 `agentd` 真实 GGUF smoke 已于 2026-10-08 通过。脚本从
   可信目录读取实际硬件选择及固定摘要，验证了不自动下载、显式取消/重试、进度、校验、
   激活、pinned/auto 选择、真实回答和 usage、`write` 调用、审批与准确落盘、长 turn 取消、
-  缓存重启以及 30 秒预算内关闭。脚本最终输出 `REAL_GGUF_SMOKE_OK`，并清理临时缓存。
+  新 PID/server epoch 的缓存重启以及 30 秒预算内关闭。模型持久保存在 dotenv 注入的
+  `F:\Lyonbrown\models\chat`，脚本最终输出 `REAL_GGUF_SMOKE_OK`，并只清理单次 scratch。
 - daemon 重启现在会为已完成且无歧义的 Session 重建 Pi 历史，包括工具调用、工具结果
   与会话级审批策略。运行中、失败、取消、含 steering、待审批、未决结果或超过
   128 条消息/256 KiB 的历史仍会 fail closed 并轮换，持久事件继续保留。
@@ -106,8 +108,9 @@ gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼�
 2. 决策并实现 CPU/Vulkan/CUDA 制品变体、归档/checksum/SBOM/签名和干净机器安装器，
    并基于最终 release artifact 在支持的发布硬件上重复固定真实 GGUF 的下载、激活、
    取消、推理、缓存重启与有界关闭验证。
-3. 将构建产物认证黑盒从已验证的独立 daemon、gRPC handshake、setup-required TUI 渲染
-   检查点扩展到复用、重启 fencing、模型进度、推理与取消。
+3. 将 ConPTY TUI 黑盒从已验证的独立 daemon、gRPC handshake 与 setup-required 渲染，
+   扩展到在真实模型已就绪时通过终端输入完成回答、工具审批和取消的可视交互断言；底层
+   gRPC 复用、重启 fencing、推理与取消已经由独立 GGUF 黑盒覆盖。
 4. 在已落地的有界 Pi history hydration 基础上实现运行时 context pruning/compaction，
    并用多 turn 真实 GGUF 场景验证 4096-token 窗口。
 5. 在现有窄化文件工具与审批基础上增加 MCP 与 Secret；各能力独立验证前继续

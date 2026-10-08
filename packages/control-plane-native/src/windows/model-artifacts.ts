@@ -28,6 +28,7 @@ import {
   releaseQuietly,
   storageFailure,
 } from "@lyonbrown/control-plane-native/internal/windows/model-storage-shared";
+import { cleanupStaleStagingDirectories } from "@lyonbrown/control-plane-native/internal/windows/model-staging-cleanup";
 import { NativeFailure } from "@lyonbrown/control-plane-native/internal/result";
 
 export class WindowsInstallLockAnchor implements NativeInstallLockAnchor {
@@ -75,6 +76,7 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
   #callbackActive = false;
   #lock: SharedFileLock | undefined;
   #cleanupPromise: Promise<void> | undefined;
+  #stagingDeletePending = false;
 
   public constructor(
     private readonly directory: ModelDirectoryLease,
@@ -82,6 +84,8 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
     private file: OwnedHandle | undefined,
     private readonly filePath: string,
     private readonly stagingPath: string,
+    private readonly stagingPrefix: string,
+    private readonly modelFilename: string,
     private readonly destinationPath: string,
     private readonly destinationName: string,
     private readonly maximumBytes: number,
@@ -139,6 +143,13 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
       this.#replaceAnchor(installed, lockShared(installed));
       this.#assertInstalledPath();
       this.#state = "activated";
+      this.#scheduleStagingRemoval();
+      cleanupStaleStagingDirectories(
+        this.directory,
+        this.stagingPath,
+        this.stagingPrefix,
+        this.modelFilename,
+      );
     } catch (error) {
       throw storageFailure(error);
     }
@@ -166,10 +177,10 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
         this.file?.close();
       },
       () => {
-        deleteStagedModelIfPresent(this.filePath);
+        if (!activated) deleteStagedModelIfPresent(this.filePath);
       },
       () => {
-        disposeOnClose(this.stagingDirectory);
+        this.#scheduleStagingRemoval();
       },
       () => {
         this.stagingDirectory.close();
@@ -191,6 +202,12 @@ export class WindowsModelStagingFile implements NativeModelStagingFile {
   #seal(): void {
     this.#lock = lockShared(this.#file());
     this.#state = "sealed";
+  }
+
+  #scheduleStagingRemoval(): void {
+    if (this.#stagingDeletePending) return;
+    disposeOnClose(this.stagingDirectory);
+    this.#stagingDeletePending = true;
   }
 
   #validate(): void {

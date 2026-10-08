@@ -1,10 +1,11 @@
 import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import type { EventStore, PathSecurityVerifier, SessionMetadata } from "@lyonbrown/event-store";
 import type { LocalModelService } from "@lyonbrown/local-model";
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
+import { parse, populate } from "dotenv";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ModelAwareRuntime } from "@lyonbrown/agentd/internal/model-aware-runtime";
@@ -118,6 +119,48 @@ describe("production runtime composition", () => {
     expect(state.decisionDispose).toHaveBeenCalledOnce();
     expect(state.releaseProxyEnvironment).toHaveBeenCalledOnce();
   });
+
+  it("uses an absolute local-model root injected through dotenv", async () => {
+    const state = dependencies();
+    const configuredRoot = resolve(import.meta.dirname, "fixtures", "local models");
+    const environment: NodeJS.ProcessEnv = {};
+    populate(
+      environment,
+      parse(`LYONBROWN_LOCAL_MODEL_ROOT=${configuredRoot.replaceAll("\\", "/")}`),
+      { override: false },
+    );
+    const values: ProductionRuntimeDependencies = {
+      ...state.values,
+      environment,
+    };
+
+    const runtime = await createProductionAgentdRuntime(CONTEXT, values);
+
+    expect(values.createModelStorage).toHaveBeenCalledWith(configuredRoot);
+    await runtime.close();
+  });
+
+  it.each(["relative/models", " ", `invalid\0path`, "F:\\models\\line\nbreak"])(
+    "rejects an invalid configured local-model root %j",
+    async (configuredRoot) => {
+      const state = dependencies();
+      const values: ProductionRuntimeDependencies = {
+        ...state.values,
+        environment: { LYONBROWN_LOCAL_MODEL_ROOT: configuredRoot },
+      };
+
+      const failure = await createProductionAgentdRuntime(CONTEXT, values).catch(
+        (error: unknown) => error,
+      );
+
+      expect(failure).toBeInstanceOf(AggregateError);
+      expect((failure as AggregateError).errors).toEqual([
+        expect.objectContaining({ message: "LOCAL_MODEL_ROOT_INVALID" }),
+      ]);
+      expect(state.values.createModelStorage).not.toHaveBeenCalled();
+      expect(state.storeClose).toHaveBeenCalledOnce();
+    },
+  );
 
   it("rolls back the store when later composition fails", async () => {
     const state = dependencies();

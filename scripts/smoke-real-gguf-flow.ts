@@ -1,20 +1,11 @@
+import { bounded, errorFromUnknown } from "@lyonbrown/workspace/internal/smoke-real-gguf-lib";
 import {
-  assertProgress,
-  bounded,
-  errorFromUnknown,
-  waitForCondition,
-  type ProgressState,
-} from "@lyonbrown/workspace/internal/smoke-real-gguf-lib";
-import {
-  assertSmokeSnapshotHealthy,
-  hasProgress,
-  isActiveDownload,
   isReady,
-  isSetup,
   requireManagedModel,
-  requireOperationId,
   requireSessionId,
 } from "@lyonbrown/workspace/internal/smoke-real-gguf-assertions";
+import { prepareRealGgufModel } from "@lyonbrown/workspace/internal/smoke-real-gguf-setup";
+import { waitSmokeSnapshot } from "@lyonbrown/workspace/internal/smoke-real-gguf-wait";
 
 export interface SmokeSnapshot {
   readonly revision: bigint;
@@ -96,72 +87,9 @@ export async function runRealGgufSmokeFlow(
 ): Promise<void> {
   let primaryFailure: unknown;
   try {
-    const initial = await waitSnapshot(port, options, "setup-required", (snapshot) =>
-      isSetup(snapshot, "required"),
-    );
-    const model = requireManagedModel(initial);
-    const expectedSha256 = options.trustedModelDigests[model.id];
-    if (expectedSha256 === undefined || model.sha256 !== expectedSha256) {
-      throw new Error("REAL_GGUF_CATALOG_DIGEST_MISMATCH");
-    }
-    const initialSetup = initial.modelSetup;
-    if (
-      initialSetup?.operationId !== null ||
-      initialSetup.downloadedBytes !== 0n ||
-      initialSetup.failure !== null ||
-      !initialSetup.allowedActions.includes("download")
-    ) {
-      throw new Error("REAL_GGUF_UNEXPECTED_AUTO_DOWNLOAD");
-    }
+    const { modelId, expectedSha256, ready } = await prepareRealGgufModel(port, options);
 
-    await port.startDownload(model.id);
-    const firstProgress = await waitSnapshot(port, options, "first-download-progress", (snapshot) =>
-      hasProgress(snapshot, options.cancelAfterBytes),
-    );
-    const firstOperation = requireOperationId(firstProgress);
-    await port.cancelDownload(firstOperation);
-    await waitSnapshot(port, options, "download-cancelled", (snapshot) => {
-      const setup = snapshot.modelSetup;
-      return (
-        setup?.phase === "cancelled" &&
-        setup.operationId === firstOperation &&
-        setup.allowedActions.includes("retry")
-      );
-    });
-
-    await port.startDownload(model.id);
-    let progress: ProgressState | undefined;
-    let secondOperation = "";
-    const ready = await waitSnapshot(
-      port,
-      { ...options, phaseTimeoutMs: options.downloadTimeoutMs },
-      "download-ready",
-      isReady,
-      (snapshot) => {
-        const setup = snapshot.modelSetup;
-        if (!setup?.operationId || !isActiveDownload(setup)) return;
-        if (secondOperation.length === 0) {
-          secondOperation = setup.operationId;
-          if (secondOperation === firstOperation)
-            throw new Error("REAL_GGUF_OPERATION_NOT_RENEWED");
-          progress = {
-            operationId: secondOperation,
-            downloadedBytes: 0n,
-            totalBytes: null,
-            maxBytes: model.maxBytes,
-          };
-        }
-        if (setup.operationId !== secondOperation || progress === undefined) return;
-        if (setup.phase === "downloading") {
-          progress = assertProgress(progress, setup.downloadedBytes, setup.totalBytes);
-        }
-      },
-    );
-    if (secondOperation.length === 0 || progress === undefined || progress.downloadedBytes <= 0n) {
-      throw new Error("REAL_GGUF_PROGRESS_NOT_OBSERVED");
-    }
-
-    await verifyModelSelection(port, options, model.id);
+    await verifyModelSelection(port, options, modelId);
     await completeShortTurn(port, options);
     await completeApprovedWorkspaceWrite(port, options);
     await cancelStreamingTurn(port, options);
@@ -174,7 +102,7 @@ export async function runRealGgufSmokeFlow(
     await port.verifyInstalledCache(expectedSha256);
 
     await port.restartServer();
-    await waitSnapshot(port, options, "cached-restart-ready", (snapshot) => {
+    await waitSmokeSnapshot(port, options, "cached-restart-ready", (snapshot) => {
       return (
         isReady(snapshot) &&
         snapshot.turns.length === 0 &&
@@ -210,14 +138,14 @@ async function verifyModelSelection(
   modelId: string,
 ): Promise<void> {
   await port.selectModel({ kind: "pinned", provider: "local", model: modelId });
-  await waitSnapshot(port, options, "model-pinned", (snapshot) => {
+  await waitSmokeSnapshot(port, options, "model-pinned", (snapshot) => {
     const selection = snapshot.modelSelection;
     return (
       selection.kind === "pinned" && selection.provider === "local" && selection.model === modelId
     );
   });
   await port.selectModel({ kind: "auto" });
-  await waitSnapshot(
+  await waitSmokeSnapshot(
     port,
     options,
     "model-auto",
@@ -231,7 +159,7 @@ async function completeApprovedWorkspaceWrite(
 ): Promise<void> {
   const baseline = (await port.readSnapshot()).turns.length;
   await port.startTurn(TOOL_PROMPT);
-  const pending = await waitSnapshot(port, options, "tool-approval", (snapshot) => {
+  const pending = await waitSmokeSnapshot(port, options, "tool-approval", (snapshot) => {
     return snapshot.phase === "awaiting-approval" && snapshot.pendingApproval?.toolName === "write";
   });
   const approval = pending.pendingApproval;
@@ -239,7 +167,7 @@ async function completeApprovedWorkspaceWrite(
   const requestId = approval.requestId;
   assertExpectedWriteArguments(approval.argumentsJson);
   await port.respondApproval(requestId);
-  await waitSnapshot(port, options, "approved-tool-complete", (snapshot) => {
+  await waitSmokeSnapshot(port, options, "approved-tool-complete", (snapshot) => {
     const turn = snapshot.turns.at(-1);
     return (
       snapshot.phase === "completed" &&
@@ -291,7 +219,7 @@ async function completeShortTurn(
 ): Promise<SmokeSnapshot> {
   const baseline = (await port.readSnapshot()).turns.length;
   await port.startTurn(SHORT_PROMPT);
-  const snapshot = await waitSnapshot(port, options, "short-turn", (value) => {
+  const snapshot = await waitSmokeSnapshot(port, options, "short-turn", (value) => {
     const turn = value.turns.at(-1);
     return (
       value.phase === "completed" &&
@@ -324,7 +252,7 @@ async function cancelStreamingTurn(
 ): Promise<void> {
   const baseline = await startStreamingTurn(port, options);
   await port.cancelTurn();
-  await waitSnapshot(port, options, "turn-cancelled", (snapshot) => {
+  await waitSmokeSnapshot(port, options, "turn-cancelled", (snapshot) => {
     const turn = snapshot.turns.at(-1);
     return (
       snapshot.phase === "ready" &&
@@ -341,7 +269,7 @@ async function startStreamingTurn(
 ): Promise<number> {
   const baseline = (await port.readSnapshot()).turns.length;
   await port.startTurn(LONG_PROMPT);
-  await waitSnapshot(port, options, "turn-streaming", (snapshot) => {
+  await waitSmokeSnapshot(port, options, "turn-streaming", (snapshot) => {
     const turn = snapshot.turns.at(-1);
     return (
       (snapshot.phase === "preparing" || snapshot.phase === "streaming") &&
@@ -352,25 +280,4 @@ async function startStreamingTurn(
     );
   });
   return baseline;
-}
-
-function waitSnapshot(
-  port: RealGgufSmokePort,
-  options: RealGgufSmokeFlowOptions,
-  label: string,
-  accept: (snapshot: SmokeSnapshot) => boolean,
-  observe?: (snapshot: SmokeSnapshot) => void,
-): Promise<SmokeSnapshot> {
-  return waitForCondition({
-    label,
-    timeoutMs: options.phaseTimeoutMs,
-    intervalMs: options.pollIntervalMs,
-    read: async () => {
-      const snapshot = await port.readSnapshot();
-      assertSmokeSnapshotHealthy(snapshot);
-      return snapshot;
-    },
-    accept,
-    ...(observe === undefined ? {} : { observe }),
-  });
 }

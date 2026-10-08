@@ -163,6 +163,10 @@ export function createPrivateChildDirectory(
   path: string,
 ): OwnedHandle {
   createPrivateDirectory(path);
+  return openPrivateChildDirectory(parent, path);
+}
+
+export function openPrivateChildDirectory(parent: ModelDirectoryLease, path: string): OwnedHandle {
   const handle = createFile(
     path,
     ACCESS.genericRead | ACCESS.genericWrite | ACCESS.delete | ACCESS.readControl,

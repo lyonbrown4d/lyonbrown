@@ -126,5 +126,35 @@ The 2026-10-08 local run returned `REAL_AGENTD_GRPC_TUI_SMOKE_OK`:
   bounded retry for transient Windows `read_descriptor` conflicts during atomic publication.
 
 This covers an independent daemon, the real transport, and real terminal rendering. It does not yet
-cover Pi response text, tool approval, or cancellation after downloading the roughly 1 GiB chat
-model; those remain follow-up process-level black-box scenarios.
+cover Pi response text, tool approval, or cancellation by itself; the separate real-GGUF scenario
+below covers those behaviors.
+
+## Real GGUF flow through an independent agentd
+
+The persistent chat-model root is injected through `LYONBROWN_LOCAL_MODEL_ROOT`. The default remains
+workspace scoped, while the local black box uses an uncommitted `.env.local` value of
+`F:\Lyonbrown\models\chat`; neither product code nor test fixtures hard-code a drive. Running
+`pnpm smoke:real-gguf -- --confirm-download` also requires the explicit
+`LYONBROWN_REAL_GGUF_SMOKE=1` gate, preventing ordinary tests from starting network or large-file
+work.
+
+The 2026-10-08 process-level run returned `REAL_GGUF_SMOKE_OK`:
+
+- hardware policy selected the pinned-revision, pinned-SHA-256 `Qwen3 0.6B Q8_0` and downloaded
+  `639,446,688` bytes to the F drive; the smoke performed a real cancel before retry, verification,
+  and atomic activation;
+- the harness started a built `agentd` as an independent process and connected through protected
+  discovery and authenticated gRPC instead of embedding daemon composition;
+- it completed a real short answer, a `write` tool call, explicit `allow-once` approval, exact file
+  verification, streaming cancellation of a long answer, and another inference after cancellation;
+- after closing the first daemon and verifying the installed digest, it started a new PID/server
+  epoch; discovery polling ignored the old descriptor and waited for the new PID and scope before
+  cached-model inference;
+- it performed bounded shutdown while the second daemon had active inference, removed only the
+  per-run F-drive scratch, and retained the persistent verified model;
+- Windows native storage now marks the current staging directory delete-on-close inside successful
+  activation and performs bounded cleanup of same-model crash residue only after private-ACL,
+  non-reparse, and strict-name verification.
+
+This is development-machine evidence for the independent C/S path, not final archive, signing,
+installer, or clean-machine release-artifact evidence.
