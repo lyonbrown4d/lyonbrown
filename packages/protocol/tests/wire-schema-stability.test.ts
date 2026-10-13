@@ -95,4 +95,27 @@ describe("wire schema stability", () => {
       MODEL_RECOMMENDATION_REASON_CONSERVATIVE_FALLBACK: 3,
     });
   });
+  it("keeps decision installation purpose and snapshot tags separate from chat", () => {
+    expect(root.lookupType("lyonbrown.agent.v1.StartModelDownloadRequest").fields.purpose?.id).toBe(
+      3,
+    );
+    expect(
+      root.lookupType("lyonbrown.agent.v1.CancelModelDownloadRequest").fields.purpose?.id,
+    ).toBe(3);
+    expect(root.lookupType("lyonbrown.agent.v1.RuntimeSnapshot").fields.decision_model?.id).toBe(
+      14,
+    );
+    expect(root.lookupEnum("lyonbrown.agent.v1.ModelPurpose").values).toEqual({
+      MODEL_PURPOSE_UNSPECIFIED: 0,
+      MODEL_PURPOSE_CHAT: 1,
+      MODEL_PURPOSE_DECISION: 2,
+    });
+    expect(
+      root.lookupType("lyonbrown.agent.v1.DecisionModelSnapshot").fields.advisory_only?.id,
+    ).toBe(10);
+    expect(
+      root.lookupEnum("lyonbrown.agent.v1.DecisionModelPhase").values
+        .DECISION_MODEL_PHASE_CONFIGURED,
+    ).toBe(7);
+  });
 });

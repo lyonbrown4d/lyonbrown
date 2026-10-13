@@ -25,6 +25,7 @@ import {
   HealthResponse,
   HealthStatus,
   PROTOCOL_VERSION,
+  ModelPurpose,
   UnsupportedCommand,
   type AgentServiceServer,
   type RequestMetadata,
@@ -205,18 +206,28 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
     }),
     startModelDownload: unary((request: StartModelDownloadRequest) => {
       requireBoundedText("model_id", request.modelId, 128);
+      const purpose = modelPurpose(request.purpose);
       return execute(
         request.metadata,
-        { kind: "start-model-download", modelId: request.modelId },
-        commandFingerprint("start_model_download", [request.modelId]),
+        {
+          kind: "start-model-download",
+          modelId: request.modelId,
+          ...(purpose === "decision" ? { purpose } : {}),
+        },
+        commandFingerprint("start_model_download", [request.modelId, purpose]),
       );
     }),
     cancelModelDownload: unary((request: CancelModelDownloadRequest) => {
       requireBoundedText("operation_id", request.operationId, 128);
+      const purpose = modelPurpose(request.purpose);
       return execute(
         request.metadata,
-        { kind: "cancel-model-download", operationId: request.operationId },
-        commandFingerprint("cancel_model_download", [request.operationId]),
+        {
+          kind: "cancel-model-download",
+          operationId: request.operationId,
+          ...(purpose === "decision" ? { purpose } : {}),
+        },
+        commandFingerprint("cancel_model_download", [request.operationId, purpose]),
       );
     }),
     getSnapshot: unary(async (request: GetSnapshotRequest): Promise<RuntimeSnapshot> => {
@@ -238,6 +249,13 @@ export function createAgentService(options: CreateAgentServiceOptions): AgentSer
       ).catch((error: unknown) => call.destroy(internalStatus(error)));
     },
   };
+}
+
+function modelPurpose(value: ModelPurpose): "chat" | "decision" {
+  if (value === ModelPurpose.MODEL_PURPOSE_UNSPECIFIED || value === ModelPurpose.MODEL_PURPOSE_CHAT)
+    return "chat";
+  if (value === ModelPurpose.MODEL_PURPOSE_DECISION) return "decision";
+  throw trustedStatus(status.INVALID_ARGUMENT, "model purpose is invalid");
 }
 
 function runtimeModelSelection(

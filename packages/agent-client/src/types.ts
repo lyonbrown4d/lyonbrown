@@ -1,4 +1,6 @@
 import type { EpochBinding } from "@lyonbrown/local-control-plane";
+import type { DecisionModelDto } from "@lyonbrown/agent-client/internal/decision-types";
+export type { DecisionModelDto } from "@lyonbrown/agent-client/internal/decision-types";
 
 export type ApprovalDecision = "allow-once" | "allow-for-session" | "deny-once" | "deny-remaining";
 
@@ -18,8 +20,16 @@ export type AgentCommand =
       readonly decision: ApprovalDecision;
     }
   | { readonly type: "select-session-model"; readonly selection: ModelSelectionDto }
-  | { readonly type: "start-model-download"; readonly modelId: string }
-  | { readonly type: "cancel-model-download"; readonly operationId: string };
+  | {
+      readonly type: "start-model-download";
+      readonly modelId: string;
+      readonly purpose?: "chat" | "decision";
+    }
+  | {
+      readonly type: "cancel-model-download";
+      readonly operationId: string;
+      readonly purpose?: "chat" | "decision";
+    };
 
 export interface ClientDeadlines {
   readonly unaryMs?: number;
@@ -81,6 +91,7 @@ export interface RuntimeSnapshotDto {
   readonly modelSelection: ModelSelectionDto;
   readonly route: RouteSummaryDto | null;
   readonly modelSetup: ModelSetupDto | null;
+  readonly decisionModel: DecisionModelDto | null;
   readonly modelCatalog: ModelCatalogDto | null;
   readonly modelPolicy: ModelPolicyDto | null;
 }

@@ -1,6 +1,6 @@
 # 迁移进度
 
-> 已验证检查点：2026-10-08
+> 已验证检查点：2026-10-14
 >
 > 后续开发直接在 `main` 上继续。本页会区分“已经实现并有测试覆盖”和“发布验证”，
 > 不表示产品已经可以发布。
@@ -56,13 +56,20 @@
 
 ## 当前检查点的验证证据
 
+- 本轮工作区已完成决策模型 TUI 安装与状态投影，独立安装子进程、模型用途隔离、
+  operation/epoch fencing、缺失时继续 chat、成功安装后的懒加载切换均有回归测试。
+  这些改动纳入本轮 `main` 检查点。
+- 2026-10-14 真实独立 daemon/gRPC/ConPTY 验收验证了设置页打开决策面板、英文状态、
+  F2 中文切换和退出码 `0`。36 条双语探索性模型基准已完成，意图/风险/工具需求准确率
+  分别为 55.6%/38.9%/75.0%，继续固定采用 `continue_pi`。
+
 - 包级回归测试覆盖 TUI、Windows 原生模型存储、protocol 冷生成，并会拒绝受 Git
   跟踪的 protocol 生成输出。
 - 下载回归测试覆盖内建 `fetch` 的流式写入、响应 headers 前有限重试、取消传播、长度
   与字节上限校验，以及失败后的 staging 清理。
 - 聚焦的 TypeScript 测试已经覆盖生产组合、model-aware Runtime 激活与重试、
   transport revision、本地推理并发与清理、Session 轮换和重启恢复。
-- 当前本轮聚焦测试数量为：`agentd` 208、`local-model` 135、脚本编排 48；完整仓库门禁
+- 当前本轮聚焦测试数量为：`agentd` 267、`local-model` 136、脚本编排 60；完整仓库门禁
   仍以本页末尾列出的命令为准。
 - 构建后的生产 launcher/独立 `agentd` 启动黑盒已于 2026-10-06 通过：
   `source=spawned`、认证 health 为 `serving`、模型设置为 `required`、
@@ -101,10 +108,9 @@ gRPC 展示 client。不得增加 embedded Runtime、GUI fallback 或 Rust 兼�
 
 ## 后续顺序
 
-1. 在已完成的 [System One 决策层](../architecture/system-one-decision-layer.md) daemon
-   组合、受保护模型存储、领域事件、独立 daemon、真实 gRPC 和 ConPTY TUI smoke 基础上，
-   增加决策模型的 TUI 安装/状态投影与大样本中英文准确率、校准 benchmark；达到质量门槛前
-   保持 `continue_pi` advisory 策略。
+1. 在已完成的 [System One 决策层](../architecture/system-one-decision-layer.md) TUI 安装/状态
+   投影与 36 条双语探索性基准基础上，明确问题/风险定义、扩大独立留出集并比较校准策略。
+   达到质量门槛前保持 `continue_pi` advisory 策略。
 2. 决策并实现 CPU/Vulkan/CUDA 制品变体、归档/checksum/SBOM/签名和干净机器安装器，
    并基于最终 release artifact 在支持的发布硬件上重复固定真实 GGUF 的下载、激活、
    取消、推理、缓存重启与有界关闭验证。

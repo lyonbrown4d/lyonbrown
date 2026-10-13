@@ -17,6 +17,7 @@ const COMMANDS = [
   "queue",
   "help",
   "quit",
+  "decision",
 ] as const;
 
 const DESCRIPTIONS: Readonly<Record<Locale, readonly string[]>> = {
@@ -31,6 +32,7 @@ const DESCRIPTIONS: Readonly<Record<Locale, readonly string[]>> = {
     "Queue a follow-up message",
     "Commands and shortcuts",
     "Exit the client",
+    "Decision model installation and status",
   ],
   "zh-CN": [
     "模型与路由策略",
@@ -43,10 +45,11 @@ const DESCRIPTIONS: Readonly<Record<Locale, readonly string[]>> = {
     "排队下一步消息",
     "命令与快捷键",
     "退出客户端",
+    "决策模型安装与状态",
   ],
 };
 
-const ENABLED = new Set(["model", "theme", "language", "status", "help", "quit"]);
+const ENABLED = new Set(["model", "decision", "theme", "language", "status", "help", "quit"]);
 
 export function commandCatalog(locale: Locale): readonly CommandCatalogItem[] {
   return COMMANDS.map((name, index) => ({

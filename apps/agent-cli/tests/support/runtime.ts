@@ -13,6 +13,7 @@ export function runtimeSnapshot(overrides: Partial<RuntimeSnapshotDto> = {}): Ru
     modelSelection: { kind: "auto" },
     route: null,
     modelSetup: null,
+    decisionModel: null,
     modelCatalog: null,
     modelPolicy: null,
     ...overrides,

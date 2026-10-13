@@ -17,10 +17,8 @@ import type {
   ProductionRuntimeContext,
 } from "@lyonbrown/agentd/internal/bootstrap";
 import { collectCleanupFailure } from "@lyonbrown/agentd/internal/cleanup";
-import {
-  createProductionDecisionService,
-  type ProductionDecisionService,
-} from "@lyonbrown/agentd/internal/decision-service";
+import { type ProductionDecisionService } from "@lyonbrown/agentd/internal/decision-service";
+import { createManagedDecisionService } from "@lyonbrown/agentd/internal/managed-decision-service";
 import {
   createModelAwareRuntime,
   type CreateModelAwareRuntimeOptions,
@@ -53,7 +51,7 @@ const DEFAULT_DEPENDENCIES: ProductionRuntimeDependencies = Object.freeze({
   createModelStorage: createNativeModelStorageCapability,
   createModelService: createLocalModelService,
   createRuntime: createModelAwareRuntime,
-  createDecisionService: createProductionDecisionService,
+  createDecisionService: createManagedDecisionService,
   environment: process.env,
   acquireProxyEnvironment: () => agentdProxyEnvironment.acquire(),
 });
@@ -86,6 +84,7 @@ export async function createProductionAgentdRuntime(
       sessionId,
       modelService,
       eventStore,
+      ...(decisionService.setup === undefined ? {} : { decisionModel: decisionService.setup }),
       createRuntime: (lease, modelId, store, activeSessionId) =>
         createProductionRuntime(
           lease,

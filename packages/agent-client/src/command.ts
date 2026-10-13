@@ -5,6 +5,7 @@ import {
   CancelTurnRequest,
   ForceStopRequest,
   ModelRoute,
+  ModelPurpose,
   ModelSelection,
   QueueFollowUpRequest,
   RespondApprovalRequest,
@@ -23,6 +24,7 @@ import type {
   ModelSelectionDto,
 } from "@lyonbrown/agent-client/internal/types";
 import { requireId, requireText } from "@lyonbrown/agent-client/internal/validation";
+import { clientError } from "@lyonbrown/agent-client/internal/errors";
 
 export interface WireCommand {
   readonly invoke: (
@@ -97,6 +99,7 @@ export function mapCommand(command: AgentCommand, requestMetadata: RequestMetada
       const request = StartModelDownloadRequest.fromPartial({
         metadata: requestMetadata,
         modelId: requireId("modelId", command.modelId),
+        purpose: purpose(command.purpose),
       });
       return invocation((client, metadata, deadline, callback) =>
         client.startModelDownload(request, metadata, { deadline }, callback),
@@ -106,12 +109,19 @@ export function mapCommand(command: AgentCommand, requestMetadata: RequestMetada
       const request = CancelModelDownloadRequest.fromPartial({
         metadata: requestMetadata,
         operationId: requireId("operationId", command.operationId),
+        purpose: purpose(command.purpose),
       });
       return invocation((client, metadata, deadline, callback) =>
         client.cancelModelDownload(request, metadata, { deadline }, callback),
       );
     }
   }
+}
+
+function purpose(value: unknown): ModelPurpose {
+  if (value === "decision") return ModelPurpose.MODEL_PURPOSE_DECISION;
+  if (value === undefined || value === "chat") return ModelPurpose.MODEL_PURPOSE_CHAT;
+  throw clientError("validation", "INVALID_ARGUMENT", "invalid model purpose");
 }
 
 function invocation(invoke: WireCommand["invoke"]): WireCommand {

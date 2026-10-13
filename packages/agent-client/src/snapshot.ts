@@ -1,6 +1,7 @@
 import { PROTOCOL_VERSION, type RuntimeEvent, type RuntimeSnapshot } from "@lyonbrown/protocol";
 
 import { clientError } from "@lyonbrown/agent-client/internal/errors";
+import { mapDecisionModel } from "@lyonbrown/agent-client/internal/snapshot-decision";
 import { mapApproval, mapTurn } from "@lyonbrown/agent-client/internal/snapshot-activity";
 import {
   mapCatalog,
@@ -42,6 +43,7 @@ export function mapSnapshot(wire: RuntimeSnapshot): RuntimeSnapshotDto {
     modelSelection: mapSelection(wire.modelSelection),
     route: mapRouteSummary(wire.route),
     modelSetup: mapModelSetup(wire.modelSetup),
+    decisionModel: mapDecisionModel(wire.decisionModel),
     modelCatalog: mapCatalog(wire.modelCatalog),
     modelPolicy: mapPolicy(wire.modelPolicy),
   };

@@ -1,6 +1,6 @@
 # Migration Progress
 
-> Verified checkpoint: 2026-10-08
+> Verified checkpoint: 2026-10-14
 >
 > Development continues directly on `main`. This page distinguishes implemented
 > and test-covered behavior from release evidence; it does not claim that the
@@ -74,6 +74,14 @@
 
 ## Verification evidence at this checkpoint
 
+- This workspace increment implements the decision-model TUI installation/status flow, an owned
+  installer child, purpose isolation, operation/epoch fencing, chat continuation while missing,
+  and lazy activation after installation. These changes are included in this `main` checkpoint.
+- The 2026-10-14 independent-daemon/gRPC/ConPTY run verified decision-panel navigation during
+  chat setup, English status, F2 switching to Chinese, and CLI exit code `0`. The 36-fixture
+  exploratory bilingual benchmark scored 55.6% intent, 38.9% risk and 75.0% tool-requirement
+  accuracy. The adopted action remains `continue_pi`.
+
 - Package-level regression suites cover the TUI, Windows native model storage,
   protocol cold generation, and rejection of tracked generated protocol output.
 - Download regression tests cover built-in `fetch` streaming, finite retry
@@ -82,8 +90,8 @@
 - Focused TypeScript tests cover production composition, model-aware Runtime
   activation and retry, transport revisions, local inference concurrency and
   cleanup, session rotation, and restart recovery.
-- Current focused counts for this increment are `agentd` 208, `local-model` 135,
-  and 48 script-orchestration tests. The complete repository gate remains the
+- Current focused counts for this increment are `agentd` 267, `local-model` 136,
+  and 60 script-orchestration tests. The complete repository gate remains the
   command set listed below.
 - The built production launcher/independent `agentd` startup black box passed on
   2026-10-06: `source=spawned`, authenticated health was `serving`, model setup
@@ -135,11 +143,10 @@ embedded Runtime, GUI fallback, or Rust compatibility path may be added.
 
 ## Next order
 
-1. Build decision-model TUI install/status projection and a larger bilingual accuracy and
-   calibration benchmark on top of the completed daemon composition, protected storage, domain
-   events, independent-daemon gRPC, and ConPTY TUI smoke for the
-   [System One decision layer](../architecture/system-one-decision-layer.md). Keep the `continue_pi`
-   advisory policy until the quality gate passes.
+1. Refine question and risk definitions, expand independent hold-out fixtures, and compare
+   calibration strategies on top of the completed TUI install/status flow and 36-example
+   exploratory benchmark for the [System One layer](../architecture/system-one-decision-layer.md).
+   Keep the `continue_pi` advisory policy until the quality gate passes.
 2. Decide and implement CPU/Vulkan/CUDA artifact variants,
    archive/checksum/SBOM/signing, and clean-machine installer behavior. Then
    repeat pinned real-GGUF download, activation, cancellation, inference,

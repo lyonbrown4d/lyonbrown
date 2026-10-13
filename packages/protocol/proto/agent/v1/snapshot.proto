@@ -302,6 +302,35 @@ message RuntimeSnapshot {
   ModelSetupSnapshot model_setup = 11;
   ModelCatalog model_catalog = 12;
   ModelPolicy model_policy = 13;
+  DecisionModelSnapshot decision_model = 14;
+}
+
+enum DecisionModelPhase {
+  DECISION_MODEL_PHASE_UNSPECIFIED = 0;
+  DECISION_MODEL_PHASE_UNAVAILABLE = 1;
+  DECISION_MODEL_PHASE_CHECKING = 2;
+  DECISION_MODEL_PHASE_REQUIRED = 3;
+  DECISION_MODEL_PHASE_DOWNLOADING = 4;
+  DECISION_MODEL_PHASE_VERIFYING = 5;
+  DECISION_MODEL_PHASE_INSTALLING = 6;
+  DECISION_MODEL_PHASE_CONFIGURED = 7;
+  DECISION_MODEL_PHASE_CANCELLED = 8;
+  DECISION_MODEL_PHASE_FAILED = 9;
+  DECISION_MODEL_PHASE_WAITING_FOR_LOCK = 10;
+}
+
+// Verified installation and provider availability; configured does not mean loaded.
+message DecisionModelSnapshot {
+  string provider_id = 1;
+  string model_id = 2;
+  string model_revision = 3;
+  DecisionModelPhase phase = 4;
+  optional string operation_id = 5;
+  uint64 downloaded_bytes = 6;
+  uint64 total_bytes = 7;
+  ModelSetupFailure failure = 8;
+  repeated ModelSetupAction allowed_actions = 9;
+  bool advisory_only = 10;
 }
 
 message RuntimeEvent {

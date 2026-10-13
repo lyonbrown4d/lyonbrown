@@ -19,6 +19,7 @@ import {
   type RuntimeFeed,
 } from "@lyonbrown/agentd/internal/latest-runtime-feed";
 import { closeModelAwareResources } from "@lyonbrown/agentd/internal/model-aware-close";
+import { projectDecisionModel } from "@lyonbrown/agentd/internal/decision-model-projection";
 import { executeModelDownloadCommand } from "@lyonbrown/agentd/internal/model-download-commands";
 import { failedRuntimeResult } from "@lyonbrown/agentd/internal/model-download-results";
 import { ModelLeaseOwnership } from "@lyonbrown/agentd/internal/model-lease-ownership";
@@ -68,6 +69,8 @@ export function createModelAwareRuntime(
   return new ModelAwareRuntimeHost(options);
 }
 
+// This state owner intentionally remains cohesive above the 300-line review trigger:
+// activation, downloads, projections, rotation and resource cleanup already live in separate modules.
 class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
   readonly host: RuntimeHost = this;
   private modelStatus: LocalModelStatus;
@@ -79,6 +82,7 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
   private current: RuntimeSnapshot;
   private readonly feeds = new Set<RuntimeFeed>();
   private readonly unsubscribeModel: () => void;
+  private readonly unsubscribeDecision: (() => void) | undefined;
   private runtimeFeed: ReturnType<AgentRuntime["snapshots"]> | undefined;
   private readonly activationController: ModelActivationController;
   private rotationTask: Promise<AgentRuntime> | undefined;
@@ -112,12 +116,23 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
     this.unsubscribeModel = options.modelService.subscribe((status) => {
       this.onModelStatus(status);
     });
+    this.unsubscribeDecision = options.decisionModel?.subscribe(() => {
+      this.publish();
+    });
     if (this.modelStatus.phase === "ready") this.activationController.begin();
   }
 
   async execute(command: RuntimeCommand): Promise<RuntimeResult> {
     if (this.closed) return failedRuntimeResult({ code: "RUNTIME_STOPPED" });
     if (command.kind === "start-model-download" || command.kind === "cancel-model-download") {
+      if (command.purpose === "decision") {
+        const control = this.options.decisionModel;
+        if (control === undefined)
+          return failedRuntimeResult({ code: "MODEL_DOWNLOAD_UNAVAILABLE" });
+        return command.kind === "start-model-download"
+          ? control.start(command.modelId)
+          : control.cancel(command.operationId);
+      }
       return executeModelDownloadCommand({
         command,
         status: this.modelStatus,
@@ -239,7 +254,9 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
   }
 
   capabilities(): readonly string[] {
-    return CAPABILITIES;
+    return this.options.decisionModel === undefined
+      ? CAPABILITIES
+      : [...CAPABILITIES, "decision-model-install.v1"];
   }
 
   close(): Promise<void> {
@@ -306,6 +323,7 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
       phase: runtimeSnapshot?.phase ?? projectSetupRuntimePhase(this.modelStatus, this.activation),
       modelSelection,
       modelSetup: projectModelSetup(this.modelStatus, this.activation),
+      decisionModel: projectDecisionModel(this.options.decisionModel?.status()),
       modelCatalog: modelCatalog(this.modelStatus),
       modelPolicy: ModelPolicy.create({ active: modelSelection }),
       route: RouteSummary.create({
@@ -326,6 +344,7 @@ class ModelAwareRuntimeHost implements RuntimeHost, ModelAwareRuntime {
 
   private async closeOwned(): Promise<void> {
     this.closed = true;
+    this.unsubscribeDecision?.();
     await closeModelAwareResources({
       unsubscribeModel: this.unsubscribeModel,
       runtimeFeed: this.runtimeFeed,

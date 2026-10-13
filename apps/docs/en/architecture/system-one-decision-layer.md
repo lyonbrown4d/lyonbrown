@@ -100,8 +100,57 @@ the model adapter directly. `pnpm smoke:real-decision` reported:
 The implementation therefore passes the safety and availability smoke, but not yet the larger
 bilingual accuracy and calibration gate. Until that benchmark passes, the daemon records the
 decision and adopts `continue_pi`; it never uses the classification to relax authority, skip
-approval, or select a higher-risk execution path. The next slice is TUI install/status projection
-and a larger bilingual benchmark set.
+approval, or select a higher-risk execution path. TUI installation/status projection and an expanded
+exploratory bilingual benchmark are implemented in the checkpoint below.
+
+## 2026-10-14 decision panel and exploratory benchmark
+
+`/decision` opens the control panel's Decision section, also available from the command palette.
+`Ctrl+P` remains available during chat-model setup. Both languages cover missing weights, background
+inspection, install-lock waiting, progress, verification, installation, cancellation, failure and
+retry. `/decision install`, `/decision retry` and `/decision cancel` are explicit actions. Closing
+the panel leaves installation running in the background.
+
+The daemon owns the controller and a separate Node installation process. The existing download RPCs
+carry `ModelPurpose`; chat and decision requests reach separate controllers, and purpose participates
+in replay identity. Cancellation is fenced by operation ID and authenticated daemon epoch, and is
+disabled during atomic installation. Success requires a completion marker and exit code `0`.
+Cancellation grants 15 seconds for cleanup before terminating only the daemon-owned child.
+
+The independent `decision_model` snapshot uses Lyonbrown types and the existing monotonic transport
+revision. Verified weights become `configured`, displayed as “Installed · loads on first use”; the
+engine still loads lazily. Missing, checking, installing and failed states leave chat available and
+persist the safe pre-Pi fallback. Installation activates the existing stable decision port without
+restarting chat.
+
+The local `pnpm smoke:real-tui` run returned `REAL_AGENTD_GRPC_TUI_SMOKE_OK`: independent daemon PID
+`32976`, authenticated gRPC health `serving`, and real ConPTY navigation from chat setup to the
+English decision panel followed by F2 switching to Chinese. CLI exit code was `0`; per-run scratch
+was removed and dotenv-injected F-drive weights were retained. The decision smoke also verified
+cache reuse through the built installer child process.
+
+`pnpm smoke:real-decision` now runs 18 bilingual pairs, 36 fixtures total: 18 per language and 12
+per intent. Human labels treat explanations/translations as low risk, workspace changes as medium,
+and production-data deletion, disk formatting and permanent firewall disabling as high. The
+benchmark Kernel records start/completion only and does not execute the described actions. Every
+fixture verifies `user_message_submitted → decision_recorded → run_started → run_completed`, with
+action fixed to `continue_pi`.
+
+| Axis             | Overall accuracy | English       | Chinese       | ECE (10 bins) | Brier  |
+| ---------------- | ---------------- | ------------- | ------------- | ------------- | ------ |
+| Intent           | 20/36 (55.6%)    | 12/18 (66.7%) | 8/18 (44.4%)  | 0.2503        | 0.6369 |
+| Risk             | 14/36 (38.9%)    | 8/18 (44.4%)  | 6/18 (33.3%)  | 0.3318        | 0.7074 |
+| Tool requirement | 27/36 (75.0%)    | 13/18 (72.2%) | 14/18 (77.8%) | 0.1198        | 0.3496 |
+
+Fallback rate was `0/36`. First inference took `5070.31 ms`; the remaining 35 had P50 `149.89 ms`
+and P95 `243.34 ms`, with observed process peak RSS `897,880,064` bytes. Accuracy counts fallbacks
+as incorrect. ECE/Brier are conditional on validated decisions and use each axis's selected-label
+probability, not the overall minimum confidence.
+
+These handcrafted examples are exploratory rather than a held-out or release-quality gate. Current
+question definitions and classification quality remain inadequate, especially Chinese intent and
+risk. Next steps are explicit label definitions, independently expanded hold-out cases, question
+version comparisons and calibration; retain advisory behavior until predefined quality gates pass.
 
 ## Independent daemon, real gRPC, and TUI black box
 

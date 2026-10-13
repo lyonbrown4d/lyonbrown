@@ -75,6 +75,11 @@ export function createPiScreen(options: PiScreenOptions): PiScreen {
       options.onLanguageToggle();
       return { consume: true };
     }
+    if (currentFrame.overlay !== null) return undefined;
+    if (matchesKey(data, Key.ctrl("p"))) {
+      options.onPaletteToggle();
+      return { consume: true };
+    }
     const setupIntent = setupKeyIntent(data, currentFrame);
     if (setupIntent !== null) {
       if (setupIntent === "exit") {
@@ -130,10 +135,6 @@ export function createPiScreen(options: PiScreenOptions): PiScreen {
     }
     if (matchesKey(data, "?") && editor.getExpandedText().length === 0) {
       void Promise.resolve(options.onSubmit("/help")).catch(() => undefined);
-      return { consume: true };
-    }
-    if (matchesKey(data, Key.ctrl("p"))) {
-      options.onPaletteToggle();
       return { consume: true };
     }
     if (matchesKey(data, Key.ctrl("o")) || matchesKey(data, Key.ctrlShift("a"))) {

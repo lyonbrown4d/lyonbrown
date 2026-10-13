@@ -89,6 +89,7 @@ export function snapshot(revision = 1n): RuntimeSnapshotDto {
     modelSetup: null,
     modelCatalog: null,
     modelPolicy: null,
+    decisionModel: null,
   };
 }
 

@@ -1,7 +1,7 @@
 import type { ModelSelectionDto } from "@lyonbrown/agent-client";
 import { THEME_IDS, type Locale, type ThemeId } from "@lyonbrown/ui-model";
 
-export type ControlPanelTab = "model" | "theme" | "language";
+export type ControlPanelTab = "model" | "decision" | "theme" | "language";
 
 export type ParsedInput =
   | { readonly kind: "chat"; readonly text: string }
@@ -11,6 +11,7 @@ export type ParsedInput =
   | { readonly kind: "control"; readonly tab: ControlPanelTab }
   | { readonly kind: "cancel" | "force-stop" }
   | { readonly kind: "download" | "retry" }
+  | { readonly kind: "decision-action"; readonly action: "install" | "retry" | "cancel" }
   | { readonly kind: "steer" | "follow-up"; readonly text: string }
   | { readonly kind: "approve"; readonly scope: "once" | "session" }
   | { readonly kind: "deny"; readonly scope: "once" | "remaining" }
@@ -49,6 +50,11 @@ export function parseInput(raw: string): ParsedInput {
       return argument.length === 0
         ? { kind: "control", tab: "model" }
         : { kind: "model", selection: parseModelSelection(argument) };
+    case "decision":
+      if (argument.length === 0) return { kind: "control", tab: "decision" };
+      if (argument === "install" || argument === "retry" || argument === "cancel")
+        return { kind: "decision-action", action: argument };
+      throw new Error("/decision expects install, retry or cancel");
     case "cancel":
       return { kind: "cancel" };
     case "force-stop":

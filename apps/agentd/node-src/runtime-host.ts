@@ -16,8 +16,16 @@ export type RuntimeCommand =
         | { readonly kind: "auto" }
         | { readonly kind: "pinned"; readonly provider: string; readonly model: string };
     }
-  | { readonly kind: "start-model-download"; readonly modelId: string }
-  | { readonly kind: "cancel-model-download"; readonly operationId: string };
+  | {
+      readonly kind: "start-model-download";
+      readonly modelId: string;
+      readonly purpose?: "chat" | "decision";
+    }
+  | {
+      readonly kind: "cancel-model-download";
+      readonly operationId: string;
+      readonly purpose?: "chat" | "decision";
+    };
 
 export type RuntimeFailure =
   | { readonly code: "RUNTIME_STOPPED" }

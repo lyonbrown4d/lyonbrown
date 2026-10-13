@@ -85,11 +85,19 @@ message SelectSessionModelRequest {
 message StartModelDownloadRequest {
   RequestMetadata metadata = 1;
   string model_id = 2;
+  ModelPurpose purpose = 3;
 }
 
 message CancelModelDownloadRequest {
   RequestMetadata metadata = 1;
   string operation_id = 2;
+  ModelPurpose purpose = 3;
+}
+
+enum ModelPurpose {
+  MODEL_PURPOSE_UNSPECIFIED = 0;
+  MODEL_PURPOSE_CHAT = 1;
+  MODEL_PURPOSE_DECISION = 2;
 }
 
 message CommandResponse {

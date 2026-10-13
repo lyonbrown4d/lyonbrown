@@ -3,6 +3,7 @@ import { access, mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { setTimeout as delay } from "node:timers/promises";
 
 import { createAgentClient, type AgentClient } from "@lyonbrown/agent-client";
 import { createControlPlaneNativeProvider } from "@lyonbrown/control-plane-native";
@@ -63,6 +64,9 @@ async function main(): Promise<void> {
   );
 
   const environment = childEnvironment(process.env, homeDirectory);
+  // Keep the chat setup flow isolated while reusing the explicitly configured decision cache.
+  // Native storage requires both the model directory and its immediate parent to be private.
+  environment.LYONBROWN_LOCAL_MODEL_ROOT = join(runRoot, "model-storage", "chat");
   const nativeProvider = createControlPlaneNativeProvider();
   let daemon: ChildProcess | undefined;
   let client: AgentClient | undefined;
@@ -159,6 +163,10 @@ async function main(): Promise<void> {
     );
     const render = requireTuiRender(activeTranscript);
     console.log("REAL_TUI_STAGE tui_rendered");
+    const decisionRender = await exerciseDecisionTui(tui, activeTranscript);
+    const decisionSnapshot = await client.getSnapshot();
+    if (decisionSnapshot.decisionModel?.phase !== "configured")
+      throw new Error("decision weights are not verified and configured");
     tui.write("q");
     const tuiResult = await withTimeout(tuiExited, EXIT_TIMEOUT_MS, "TUI did not exit cleanly");
     if (tuiResult.exitCode !== 0)
@@ -178,9 +186,22 @@ async function main(): Promise<void> {
       snapshotPhase: snapshot.phase,
       snapshotRevision: snapshot.revision.toString(),
       render,
+      decisionRender,
+      decisionModelPhase: decisionSnapshot.decisionModel.phase,
       tuiExitCode: tuiResult.exitCode,
     });
   } catch (error: unknown) {
+    const failedSnapshot = await client?.getSnapshot().catch(() => undefined);
+    if (failedSnapshot !== undefined)
+      console.error(
+        JSON.stringify({
+          stage: "failed_snapshot",
+          chatModelPhase: failedSnapshot.modelSetup?.phase,
+          chatModelFailureCode: failedSnapshot.modelSetup?.failure?.code,
+          decisionModelPhase: failedSnapshot.decisionModel?.phase,
+          decisionModelFailureCode: failedSnapshot.decisionModel?.failure?.code,
+        }),
+      );
     const details = daemonOutput.trim();
     if (details.length > 0) console.error(`agentd output:\n${details}`);
     const terminalTail = transcript?.plain.slice(-4_096).trim();
@@ -195,6 +216,48 @@ async function main(): Promise<void> {
     await removeOwnedRunDirectory(scratchRoot, runRoot);
   }
   console.log(JSON.stringify(report));
+}
+
+async function exerciseDecisionTui(
+  tui: IPty,
+  transcript: TerminalTranscript,
+): Promise<Readonly<Record<string, boolean>>> {
+  tui.write("\u0010");
+  await waitUntil(
+    () => transcript.plain.includes("Command palette"),
+    TUI_TIMEOUT_MS,
+    "command palette did not open during chat setup",
+  );
+  // Individual keys preserve ordering in the terminal input parser; this is a bounded UI sequence.
+  for (const character of "decision") {
+    tui.write(character);
+    await delay(40);
+  }
+  await waitUntil(
+    () => transcript.plain.includes("Search: decision"),
+    TUI_TIMEOUT_MS,
+    "decision command search did not render",
+  );
+  tui.write("\r");
+  await waitUntil(
+    () => transcript.plain.includes("Installed · loads on first use"),
+    STARTUP_TIMEOUT_MS,
+    "verified decision model status did not render in English",
+  );
+  const beforeChinese = transcript.plain.length;
+  tui.write("\u001bOQ");
+  await waitUntil(
+    () => transcript.plain.slice(beforeChinese).includes("已安装 · 首次使用时加载"),
+    TUI_TIMEOUT_MS,
+    "decision model status did not render in Chinese",
+  );
+  tui.write("\u001b");
+  await delay(150);
+  return Object.freeze({
+    openedDuringChatSetup: true,
+    englishConfiguredRendered: true,
+    chineseConfiguredRendered: true,
+  });
 }
 
 const entry = process.argv[1] === undefined ? undefined : pathToFileURL(process.argv[1]).href;

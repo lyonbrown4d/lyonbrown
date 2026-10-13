@@ -6,11 +6,11 @@ const { createRuntimeInternal, startAgentdInternal } = vi.hoisted(() => ({
   startAgentdInternal: vi.fn(),
 }));
 
-vi.mock("../node-src/bootstrap.ts", () => ({
+vi.mock("@lyonbrown/agentd/internal/bootstrap", () => ({
   startProductionAgentd: startAgentdInternal,
 }));
 
-vi.mock("../node-src/production-runtime.ts", () => ({
+vi.mock("@lyonbrown/agentd/internal/production-runtime", () => ({
   createProductionAgentdRuntime: createRuntimeInternal,
 }));
 
@@ -24,6 +24,7 @@ describe("public production composition", () => {
   it("starts a supervised daemon with the production runtime factory", async () => {
     expect(Object.keys(composition)).toEqual([
       "createProductionDecisionService",
+      "runDecisionInstallProcess",
       "startProductionAgentd",
     ]);
     const nativeProvider = Object.freeze({}) as NativeControlPlaneProvider;

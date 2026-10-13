@@ -1,6 +1,7 @@
 import type { AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
 import type { SurfaceStyles } from "@lyonbrown/agent-cli/internal/surface-types";
 import { safeTerminalText } from "@lyonbrown/agent-cli/internal/text-safety";
+import { decisionModelSummary } from "@lyonbrown/agent-cli/internal/decision-model-surface";
 
 export function renderSessionsOverlay(frame: AgentTuiFrame, styles: SurfaceStyles): string[] {
   const zh = frame.ui.preferences.locale === "zh-CN";
@@ -24,6 +25,8 @@ export function renderStatusOverlay(frame: AgentTuiFrame, styles: SurfaceStyles)
     `${zh ? "阶段" : "Phase"}       ${safeTerminalText(snapshot?.phase ?? "—")}`,
     `${zh ? "路由" : "Route"}       ${selected === undefined ? "auto" : `${safeTerminalText(selected.provider)}/${safeTerminalText(selected.model)}`}`,
     `${zh ? "版本" : "Revision"}    ${String(snapshot?.revision ?? 0n)}`,
+    decisionModelSummary(frame),
+    styles.muted(zh ? "/decision  安装与状态" : "/decision  installation and status"),
     styles.muted(zh ? "Esc  关闭" : "Esc  close"),
   ];
 }

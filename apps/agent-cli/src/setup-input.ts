@@ -5,6 +5,7 @@ import type { AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
 export type SetupKeyIntent = "download" | "retry" | "cancel" | "exit" | "blocked";
 
 export function setupKeyIntent(data: string, frame: AgentTuiFrame): SetupKeyIntent | null {
+  if (frame.overlay !== null) return null;
   const setup = frame.snapshot?.modelSetup;
   if (setup === null || setup === undefined || setup.phase === "ready") return null;
 

@@ -7,6 +7,10 @@ export {
   createProductionDecisionService,
   type ProductionDecisionService,
 } from "@lyonbrown/agentd/internal/decision-service";
+export {
+  runDecisionInstallProcess,
+  type DecisionInstallProgress,
+} from "@lyonbrown/agentd/internal/decision-install-process";
 
 export interface StartProductionAgentdOptions {
   readonly workspace: string;

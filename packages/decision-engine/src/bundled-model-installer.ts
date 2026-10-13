@@ -34,6 +34,9 @@ export interface InstallBundledDecisionModelOptions {
   readonly fetcher?: typeof globalThis.fetch;
   readonly acquireProcessLock?: ProcessLockAcquirer;
   readonly onProgress?: (progress: DecisionModelDownloadProgress) => void;
+  readonly onPhase?: (
+    phase: "checking" | "waiting-for-lock" | "downloading" | "verifying" | "installing",
+  ) => void;
 }
 
 export async function inspectBundledDecisionModel(
@@ -74,12 +77,14 @@ export async function installDecisionModelBundle(
   model: DecisionModelBundleIdentity,
   options: InstallBundledDecisionModelOptions,
 ): Promise<BundledDecisionModelInstallResult> {
+  options.onPhase?.("checking");
   const existing = await inspectDecisionModelBundle(storage, model, options.signal);
   if (existing.kind === "present") {
     return { kind: "already_installed", modelPath: existing.modelPath };
   }
 
   const anchor = await storage.acquireInstallLockAnchor(model, options.signal);
+  options.onPhase?.("waiting-for-lock");
   let releaseProcessLock: (() => Promise<void>) | undefined;
   try {
     releaseProcessLock = await anchor.withLockTarget((target) =>
@@ -93,6 +98,7 @@ export async function installDecisionModelBundle(
     const staging = await storage.createStagingBundle(model, options.operationId, options.signal);
     try {
       await staging.withDirectoryPath(async (directoryPath) => {
+        options.onPhase?.("downloading");
         await downloadDecisionModelBundle(
           directoryPath,
           model,
@@ -100,8 +106,11 @@ export async function installDecisionModelBundle(
           options.fetcher ?? globalThis.fetch,
           options.onProgress ?? (() => undefined),
         );
+        options.onPhase?.("verifying");
         await verifyDecisionModelBundle(directoryPath, model, options.signal);
       });
+      throwIfAborted(options.signal);
+      options.onPhase?.("installing");
       await staging.activate();
     } catch (error) {
       await staging.cleanup();

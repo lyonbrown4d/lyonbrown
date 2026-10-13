@@ -15,6 +15,13 @@ list and compatibility-sensitive field and enum numbers. An intentional wire
 change must be reviewed as a protocol version change, regenerate transport code
 locally, and update the versioned fixture in the same commit.
 
+The decision-installation extension retains protocol version 1: it adds purpose
+tag 3 to the existing model-download requests and decision-model tag 14 to the
+snapshot, without renumbering or changing existing fields. Unspecified purpose
+means chat; decision installation is advertised as `decision-model-install.v1`.
+Configured decision weights denote a verified installation, not a loaded engine.
+The fixture and explicit tag/enum tests track this intentional additive change.
+
 ## Generation
 
 `pnpm generate` uses the exact, lockfile-pinned `@bufbuild/buf` binary and the

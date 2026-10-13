@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import * as http from "node:http";
 import { win32 } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -9,17 +10,16 @@ import { parse, populate } from "dotenv";
 import { $, usePowerShell } from "zx";
 
 import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
+import { DECISION_BENCHMARK_FIXTURES } from "@lyonbrown/workspace/internal/decision-benchmark-fixtures";
+import {
+  summarizeDecisionBenchmark,
+  type DecisionBenchmarkResult,
+} from "@lyonbrown/workspace/internal/decision-benchmark-metrics";
 
 const BUILD_TIMEOUT_MS = 15 * 60_000;
 const INSTALL_TIMEOUT_MS = 60 * 60_000;
 const DECISION_TIMEOUT_MS = 120_000;
 const MODEL_ROOT_ENV = "LYONBROWN_DECISION_MODEL_ROOT";
-const FIXTURES = Object.freeze([
-  "Explain what this repository does.",
-  "Change the TypeScript implementation and run its tests.",
-  "请解释这个项目的核心架构。",
-  "请修改 TypeScript 实现并运行测试。",
-]);
 
 interface SmokeResult {
   readonly input: string;
@@ -49,6 +49,7 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
   );
   const native = await import("@lyonbrown/control-plane-native");
   const decision = await import("@lyonbrown/decision-engine/composition");
+  const agentd = await import("@lyonbrown/agentd/composition");
   const storage = native.createNativeModelBundleStorageCapability(modelRoot);
   let lastPercent = -1;
   const install = await withDeadline(
@@ -72,6 +73,17 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
     fetcher: () => Promise.reject(new Error("network access forbidden during cache verification")),
   });
   if (cached.kind !== "already_installed") throw new Error("DECISION_MODEL_CACHE_REUSE_FAILED");
+  const installerProcessPhases: string[] = [];
+  await agentd.runDecisionInstallProcess(
+    modelRoot,
+    randomUUID(),
+    AbortSignal.timeout(INSTALL_TIMEOUT_MS),
+    ({ phase }) => {
+      installerProcessPhases.push(phase);
+    },
+  );
+  if (installerProcessPhases.includes("downloading"))
+    throw new Error("DECISION_INSTALL_PROCESS_DID_NOT_REUSE_CACHE");
   if (installOnly) {
     process.stdout.write(
       `${JSON.stringify({
@@ -79,6 +91,8 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
         modelRoot,
         install: install.kind,
         cache: cached.kind,
+        installerProcess: "built-agentd-child",
+        installerProcessPhases,
       })}\n`,
     );
     return;
@@ -86,7 +100,6 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
 
   const agentDomain = await import("@lyonbrown/agent-domain");
   const agentRuntime = await import("@lyonbrown/agent-runtime");
-  const agentd = await import("@lyonbrown/agentd/composition");
   const eventStore = await import("@lyonbrown/event-store");
   const sessionId = agentDomain.asSessionId(`real-decision-smoke-${String(Date.now())}`);
   const store = eventStore.openEventStore({ testOnlyMemory: true });
@@ -121,9 +134,11 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
     }),
   });
   const results: SmokeResult[] = [];
+  const benchmarkResults: DecisionBenchmarkResult[] = [];
   let peakRssBytes = process.memoryUsage().rss;
   try {
-    for (const input of FIXTURES) {
+    for (const fixture of DECISION_BENCHMARK_FIXTURES) {
+      const input = fixture.input;
       const previousRevision = runtime.snapshot().revision;
       const previousDecisionCount = decisions.length;
       const started = performance.now();
@@ -139,7 +154,7 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
       if (decisions.length !== previousDecisionCount + 1) {
         throw new Error("DECISION_MODEL_DECISION_COUNT_FAILED");
       }
-      if (outcome?.kind !== "decided") {
+      if (outcome === undefined) {
         throw new Error("DECISION_MODEL_REAL_INFERENCE_FAILED");
       }
       const durableSequence = (
@@ -147,19 +162,22 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
       ).map(({ type }) => type);
       if (
         durableSequence.join(",") !==
-        "user_message_submitted,decision_recorded,run_started,run_completed"
+        `user_message_submitted,${outcome.kind === "decided" ? "decision_recorded" : "decision_fallback_recorded"},run_started,run_completed`
       ) {
         throw new Error("DECISION_MODEL_DURABLE_ORDER_FAILED");
       }
       results.push({ input, latencyMs, outcome, durableSequence });
+      benchmarkResults.push({ fixture, latencyMs, outcome });
     }
   } finally {
     await runtime.dispose();
     await service.dispose();
     store.close();
   }
-  if (kernelStarts.length !== FIXTURES.length)
+  if (kernelStarts.length !== DECISION_BENCHMARK_FIXTURES.length)
     throw new Error("DECISION_MODEL_PI_CONTINUATION_FAILED");
+  if (!benchmarkResults.some(({ outcome }) => outcome.kind === "decided"))
+    throw new Error("DECISION_MODEL_REAL_INFERENCE_FAILED");
 
   const latencies = results.map(({ latencyMs }) => latencyMs).sort((left, right) => left - right);
   process.stdout.write(
@@ -171,6 +189,9 @@ async function runSmoke(modelRoot: string, installOnly: boolean): Promise<void> 
       p50Ms: percentile(latencies, 0.5),
       p95Ms: percentile(latencies, 0.95),
       peakRssBytes,
+      benchmark: summarizeDecisionBenchmark(benchmarkResults),
+      installerProcess: "built-agentd-child",
+      installerProcessPhases,
       results,
     })}\n`,
   );

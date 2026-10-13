@@ -30,6 +30,7 @@ export type {
   RuntimeEventDto,
   RuntimePhaseDto,
   RuntimeSnapshotDto,
+  DecisionModelDto,
   StepOutcomeDto,
   StopReasonDto,
   SubscribeEventsInput,

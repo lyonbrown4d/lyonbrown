@@ -22,6 +22,7 @@ import {
   type AgentTuiFrame,
 } from "@lyonbrown/agent-cli/internal/controller-state";
 import { projectRemoteSnapshot } from "@lyonbrown/agent-cli/internal/projection";
+import { decisionModelCommand } from "@lyonbrown/agent-cli/internal/decision-model-commands";
 import { observeRuntimeSnapshots } from "@lyonbrown/agent-cli/internal/runtime-snapshot-stream";
 
 export { createInitialFrame } from "@lyonbrown/agent-cli/internal/controller-state";
@@ -248,6 +249,8 @@ export class AgentTuiController {
       case "download":
       case "retry":
         return this.enqueueFresh(modelDownloadCommand(this.frame.snapshot, input.kind));
+      case "decision-action":
+        return this.enqueueFresh(decisionModelCommand(this.frame.snapshot, input.action));
       case "approve":
         return this.respondApproval(input.scope === "once" ? "allow-once" : "allow-for-session");
       case "deny":

@@ -10,6 +10,8 @@ import { THEME_IDS, type ThemeId } from "@lyonbrown/ui-model";
 import { renderActivityInspector } from "@lyonbrown/agent-cli/internal/activity-surface";
 import { commandCatalog } from "@lyonbrown/agent-cli/internal/command-catalog";
 import type { AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
+import type { ControlPanelTab } from "@lyonbrown/agent-cli/internal/commands";
+import { renderDecisionModel } from "@lyonbrown/agent-cli/internal/decision-model-surface";
 import {
   renderHelpOverlay,
   renderSessionsOverlay,
@@ -21,7 +23,7 @@ import { THEMES } from "@lyonbrown/agent-cli/internal/themes";
 export interface OverlayViewState {
   readonly selection?: number;
   readonly query?: string;
-  readonly controlTab?: "model" | "theme" | "language";
+  readonly controlTab?: ControlPanelTab;
   readonly previewTheme?: ThemeId | null;
   readonly savedTheme?: ThemeId;
   readonly activitySelection?: number;
@@ -109,7 +111,7 @@ function renderCommands(
 
 function renderControl(
   frame: AgentTuiFrame,
-  tab: "model" | "theme" | "language",
+  tab: ControlPanelTab,
   width: number,
   view: OverlayViewState,
   styles: ReturnType<typeof overlayStyles>,
@@ -119,6 +121,7 @@ function renderControl(
     ["model", zh ? "模型" : "Model"],
     ["theme", zh ? "主题" : "Theme"],
     ["language", zh ? "语言" : "Language"],
+    ["decision", zh ? "决策" : "Decision"],
   ] as const;
   const lines = [
     styles.accent(zh ? "控制面板" : "Control panel"),
@@ -128,6 +131,7 @@ function renderControl(
     ...controlSummary(frame, styles),
   ];
   if (tab === "model") lines.push(...renderModels(frame, view.selection ?? 0, styles));
+  if (tab === "decision") lines.push(...renderDecisionModel(frame, width, styles));
   if (tab === "theme") lines.push(...renderThemes(frame, view, styles));
   if (tab === "language") lines.push(...renderLanguages(frame, view.selection ?? 0, styles));
   const instructions =
@@ -140,7 +144,16 @@ function renderControl(
             ? "↑↓ 移动 · ←→ 切换分区 · Space 预览 · Enter 应用并记住 · Esc 关闭"
             : "↑↓ move · ←→ switch section · Space preview · Enter apply and remember · Esc close",
         ];
-  lines.push(...instructions.map(styles.muted));
+  lines.push(
+    ...(tab === "decision"
+      ? [
+          zh
+            ? "←→ 切换分区 · Esc 关闭（安装会在后台继续）"
+            : "←→ switch section · Esc close (installation continues in background)",
+        ]
+      : instructions
+    ).map(styles.muted),
+  );
   return lines;
 }
 

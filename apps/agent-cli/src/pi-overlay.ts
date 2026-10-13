@@ -1,6 +1,8 @@
 import { Key, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
 
 import { commandCatalog } from "@lyonbrown/agent-cli/internal/command-catalog";
+import type { ControlPanelTab } from "@lyonbrown/agent-cli/internal/commands";
+import { decisionPanelAction } from "@lyonbrown/agent-cli/internal/decision-model-surface";
 import type { AgentTuiFrame } from "@lyonbrown/agent-cli/internal/controller";
 import { renderOverlay } from "@lyonbrown/agent-cli/internal/overlay-surface";
 import { THEMES } from "@lyonbrown/agent-cli/internal/themes";
@@ -25,7 +27,7 @@ class FrameOverlayComponent implements FrameOverlay {
   private frame: AgentTuiFrame;
   private selection = 0;
   private query = "";
-  private tab: "model" | "theme" | "language";
+  private tab: ControlPanelTab;
   private previewTheme: keyof typeof THEMES | null = null;
   private readonly savedTheme: keyof typeof THEMES;
   private activitySelection: { readonly turnId: string; readonly stepId: string } | null = null;
@@ -82,6 +84,17 @@ class FrameOverlayComponent implements FrameOverlay {
       this.tui.requestRender();
       return;
     }
+    if (this.kind === "control" && this.tab === "decision") {
+      const command = decisionPanelAction(this.frame);
+      if (
+        (matchesKey(data, "d") && command === "/decision install") ||
+        (matchesKey(data, "r") && command === "/decision retry") ||
+        (matchesKey(data, "c") && command === "/decision cancel")
+      ) {
+        this.activateSelection();
+        return;
+      }
+    }
     if (matchesKey(data, Key.up)) this.selection = Math.max(0, this.selection - 1);
     else if (matchesKey(data, Key.down)) this.selection += 1;
     else if (this.kind === "control" && matchesKey(data, Key.left)) this.switchTab(-1);
@@ -99,7 +112,7 @@ class FrameOverlayComponent implements FrameOverlay {
   }
 
   private switchTab(delta: number): void {
-    const tabs = ["model", "theme", "language"] as const;
+    const tabs = ["model", "theme", "language", "decision"] as const;
     const current = tabs.indexOf(this.tab);
     this.tab = tabs[(current + delta + tabs.length) % tabs.length] ?? "model";
     this.selection = this.defaultControlSelection(this.tab);
@@ -186,6 +199,11 @@ class FrameOverlayComponent implements FrameOverlay {
       return;
     }
     if (this.kind !== "control") return;
+    if (this.tab === "decision") {
+      const command = decisionPanelAction(this.frame);
+      if (command !== null) void Promise.resolve(this.submit(command)).catch(() => undefined);
+      return;
+    }
     if (this.tab === "theme") {
       this.previewSelection();
       if (this.previewTheme !== null)
@@ -223,7 +241,8 @@ class FrameOverlayComponent implements FrameOverlay {
     return items[Math.max(0, Math.min(this.selection, items.length - 1))] ?? null;
   }
 
-  private defaultControlSelection(tab: "model" | "theme" | "language"): number {
+  private defaultControlSelection(tab: ControlPanelTab): number {
+    if (tab === "decision") return 0;
     if (tab === "theme") {
       return Math.max(0, Object.keys(THEMES).indexOf(this.frame.ui.preferences.themeId));
     }

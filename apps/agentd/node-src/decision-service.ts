@@ -14,9 +14,11 @@ import {
   createSystemOneDecisionPort,
   type CreateSystemOneDecisionPortOptions,
 } from "@lyonbrown/agentd/internal/decision-adapter";
+import type { DecisionModelControlPort } from "@lyonbrown/agentd/internal/decision-model-state";
 
 export interface ProductionDecisionService {
   readonly port: RuntimeDecisionPort;
+  readonly setup?: DecisionModelControlPort;
   dispose(): Promise<void>;
 }
 
