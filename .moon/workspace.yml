@@ -1,6 +1,7 @@
 projects:
   sources:
     agent-cli: ".moon/projects/agent-cli"
+    agent-desktop: ".moon/projects/agent-desktop"
     agent-client: ".moon/projects/agent-client"
     agent-domain: ".moon/projects/agent-domain"
     agent-launch: ".moon/projects/agent-launch"

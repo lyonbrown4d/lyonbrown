@@ -1,5 +1,6 @@
 /target
 /artifacts/
+/output/playwright/
 .release-smoke/
 .worktrees/
 .idea/

@@ -8,6 +8,8 @@
     "rewriteRelativeImportExtensions": true,
     "baseUrl": ".",
     "paths": {
+      "@lyonbrown/agent-desktop/internal/*": ["apps/agent-desktop/src/*"],
+      "@lyonbrown/agent-desktop/test/*": ["apps/agent-desktop/tests/*"],
       "@lyonbrown/workspace/internal/*": ["scripts/*.ts"],
       "@lyonbrown/agent-cli/internal/*": ["apps/agent-cli/src/*.ts"],
       "@lyonbrown/agent-cli/test/*": ["apps/agent-cli/tests/*.ts"],

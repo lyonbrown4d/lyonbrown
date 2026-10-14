@@ -15,6 +15,7 @@ const relativeJavaScriptSpecifier =
 const workspaceRoots = new Map<string, string>([
   ["workspace", "scripts/"],
   ["agent-cli", "apps/agent-cli/"],
+  ["agent-desktop", "apps/agent-desktop/"],
   ["agentd", "apps/agentd/"],
   ["agent-client", "packages/agent-client/"],
   ["agent-domain", "packages/agent-domain/"],
@@ -81,7 +82,17 @@ function findPrivateAliasEscapes(paths: readonly string[]): string[] {
 function trackedTypeScriptFiles(): string[] {
   return execFileSync(
     "git",
-    ["ls-files", "--cached", "--others", "--exclude-standard", "--", "*.ts", "*.mts", "*.cts"],
+    [
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      "--",
+      "*.ts",
+      "*.tsx",
+      "*.mts",
+      "*.cts",
+    ],
     {
       cwd: repositoryRoot,
       encoding: "utf8",
