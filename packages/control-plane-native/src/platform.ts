@@ -3,8 +3,7 @@ import {
   createPortablePathVerifier,
   type PathSecurityVerifier,
 } from "@lyonbrown/event-store/path-verifier";
-import { createFailClosedPosixSecurity } from "@lyonbrown/control-plane-native/internal/posix-provider";
-import type { WindowsEventStoreVerifierOptions } from "@lyonbrown/control-plane-native/internal/windows/store-verifier";
+import type { NativeEventStorePathVerifierOptions } from "@lyonbrown/control-plane-native/internal/store-verifier-options";
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
 import type { NativeModelBundleStorageCapability } from "@lyonbrown/control-plane-native/internal/model-bundle-storage";
 
@@ -71,6 +70,17 @@ const windowsFactory = await selectWindowsFactory(
   unavailableWindows,
 );
 
+const posixSupported = process.platform === "darwin" || process.platform === "linux";
+const posixSecurity = posixSupported
+  ? await import("@lyonbrown/control-plane-native/internal/posix-provider")
+  : undefined;
+const posixStorage = posixSupported
+  ? await import("@lyonbrown/control-plane-native/internal/posix/model-storage")
+  : undefined;
+const posixBundleStorage = posixSupported
+  ? await import("@lyonbrown/control-plane-native/internal/posix/model-bundle-storage")
+  : undefined;
+
 const windowsStoreVerifierFactory =
   process.platform === "win32"
     ? (await import("@lyonbrown/control-plane-native/internal/windows/store-verifier"))
@@ -98,11 +108,13 @@ const windowsModelBundleStorageFactory = await selectWindowsModelBundleStorageFa
 );
 
 export function createPlatformSecurity(): PlatformControlPlaneSecurity {
-  return selectPlatformSecurity(process.platform, windowsFactory, createFailClosedPosixSecurity);
+  if (process.platform === "win32") return windowsFactory();
+  if (posixSecurity) return posixSecurity.createPosixSecurity();
+  throw new Error("native_platform_unsupported");
 }
 
 export function createPlatformEventStorePathVerifier(
-  options: WindowsEventStoreVerifierOptions = {},
+  options: NativeEventStorePathVerifierOptions = {},
 ): PathSecurityVerifier {
   if (process.platform !== "win32") return createPortablePathVerifier();
   if (!windowsStoreVerifierFactory) throw new Error("Windows native provider is unavailable");
@@ -112,11 +124,15 @@ export function createPlatformEventStorePathVerifier(
 export function createPlatformModelStorageCapability(
   modelsDirectory: string,
 ): NativeModelStorageCapability {
+  if (posixStorage) return posixStorage.createPosixModelStorageCapability(modelsDirectory);
   return windowsModelStorageFactory(modelsDirectory);
 }
 
 export function createPlatformModelBundleStorageCapability(
   modelsDirectory: string,
 ): NativeModelBundleStorageCapability {
+  if (posixBundleStorage) {
+    return posixBundleStorage.createPosixModelBundleStorageCapability(modelsDirectory);
+  }
   return windowsModelBundleStorageFactory(modelsDirectory);
 }

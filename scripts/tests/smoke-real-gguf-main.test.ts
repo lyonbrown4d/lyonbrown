@@ -26,20 +26,20 @@ describe("real GGUF smoke main guard", () => {
     mocks.makeTemporaryRoot.mockClear();
   });
 
-  test("configures Windows zx and rejects before build or temporary storage", async () => {
+  test("configures the host shell and rejects before build or temporary storage", async () => {
     const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const startedAt = performance.now();
 
     await expect(main([], {})).rejects.toThrow("REAL_GGUF_SMOKE_DISABLED");
 
     expect(performance.now() - startedAt).toBeLessThan(1_000);
-    expect(mocks.usePowerShell).toHaveBeenCalledOnce();
+    expect(mocks.usePowerShell).toHaveBeenCalledTimes(process.platform === "win32" ? 1 : 0);
     expect(mocks.command).not.toHaveBeenCalled();
     expect(mocks.makeTemporaryRoot).not.toHaveBeenCalled();
     expect(write).toHaveBeenCalledWith(expect.stringContaining("REAL_GGUF_SMOKE_DISABLED"));
   });
 
-  test("requires F-drive-capable storage configuration before building", async () => {
+  test("requires explicit storage configuration before building", async () => {
     const write = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
     await expect(

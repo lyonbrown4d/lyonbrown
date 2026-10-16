@@ -124,15 +124,22 @@ export async function withTimeout<T>(
   timeoutMs: number,
   message: string,
 ): Promise<T> {
-  const timeout = delay(timeoutMs).then(() => Promise.reject(new Error(message)));
-  return Promise.race([promise, timeout]);
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function stopProcess(
   child: ChildProcess | undefined,
   timeoutMs: number,
 ): Promise<void> {
-  if (child === undefined) return;
+  if (child === undefined || child.pid === undefined) return;
   if (child.exitCode !== null || child.signalCode !== null) return;
   const exited = processExit(child);
   child.kill("SIGTERM");
@@ -140,7 +147,7 @@ export async function stopProcess(
     await withTimeout(exited, timeoutMs, "agentd graceful shutdown timed out");
   } catch {
     child.kill("SIGKILL");
-    await withTimeout(exited, timeoutMs, "agentd forced shutdown timed out").catch(() => undefined);
+    await withTimeout(exited, timeoutMs, "agentd forced shutdown timed out");
   }
 }
 

@@ -1,3 +1,5 @@
+import { basename, resolve } from "node:path";
+
 import {
   deriveScopedDaemonPaths,
   parseDiscoveryDescriptor,
@@ -20,8 +22,8 @@ import {
 import type { StartAgentdServerOptions } from "@lyonbrown/agentd/internal/server";
 import { FakeHost } from "@lyonbrown/agentd/test/server-test-support";
 
-const WORKSPACE = "C:\\work\\lyonbrown";
-const HOME_DIRECTORY = "C:\\Users\\agent";
+const WORKSPACE = resolve("work", "lyonbrown");
+const HOME_DIRECTORY = resolve("home", "agent");
 const FINGERPRINT = "production-test";
 
 interface NativeHarness {
@@ -138,7 +140,7 @@ describe("production bootstrap", () => {
         createRuntime: async ({ canonicalWorkspace, dataDirectory, scopeId }) => {
           native.events.push("runtime.create");
           expect(canonicalWorkspace).toBe(WORKSPACE);
-          expect(dataDirectory).toMatch(/\\data$/u);
+          expect(basename(dataDirectory)).toBe("data");
           expect(scopeId).toMatch(/^[a-f0-9]{64}$/u);
           return runtime(native.events);
         },

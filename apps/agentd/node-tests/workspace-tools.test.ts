@@ -31,10 +31,13 @@ describe("workspace tool registry", () => {
       ["read", "low", ["workspace.read"]],
       ["write", "medium", ["workspace.write"]],
       ["edit", "medium", ["workspace.write"]],
+      ["list_directory", "low", ["workspace.read"]],
+      ["search_files", "low", ["workspace.read"]],
+      ["process_execute", "high", ["process.execute"]],
     ]);
     expect(registry.hasPermission("workspace.read")).toBe(true);
     expect(registry.hasPermission("workspace.write")).toBe(true);
-    expect(registry.hasPermission("process.execute")).toBe(false);
+    expect(registry.hasPermission("process.execute")).toBe(true);
   });
 
   it("executes workspace file tools but denies traversal outside the workspace", async () => {

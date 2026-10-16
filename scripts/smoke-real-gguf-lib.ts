@@ -31,7 +31,9 @@ export function parseRealGgufSmokeAuthorization(
   if (!arguments_.includes("--confirm-download")) {
     throw new Error("REAL_GGUF_DOWNLOAD_NOT_CONFIRMED");
   }
-  if (platform !== "win32") throw new Error("REAL_GGUF_SMOKE_UNSUPPORTED_PLATFORM");
+  if (!["win32", "darwin", "linux"].includes(platform)) {
+    throw new Error("REAL_GGUF_SMOKE_UNSUPPORTED_PLATFORM");
+  }
   return { confirmed: true };
 }
 

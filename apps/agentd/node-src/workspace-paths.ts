@@ -22,14 +22,7 @@ configureFsSafeNative({ mode: "require" });
 export async function createWorkspaceFileOperations(
   workspace: string,
 ): Promise<WorkspaceFileOperations> {
-  const workspaceRoot = await createSafeRoot(workspace, {
-    durable: true,
-    hardlinks: "reject",
-    maxBytes: MAX_WORKSPACE_FILE_BYTES,
-    mkdir: true,
-    mutationSymlinks: "follow-parents-within-root",
-    symlinks: "follow-within-root",
-  });
+  const workspaceRoot = await createWorkspaceRoot(workspace);
 
   return Object.freeze({
     read: Object.freeze({
@@ -65,11 +58,22 @@ export async function createWorkspaceFileOperations(
   });
 }
 
+export function createWorkspaceRoot(workspace: string): Promise<Root> {
+  return createSafeRoot(workspace, {
+    durable: true,
+    hardlinks: "reject",
+    maxBytes: MAX_WORKSPACE_FILE_BYTES,
+    mkdir: true,
+    mutationSymlinks: "follow-parents-within-root",
+    symlinks: "follow-within-root",
+  });
+}
+
 export function resolveWorkspaceRoot(workspace: string): Promise<string> {
   return realpath(resolve(workspace));
 }
 
-function toRelative(workspaceRoot: Root, candidate: string): string {
+export function toRelative(workspaceRoot: Root, candidate: string): string {
   const absolute = isAbsolute(candidate)
     ? resolve(candidate)
     : resolve(workspaceRoot.rootReal, candidate);

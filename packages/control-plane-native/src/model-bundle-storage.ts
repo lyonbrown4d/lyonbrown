@@ -29,6 +29,7 @@ export type NativeInstalledBundleResult<T> =
   | { readonly kind: "present"; readonly value: T };
 
 export interface NativeModelBundleStorageCapability {
+  /** Private, anchored storage; POSIX locks coordinate adapter operations, not hostile same-uid code. */
   acquireInstallLockAnchor(
     identity: NativeModelBundleIdentity,
     signal: AbortSignal,

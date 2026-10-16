@@ -22,6 +22,7 @@
 6. 仓库只保留 Node.js / TypeScript 产品实现。允许基于现有 C/S 架构重新设计 Electron Desktop，不恢复旧 GUI；不得重新引入 Rust runtime 或双实现兼容路径。Desktop 主进程复用 launcher 和认证 gRPC client，renderer 只能访问受限的类型化 preload 接口，不得接触认证 token、通用 IPC 或 Node.js API。历史行为需要保留时，转换为语言无关 fixture 或 TypeScript 回归测试。
 7. 新的工程风格与结构约束必须收敛到本文件，不散落为口头约定。
 8. 每个 `apps/*`、`packages/*` workspace 包都必须在 `.moon/workspace.yml` 中注册，并在 `.moon/projects/*/moon.yml` 显式维护内部依赖边、输入与输出。新增、删除或重命名 workspace 包时必须同步更新 moon 项目图和配置契约测试。
+9. 操作能力以 Windows、macOS、Linux 跨平台为目标。文件、路径、权限、锁、进程、命令执行、模型存储和工作区操作通过类型化能力接口提供；优先复用跨平台实现，将必要的系统差异集中在平台适配层。统一输入输出、授权、取消、超时和错误语义，不要求不同系统使用相同底层机制。缺失能力必须明确报告，不得静默降级安全约束或把占位实现视为支持；按能力维护三平台契约测试与真实运行验收记录，新增操作同步纳入。
 
 ## 验证
 

@@ -44,7 +44,9 @@ const EXIT_TIMEOUT_MS = 10_000;
 const require = createRequire(import.meta.url);
 
 async function main(): Promise<void> {
-  if (process.platform !== "win32") throw new Error("real TUI smoke currently requires Windows");
+  if (!["win32", "darwin", "linux"].includes(process.platform)) {
+    throw new Error("real TUI smoke does not support this platform");
+  }
   configureZxPlatform(process.platform, usePowerShell);
   loadEnvironment({ path: resolve(".env.local"), override: false, quiet: true });
   const workspace = resolve(process.cwd());

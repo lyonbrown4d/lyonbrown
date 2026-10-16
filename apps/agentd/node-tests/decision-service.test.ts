@@ -1,3 +1,5 @@
+import { resolve } from "node:path";
+
 import type { RuntimePreKernelDecision } from "@lyonbrown/agent-runtime";
 import { describe, expect, it, vi } from "vitest";
 
@@ -20,6 +22,7 @@ const decided: RuntimePreKernelDecision = {
   probabilities: { intent: { chat: 0.9 } },
   action: "continue_pi",
 };
+const MODEL_ROOT = resolve("models", "decision");
 
 describe("production decision service", () => {
   it("does not choose a system-drive fallback when the model root is absent", async () => {
@@ -36,7 +39,7 @@ describe("production decision service", () => {
   it("loads the configured secure bundle lazily and owns engine disposal", async () => {
     const dependencies = dependencyFakes();
     const service = createProductionDecisionService(
-      { LYONBROWN_DECISION_MODEL_ROOT: "F:\\Lyonbrown\\models\\decision" },
+      { LYONBROWN_DECISION_MODEL_ROOT: MODEL_ROOT },
       dependencies.values,
     );
 
@@ -45,7 +48,7 @@ describe("production decision service", () => {
     await expect(
       service.port.evaluate({ input: "hello", signal: new AbortController().signal }),
     ).resolves.toEqual(decided);
-    expect(dependencies.createStorage).toHaveBeenCalledWith("F:\\Lyonbrown\\models\\decision");
+    expect(dependencies.createStorage).toHaveBeenCalledWith(MODEL_ROOT);
     expect(dependencies.createAnchoredEngine).toHaveBeenCalledOnce();
     await service.dispose();
     await service.dispose();
@@ -67,7 +70,7 @@ describe("production decision service", () => {
       throw new Error("private native failure");
     });
     const failedService = createProductionDecisionService(
-      { LYONBROWN_DECISION_MODEL_ROOT: "F:\\Lyonbrown\\models\\decision" },
+      { LYONBROWN_DECISION_MODEL_ROOT: MODEL_ROOT },
       failed.values,
     );
     await expect(
@@ -82,7 +85,7 @@ describe("production decision service", () => {
       reason: "model_corrupted",
     });
     const service = createProductionDecisionService(
-      { LYONBROWN_DECISION_MODEL_ROOT: "F:\\Lyonbrown\\models\\decision" },
+      { LYONBROWN_DECISION_MODEL_ROOT: MODEL_ROOT },
       dependencies.values,
     );
 
@@ -97,7 +100,7 @@ describe("production decision service", () => {
     const dependencies = dependencyFakes();
     dependencies.createAnchoredEngine.mockImplementation(() => new Promise<never>(() => undefined));
     const service = createProductionDecisionService(
-      { LYONBROWN_DECISION_MODEL_ROOT: "F:\\Lyonbrown\\models\\decision" },
+      { LYONBROWN_DECISION_MODEL_ROOT: MODEL_ROOT },
       dependencies.values,
     );
     const controller = new AbortController();
@@ -123,7 +126,7 @@ describe("production decision service", () => {
       });
     });
     const service = createProductionDecisionService(
-      { LYONBROWN_DECISION_MODEL_ROOT: "F:\\Lyonbrown\\models\\decision" },
+      { LYONBROWN_DECISION_MODEL_ROOT: MODEL_ROOT },
       dependencies.values,
     );
     const evaluation = service.port.evaluate({

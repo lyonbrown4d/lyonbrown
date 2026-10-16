@@ -31,6 +31,7 @@
     "smoke:real-decision": "tsx scripts/smoke-real-decision-model.ts",
     "smoke:real-tui": "tsx scripts/smoke-real-tui.ts",
     "smoke:real-desktop": "tsx scripts/smoke-real-desktop.ts",
+    "smoke:platform": "tsx scripts/smoke-platform.ts",
     "decision-model:install": "tsx scripts/smoke-real-decision-model.ts --install-only",
     "audit": "pnpm audit --registry=https://registry.npmjs.org"
   },

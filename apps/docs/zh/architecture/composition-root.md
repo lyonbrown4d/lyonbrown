@@ -22,10 +22,12 @@ TUI 只能得到窄化后的 `agent-launch`、`agent-client` 与 `ui-model` 接�
 顺序使用 daemon 自有的单调 transport revision，不直接暴露 EventStore revision；
 仅模型状态与激活状态的更新也进入同一顺序。
 
-当前生产 Kernel 组合受工作区约束的 `read`、`write`、`edit` registry 和显式审批门；
+当前生产 Kernel 组合受工作区约束的 `read`、`write`、`edit`、`list_directory`、`search_files` registry 和显式审批门；
 文件能力由 native-required 的 `@openclaw/fs-safe` 根对象提供，读取限制为 1 MiB，
 写入使用受约束的原子替换；一次性/会话级审批的完整决策进入领域事件。Secret resolver
 仍为拒绝式实现，MCP 尚未连接。工具与审批归 daemon 所有，TUI 只投影状态并提交用户决定。
+
+`process_execute` 接受可执行文件和参数数组，使用工作区内 cwd、受限继承环境、有界输出及超时/取消清理。该工具要求高风险审批，具有主机用户权限，不提供 OS 沙箱。Windows 与 POSIX 分别清理进程树与进程组。
 
 ## Workspace 导入边界
 

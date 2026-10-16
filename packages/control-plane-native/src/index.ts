@@ -9,7 +9,7 @@ import { createPlatformModelBundleStorageCapability } from "@lyonbrown/control-p
 import type { NativeModelBundleStorageCapability } from "@lyonbrown/control-plane-native/internal/model-bundle-storage";
 import type { PathSecurityVerifier } from "@lyonbrown/event-store/path-verifier";
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
-import type { WindowsEventStoreVerifierOptions } from "@lyonbrown/control-plane-native/internal/windows/store-verifier";
+import type { NativeEventStorePathVerifierOptions } from "@lyonbrown/control-plane-native/internal/store-verifier-options";
 
 let provider: NativeControlPlaneProvider | undefined;
 
@@ -19,7 +19,7 @@ export function createControlPlaneNativeProvider(): NativeControlPlaneProvider {
 }
 
 export function createNativeEventStorePathVerifier(
-  options: WindowsEventStoreVerifierOptions = {},
+  options: NativeEventStorePathVerifierOptions = {},
 ): PathSecurityVerifier {
   return createPlatformEventStorePathVerifier(options);
 }
@@ -45,4 +45,4 @@ export type {
   NativeModelStagingBundle,
 } from "@lyonbrown/control-plane-native/internal/model-bundle-storage";
 
-export type { WindowsEventStoreVerifierOptions as NativeEventStorePathVerifierOptions };
+export type { NativeEventStorePathVerifierOptions };

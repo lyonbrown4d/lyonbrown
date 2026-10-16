@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { NativeModelStorageCapability } from "@lyonbrown/local-model/composition";
+import type { NativeModelBundleStorageCapability } from "@lyonbrown/control-plane-native/internal/model-bundle-storage";
+import { selectWindowsModelBundleStorageFactory } from "@lyonbrown/control-plane-native/internal/platform";
 
 interface ModelStoragePlatformModule {
   selectWindowsModelStorageFactory?: (
@@ -13,6 +15,22 @@ interface ModelStoragePlatformModule {
 }
 
 describe("native model storage platform contract", () => {
+  it("dispatches bundle storage without loading Windows dependencies on POSIX", async () => {
+    const capability = {} as NativeModelBundleStorageCapability;
+    const windows = vi.fn(() => capability);
+    const unavailable = vi.fn(() => {
+      throw new Error("unsupported");
+    });
+    const load = vi.fn(() =>
+      Promise.resolve({ createWindowsModelBundleStorageCapability: windows }),
+    );
+    expect(await selectWindowsModelBundleStorageFactory("darwin", load, unavailable)).toBe(
+      unavailable,
+    );
+    expect(load).not.toHaveBeenCalled();
+    const selected = await selectWindowsModelBundleStorageFactory("win32", load, unavailable);
+    expect(selected("C:\\models")).toBe(capability);
+  });
   it("does not load Windows DLLs on POSIX and fails closed", async () => {
     const module = (await import(
       "@lyonbrown/control-plane-native/internal/platform"

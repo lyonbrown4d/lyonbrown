@@ -3,6 +3,7 @@ import {
   existsSync,
   lstatSync,
   mkdtempSync,
+  realpathSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -27,7 +28,7 @@ import {
 const directories: string[] = [];
 
 function temporaryDirectory(label: string): string {
-  const result = mkdtempSync(join(tmpdir(), `lyonbrown-${label}-`));
+  const result = realpathSync(mkdtempSync(join(tmpdir(), `lyonbrown-${label}-`)));
   directories.push(result);
   return result;
 }

@@ -1,10 +1,16 @@
 import { constants } from "node:fs";
-import { access, readdir, readFile, realpath } from "node:fs/promises";
-import { resolve, join } from "node:path";
+import { access, readFile, realpath } from "node:fs/promises";
+import { join } from "node:path";
 
 import { $, usePowerShell } from "zx";
 
 import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
+import { assertPortableArtifactFiles } from "@lyonbrown/workspace/internal/release-artifact-files";
+import {
+  releaseRuntimeName,
+  releaseLauncherName,
+  resolveArtifactSmokeDirectory,
+} from "@lyonbrown/workspace/internal/release-artifact-lib";
 
 configureZxPlatform(process.platform, usePowerShell);
 
@@ -36,39 +42,21 @@ const LLAMA_SMOKE = [
   "const modelEntry=realpathSync(resolve(scope,'local-model','dist','index.js'));",
   "const modelRequire=createRequire(modelEntry);",
   "const module=await import(pathToFileURL(modelRequire.resolve('node-llama-cpp')).href);",
-  "const llama=await module.getLlama({gpu:false,build:'never',skipDownload:true,usePrebuiltBinaries:true,progressLogs:false,dryRun:true});",
-  "await llama.dispose();",
+  // dryRun already disposes the returned instance inside node-llama-cpp.
+  "await module.getLlama({gpu:process.platform==='darwin'?'auto':false,build:'never',skipDownload:true,usePrebuiltBinaries:true,progressLogs:false,dryRun:true});",
   "process.stdout.write('LLAMA_ARTIFACT_OK');",
 ].join("");
 
-function artifactArgument(arguments_: readonly string[]): string {
-  if (arguments_.length !== 2 || arguments_[0] !== "--artifact" || arguments_[1] === undefined) {
-    throw new Error("Usage: smoke-release-artifact --artifact <directory>");
-  }
-  return resolve(arguments_[1]);
-}
-
-async function assertNoFilesystemLinks(directory: string): Promise<void> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  for (const entry of entries) {
-    const path = join(directory, entry.name);
-    if (entry.isSymbolicLink()) {
-      throw new Error(`Release artifact contains a filesystem link: ${path}`);
-    }
-    if (entry.isDirectory()) await assertNoFilesystemLinks(path);
-  }
-}
-
 async function main(): Promise<void> {
-  const artifact = await realpath(artifactArgument(process.argv.slice(2)));
-  const runtime = join(artifact, "runtime", "node.exe");
+  const artifact = await realpath(resolveArtifactSmokeDirectory(process.argv.slice(2)));
+  const runtime = join(artifact, "runtime", releaseRuntimeName(process.platform));
   const entry = join(artifact, "dist", "main.js");
   await Promise.all([
     access(runtime, constants.X_OK),
     access(entry, constants.R_OK),
-    access(join(artifact, "agent.cmd"), constants.R_OK),
+    access(join(artifact, releaseLauncherName(process.platform)), constants.R_OK),
   ]);
-  await assertNoFilesystemLinks(artifact);
+  await assertPortableArtifactFiles(artifact);
 
   const manifest = JSON.parse(await readFile(join(artifact, "package.json"), "utf8")) as {
     readonly name?: unknown;
@@ -78,14 +66,19 @@ async function main(): Promise<void> {
     throw new Error("Release artifact manifest is invalid");
   }
 
-  const version = (
-    await $({ cwd: artifact, quiet: true })`& ${runtime} ${entry} --version`
-  ).stdout.trim();
+  // zx argument arrays preserve argv on both PowerShell and POSIX shells.
+  const invoke = (...args: readonly string[]) => {
+    const command = [runtime, ...args];
+    return process.platform === "win32"
+      ? $({ cwd: artifact, quiet: true, timeout: 60_000 })`& ${command}`
+      : $({ cwd: artifact, quiet: true, timeout: 60_000 })`${command}`;
+  };
+  const version = (await invoke(entry, "--version")).stdout.trim();
   if (version !== manifest.version) throw new Error("Release artifact version does not match");
 
-  await $({ cwd: artifact, quiet: true })`& ${runtime} --input-type=module --eval ${IMPORT_SMOKE}`;
-  await $({ cwd: artifact, quiet: true })`& ${runtime} --input-type=module --eval ${SQLITE_SMOKE}`;
-  await $({ cwd: artifact, quiet: true })`& ${runtime} --input-type=module --eval ${LLAMA_SMOKE}`;
+  await invoke("--input-type=module", "--eval", IMPORT_SMOKE);
+  await invoke("--input-type=module", "--eval", SQLITE_SMOKE);
+  await invoke("--input-type=module", "--eval", LLAMA_SMOKE);
   console.log(`RELEASE_ARTIFACT_SMOKE_OK ${manifest.version}`);
 }
 

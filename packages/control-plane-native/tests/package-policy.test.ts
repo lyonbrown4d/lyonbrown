@@ -28,7 +28,8 @@ describe("native package policy", () => {
     expect(koffiManifest.version).toBe("3.3.2");
     expect(koffiManifest.scripts?.install).toContain("--prebuild");
     expect(koffiManifest.optionalDependencies[payload]).toBe("3.3.2");
-    expect(require.resolve(payload)).toBeTruthy();
+    // Optional native payloads belong to Koffi's dependency scope under pnpm.
+    expect(createRequire(require.resolve("koffi")).resolve(payload)).toBeTruthy();
     expect(() => {
       require("koffi");
     }).not.toThrow();
@@ -64,15 +65,20 @@ describe("native package policy", () => {
         "src/index.ts",
         "src/platform.ts",
         "src/posix-provider.ts",
+        "src/posix/**/*.ts",
         "src/result.ts",
       ],
       include: [
         "tests/package-policy.test.ts",
         "tests/portable-contracts.test.ts",
         "tests/provider.test.ts",
+        "tests/model-storage-contracts.test.ts",
+        "tests/posix*.test.ts",
       ],
+      exclude: [],
     });
     for (const file of plan?.include ?? []) {
+      if (file.includes("*")) continue;
       expect(await readFile(resolve(packageRoot, file), "utf8")).not.toMatch(
         /(?:from|import\()\s*["'][^"']*\/windows\//u,
       );

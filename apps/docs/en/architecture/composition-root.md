@@ -25,13 +25,18 @@ provider secret, or Pi object. Snapshot ordering uses a daemon-owned monotonic
 transport revision rather than exposing EventStore revisions directly; this
 also orders model-only and activation updates.
 
-The production kernel composes workspace-confined `read`, `write`, and `edit`
+The production kernel composes workspace-confined `read`, `write`, `edit`, `list_directory`, and `search_files`
 tools through a native-required `@openclaw/fs-safe` root plus an explicit
 approval gate. Reads are bounded to 1 MiB and writes use confined atomic
 replacement. Exact one-shot/session approval decisions are durable domain
 events. Its secret resolver still rejects and MCP is not connected. Tools and
 approval remain daemon-owned; the TUI only projects state and submits the
 user's decision.
+
+`process_execute` accepts an executable plus argument array, a workspace cwd,
+limited inherited environment, bounded output, and timeout/cancellation cleanup.
+It requires high-risk approval and has host-user authority, not an OS sandbox.
+Windows and POSIX clean up process trees and process groups respectively.
 
 ## Workspace import boundary
 

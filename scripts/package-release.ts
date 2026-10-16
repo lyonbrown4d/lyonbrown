@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, copyFile, lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import { $, usePowerShell } from "zx";
@@ -7,8 +7,12 @@ import { $, usePowerShell } from "zx";
 import {
   resolveReleaseTarget,
   windowsAgentLauncher,
+  posixAgentLauncher,
+  releaseRuntimeName,
+  releaseLauncherName,
 } from "@lyonbrown/workspace/internal/release-artifact-lib";
 import { configureZxPlatform } from "@lyonbrown/workspace/internal/zx-platform";
+import { detachReleaseFiles } from "@lyonbrown/workspace/internal/detach-release-files";
 
 configureZxPlatform(process.platform, usePowerShell);
 
@@ -37,19 +41,27 @@ async function main(): Promise<void> {
   await assertMissing(target.outputDirectory);
   await mkdir(dirname(target.outputDirectory), { recursive: true });
 
-  await $({ cwd: workspaceRoot, stdio: "inherit" })`pnpm --filter @lyonbrown/agent-cli build`;
+  await $({ cwd: workspaceRoot, stdio: "inherit" })`pnpm exec moon run agent-cli:build`;
   await $({
     cwd: workspaceRoot,
     stdio: "inherit",
-  })`pnpm --config.node-linker=hoisted --filter @lyonbrown/agent-cli deploy --prod --legacy ${target.outputDirectory}`;
+  })`pnpm --config.node-linker=hoisted --config.inject-workspace-packages=true --config.package-import-method=copy --filter @lyonbrown/agent-cli deploy --prod ${target.outputDirectory}`;
+  await detachReleaseFiles(target.outputDirectory);
 
   const runtimeDirectory = join(target.outputDirectory, "runtime");
   await mkdir(runtimeDirectory);
-  await copyFile(process.execPath, join(runtimeDirectory, "node.exe"), constants.COPYFILE_EXCL);
-  await writeFile(join(target.outputDirectory, "agent.cmd"), windowsAgentLauncher(), {
-    encoding: "utf8",
-    flag: "wx",
-  });
+  const runtimePath = join(runtimeDirectory, releaseRuntimeName(target.platform));
+  await copyFile(process.execPath, runtimePath, constants.COPYFILE_EXCL);
+  await chmod(runtimePath, 0o755);
+  await writeFile(
+    join(target.outputDirectory, releaseLauncherName(target.platform)),
+    target.platform === "win32" ? windowsAgentLauncher() : posixAgentLauncher(),
+    {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o755,
+    },
+  );
 
   const product = JSON.parse(
     await readFile(join(target.outputDirectory, "package.json"), "utf8"),

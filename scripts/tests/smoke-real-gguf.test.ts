@@ -25,22 +25,25 @@ describe("real GGUF smoke authorization", () => {
     );
   });
 
-  test("accepts only the exact opt-in values on Windows", () => {
-    expect(
-      parseRealGgufSmokeAuthorization(
-        { LYONBROWN_REAL_GGUF_SMOKE: "1" },
-        ["--confirm-download"],
-        "win32",
-      ),
-    ).toEqual({ confirmed: true });
-    expect(() =>
-      parseRealGgufSmokeAuthorization(
-        { LYONBROWN_REAL_GGUF_SMOKE: "true" },
-        ["--confirm-download"],
-        "win32",
-      ),
-    ).toThrow("REAL_GGUF_SMOKE_DISABLED");
-  });
+  test.each(["win32", "darwin", "linux"] as const)(
+    "accepts exact opt-in values on %s",
+    (platform) => {
+      expect(
+        parseRealGgufSmokeAuthorization(
+          { LYONBROWN_REAL_GGUF_SMOKE: "1" },
+          ["--confirm-download"],
+          platform,
+        ),
+      ).toEqual({ confirmed: true });
+      expect(() =>
+        parseRealGgufSmokeAuthorization(
+          { LYONBROWN_REAL_GGUF_SMOKE: "true" },
+          ["--confirm-download"],
+          platform,
+        ),
+      ).toThrow("REAL_GGUF_SMOKE_DISABLED");
+    },
+  );
 });
 
 describe("real GGUF progress validation", () => {

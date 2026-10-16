@@ -26,8 +26,11 @@ export type NativeInstalledFileResult<T> =
 
 /**
  * Privileged filesystem operations supplied by the native control plane.
- * Implementations must bind every anchor to the complete identity, reject
- * reparse points and identity drift, and deny write/delete while callbacks run.
+ * Implementations bind anchors to the complete identity, reject links and identity
+ * drift, and exclude conflicting adapter-managed activation while read callbacks
+ * run. Windows also enforces native share-deny. POSIX uses private owner-only
+ * directories, kernel advisory locks, and pre/post identity/content checks; it
+ * does not isolate a hostile process running as the same OS user.
  */
 export interface NativeModelStorageCapability {
   acquireInstallLockAnchor(

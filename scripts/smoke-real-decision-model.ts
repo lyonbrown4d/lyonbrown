@@ -32,7 +32,7 @@ configureZxPlatform(process.platform, usePowerShell);
 
 export async function main(): Promise<void> {
   const environment = await loadLocalEnvironment();
-  const modelRoot = requireFDriveRoot(environment);
+  const modelRoot = requireDecisionModelRoot(environment);
   const restoreProxy = configureNodeEnvironmentProxy();
   try {
     await runSmoke(modelRoot, process.argv.slice(2).includes("--install-only"));
@@ -225,13 +225,10 @@ function isMissingFile(error: unknown): boolean {
   );
 }
 
-function requireFDriveRoot(environment: Readonly<NodeJS.ProcessEnv>): string {
+function requireDecisionModelRoot(environment: Readonly<NodeJS.ProcessEnv>): string {
   const modelRoot = environment[MODEL_ROOT_ENV];
   if (modelRoot === undefined) throw new Error("DECISION_MODEL_ROOT_MISSING");
   const normalized = process.platform === "win32" ? win32.normalize(modelRoot) : modelRoot;
-  if (process.platform === "win32" && win32.parse(normalized).root.toUpperCase() !== "F:\\") {
-    throw new Error("DECISION_MODEL_ROOT_MUST_USE_F_DRIVE");
-  }
   return normalized;
 }
 

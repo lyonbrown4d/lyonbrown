@@ -6,6 +6,12 @@
 > and test-covered behavior from release evidence; it does not claim that the
 > product is release-ready.
 
+> Roadmap update, 2026-10-16: distributed agents are now the subsequent iteration
+> direction. First upgrade operation capabilities across Windows, macOS, and Linux
+> and establish single-machine usability on real tasks, then local Root/Subagent
+> orchestration and cross-node execution. The additions below are
+> record planning and current workspace implementation separately; historical results do not establish acceptance on all three platforms for this change.
+
 ## Integrated on `main`
 
 - Node.js 24, pinned pnpm, strict ESM, repository gates, and bilingual
@@ -19,9 +25,12 @@
   snapshot revision fencing, English and Simplified Chinese, six themes, a
   responsive model-setup surface aligned with the accepted design, approvals,
   command palette, Activity Inspector, and terminal text safety.
-- GUI/Desktop code, root Cargo metadata, Rust crates/providers, Rust build
+- Legacy GUI/Desktop code, root Cargo metadata, Rust crates/providers, Rust build
   scripts, and the final Rust TUI snapshot are removed. The tracked repository
   contains no `.rs`, `Cargo.toml`, or `Cargo.lock` product files.
+- A new Electron Desktop client foundation is integrated, reusing the launcher,
+  authenticated gRPC, and daemon. See [Electron Desktop](../architecture/electron-desktop.md)
+  for its current interactions and remaining scope.
 - Windows native model storage now covers private ACLs, reparse-point and file
   identity checks, install locking, bounded staging, atomic activation, and
   installed-file anchoring. Successful activation also safely removes
@@ -130,7 +139,8 @@ checkpoint, not yet release evidence.
 
 The production kernel now has workspace-confined file tools and explicit
 approval, while its secret resolver still rejects. MCP is not connected.
-GUI, Desktop, and mobile clients remain out of scope. Real-GGUF download,
+Electron Desktop has a client foundation; complete product interactions and
+installer distribution remain unfinished. Mobile remains out of scope. Real-GGUF download,
 activation, inference, cancellation, cached restart, and bounded shutdown are
 verified only on the current Windows development machine through production
 composition. A relocatable development directory is verified, but the archived,
@@ -138,28 +148,96 @@ signed, installed final artifact remains unverified, so this is not a
 release-readiness claim.
 
 The architecture remains singular: `agentd` owns Runtime, models, tools, MCP,
-and EventStore; the TUI is only an authenticated gRPC presentation client. No
-embedded Runtime, GUI fallback, or Rust compatibility path may be added.
+and EventStore; TUI and Desktop are authenticated clients. No embedded Runtime,
+legacy GUI fallback, or Rust compatibility path may be added.
 
-## Next order
+## Single-machine usability gaps (code inspection, 2026-10-16)
 
-1. Refine question and risk definitions, expand independent hold-out fixtures, and compare
-   calibration strategies on top of the completed TUI install/status flow and 36-example
-   exploratory benchmark for the [System One layer](../architecture/system-one-decision-layer.md).
-   Keep the `continue_pi` advisory policy until the quality gate passes.
-2. Decide and implement CPU/Vulkan/CUDA artifact variants,
-   archive/checksum/SBOM/signing, and clean-machine installer behavior. Then
-   repeat pinned real-GGUF download, activation, cancellation, inference,
-   cached restart, and bounded shutdown against the final release artifact on
-   supported release hardware.
-3. Extend the ConPTY TUI black box beyond the verified independent daemon, gRPC handshake, and
-   setup-required rendering to assert visible response, tool approval, and cancellation interactions
-   with an already-ready real model. Independent gRPC reuse, restart fencing, inference, and
-   cancellation are now covered by the GGUF black box.
-4. Add runtime context pruning/compaction on top of bounded Pi history
-   hydration, then validate the 4096-token window with a multi-turn real-GGUF
-   scenario.
-5. Extend the existing narrow file-tool and approval path with MCP and secrets;
-   retain default-deny behavior until each capability is independently tested.
-6. Run frozen install plus full format, lint, typecheck, test, build, docs, and
-   `ci-gate` verification against the final artifacts.
+The immediate engineering priority is upgrading operations across Windows, macOS,
+and Linux by capability. Define shared contracts, reuse portable implementations,
+add necessary platform adapters, and verify behavior separately on all three
+platforms. Root `AGENTS.md` owns the engineering constraints. Existing Windows
+implementations and evidence are the migration baseline. POSIX foundations and a Mac independent-daemon smoke are now implemented; complete three-platform task acceptance remains pending.
+
+Near-term Coding usability means submitting a real repository task through TUI
+or Desktop, locating code, editing files, running builds/tests, repairing failures,
+and reporting verification results. Multi-turn interaction, cancellation,
+reconnection, and post-restart state must be understandable. Chat and a single
+file-write smoke do not establish this acceptance level.
+
+| Priority                          | Current evidence and gap                                                                                                                                                                                                                                                      | Next acceptance                                                                                                                                                                                           |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0: cross-platform operations     | Current workspace implements POSIX native directories, locks, GGUF/bundle storage and retains Windows adapters. Independent Mac daemon/gRPC smoke passes. CI now covers three platforms; this change has no Windows/Linux runtime results yet.                                | Complete full gates and real tasks separately on Windows, macOS and Linux, including native dependencies, models, tools, cancellation and restart.                                                        |
+| P0: complete a code task          | Registry adds `list_directory`, `search_files` and high-risk approval-gated `process_execute`, which can explicitly invoke Git or project tools. Real argv, workspace bounds and descendant cancellation have tests; model-driven repository task acceptance remains pending. | Verify locate → edit → run checks → repair → report on all three platforms.                                                                                                                               |
+| P0: execution-model quality       | Production uses local models. Existing real-GGUF evidence primarily covers answers, prescribed file writes, and lifecycle, without a real repository-task quality benchmark.                                                                                                  | Evaluate understanding, tool selection, repair success, and latency against explicit tasks and acceptance criteria before choosing local models or another Provider path.                                 |
+| P0: task context                  | Local inference fixes context at 4096 tokens. Session limits and history hydration exist; application-level runtime pruning/compaction does not.                                                                                                                              | Verify that real multi-turn code tasks retain goals, edits, and verification information as tool output/history grows, with explicit recoverable states at limits.                                        |
+| P1: configuration and recovery UX | CLI still passes the fixed `production-default` fingerprint; full effective-configuration normalization/fingerprinting is not connected. Only completed, unambiguous Sessions resume; running, cancelled, pending-approval, and other unsafe states rotate.                   | Isolate daemon scopes correctly after configuration changes and let users find prior sessions, understand interruption outcomes, and continue without replaying uncertain effects.                        |
+| P1: real-client acceptance        | TUI has real setup/decision-panel evidence; Desktop has connection/chat foundations. Complete visible real-code-task interactions lack acceptance records.                                                                                                                    | Verify a code task, approval denial/acceptance, cancellation, reconnection, and history inspection through the selected client.                                                                           |
+| Before release: delivery          | A relocatable Windows development directory is verified. Final archives, signing, installation, upgrade/rollback, clean-machine acceptance, and Desktop distribution remain unfinished.                                                                                       | Maintain separate artifacts and acceptance records for all three platforms; revalidate installation, real tasks, cache reuse, and cleanup against each final artifact before claiming a platform release. |
+
+### Cross-platform implementation checkpoint (2026-10-16)
+
+- POSIX uses native `openat`, `O_NOFOLLOW`, `flock`, directory handles and identity revalidation, with extended ACL checks on Darwin. Implementation targets macOS/Linux x64 and arm64; unsupported platforms/architectures fail closed.
+- GGUF and decision-model bundles use private directories, complete identity keys, controlled staging, atomic publication and pre/post callback checks. POSIX advisory locks coordinate adapter-managed operations, not hostile same-OS-user processes. Windows native share-deny remains intact. Historical bundle-version collection is still pending.
+- File tools add bounded directory enumeration and literal text search. Process execution uses argument arrays, limited inherited environment, bounded output and timeout/cancellation cleanup; high-risk approval is required. It has host-user authority, not an OS sandbox.
+- New `pnpm smoke:platform` verifies independent daemon startup, native discovery, authenticated gRPC, SQLite and no model download. This machine returned `PLATFORM_SMOKE_OK darwin-arm64`.
+- macOS arm64 passed frozen install, preflight, format, lint, typecheck, test, build and `ci-gate`. The full gates include 46 passing native-adapter tests, 277 agentd tests and 79 script tests; platform-specific skips are excluded from those pass counts. Windows/Linux have no real-run result for this change yet.
+- A macOS arm64 development artifact passed independent import, SQLite, platform prebuilt and relocation smoke, including launcher execution under a path with spaces/Chinese characters. Source hard links were detached; final installation/distribution and real GGUF task acceptance remain pending.
+- Packaging/launchers now distinguish all three platforms, GGUF/TUI smoke entry points allow them, and decision smoke no longer requires drive F. CI defines three-platform quality gates plus daemon smoke; configuration is not remote passing evidence.
+
+### Cross-platform operation scope
+
+This is implementation and acceptance scope, not completed platform support.
+Contracts and observable behavior are shared; permissions, locks, process
+termination, terminals, and signing use appropriate operating-system mechanisms.
+
+| Capability                    | Shared behavior                                                                                                   | Platform adaptation and acceptance                                                                                                                                                    |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Files and workspaces          | Read/write/edit, directory listing, search, atomic replacement, and workspace access boundaries                   | Separators, drive letters, case sensitivity, Unicode, symlinks/reparse points, file identity, and access permissions.                                                                 |
+| Processes and commands        | Argument arrays, working directory, environment, output, exit results, cancellation, deadlines, and child cleanup | Executable discovery, shell selection/quoting, process-tree termination, and avoiding dependencies on one OS command or shell syntax.                                                 |
+| Daemon and local security     | Workspace identity, private directories, discovery, authentication, exclusion locks, startup/shutdown             | Equivalent security constraints using Windows ACLs or POSIX ownership/modes, locking, and stable directory handles.                                                                   |
+| Models and durable storage    | Downloads, checksums, install locks, atomic activation, cache, cancellation, and recovery                         | Native prebuilds by OS/architecture, file anchoring, crash cleanup, and separately recorded hardware-backend evidence.                                                                |
+| Git and clients               | Git workspace lifecycle, TUI input/output, Desktop connection, and restricted preload                             | Git discovery/path handling, terminal/PTY behavior, client lifecycle, and separately declared desktop-interaction permissions.                                                        |
+| Verification and distribution | Shared capability contract tests, real-task scenarios, and check-result formats                                   | Runtime environments and real smoke tests on all three platforms, progressively replacing Windows-only acceptance entry points and verifying artifacts/install lifecycles separately. |
+
+Proceed by capability: files/processes/local security → models/storage → Git/clients
+→ real tasks/artifacts. Unsupported capabilities report unavailability and its
+reason; missing native security continues to deny operations. Support records must
+identify OS, architecture, and runtime evidence; one platform cannot establish
+another platform's support.
+
+Add MCP, secrets, and Skills according to real-task needs, retaining default deny
+until independently verified. Keep the [System One layer](../architecture/system-one-decision-layer.md)
+on `continue_pi`; independent evaluation and calibration can continue, but its
+classification quality is not a prerequisite for ordinary task execution.
+
+## Iteration direction: cross-platform operations → single-machine usability → distributed agents
+
+Distributed architecture was confirmed as the subsequent direction on 2026-10-16.
+Advance by acceptance results; candidate models, transport libraries, and automatic
+recovery behavior in the proposal are not final selections or implemented features.
+
+1. **Cross-platform operations and real tasks on one machine.** Establish contracts,
+   adapters, and acceptance by capability on Windows, macOS, and Linux. Resolve P0
+   gaps and validate client, model, tools, context, and event recovery through real
+   tasks on each platform. Validate release delivery separately per platform.
+2. **Task contracts and local multi-agent execution.** Distinguish Node, Agent,
+   Run, Task, and Attempt; define dependencies, authority, budgets, result submission,
+   and Root acceptance. Run two local Subagents with isolated sessions/workspaces
+   through a replaceable local scheduling interface. Keep Pi in the adapter layer.
+3. **Cross-node Subagents.** Add persistent device identity, membership/execution
+   authority, secure transport, node capabilities, atomic admission, leases,
+   cancellation, and disconnected-result delivery, followed by LAN/VPN candidate
+   discovery. Single-machine execution must not require a center.
+4. **Distributed Coding, then collection validation.** Use fixed baselines and
+   isolated Git workspaces; return commits, logs, and test evidence for Root
+   acceptance/integration. Reuse task contracts for structured collection artifacts.
+5. **Replication, explicit handoff, and an optional Center.** Preserve one writer
+   per Root Session; add incremental synchronization, `ownerEpoch`, and explicit
+   coordinator handoff. Do not promise automatic takeover without the protocol
+   and corresponding failure tests.
+
+At each delivery checkpoint, run the repository-required frozen install,
+preflight, format, lint, typecheck, test, build, and `ci-gate`, with real-scenario
+evidence appropriate to the changes. Existing client gRPC and local daemon epochs
+remain local boundaries, not a node-to-node protocol or Root authority mechanism.
