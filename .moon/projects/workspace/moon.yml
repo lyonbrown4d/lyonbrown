@@ -22,11 +22,10 @@ fileGroups:
     - "/scripts/**/*.ts"
   lint-configs:
     - "/eslint.config.mjs"
-    - "/apps/docs/.vitepress/**/*.mts"
 
 tasks:
   lint:
-    command: "eslint scripts/**/*.ts apps/docs/.vitepress/**/*.mts eslint.config.mjs"
+    command: "eslint scripts/**/*.ts eslint.config.mjs"
     toolchains: "system"
     inputs:
       - "@group(root-configs)"

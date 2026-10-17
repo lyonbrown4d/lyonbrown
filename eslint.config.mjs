@@ -5,7 +5,9 @@ import tseslint from "typescript-eslint";
 const typeScriptFiles = [
   "scripts/**/*.ts",
   "vitest.config.ts",
-  "apps/docs/.vitepress/**/*.mts",
+  "apps/docs/astro.config.ts",
+  "apps/docs/src/**/*.ts",
+  "apps/docs/tests/**/*.ts",
   "packages/**/*.ts",
 ];
 

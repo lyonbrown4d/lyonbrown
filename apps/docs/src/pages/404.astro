@@ -1,0 +1,19 @@
+---
+import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+---
+
+<StarlightPage
+  sidebar={[]}
+  frontmatter={{
+    title: "Page not found · 页面未找到",
+    template: "splash",
+    pagefind: false,
+    hero: {
+      tagline: "Choose a language to return to the documentation. 选择语言，返回项目文档。",
+      actions: [
+        { text: "简体中文", link: "/zh/", variant: "primary" },
+        { text: "English", link: "/en/", variant: "secondary" },
+      ],
+    },
+  }}
+/>

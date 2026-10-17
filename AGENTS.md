@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件统一约定 Lyonbrown 在 Node.js / TypeScript 迁移期间的工程与架构约束。所有贡献者（人类与 AI agent）必须遵守。
+本文件统一约定 Lyonbrown 的工程与架构约束。产品主线采用 Node.js / TypeScript，所有贡献者（人类与 AI agent）必须遵守。
 
 ## 工具链与代码风格
 

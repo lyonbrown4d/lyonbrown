@@ -1,7 +1,7 @@
 # moon task graph
 
 The root package scripts invoke the repository-local moon CLI. `pnpm dev` starts the agent TUI,
-while `pnpm dev:docs` starts VitePress. The TUI task builds `agent-cli` and its complete upstream
+while `pnpm dev:docs` starts Astro with Starlight. The TUI task builds `agent-cli` and its complete upstream
 dependency graph before executing the source entry point with the root `tsx` dependency.
 
 Projects are represented under `.moon/projects` so their dependency edges can be maintained in one

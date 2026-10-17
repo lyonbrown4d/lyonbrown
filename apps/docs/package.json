@@ -8,18 +8,27 @@
     "pnpm": "10.33.4"
   },
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build",
-    "preview": "vitepress preview",
-    "lint": "prettier --check .vitepress package.json tsconfig.json \"**/*.md\"",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitepress build --outDir .vitepress/test-dist"
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "lint": "eslint astro.config.ts src tests && prettier --plugin prettier-plugin-astro --check astro.config.ts package.json tsconfig.json \"src/**/*.{astro,ts,css,json,md}\" \"tests/**/*.ts\"",
+    "typecheck": "astro check",
+    "test": "vitest run"
   },
   "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "@astrojs/markdown-remark": "7.3.3",
+    "@astrojs/starlight": "0.42.6",
+    "@types/mdast": "4.0.4",
+    "astro": "7.4.0",
+    "cheerio": "1.2.0",
+    "eslint": "9.39.1",
     "mermaid": "11.17.2",
+    "photoswipe": "5.4.4",
     "prettier": "3.6.2",
+    "prettier-plugin-astro": "1.1.1",
     "typescript": "5.9.3",
-    "vitepress": "1.6.4",
-    "vitepress-plugin-mermaid": "2.0.17"
+    "unist-util-visit": "5.1.0",
+    "vitest": "4.1.11"
   }
 }

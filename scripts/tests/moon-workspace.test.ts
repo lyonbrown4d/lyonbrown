@@ -51,6 +51,28 @@ describe("moon workspace orchestration", () => {
       await expect(access(join(ROOT, obsoleteFile))).rejects.toMatchObject({ code: "ENOENT" });
     }
   });
+
+  test("builds Astro documentation before validating its generated links", async () => {
+    const [project, manifest, rootManifest] = await Promise.all([
+      readFile(join(ROOT, ".moon/projects/docs/moon.yml"), "utf8"),
+      readFile(join(ROOT, "apps/docs/package.json"), "utf8"),
+      readFile(join(ROOT, "package.json"), "utf8"),
+    ]);
+    const docs = JSON.parse(manifest) as {
+      scripts: Record<string, string>;
+      devDependencies: Record<string, string>;
+    };
+    const root = JSON.parse(rootManifest) as { pnpm: { overrides: Record<string, string> } };
+    expect(docs.scripts.build).toBe("astro build");
+    expect(docs.scripts.test).toBe("vitest run");
+    expect(docs.devDependencies.astro).toBe("7.4.0");
+    expect(docs.devDependencies["@astrojs/starlight"]).toBe("0.42.6");
+    expect(root.pnpm.overrides).toMatchObject({ vite: "6.4.3", "astro>vite": "8.3.4" });
+    expect(project).toContain('deps: ["docs:build"]');
+    expect(project).toContain('deps: ["docs:typecheck"]');
+    expect(project).toContain('outputs: ["/apps/docs/dist"]');
+    expect(project).not.toContain(".vitepress");
+  });
 });
 
 async function packageDirectories(...roots: readonly string[]): Promise<readonly string[]> {

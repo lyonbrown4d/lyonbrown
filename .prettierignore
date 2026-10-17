@@ -1,7 +1,6 @@
 coverage/
 dist/
 node_modules/
-**/.vitepress/test-dist/
-**/.vitepress/cache/
+**/.astro/
 packages/protocol/src/generated/
 target/

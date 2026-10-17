@@ -249,7 +249,7 @@ describe("repository checks", () => {
     const root = await makeRepository();
     await writeFile(
       join(root, "apps/docs/package.json"),
-      JSON.stringify({ private: true, devDependencies: { vitepress: "1.6.4" } }),
+      JSON.stringify({ private: true, devDependencies: { astro: "7.4.0" } }),
       "utf8",
     );
 

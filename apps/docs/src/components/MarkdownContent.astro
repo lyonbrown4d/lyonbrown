@@ -1,0 +1,13 @@
+---
+import MarkdownContent from "@astrojs/starlight/components/MarkdownContent.astro";
+import "photoswipe/style.css";
+---
+
+<MarkdownContent>
+  <slot />
+</MarkdownContent>
+
+<script>
+  import { initializeDiagrams } from "@lyonbrown/docs/internal/diagrams/mermaid-client";
+  initializeDiagrams();
+</script>

@@ -1,7 +1,11 @@
 language: "typescript"
 layer: "application"
 fileGroups:
-  package: ["/apps/docs/**/*"]
+  package:
+    - "/apps/docs/**/*"
+    - "!/apps/docs/dist/**/*"
+    - "!/apps/docs/.astro/**/*"
+    - "!/apps/docs/node_modules/**/*"
 tasks:
   lint:
     args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "lint"]
@@ -9,10 +13,11 @@ tasks:
     args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "typecheck"]
   test:
     args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "test"]
-    outputs: ["/apps/docs/.vitepress/test-dist"]
+    deps: ["docs:build"]
   build:
     args: ["--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "build"]
-    outputs: ["/apps/docs/.vitepress/dist"]
+    deps: ["docs:typecheck"]
+    outputs: ["/apps/docs/dist"]
   dev:
     command: ["pnpm", "--dir", "apps/docs", "--config.enable-pre-post-scripts=false", "run", "dev"]
     toolchains: "system"

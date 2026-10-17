@@ -10,9 +10,7 @@ dist/
 coverage/
 /.moon/cache/
 /packages/protocol/src/generated/
-**/.vitepress/cache/
-**/.vitepress/dist/
-**/.vitepress/test-dist/
+**/.astro/
 .env
 .env.*
 !.env.example

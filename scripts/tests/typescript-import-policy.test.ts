@@ -14,6 +14,7 @@ const relativeJavaScriptSpecifier =
   /(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)["'](\.{1,2}\/[^"']+[.](?:c|m)?js)["']/gu;
 const workspaceRoots = new Map<string, string>([
   ["workspace", "scripts/"],
+  ["docs", "apps/docs/"],
   ["agent-cli", "apps/agent-cli/"],
   ["agent-desktop", "apps/agent-desktop/"],
   ["agentd", "apps/agentd/"],
