@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3d63333f.js";
+            window.path_to_searchindex_js = "searchindex-0cd9575c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -438,8 +438,10 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 </div>
 <p>变更操作要求准确动作人工审批。daemon 检查会话、所有者代次、runtime host 绑定、取消状态和人工接管状态。人工接管期间暂停模型变更；模型工具不开放原始输入和接管能力。快照过期后重新观察，未知结果先核对记录，禁止自动重放。Profile 保存不代表活页面恢复。</p>
 <p>模型侧变更在同一本地事务中消费准确审批、保存浏览器执行意图，并写入事件和 Outbox；事务再次检查运行仍在执行、会话及所有者代次一致。事务失败时审批和意图一同回滚。提交后才向获批的 runtime host 发送操作；等待回执时取消或断线会保留 <code>Uncertain</code>，不重放动作。客户端的人工浏览器操作使用独立的认证入口，并保存相同类型的执行意图和结果回执。</p>
+<p>原生 CEF 语义动作在滚动、聚焦、按键或导航之前撤销旧快照。进入这些步骤后，动作或后续观察失败会进入 <code>Uncertain</code>，停止本次模型运行，并保留持久回执供人工核对。输入、所有权和快照检查在动作之前完成。</p>
 <p><code>apps/agentd/tests/browser_tools.rs</code> 通过本地 HTTP 模型 mock 和真实协议适配器覆盖 Responses、Chat Completions、Anthropic Messages，以及批准、拒绝、所有权/会话边界、取消和截图 artifact。其 runtime host 是合成实现，验证的是 Harness 到 daemon 的工具契约与持久状态，不能替代原生 CEF 自主浏览器操作验收。</p>
 <p>原生链路使用 <code>apps/agentd/tests/native_browser_tools.rs</code> 单独验收。在 macOS 27.0.1 arm64 的调试 CEF 环境中，三个协议分别完成真实 AX 观察、准确审批后的填入与点击，并通过本地 HTTP 页面副作用和持久回执核对结果；另三种场景在点击成功后丢弃回执，确认取消与恢复不重放，运行保持 <code>Uncertain</code>。测试只操作合成页面和独立 Profile，使用调试测试钥匙串，不证明生产钥匙串或其他平台已验收。</p>
+<p><code>apps/agentd/tests/native_browser_post_effect.rs</code> 通过 Responses 协议验证点击后的页面错误：一次实际点击产生一次本地 HTTP 副作用，随后超限页面内容触发错误。测试确认运行与浏览器回执持久化为 <code>Uncertain</code>、模型停止继续执行、恢复不重放，并拒绝在未核对结果的会话中启动新运行。该场景与上述六个场景均使用重新构建并签名的原生宿主执行。</p>
 <pre><code class="language-sh">cargo test -p agentd --test browser_tools --test command_tools --locked
 </code></pre>
 <p>原生运行截图的覆盖范围见<a href="#桌面运行截图与验收范围">桌面运行截图与验收范围</a>。浏览器工具实现位于 <code>apps/agentd/src/browser/agent_tools/</code>，BrowserRuntime 生命周期契约见<a href="#协议与平台能力">协议与平台能力</a>。</p>
