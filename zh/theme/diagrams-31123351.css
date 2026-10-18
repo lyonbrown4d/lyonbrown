@@ -1,0 +1,17 @@
+.diagram-preview {
+    display: block;
+    width: 100%;
+    padding: 1rem;
+    border: 1px solid var(--table-border-color);
+    border-radius: 0.4rem;
+    background: var(--bg);
+    color: var(--fg);
+    cursor: zoom-in;
+}
+.diagram-preview svg { display: block; width: 100%; height: auto; max-height: 40rem; }
+.diagram-preview:focus-visible { outline: 3px solid var(--links); outline-offset: 3px; }
+.diagram-footer { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 0.5rem; align-items: baseline; }
+.diagram-footer details { flex: 1; min-width: 12rem; }
+.diagram-footer summary { cursor: pointer; }
+.diagram-status { font-size: 0.9em; }
+.diagram-lightbox { --pswp-bg: var(--bg); --pswp-icon-color: var(--fg); }

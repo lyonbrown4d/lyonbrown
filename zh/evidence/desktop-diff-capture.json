@@ -1,0 +1,24 @@
+{
+  "captured_at_utc": "2026-10-18T12:11:04.474522+00:00",
+  "platform": "macOS 27.0.1 arm64",
+  "product_version": "0.1.0",
+  "gpui_kit_version": "0.7.3",
+  "native_window": true,
+  "theme": "dark",
+  "diff_mode": "unified",
+  "executable_kind": "dev profile acceptance example, production GPUI and authenticated agentd, local synthetic HTTP model fixture; not final installer",
+  "executable_sha256": "368feff4d6a9ee6db1250e614c2654df02adeaf0dbb7c20050a4c3f9e009a335",
+  "source_scope": "V8 native acceptance build; not final release installer",
+  "screenshot_sha256": "d40dd4bc88f0102bc76178f8967779735d224f77e53855545a7322fcfc883f82",
+  "run_id": "01a14eea-a1bb-75be-9957-443fe3c035db",
+  "persisted_run_status": "completed",
+  "tracked_file": "README.md",
+  "fixture_git_head": "f78bda005175f72363e50e65cf56645da4715e08",
+  "actual_git_patch_sha256": "235bf0d30bce591b85ab579ba5ce603fc48429a408b5535cfb7f9c25da66ff1c",
+  "patch": "diff --git a/README.md b/README.md\nindex e50b1ee..e23429c 100644\n--- a/README.md\n+++ b/README.md\n@@ -1,3 +1,3 @@\n # Native workspace\n \n-Original tracked content.\n+A real change for the native Diff workbench.\n",
+  "paid_model_calls": false,
+  "limits": [
+    "Native Computer input, production Keychain, Windows/Linux and public WAN are not established by these captures.",
+    "Browser/takeover captures are recorded separately."
+  ]
+}

@@ -1,0 +1,345 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Connect peers and Control Relay - Lyonbrown User and Developer Guide</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="theme/vendor/photoswipe-b0eaaae0.css">
+        <link rel="stylesheet" href="theme/diagrams-31123351.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-714922a7.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-2d1e3935.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Lyonbrown User and Developer Guide</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="connect-peers-and-control-relay"><a class="header" href="#connect-peers-and-control-relay">Connect peers and Control Relay</a></h1>
+<p>This page is for operators configuring a Master, Worker and self-hosted <code>agent-control</code>. Direct connections and Relay use the same <code>PeerService</code>, <code>TaskService</code>, pairing and durable task rules. Clients connect to their local Master; daemons establish connections between nodes. See <a href="architecture.html">Components and calls</a>.</p>
+<h2 id="verify-identities-and-permissions"><a class="header" href="#verify-identities-and-permissions">Verify identities and permissions</a></h2>
+<p>Each daemon has its own data directory and node identity. Its public identity contains a node ID, TLS certificate and Noise public key. Private keys stay in its local <code>peers/peer-identity.json</code>. Control has a separate data directory: <code>identity/peer-identity.json</code> holds its private identity, while <code>control.sqlite3</code> holds trust, directory records and allowed links. Exchange only public JSON exported by the identity commands below; do not copy private identity files.</p>
+<p>Before pairing, compare the complete pairing fingerprint over an independent trusted channel. It binds the node ID, TLS certificate fingerprint and Noise public key. A certificate-only fingerprint cannot authorize the independent Noise identity. Pairing is a local human action: network <code>Pair</code> requests are denied, and mDNS candidates neither establish trust nor select routes.</p>
+<p>Run commands from the repository root, replacing example directories with actual absolute paths. Daemon maintenance commands require exclusive access to their data directory. Stop the corresponding daemon safely before maintenance, then restart its listener to reload mTLS trust roots. Initial identity export does not require a peer listener.</p>
+<pre><code class="language-sh">cargo run -p agentd -- --data-dir /path/to/master peer-identity &gt; master-public.json
+cargo run -p agentd -- --data-dir /path/to/worker peer-identity &gt; worker-public.json
+</code></pre>
+<p>Public JSON goes to stdout; the complete pairing fingerprint goes to stderr. Replace the fingerprint placeholders only after independent verification:</p>
+<pre><code class="language-sh">cargo run -p agentd -- --data-dir /path/to/worker peer-pair \
+  --identity master-public.json --fingerprint '&lt;verified-master-fingerprint&gt;' \
+  --capabilities tasks.submit,tasks.read,tasks.cancel,tasks.accept,workspace.read,workspace.write.approval
+cargo run -p agentd -- --data-dir /path/to/master peer-pair \
+  --identity worker-public.json --fingerprint '&lt;verified-worker-fingerprint&gt;' \
+  --capabilities workspace.read,workspace.write.approval
+</code></pre>
+<p>The receiving node’s trust record governs permissions. On the Worker, <code>tasks.submit</code>, <code>tasks.read</code>, <code>tasks.cancel</code> and <code>tasks.accept</code> allow the Master to submit, query/watch, cancel and accept results respectively. Submission also requires the Master’s trust scope to include every requested task capability. This example permits reads and writes requiring approval; for read-only work, remove <code>workspace.write.approval</code> from both the pairing and task scopes. Pairing the Worker on the Master verifies the Worker’s identity without granting it reverse task-submission permission.</p>
+<h2 id="configure-direct-connections"><a class="header" href="#configure-direct-connections">Configure direct connections</a></h2>
+<p>Add this section to each daemon’s <code>config.toml</code> in its data directory:</p>
+<pre><code class="language-toml">[peer]
+listen = "0.0.0.0:7448"
+advertise_url = "https://worker.example.test:7448"
+mdns = false
+</code></pre>
+<p>Use each node’s own reachable address. The listen port must be nonzero. <code>advertise_url</code> must be an HTTPS origin using that port, without credentials, a path, query, fragment or wildcard hostname. Unspecified addresses <code>0.0.0.0</code> / <code>::</code> cannot be advertised. Without <code>[peer]</code>, no peer listener starts. Pair at least one node before starting an mTLS listener.</p>
+<p>Keep the local client listener on loopback; do not expose the default client endpoint <code>127.0.0.1:7447</code> publicly. The separate peer listener provides mTLS node and task services. TLS verifies the paired certificate and node-derived server name; <code>Hello</code> then checks the node ID, certificate fingerprint and protocol range.</p>
+<p>See <a href="quickstart.html">Run locally</a> for daemon configuration precedence. Peer settings support <code>LYONBROWN_PEER_LISTEN</code>, <code>LYONBROWN_PEER_ADVERTISE_URL</code> and <code>LYONBROWN_PEER_MDNS</code>. <code>mdns</code> defaults to <code>false</code>; enabling it still requires human pairing and an explicit target.</p>
+<h2 id="configure-outbound-relay"><a class="header" href="#configure-outbound-relay">Configure outbound Relay</a></h2>
+<p>Both Master and Worker initiate connections to Control’s HTTPS listener. Neither needs direct access to the other’s peer TCP port. Both still require <code>[peer]</code> and bind its local port at startup. For Relay-only operation, <code>listen</code> may use loopback; <code>advertise_url</code> must still satisfy peer URL validation.</p>
+<p>Export Control’s public identity:</p>
+<pre><code class="language-sh">cargo run -p agent-control -- --data-dir /path/to/control identity &gt; control-public.json
+</code></pre>
+<p>Import its verified identity on both daemons. The explicit <code>control.relay</code> scope does not replace pairing between Master and Worker:</p>
+<pre><code class="language-sh">cargo run -p agentd -- --data-dir /path/to/master peer-pair \
+  --identity control-public.json --fingerprint '&lt;verified-control-fingerprint&gt;' \
+  --capabilities control.relay
+cargo run -p agentd -- --data-dir /path/to/worker peer-pair \
+  --identity control-public.json --fingerprint '&lt;verified-control-fingerprint&gt;' \
+  --capabilities control.relay
+</code></pre>
+<p>Import both public identities on Control and authorize both directions:</p>
+<pre><code class="language-sh">cargo run -p agent-control -- --data-dir /path/to/control pair master-public.json \
+  --pairing-fingerprint '&lt;verified-master-fingerprint&gt;'
+cargo run -p agent-control -- --data-dir /path/to/control pair worker-public.json \
+  --pairing-fingerprint '&lt;verified-worker-fingerprint&gt;'
+cargo run -p agent-control -- --data-dir /path/to/control allow '&lt;master-node-id&gt;' '&lt;worker-node-id&gt;'
+cargo run -p agent-control -- --data-dir /path/to/control allow '&lt;worker-node-id&gt;' '&lt;master-node-id&gt;'
+</code></pre>
+<p>Control’s <code>pair</code> grants <code>control.register</code>, <code>control.resolve</code> and <code>control.relay</code>. <code>allow</code> authorizes one direction only; responses require the reverse direction. Restart Control’s listener after pairing to load its trust roots.</p>
+<p>Add this section to the Master’s <code>config.toml</code>; on the Worker, set <code>routes</code> to the Master’s node ID. IDs come from public identity JSON, not directory names or invented display names.</p>
+<pre><code class="language-toml">[relay]
+control_node_id = "control"
+endpoint = "https://control.example.test:7449"
+routes = ["&lt;worker-node-id&gt;"]
+</code></pre>
+<p><code>routes</code> requires 1–32 distinct IDs, excluding Control and the local node. Control and route IDs allow 1–128 ASCII letters, digits, <code>-</code>, <code>_</code>, <code>:</code> and <code>.</code>. The Relay endpoint must be an HTTPS origin without credentials, a path, query or fragment. Relay settings come from TOML; there are no dedicated Relay environment variables or CLI flags.</p>
+<p>Nodes in <code>routes</code> always use Relay; other nodes use direct connections. Once Relay is selected, disconnection or authentication failure returns an error without falling back to a direct route. Task commands still require the Worker’s HTTPS <code>--node-endpoint</code> for the same inner mTLS connection; do not replace it with Control’s address.</p>
+<p>Control reads <code>control.toml</code> from its data directory by default; <code>--config</code> selects another file. For example:</p>
+<pre><code class="language-toml">node_id = "control"
+listen = "0.0.0.0:7449"
+lease_seconds = 60
+queue_capacity = 32
+log_directory = "logs"
+log_retention = 14
+log_filter = "info"
+</code></pre>
+<p>Precedence is defaults, TOML, <code>.env</code> beside the configuration file, process environment, then <code>--listen</code>. Environment aliases are <code>LYONBROWN_CONTROL_NODE_ID</code>, <code>LYONBROWN_CONTROL_LISTEN</code>, <code>LYONBROWN_CONTROL_LEASE_SECONDS</code>, <code>LYONBROWN_CONTROL_QUEUE_CAPACITY</code>, <code>LYONBROWN_CONTROL_LOG_DIRECTORY</code>, <code>LYONBROWN_CONTROL_LOG_RETENTION</code> and <code>LYONBROWN_CONTROL_LOG_FILTER</code>. The default listener is <code>127.0.0.1:7449</code>. Directory leases allow 1–3600 seconds, queue capacity 1–1024 and retained log files 1–365. Relative log directories resolve against Control’s data directory.</p>
+<p>Alternatively, manage links with <code>allowed_links = []</code> or <code>[[allowed_links]]</code> entries containing <code>source</code> and <code>target</code> in <code>control.toml</code>. When this field is present, <code>serve</code> atomically replaces the entire persisted allow graph at startup. Omitting it preserves links written by <code>allow</code> / <code>deny</code>.</p>
+<pre><code class="language-sh">cargo run -p agent-control -- --data-dir /path/to/control serve
+cargo run -p agentd -- --data-dir /path/to/master
+cargo run -p agentd -- --data-dir /path/to/worker
+</code></pre>
+<p>Run these in separate terminals or on their respective nodes. Control authenticates outbound streams with mTLS and checks directional permissions. Noise IK authenticates the end-to-end tunnel using paired public keys; ordinary mTLS and <code>TaskService</code> run inside that tunnel. Control sees source/target IDs, link identifiers and ciphertext sizes. It receives no task plaintext and executes no models or tools. Queues are bounded and are not durable task queues; successful enqueueing does not confirm Worker execution.</p>
+<p><code>ControlService</code> exposes leased <code>Register</code> / <code>Resolve</code> operations, but the daemon’s Relay runtime only opens an outbound stream. It does not automatically register, renew leases or resolve directory entries. These explicit routes do not depend on directory registration; directory records cannot establish pairing trust.</p>
+<h2 id="dispatch-approvals-and-recovery"><a class="header" href="#dispatch-approvals-and-recovery">Dispatch, approvals and recovery</a></h2>
+<p>Manage tasks through the CLI connected to the Master. First create a Master session and start a run; dispatch requires <code>--parent-run</code> to identify a run in that session with status <code>running</code>. Preserve preselected UUIDs for the Task and Attempt, plus a stable idempotency key.</p>
+<pre><code class="language-sh">cargo run -p agent-cli -- --data-dir /path/to/master task dispatch \
+  --node-id '&lt;worker-node-id&gt;' --node-endpoint https://worker.example.test:7448 \
+  --session '&lt;session-id&gt;' --parent-run '&lt;active-run-id&gt;' \
+  --task-id '&lt;task-uuid&gt;' --attempt-id '&lt;attempt-uuid&gt;' \
+  --idempotency-key '&lt;stable-key&gt;' --instructions 'Inspect the assigned workspace' \
+  --capability workspace.read --deadline-seconds 3600
+</code></pre>
+<p>The deadline allows 1–86400 seconds. The Worker uses its own model, credentials and Harness, creating an isolated workspace and session under <code>worker-workspaces/&lt;task_id&gt;/&lt;attempt_id&gt;</code>. It does not copy the Master’s session history or workspace files. Task capabilities can only reduce the Worker’s available tools. Writes still require local approval on the Worker through a client connected to that Worker; Relay and Master result acceptance cannot bypass tool approval.</p>
+<p>A successful Worker attempt leaves the Task <code>awaiting_acceptance</code>. Explicit Master acceptance makes it <code>completed</code>:</p>
+<pre><code class="language-sh">cargo run -p agent-cli -- --data-dir /path/to/master task get '&lt;task-uuid&gt;'
+cargo run -p agent-cli -- --data-dir /path/to/master task reconcile '&lt;task-uuid&gt;' \
+  --node-id '&lt;worker-node-id&gt;' --node-endpoint https://worker.example.test:7448
+cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&gt;' \
+  --node-id '&lt;worker-node-id&gt;' --node-endpoint https://worker.example.test:7448 --accepted true
+</code></pre>
+<p><code>task list --session &lt;session-id&gt;</code> pages through Master’s records. <code>task cancel</code> takes the same target arguments as <code>reconcile</code>. Reject results with <code>task accept … --accepted false</code>.</p>
+<p>After disconnects, timeouts or lost cancellation responses, retain the original Task, Attempt, key and target. Use <code>get</code> for local state and <code>reconcile</code> to check that same remote attempt. The Master persists unknown attempt outcomes as <code>uncertain</code>. Relay reconnection restores transport without automatically reconciling business state or replaying requests. Do not dispatch fresh identities to bypass an unknown outcome. On restart, the Worker also marks unfinished attempts uncertain without re-executing them. See <a href="persistence.html">Sessions, tasks and recovery</a>.</p>
+<h2 id="revoke-access-and-investigate-failures"><a class="header" href="#revoke-access-and-investigate-failures">Revoke access and investigate failures</a></h2>
+<ul>
+<li>Deny one direction with <code>agent-control --data-dir /path/to/control deny &lt;source&gt; &lt;target&gt;</code>. Deny both directions for bidirectional isolation. If <code>allowed_links</code> is configured, update it too so restart does not restore the old graph.</li>
+<li>Revoke a node on Control with <code>agent-control --data-dir /path/to/control revoke &lt;node-id&gt;</code>. Active streams recheck trust; restart the listener to remove its old CA root.</li>
+<li>Revoke a daemon’s paired identity by stopping that daemon, running <code>agentd --data-dir /path/to/node peer-revoke --node-id &lt;node-id&gt;</code>, then restarting its listener. Identity rotation requires another export, independent verification and pairing on the relevant receivers.</li>
+<li>For mTLS failures, check public identities, complete pairing fingerprints, trust on both ends and listener restarts. Keep identity verification enabled.</li>
+<li>For Relay failures, check both outbound streams, both route sets, Control’s bidirectional links and paired identities. <code>target has no active outbound relay stream</code> means no active target stream; backpressure errors mean a bounded queue could not accept data in time.</li>
+<li>Inspect structured logs in each data directory for <code>control.listen</code>, <code>control.relay</code>, <code>relay.transport</code> and task IDs. Do not include tokens, private keys or full task plaintext in diagnostic material.</li>
+</ul>
+<h2 id="sources-and-verification-scope"><a class="header" href="#sources-and-verification-scope">Sources and verification scope</a></h2>
+<p>This page was checked against the current workspace’s <code>apps/agentd/src/peers/</code>, <code>apps/agent-cli/src/task_command.rs</code>, <code>apps/agent-control/src/</code>, <code>crates/agent-config/src/{peer,relay}.rs</code> and <code>crates/agent-distributed/src/</code>. <code>apps/agent-control/tests/relay_tasks.rs</code> defines local real mTLS / Noise relay tests covering the Worker Harness, isolated workspaces, result acceptance and reconciliation of the same attempt after disconnection. Standard model protocols use a local mock server without paid model calls.</p>
+<p>Test definitions and documentation builds do not establish public deployment, cross-device networking or acceptance on all three platforms. See <a href="runtime-evidence.html">Desktop screenshots and acceptance scope</a> for the scope of runtime evidence. Commands and configuration here were checked against source; they are not a deployment execution record.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="runtime-evidence.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="protocol.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="runtime-evidence.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="protocol.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-09f2665d.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-609e4cb8.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/vendor/mermaid-581ed7d7.min.js"></script>
+        <script src="theme/vendor/photoswipe-ba86fd2d.umd.min.js"></script>
+        <script src="theme/diagrams-60aa7026.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

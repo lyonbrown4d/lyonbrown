@@ -1,0 +1,38 @@
+ Lyonbrown Connected                                                                                                                        
+                                                                                                                                            
+┌Sessions──────────────┐┌Conversation───────────────────────────────────────────────────────────────────────────┐┌Tasks────────────────────┐
+│› New conversation    ││You                                                                                    ││01a14e60-bf1f-702a-bf89-e│
+│  New chat            ││Review the native workspace and explain the next steps.                                ││b4ffde2d82f              │
+│                      ││                                                                                       ││completed                │
+│                      ││Agent                                                                                  ││                         │
+│                      ││## Native conversation                                                                 ││01a14e61-0eee-74e3-b569-b│
+│                      ││                                                                                       ││80f155ba293              │
+│                      ││This response streamed through the authenticated daemon into the **GPUI Markdown       ││awaiting_approval        │
+│                      ││view**.                                                                                ││                         │
+│                      ││                                                                                       ││                         │
+│                      ││- Sessions and jobs remain in agentd.                                                  ││                         │
+│                      ││- The composer and keyboard focus are native.                                          ││                         │
+│                      ││                                                                                       ││                         │
+│                      ││Ask for a workspace note next to inspect a real tool approval.                         ││                         │
+│                      ││                                                                                       ││                         │
+│                      ││You                                                                                    ││                         │
+│                      ││Create a workspace note in notes.txt.                                                  │└─────────────────────────┘
+│                      ││                                                                                       │┌Approvals────────────────┐
+│                      ││                                                                                       ││01a14e61-0f89-7293-9048-d│
+│                      ││                                                                                       ││eb75f2cb3c5              │
+│                      ││                                                                                       ││write_file               │
+│                      ││                                                                                       ││{"path":"notes.txt","cont│
+│                      ││                                                                                       ││ent":"Created by a real  │
+│                      ││                                                                                       ││daemon tool after native │
+│                      ││                                                                                       ││approval.\n"}            │
+│                      ││                                                                                       ││                         │
+│                      ││                                                                                       ││                         │
+│                      ││                                                                                       ││                         │
+│                      ││                                                                                       ││                         │
+└──────────────────────┘└───────────────────────────────────────────────────────────────────────────────────────┘└─────────────────────────┘
+┌Message · Enter send · Alt+Enter newline──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│▏                                                                                                                                         │
+│                                                                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+Task event · approval_required · cursor 18                                                                                                  
+                                                                                                                                            

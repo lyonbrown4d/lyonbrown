@@ -1,0 +1,150 @@
+{
+  "platform": "macOS 27.0.1 arm64",
+  "product_version": "0.1.0",
+  "gpui_kit_version": "0.7.3",
+  "native_window": true,
+  "executable_kind": "dev profile acceptance example, production GPUI and authenticated agentd, local synthetic HTTP model fixture; not final installer",
+  "executable_sha256": "368feff4d6a9ee6db1250e614c2654df02adeaf0dbb7c20050a4c3f9e009a335",
+  "source_sha256": {
+    "Cargo.toml": "072e5ff93df8f0647e4a2f8f4a1160b038eff29dbc8c90d9a71690e8b43a6399",
+    "Cargo.lock": "be5df1f32459e9dcaac3af389853c759303abfb4c53a2c5acfe56ffc9726fa69",
+    "apps/agent-desktop/examples/native_acceptance.rs": "c481ae1de5e19eac5f57f02d60c6807ef50a97d78e124137ee13280fdbfb2b1c",
+    "apps/agent-desktop/src/chrome.rs": "cb46674db4f39be302fa5f2d6c9fca8642b51b40a5a7383f5081cf7b8ac4dc00",
+    "apps/agent-desktop/src/composition.rs": "28c5061c959caf4b2911d158ccf7080b63726793bbfe6dbaf03e4907f083969f",
+    "apps/agent-desktop/src/connection.rs": "f1492027a11e69a869dc33ec6c583310167af32415e645a52c2e06b37ad4babf",
+    "apps/agent-desktop/src/lib.rs": "9ee1fa0e7c3ad6c27be15dab933900ecc37eb49c9925875488ab13731d82d2d5",
+    "apps/agent-desktop/src/main.rs": "5e0694087233be0c939601d892e0911bbb78b5d2cfb8e86fa6d8ba0e3690b481",
+    "apps/agent-desktop/src/message.rs": "7f0c768af343b368b0a505d4be4c4639536e77149eda7a137f0f2d6966da9e75",
+    "apps/agent-desktop/src/operations.rs": "8a6da52d94f09a6aac28cc6ea28a9214f09ea1464128b744eeab62db937a408d",
+    "apps/agent-desktop/src/panes.rs": "0349588280aee2cc6141e7d534ffaa79627197eb4d126789bfbc4f685fc179c5",
+    "apps/agent-desktop/src/presentation.rs": "9c3e6271c6dbdfab5bded02b987b3f9b3c8e21a189d93cc9202b36cf27f7b884",
+    "apps/agent-desktop/src/projection.rs": "445b7ad4ed77912b5e4cb332c9815b3daa857abff5ec133ba296f664418b6579",
+    "apps/agent-desktop/src/settings.rs": "947354b20f6cc9010163e3a15698f7a1b30049779976a5931081274b338f7f4c",
+    "apps/agent-desktop/src/shell.rs": "78cf0e33e2798ad444745411bf735d188cf10cada3fe98fb7799dc2754807dd8",
+    "apps/agent-desktop/src/tabs/state.rs": "21cb669a3cf65689742c732d79113cc01d3f081e979690b6f39cd19bacfd47f9",
+    "apps/agent-desktop/src/tabs/view.rs": "09eae94118ba52359898cdc6126ffa7cd75d722bc235ca9fb6183cb39b70c1f0",
+    "apps/agent-desktop/src/tabs.rs": "2865b1902f35fea92b92f43edf286f5aeaba54847d50abfd4925c6237a8bb0b0",
+    "apps/agent-desktop/src/workbench/browser.rs": "e3ff5b3f085c4deafad008ab49efff879064255e9204679658d00ed715e6b54f",
+    "apps/agent-desktop/src/workbench/drafts.rs": "d51afad0bb3f935d96848f28214982dcc8f0404c55724999c6c5a463fac8e20c",
+    "apps/agent-desktop/src/workbench/files.rs": "0e9b20ca014cbdd33f12dd1aff5b5dad64248e317dfbe879245edd7dc079bc2f",
+    "apps/agent-desktop/src/workbench/ime.rs": "a5f2f1c4bc5931ab99f6014a830ef10afa6373c39d9297df5a4d836b0e19a35b",
+    "apps/agent-desktop/src/workbench/input.rs": "70d10d2b78c104262d60b0517c1bb7d6a41790c9d6d374744a003cc9f246c90e",
+    "apps/agent-desktop/src/workbench/replies.rs": "b6e793584411a5eaf184eea071b589417f952bee22359b13468418ab85a9c4fb",
+    "apps/agent-desktop/src/workbench/state.rs": "668a5fba1bcecdec17369ab05cbdf4a7e000161720d5908ea3c547f7838c9ac6",
+    "apps/agent-desktop/src/workbench/tasks.rs": "25a0259525e529f79564719999b105d6e11a49e067976c3d1d0abfcab46f3b77",
+    "apps/agent-desktop/src/workbench/watch.rs": "1fba0ba311d017b00b8ef479355a44735f13c162421c9b54d66bd90f8eeda0bd",
+    "apps/agent-desktop/src/workbench.rs": "49eb9670d01bb9c66b35e974fd90656714f48f75fe14d2a5d8b012b7d6be06d9"
+  },
+  "images": {
+    "desktop-settings-macos.png": {
+      "sha256": "03f13f2efb8d37c92682f5146e59ff76216e4133c379275be70ae3f53948fa20",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:05:37.869077+00:00"
+    },
+    "desktop-chat-light-macos.png": {
+      "sha256": "8776469d06fe24e1afa9dc200e79800a29b0e69e26ccf0e323fcc6fc00e1de7e",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:06:15.205048+00:00"
+    },
+    "desktop-chat-dark-macos.png": {
+      "sha256": "aff989c87ca72202d1dd681fe4a31dae8597b35efd20df2c710015192b9252b7",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:08:19.423219+00:00"
+    },
+    "desktop-tabs-macos.png": {
+      "sha256": "e18994ce1fdbd9ed91a6856b5d7be456d438e774163453d4639850bf50ad5083",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:08:54.773561+00:00"
+    },
+    "desktop-panels-collapsed-macos.png": {
+      "sha256": "090b346fa1c2f62c09fac922895ba74450b30f17dde725053073c56cef82a0f2",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:09:07.186936+00:00"
+    },
+    "desktop-approval-macos.png": {
+      "sha256": "ba6ad87c86eb5b3972a279aa04475a746551200afce0cbb482c47afab02f2e0d",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:09:26.775705+00:00"
+    },
+    "desktop-editor-macos.png": {
+      "sha256": "0a997e9029967c5ce82555c2396893887bab781ca813ceae80ba37c91f766969",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:10:01.198689+00:00"
+    },
+    "desktop-diff-macos.png": {
+      "sha256": "d40dd4bc88f0102bc76178f8967779735d224f77e53855545a7322fcfc883f82",
+      "pixels": [
+        4718592,
+        4292935744
+      ],
+      "captured_at_utc": "2026-10-18T12:11:04.474522+00:00"
+    }
+  },
+  "runs": [
+    {
+      "id": "01a14ee7-6ee9-7523-8b27-112096adc3cb",
+      "session_id": "01a14ee7-6ee7-777b-a9a0-06e85f64bc57",
+      "status": "completed",
+      "prompt": "Show the native conversation layout.",
+      "result": "## Native conversation\n\nThis response streamed through the authenticated daemon into the **GPUI Markdown view**.\n\n- Sessions and jobs remain in agentd.\n- The composer and keyboard focus are native.\n\nAsk for a workspace note next to inspect a real tool approval."
+    },
+    {
+      "id": "01a14eea-a1bb-75be-9957-443fe3c035db",
+      "session_id": "01a14ee9-aeaa-763a-9bca-219251955220",
+      "status": "completed",
+      "prompt": "Write notes.txt after approval.",
+      "result": "The workspace note was written after your approval. Open **Files** to read or edit `notes.txt`; the **Diff** tab shows the tracked README change."
+    }
+  ],
+  "approvals": [
+    {
+      "id": "01a14eea-a20e-72d5-95ab-a0a7a025de18",
+      "run_id": "01a14eea-a1bb-75be-9957-443fe3c035db",
+      "status": "consumed",
+      "tool": "write_file",
+      "arguments_json": "{\"path\":\"notes.txt\",\"content\":\"Created by a real daemon tool after native approval.\\n\"}"
+    }
+  ],
+  "draft_switch_observations": {
+    "first_tab_restored": "Draft retained in the first tab.",
+    "second_tab_restored": "A separate draft in the second tab.",
+    "source": "actual native accessibility observations during CUA interaction; values were not submitted to model"
+  },
+  "native_controls": [
+    "system macOS traffic lights",
+    "native zoom action exercised",
+    "independent left/right collapse and expansion",
+    "native TabBar and independent composer entities"
+  ],
+  "file_result": {
+    "path": "notes.txt",
+    "content": "Created by a real daemon tool after native approval.\n",
+    "sha256": "99935ac450c607d3be3221cfb017853b8e363a27fe471da03639203def0fc6dd"
+  },
+  "paid_model_calls": false,
+  "limits": [
+    "Native Computer input, production Keychain, Windows/Linux and public WAN are not established by these captures.",
+    "Browser/takeover captures are recorded separately."
+  ]
+}
