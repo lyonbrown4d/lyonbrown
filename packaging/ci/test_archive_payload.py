@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 from collections.abc import Callable
 
 from verify import check_outputs
@@ -27,6 +28,8 @@ class MacArchiveTest(unittest.TestCase):
     temporary = tempfile.TemporaryDirectory()
     self.addCleanup(temporary.cleanup)
     self.root = Path(temporary.name)
+    # TAR fixtures intentionally contain fake PKGs; isolate only the external PKG inspection.
+    self.pkg_gate = self.enterContext(patch("verify.check_macos_packages"))
     self.cli = self.root / "lyonbrown-cli-1-macos-aarch64"
     self.desktop = self.root / "Lyonbrown.app"
     for app, main in ((self.cli / "Lyonbrown CLI.app", "agent-cli"),
@@ -79,6 +82,7 @@ class MacArchiveTest(unittest.TestCase):
 
   def test_complete_trees_and_legal_relative_links_pass(self) -> None:
     self.verify()
+    self.pkg_gate.assert_called_once_with(self.root, self.cli / "Lyonbrown CLI.app", self.desktop)
 
   def test_archive_corruption_is_rejected_with_valid_staging(self) -> None:
     for defect in ("missing helper", "modified executable", "execute mode", "unsafe path"):

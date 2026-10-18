@@ -8,6 +8,7 @@ from typing import NotRequired, TypedDict
 import urllib.request
 
 from archive_payload import check_archive_payload
+from macos_pkg import check_macos_packages
 
 
 class ArchiveIdentity(TypedDict):
@@ -162,6 +163,7 @@ def check_outputs(output: Path, target: str) -> list[Artifact]:
       "Expected one CLI tar archive and one Desktop tar archive")
     check_archive_payload(archives[0], output / archives[0].name.removesuffix(".tar.gz"))
     check_archive_payload(desktop_archives[0], output / "Lyonbrown.app")
+    check_macos_packages(output, apps[1], apps[0])
   artifacts: list[Artifact] = []
   for pattern, count in expected.items():
     paths = sorted(output.glob(pattern))
