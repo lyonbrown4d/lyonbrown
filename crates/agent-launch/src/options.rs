@@ -15,7 +15,7 @@ pub struct LaunchOptions {
 
 impl LaunchOptions {
   pub fn bundled(capabilities: impl IntoIterator<Item = impl Into<String>>) -> Result<Self> {
-    let executable = std::env::current_exe().context("locate client executable")?;
+    let executable = crate::current_executable()?;
     let parent = executable
       .parent()
       .context("client executable has no parent directory")?;

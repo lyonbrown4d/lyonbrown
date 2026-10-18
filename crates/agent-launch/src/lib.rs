@@ -1,6 +1,7 @@
 //! Per-user native service registration shared by CLI and Desktop.
 #[cfg(unix)]
 pub mod bundle_identity;
+mod executable;
 mod install;
 pub mod model;
 pub mod native;
@@ -12,6 +13,7 @@ pub mod state;
 use agent_client::AgentClient;
 use anyhow::{Context, Result};
 
+pub use executable::current_executable;
 pub use options::LaunchOptions;
 
 /// Register or reuse the same native service for CLI and Desktop.

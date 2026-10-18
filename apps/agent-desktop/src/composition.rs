@@ -35,7 +35,7 @@ fn browser(configuration: Shared<DesktopConfiguration>) -> Result<Shared<Browser
   let executable = configuration
     .browser_executable
     .clone()
-    .map_or_else(std::env::current_exe, Ok)
+    .map_or_else(agent_launch::current_executable, Ok)
     .map_err(|error| Error::factory_failed("BrowserExecutable", &error.to_string()))?;
   Ok(Shared::new(BrowserPort {
     executable,

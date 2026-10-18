@@ -3,11 +3,15 @@
 Build the Rust executables, then package their actual outputs:
 
 ```sh
-# macOS: select the same published CEF SDK for build and packaging.
-export CEF_PATH="/absolute/path/to/cef-sdk"
-cargo build --release -p agent-cli -p agentd -p agent-desktop -p agent-launch --features agent-cli/native-cef,agent-desktop/native-cef,agent-launch/cef-bundle --bins
-cargo run --release -p agent-launch --features cef-bundle --bin agent-package -- --cef-runtime "$CEF_PATH" --dmg --native-installers
+# macOS: use the same complete exported CEF SDK for build and packaging.
+export CEF_PATH="/absolute/path/to/exported-cef-sdk"
+cargo build --release --locked -p agentd --bin agentd --features local-llama,local-mistral
+cargo build --release --locked -p agent-cli -p agent-desktop --bins --features agent-cli/native-cef,agent-desktop/native-cef
+cargo build --release --locked -p agent-launch --bins --features cef-bundle
+cargo run --release --locked -p agent-launch --features cef-bundle --bin agent-package -- --cef-runtime "$CEF_PATH" --dmg --native-installers
 ```
+
+The exported SDK root contains `archive.json`, `CMakeLists.txt`, `cmake`, `include`, `libcef_dll` and the platform runtime. A vendor archive's runtime-only `Release` directory is not the complete exported SDK. Build daemon and clients in separate Cargo invocations so client-only native features do not change the daemon artifact. The daemon command above includes both local CPU inference adapters without downloading model weights.
 
 ComputerRuntime is embedded in each client, without a separate product executable. The packaging examples enable `native-cef` only. To include native computer hosting, also enable `agent-cli/native-computer,agent-desktop/native-computer` when building client binaries (and Windows client libraries). Both features are disabled by default and forward to `agent-computer-runtime/native`; neither `cargo dev` defaults nor `native-cef` enables them. Packaging an enabled binary does not grant OS permissions, enable the daemon's default-disabled `computer_tools`, or establish native-control acceptance. See the [English client guide](../docs/en/src/clients.md#native-computer-attachment) or [中文客户端说明](../docs/zh/src/clients.md#原生计算机连接) for explicit target selection and session attachment.
 
@@ -55,7 +59,11 @@ After installing either MSI, the signed-in user runs **Set up Lyonbrown service*
 
 The SCM identity is derived from the user's SID, so CLI and Desktop share one service for that account. Setup validates the immutable Program Files executable and its ancestor ACLs before using credentials or changing SCM state. It never copies a user-writable daemon into a service location. Existing service upgrades use an in-place configuration update that preserves the stored SCM account secret. A compatible registered daemon is reused before any machine-directory write. Windows API source checks and portable lifecycle regressions passed; native credential UI, SCM lifecycle and MSI upgrade, repair and uninstall still require Windows execution.
 
-Both macOS product installers include a daemon component identified by the stable `org.lyonbrown.agentd` package identifier. CLI installs its command under `/usr/local/bin` and its native app under `/Library/Application Support/Lyonbrown/Clients`; the shared bundled daemon installs under `/Library/Application Support/Lyonbrown`; Desktop installs under `/Applications`. User service registration occurs when a client starts in that user's session. Removing an app or CLI executable does not remove the retained user daemon or its data. The installer does not silently stop an active service or use a privileged service account.
+Both macOS product installers include the stable `org.lyonbrown.agentd` component, which installs the shared bundled daemon under `/Library/Application Support/Lyonbrown`. Each client stores its app at `/Library/Application Support/Lyonbrown/Clients/{cli|desktop}/{version}-{full-tree-sha256}/`. The content component uses a separate `org.lyonbrown.{client}.content.h{sha256}` package identifier. A resource or Helper change therefore selects a different content path and receipt even when the main executable and product version are unchanged. The packager verifies the copied tree and explicitly disables relocation for every analyzed app, Helper and framework bundle while retaining the other Apple bundle policies.
+
+The stable `org.lyonbrown.cli` component owns only the `/usr/local/bin/agent` symlink; `org.lyonbrown.desktop` owns only `/Applications/Lyonbrown.app`. Each link selects its client's retained content. The packager does not prune previous content components or receipts. The shared launcher and CEF host use the loaded main executable path reported by the macOS kernel to locate that version's bundled daemon, framework and copied Helper executables, even after the public selector changes. Before invoking cef-rs sandbox loading, the guard validates the same library location used by that loader. Native product generation and expanded-payload checks do not establish installation, upgrade, rollback or receipt-cleanup acceptance.
+
+User service registration occurs when a client starts in that user's session. Removing an app or CLI executable does not remove the retained user daemon or its data. The installer does not silently stop an active service or use a privileged service account.
 
 On macOS the tool also creates `Lyonbrown.app`; `--dmg` creates a disk image with `hdiutil`. Copy the app to Applications and launch it. Its executable and bundled daemon share `Contents/MacOS`. Client startup retains a versioned daemon outside either client installation, so removing a client does not remove the shared service. Signing and notarization require release credentials and are not performed by this tool.
 

@@ -2,6 +2,12 @@
 
 两个客户端均使用 `agent-client` 访问 daemon。界面中的会话、运行结果和审批来自服务端；客户端不内置另一套 Agent Loop。
 
+## macOS 安装入口
+
+PKG 将应用文件放在 `/Library/Application Support/Lyonbrown/Clients/{cli|desktop}/{version}-{完整目录哈希}/`，每份内容使用独立的组件收据。资源或 Helper 改变时，即使主程序和产品版本相同，也会选择不同的目录与组件标识。`/usr/local/bin/agent` 和 `/Applications/Lyonbrown.app` 分别由独立组件管理，仅作为指向所选内容的符号链接。打包器校验复制后的目录，禁止 Installer 重定位各级 bundle，不清理旧内容组件或收据。
+
+共享 launcher 和 CEF 宿主使用 macOS 内核报告的已加载主程序路径，从对应应用目录查找随附的 agentd、framework 和 Helper。公共入口切换版本后，旧进程仍使用原版本的配套文件。Helper 是包内复制的可执行文件；沙箱入口在调用 cef-rs 前，按该加载器使用的同一路径校验沙箱库。包内容校验与操作系统安装、升级、回滚验收分别进行，详见[本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
+
 ## 终端工作台
 
 ```sh

@@ -35,6 +35,7 @@ default = []
 cef-bundle = ["dep:cef"]
 
 [target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
 cef = { version = "154.5.0", default-features = false, features = ["build-util"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]

@@ -76,7 +76,7 @@ pub fn run(
     fixture_keychain,
     "Native CEF execution environment starting"
   );
-  let executable = std::env::current_exe()?;
+  let executable = agent_launch::current_executable()?;
   #[cfg(target_os = "macos")]
   let executable = mac::helper_executable(&executable)?;
   let settings = Settings {

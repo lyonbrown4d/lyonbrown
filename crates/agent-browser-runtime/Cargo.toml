@@ -10,6 +10,7 @@ path = "examples/native_acceptance.rs"
 required-features = ["native-cef"]
 
 [dependencies]
+agent-launch = { path = "../agent-launch" }
 agent-telemetry = { path = "../agent-telemetry" }
 tracing.workspace = true
 agent-client = { path = "../agent-client" }

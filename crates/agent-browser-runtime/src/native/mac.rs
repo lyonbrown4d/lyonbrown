@@ -8,6 +8,9 @@ use objc2::{
 use objc2_app_kit::{NSApplication, NSEvent};
 use std::{cell::Cell, ffi::CString, os::unix::ffi::OsStrExt, path::PathBuf};
 
+#[path = "mac_paths.rs"]
+mod paths;
+
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
   static kCFRunLoopDefaultMode: *const std::ffi::c_void;
@@ -95,20 +98,16 @@ impl Drop for LoadedFramework {
 pub fn initialize(create_application: bool) -> anyhow::Result<LoadedFramework> {
   let _main = MainThreadMarker::new()
     .context("CEF BrowserRuntime must start on the main thread before GPUI/TUI")?;
-  let executable = std::env::current_exe()?;
-  let parent = executable
-    .parent()
-    .context("client executable has no directory")?;
-  let configured = std::env::var_os("CEF_PATH").map(PathBuf::from);
-  let framework = "Chromium Embedded Framework.framework/Chromium Embedded Framework";
-  let candidates = [
-    Some(parent.join("../Frameworks").join(framework)),
-    Some(parent.join("../../..").join(framework)),
-    configured.map(|path| path.join(framework)),
-    cef::sys::get_cef_dir().map(|path| path.join(framework)),
-  ];
-  let library = candidates.into_iter().flatten().find(|path| path.is_file())
-    .context("CEF framework missing; package the matching framework in Contents/Frameworks or set CEF_PATH")?;
+  let executable = if create_application {
+    agent_launch::current_executable()?
+  } else {
+    std::env::current_exe()?
+  };
+  let library = paths::framework_library(
+    &executable,
+    std::env::var_os("CEF_PATH").map(PathBuf::from),
+    cef::sys::get_cef_dir(),
+  )?;
   let directory = library
     .parent()
     .context("CEF framework has no directory")?
@@ -127,44 +126,13 @@ pub fn initialize(create_application: bool) -> anyhow::Result<LoadedFramework> {
 }
 
 pub fn helper_executable(executable: &std::path::Path) -> anyhow::Result<PathBuf> {
-  let name = executable
-    .file_name()
-    .and_then(|name| name.to_str())
-    .context("native client executable has no UTF-8 filename")?;
-  let bundle = executable
-    .parent()
-    .and_then(|path| path.parent())
-    .and_then(|path| path.parent())
-    .context("native client app bundle is missing")?;
-  ensure!(
-    bundle
-      .extension()
-      .is_some_and(|extension| extension == "app"),
-    "macOS CEF requires the native client app bundle and embedded helper bundles; run the packaged client executable"
-  );
-  let helper = format!("{name} Helper");
-  let path = bundle
-    .join("Contents/Frameworks")
-    .join(format!("{helper}.app/Contents/MacOS/{helper}"));
-  ensure!(
-    path.is_file(),
-    "native client CEF helper bundle is missing: {}",
-    path.display()
-  );
-  Ok(path)
+  paths::helper_executable(executable)
 }
 
 /// The maintained CEF sandbox must initialize before loading Chromium in helper processes.
 pub fn sandbox(args: &cef::MainArgs) -> anyhow::Result<cef::sandbox::Sandbox> {
   let executable = std::env::current_exe()?;
-  let library = executable
-    .parent()
-    .context("CEF helper has no directory")?
-    .join("../../../Chromium Embedded Framework.framework/Libraries/libcef_sandbox.dylib");
-  ensure!(
-    library.is_file(),
-    "CEF sandbox library is missing from the product helper bundle"
-  );
+  let _library = paths::sandbox_library(&executable)?;
   let mut sandbox = cef::sandbox::Sandbox::new();
   sandbox.initialize(args);
   Ok(sandbox)

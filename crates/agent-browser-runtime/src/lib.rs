@@ -12,7 +12,7 @@ pub use cache_root::CacheRootLease;
 use std::{ffi::OsString, process::ExitCode};
 
 pub async fn launch(profiles: &std::path::Path) -> agent_browser::BrowserResult<BrowserRuntime> {
-  let executable = std::env::current_exe()
+  let executable = agent_launch::current_executable()
     .map_err(|error| agent_browser::BrowserError::Unavailable(error.to_string()))?;
   BrowserRuntime::spawn(&executable, profiles).await
 }
