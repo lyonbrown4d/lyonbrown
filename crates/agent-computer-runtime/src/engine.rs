@@ -85,6 +85,13 @@ impl ComputerRuntime {
     let binding = command.binding;
     match command.operation {
       Operation::Capabilities => Ok(Reply::Capabilities(self.runtime.capabilities()?)),
+      Operation::RenewLease { lease, ttl_ms } => {
+        self.owned_lease(&binding, &lease)?;
+        self
+          .runtime
+          .renew_lease(&lease, Duration::from_millis(ttl_ms))?;
+        Ok(Reply::Lease(lease))
+      }
       Operation::AcquireLease { ttl_ms } => {
         let mut state = self.lock()?;
         if state.leases.len() >= MAX_IDENTITIES {

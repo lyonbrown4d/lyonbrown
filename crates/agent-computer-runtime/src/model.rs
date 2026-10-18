@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
-pub const RUNTIME_PROTOCOL_VERSION: u32 = 1;
+pub const RUNTIME_PROTOCOL_VERSION: u32 = 2;
 
 /// Immutable native scope selected by the interactive user before attachment.
 #[derive(Clone, Serialize, Deserialize)]
@@ -72,6 +72,10 @@ pub enum Operation {
   },
   Receipt {
     action_id: Uuid,
+  },
+  RenewLease {
+    lease: LeaseToken,
+    ttl_ms: u64,
   },
 }
 

@@ -105,3 +105,11 @@ pub struct DesktopSnapshot {
   pub session: DesktopSession,
   pub observation: DesktopObservation,
 }
+
+impl DesktopSnapshot {
+  /// Identifies bounded content independently of the observation ID/revision.
+  /// A fresh capture can therefore confirm the context after model latency.
+  pub fn content_digest(&self) -> Result<[u8; 32], DesktopError> {
+    crate::content::content_digest(&self.session, &self.observation)
+  }
+}

@@ -69,6 +69,14 @@ impl DesktopRuntime {
     self.leases.acquire(&self.session, ttl)
   }
 
+  pub fn renew_lease(&self, lease: &LeaseToken, ttl: Duration) -> Result<(), DesktopError> {
+    self.check_session(lease)?;
+    if !self.capabilities()?.can_control() {
+      return Err(DesktopError::PermissionDenied("desktop control".into()));
+    }
+    self.leases.renew(lease, ttl)
+  }
+
   pub fn revoke(&self) -> Result<(), DesktopError> {
     self.leases.revoke(&self.session.identity)
   }

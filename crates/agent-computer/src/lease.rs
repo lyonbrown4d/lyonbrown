@@ -106,6 +106,33 @@ impl LeaseRegistry {
     Ok(token)
   }
 
+  /// Extend only the current live controller, without changing its identity or
+  /// extending an OS step that was dispatched under the previous deadline.
+  pub fn renew(&self, token: &LeaseToken, ttl: Duration) -> Result<(), DesktopError> {
+    let mut entries = self
+      .entries
+      .lock()
+      .map_err(|_| DesktopError::CoordinationUnavailable)?;
+    if !(Duration::from_secs(1)..=Duration::from_secs(300)).contains(&ttl) {
+      return Err(DesktopError::InvalidRequest(
+        "lease TTL must be within 1 to 300 seconds".into(),
+      ));
+    }
+    let entry = entries
+      .get_mut(&token.identity)
+      .ok_or(DesktopError::LeaseInvalid)?;
+    let active = entry.active.as_mut().ok_or(DesktopError::LeaseInvalid)?;
+    let now = self.clock.now();
+    if active.token != *token || active.revoked.is_cancelled() || now >= active.expires {
+      return Err(DesktopError::LeaseInvalid);
+    }
+    if entry.in_flight {
+      return Err(DesktopError::LeaseBusy);
+    }
+    active.expires = now + ttl;
+    Ok(())
+  }
+
   /// Called by trusted human-takeover/session-lock handling. Does not wait for a
   /// blocking OS call: the old controller is invalid immediately. Acquisition is
   /// held off until any already-dispatched OS step has drained.
