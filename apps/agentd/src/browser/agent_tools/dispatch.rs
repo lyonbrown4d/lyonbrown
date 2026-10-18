@@ -10,6 +10,8 @@ impl Operation {
     &self,
     tool: &BrowserTool,
     host: &str,
+    exact: &Value,
+    approval_id: &str,
     cancel: &tokio_util::sync::CancellationToken,
   ) -> Result<Value> {
     {
@@ -28,23 +30,38 @@ impl Operation {
       "browser runtime binding changed"
     );
     tool.fence(cancel)?;
-    let reply = tool
-      .daemon
-      .browser_mutate_owned(
-        &tool.session_id,
-        tool.epoch,
-        host,
-        self.id(),
-        self.command(&tool.session_id),
-      )
-      .await
-      .map_err(|error| {
-        if error.code() == tonic::Code::Unknown {
-          anyhow::Error::new(RuntimeError::Uncertain(error.message().into()))
-        } else {
-          anyhow::Error::new(error)
-        }
-      })?;
+    // The command and exact approval originate from this same parsed operation.
+    // Capture both before committing; dispatch cannot substitute a later command.
+    ensure!(exact["host_id"] == host, "browser approval host changed");
+    let command = self.command(&tool.session_id);
+    let proof =
+      tool
+        .daemon
+        .store
+        .begin_approved_browser_action(agent_storage::ApprovedBrowserAction {
+          run_id: &tool.run_id,
+          owner_epoch: tool.epoch,
+          action_id: self.id(),
+          tool: tool.name,
+          arguments: exact,
+          summary: crate::browser::mutation::audit_summary(&command),
+          approval_id,
+        })?;
+    // No await between the commit and guard construction: dropping this future
+    // after authorization always leaves a durable receipt or an Uncertain intent.
+    let mutation = crate::browser::mutation::CommittedMutation::approved(
+      tool.daemon.store.clone(),
+      proof,
+      command,
+    );
+    tool.daemon.events.notify_waiters();
+    let reply = mutation.execute(&tool.daemon).await.map_err(|error| {
+      if error.code() == tonic::Code::Unknown {
+        anyhow::Error::new(RuntimeError::Uncertain(error.message().into()))
+      } else {
+        anyhow::Error::new(error)
+      }
+    })?;
     match (self, reply) {
       (Self::Act(action), Reply::Snapshot(snapshot)) => {
         let observation = tool

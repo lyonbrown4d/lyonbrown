@@ -1,7 +1,6 @@
 use crate::Daemon;
 use agent_browser::{BrowserError, Command, Reply, Snapshot, Space};
 use agent_protocol::v1;
-use serde_json::json;
 use tonic::{Request, Response, Status};
 pub(super) fn failure(error: BrowserError) -> Status {
   match error {
@@ -57,78 +56,6 @@ impl Daemon {
       .map(|tab| tab.space_id.clone())
       .ok_or_else(|| Status::not_found("browser tab not found"))?;
     self.browser_space_route(&space).await
-  }
-  pub(super) async fn browser_mutate(
-    &self,
-    session_id: &str,
-    host: &str,
-    id: &str,
-    command: Command,
-  ) -> Result<Reply, Status> {
-    let session = self
-      .store
-      .session(session_id)
-      .map_err(|_| Status::internal("session storage failed"))?
-      .ok_or_else(|| Status::not_found("session not found"))?;
-    self
-      .browser_mutate_owned(session_id, session.owner_epoch, host, id, command)
-      .await
-  }
-  pub(super) async fn browser_mutate_owned(
-    &self,
-    session_id: &str,
-    expected_epoch: u64,
-    host: &str,
-    id: &str,
-    command: Command,
-  ) -> Result<Reply, Status> {
-    let session = self
-      .store
-      .session(session_id)
-      .map_err(|_| Status::internal("session storage failed"))?
-      .ok_or_else(|| Status::not_found("session not found"))?;
-    if session.owner_node_id != self.node_id || session.owner_epoch != expected_epoch {
-      return Err(Status::failed_precondition(
-        "this node does not own the browser session",
-      ));
-    }
-    self
-      .store
-      .begin_browser_action(
-        session_id,
-        session.owner_epoch,
-        id,
-        "browser_command",
-        audit_summary(&command),
-      )
-      .map_err(|_| {
-        Status::failed_precondition("browser action already recorded or session ownership changed")
-      })?;
-    let expected = command.clone();
-    let mut guard = MutationGuard {
-      store: self.store.clone(),
-      id: id.into(),
-      epoch: session.owner_epoch,
-      finished: false,
-    };
-    let result = self.browser.request(host, command).await.and_then(|reply| {
-      if super::validation::matches_reply(&expected, &reply, session_id) {
-        Ok(reply)
-      } else {
-        Err(BrowserError::Uncertain)
-      }
-    });
-    let status = match &result {
-      Ok(_) => "completed",
-      Err(BrowserError::Uncertain | BrowserError::Timeout) => "uncertain",
-      Err(_) => "failed",
-    };
-    self
-      .store
-      .finish_browser_action(id, session.owner_epoch, status, json!({"status":status}))
-      .map_err(|_| Status::unknown("browser outcome could not be persisted; do not replay"))?;
-    guard.finished = true;
-    result.map_err(failure)
   }
   pub(super) async fn browser_snapshot_view(
     &self,
@@ -190,57 +117,6 @@ impl Daemon {
       accessibility_json: snapshot.accessibility_json,
       screenshot_artifact: artifact,
     })
-  }
-}
-
-/// Human keystrokes, fill values and navigation URLs can contain credentials.
-/// Receipts need identity and outcome, never a reconstructable input stream.
-fn audit_summary(command: &Command) -> serde_json::Value {
-  match command {
-    Command::Input {
-      tab_id, revision, ..
-    } => json!({"kind":"input","tab_id":tab_id,"revision":revision}),
-    Command::Act(action) => {
-      json!({"kind":"act","action_id":action.id,"tab_id":action.tab_id,"snapshot_id":action.snapshot_id,"revision":action.revision,"operation":action.kind})
-    }
-    Command::OpenTab { space_id, .. } => json!({"kind":"open_tab","space_id":space_id}),
-    Command::OpenSpace {
-      session_id,
-      profile_id,
-      headless,
-    } => {
-      json!({"kind":"open_space","session_id":session_id,"profile_id":profile_id,"headless":headless})
-    }
-    Command::Takeover {
-      space_id,
-      human_control,
-    } => json!({"kind":"takeover","space_id":space_id,"human_control":human_control}),
-    Command::CloseSpace { space_id } => json!({"kind":"close_space","space_id":space_id}),
-    _ => json!({"kind":"runtime_command"}),
-  }
-}
-
-struct MutationGuard {
-  store: agent_storage::Store,
-  id: String,
-  epoch: u64,
-  finished: bool,
-}
-impl Drop for MutationGuard {
-  fn drop(&mut self) {
-    if !self.finished
-      && self
-        .store
-        .finish_browser_action(
-          &self.id,
-          self.epoch,
-          "uncertain",
-          json!({"reason":"caller_disconnected"}),
-        )
-        .is_err()
-    {
-      tracing::warn!(action_id=%self.id,"browser intent remains unresolved after caller disconnected");
-    }
   }
 }
 

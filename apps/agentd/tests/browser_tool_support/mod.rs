@@ -1,7 +1,9 @@
 mod lifecycle;
+mod receipts;
 mod runtime;
 use crate::support::TestNode;
 use agent_protocol::v1;
+pub use receipts::assert_receipts;
 pub use runtime::{ActionMode, Runtime};
 use serde_json::{Value, json};
 pub fn route() -> String {

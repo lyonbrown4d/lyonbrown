@@ -3,7 +3,7 @@ mod browser_tool_support;
 mod support;
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply};
 use browser_tool_support::{
-  ActionMode, Runtime, approval, click, observation_payload, open, route, schema,
+  ActionMode, Runtime, approval, assert_receipts, click, observation_payload, open, route, schema,
 };
 use serde_json::{Value, json};
 use support::TestNode;
@@ -50,17 +50,14 @@ async fn every_model_protocol_observes_and_executes_only_exact_approved_browser_
         assert_eq!(actions[0].id, id);
         assert_eq!(actions[0].element_ref, "submit");
         assert_eq!(actions[0].tab_id, "fixture-tab-1");
-        assert_eq!(
-          node
-            .daemon
-            .store
-            .browser_action_status(id)
-            .unwrap()
-            .as_deref(),
-          Some("completed")
-        );
       }
       drop(actions);
+      assert_receipts(
+        &node,
+        &pending,
+        if approved { "consumed" } else { "denied" },
+        approved.then_some("completed"),
+      );
       assert_eq!(&*runtime.observed.lock().await, &["fixture-tab-1"]);
       let requests = main.requests().await;
       assert_eq!(requests.len(), 3);
@@ -194,15 +191,7 @@ async fn takeover_or_ownership_change_while_approval_pending_prevents_browser_ef
       assert_eq!(node.terminal(&run.id).await.status, "completed");
     }
     assert!(runtime.actions.lock().await.is_empty());
-    let exact: Value = serde_json::from_str(&pending.arguments_json).unwrap();
-    assert_eq!(
-      node
-        .daemon
-        .store
-        .browser_action_status(exact["action_id"].as_str().unwrap())
-        .unwrap(),
-      None
-    );
+    assert_receipts(&node, &pending, "approved", None);
     drop(runtime);
     node.close().await;
   }
@@ -234,17 +223,7 @@ async fn runtime_disconnect_or_cancellation_after_dispatch_is_persisted_uncertai
     }
     let result = node.terminal(&run.id).await;
     assert_eq!(result.status, "uncertain", "{}", result.error);
-    let exact: Value = serde_json::from_str(&pending.arguments_json).unwrap();
-    let id = exact["action_id"].as_str().unwrap();
-    assert_eq!(
-      node
-        .daemon
-        .store
-        .browser_action_status(id)
-        .unwrap()
-        .as_deref(),
-      Some("uncertain")
-    );
+    assert_receipts(&node, &pending, "consumed", Some("uncertain"));
     assert_eq!(runtime.actions.lock().await.len(), 1);
     assert_eq!(
       main.requests().await.len(),

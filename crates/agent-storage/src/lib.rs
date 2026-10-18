@@ -1,6 +1,7 @@
 //! Node-local durable state. Critical writes include an event and outbox row.
 #![forbid(unsafe_code)]
 mod approvals;
+mod approved_browser_action;
 mod approved_operation;
 mod browser_actions;
 mod control;
@@ -13,6 +14,7 @@ mod sessions;
 mod tasks;
 use agent_core::{Event, now_ms};
 use anyhow::{Context, Result};
+pub use approved_browser_action::{ApprovedBrowserAction, BrowserActionAuthorization};
 pub use approved_operation::{ApprovedOperation, OperationAuthorization};
 use diesel::{connection::SimpleConnection, prelude::*};
 pub use operations::{OperationRecord, OperationStatus};

@@ -23,44 +23,8 @@ impl Store {
     kind: &str,
     arguments: Value,
   ) -> Result<()> {
-    ensure!(
-      !action.is_empty() && action.len() <= 128,
-      "invalid browser action identifier"
-    );
-    let arguments = serde_json::to_string(&arguments)?;
-    ensure!(
-      arguments.len() <= 1024 * 1024,
-      "browser action arguments exceed limit"
-    );
     self.lock()?.immediate_transaction(|connection| {
-      verify_epoch(connection, session, epoch)?;
-      let prior = browser_actions::table
-        .find(action)
-        .select(browser_actions::action_id)
-        .first::<String>(connection)
-        .optional()?;
-      ensure!(
-        prior.is_none(),
-        "browser action already recorded; inspect its outcome before using a new action identifier"
-      );
-      diesel::insert_into(browser_actions::table)
-        .values((
-          browser_actions::action_id.eq(action),
-          browser_actions::session_id.eq(session),
-          browser_actions::owner_epoch.eq(i64::try_from(epoch)?),
-          browser_actions::kind.eq(kind),
-          browser_actions::arguments.eq(arguments),
-          browser_actions::status.eq("intent"),
-          browser_actions::result.eq(""),
-        ))
-        .execute(connection)?;
-      event_tx(
-        connection,
-        &format!("browser:{session}"),
-        "browser_action_intent",
-        json!({"action_id":action,"kind":kind}),
-      )?;
-      Ok(())
+      begin_browser_action_tx(connection, session, epoch, action, kind, arguments)
     })
   }
   pub fn finish_browser_action(
@@ -141,4 +105,52 @@ impl Store {
       Ok(interrupted.len())
     })
   }
+}
+
+/// Shared by authenticated human intent and atomic model approval/intent writes.
+pub(crate) fn begin_browser_action_tx(
+  connection: &mut SqliteConnection,
+  session: &str,
+  epoch: u64,
+  action: &str,
+  kind: &str,
+  arguments: Value,
+) -> Result<()> {
+  ensure!(
+    !action.is_empty() && action.len() <= 128,
+    "invalid browser action identifier"
+  );
+  let arguments = serde_json::to_string(&arguments)?;
+  ensure!(
+    arguments.len() <= 1024 * 1024,
+    "browser action arguments exceed limit"
+  );
+  verify_epoch(connection, session, epoch)?;
+  let prior = browser_actions::table
+    .find(action)
+    .select(browser_actions::action_id)
+    .first::<String>(connection)
+    .optional()?;
+  ensure!(
+    prior.is_none(),
+    "browser action already recorded; inspect its outcome before using a new action identifier"
+  );
+  diesel::insert_into(browser_actions::table)
+    .values((
+      browser_actions::action_id.eq(action),
+      browser_actions::session_id.eq(session),
+      browser_actions::owner_epoch.eq(i64::try_from(epoch)?),
+      browser_actions::kind.eq(kind),
+      browser_actions::arguments.eq(arguments),
+      browser_actions::status.eq("intent"),
+      browser_actions::result.eq(""),
+    ))
+    .execute(connection)?;
+  event_tx(
+    connection,
+    &format!("browser:{session}"),
+    "browser_action_intent",
+    json!({"action_id":action,"kind":kind}),
+  )?;
+  Ok(())
 }

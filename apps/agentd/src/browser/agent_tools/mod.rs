@@ -119,7 +119,7 @@ impl BrowserTool {
     let selected_host = operation.host(self).await?;
     let exact = json!({"session_id":self.session_id,"owner_epoch":self.epoch,
       "host_id":selected_host,"action_id":operation.id(),"call":call.arguments["call"]});
-    crate::authorization::approve(
+    let approval_id = crate::authorization::wait_for_approval(
       &self.daemon,
       &self.run_id,
       self.epoch,
@@ -135,7 +135,7 @@ impl BrowserTool {
     );
     self.fence(&cancel)?;
     let result = tokio::select! {
-      result = operation.dispatch(self, &selected_host, &cancel) => result,
+      result = operation.dispatch(self, &selected_host, &exact, &approval_id, &cancel) => result,
       _ = cancel.cancelled() => return Err(RuntimeError::Uncertain(
         "browser dispatch cancelled; inspect the recorded outcome before acting again".into()).into()),
     };

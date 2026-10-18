@@ -2,6 +2,7 @@ mod agent_tools;
 pub(crate) use agent_tools::tools;
 mod bridge;
 mod input;
+mod mutation;
 mod routing;
 mod service;
 mod validation;

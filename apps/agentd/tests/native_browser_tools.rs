@@ -1,5 +1,7 @@
 //! Opt-in acceptance across model protocols, the sole Harness, and actual CEF.
 mod native_browser_support;
+#[path = "browser_tool_support/receipts.rs"]
+mod receipts;
 #[allow(dead_code)]
 mod support;
 
@@ -86,6 +88,7 @@ async fn all_protocols_harness_approve_real_cef_fill_click_and_fence_lost_receip
       assert_eq!(page.effects.lock().await.len(), 0);
       node.client.approve(&pending.id, true).await.unwrap();
       let filled = model_observation(&model, 3).await;
+      receipts::assert_receipts(&node, &pending, "consumed", Some("completed"));
       assert_eq!(
         runtime.actions.lock().await[0].id,
         exact["action_id"].as_str().unwrap()
@@ -201,6 +204,16 @@ async fn all_protocols_harness_approve_real_cef_fill_click_and_fence_lost_receip
         );
         assert_eq!(runtime.actions.lock().await.len(), 2);
       }
+      receipts::assert_receipts(
+        &node,
+        &pending,
+        "consumed",
+        Some(if lose_receipt {
+          "uncertain"
+        } else {
+          "completed"
+        }),
+      );
       runtime.ready(&tab.id, "Submitted").await;
       eprintln!(
         "{protocol:?}: actual CEF fill + click, exact approvals, page effect and durable {} verified",

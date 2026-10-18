@@ -46,6 +46,8 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 
 变更操作要求准确动作人工审批。daemon 检查会话、所有者代次、runtime host 绑定、取消状态和人工接管状态。人工接管期间暂停模型变更；模型工具不开放原始输入和接管能力。快照过期后重新观察，未知结果先核对记录，禁止自动重放。Profile 保存不代表活页面恢复。
 
+模型侧变更在同一本地事务中消费准确审批、保存浏览器执行意图，并写入事件和 Outbox；事务再次检查运行仍在执行、会话及所有者代次一致。事务失败时审批和意图一同回滚。提交后才向获批的 runtime host 发送操作；等待回执时取消或断线会保留 `Uncertain`，不重放动作。客户端的人工浏览器操作使用独立的认证入口，并保存相同类型的执行意图和结果回执。
+
 `apps/agentd/tests/browser_tools.rs` 通过本地 HTTP 模型 mock 和真实协议适配器覆盖 Responses、Chat Completions、Anthropic Messages，以及批准、拒绝、所有权/会话边界、取消和截图 artifact。其 runtime host 是合成实现，验证的是 Harness 到 daemon 的工具契约与持久状态，不能替代原生 CEF 自主浏览器操作验收。
 
 原生链路使用 `apps/agentd/tests/native_browser_tools.rs` 单独验收。在 macOS 27.0.1 arm64 的调试 CEF 环境中，三个协议分别完成真实 AX 观察、准确审批后的填入与点击，并通过本地 HTTP 页面副作用和持久回执核对结果；另三种场景在点击成功后丢弃回执，确认取消与恢复不重放，运行保持 `Uncertain`。测试只操作合成页面和独立 Profile，使用调试测试钥匙串，不证明生产钥匙串或其他平台已验收。

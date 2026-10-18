@@ -1,4 +1,4 @@
-use super::{ActionMode, Runtime, approval, click, open, route};
+use super::{ActionMode, Runtime, approval, assert_receipts, click, open, route};
 use crate::support::TestNode;
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply};
 use serde_json::{Value, json};
@@ -55,14 +55,11 @@ async fn opening_and_closing_require_exact_approval_and_persist_mutation_receipt
           approved
         );
       }
-      assert_eq!(
-        node
-          .daemon
-          .store
-          .browser_action_status(exact["action_id"].as_str().unwrap())
-          .unwrap()
-          .as_deref(),
-        approved.then_some("completed")
+      assert_receipts(
+        &node,
+        &pending,
+        if approved { "consumed" } else { "denied" },
+        approved.then_some("completed"),
       );
       drop(runtime);
       node.close().await;
@@ -91,19 +88,7 @@ async fn cancelling_pending_browser_approval_has_no_intent_or_effect() {
   node.client.cancel_run(&run.id).await.unwrap();
   assert_eq!(node.terminal(&run.id).await.status, "cancelled");
   assert!(runtime.actions.lock().await.is_empty());
-  let exact: Value = serde_json::from_str(&pending.arguments_json).unwrap();
-  assert_eq!(
-    node
-      .daemon
-      .store
-      .browser_action_status(exact["action_id"].as_str().unwrap())
-      .unwrap(),
-    None
-  );
-  assert_eq!(
-    node.client.list_approvals(&run.id).await.unwrap()[0].status,
-    "cancelled"
-  );
+  assert_receipts(&node, &pending, "cancelled", None);
   assert_eq!(main.requests().await.len(), 1);
   drop(runtime);
   node.close().await;
