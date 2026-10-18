@@ -43,7 +43,9 @@ BrowserRuntime 以 crate 嵌入客户端，CEF helper 通过客户端私有模�
 
 ## 原生桌面执行边界
 
-原生 SDK 通过显式 `native` feature 启用：`agent-computer-runtime/native` 同时启用 `agent-computer/native`，并提供 `attach_native` 工厂。默认构建保留协议、执行引擎和可注入的 `attach_host`，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。
+CLI 与 Desktop 以默认关闭的 `native-computer` feature 转发启用 `agent-computer-runtime/native`。原生 SDK 通过显式 `native` feature 启用：`agent-computer-runtime/native` 同时启用 `agent-computer/native`，并提供 `attach_native` 工厂。默认构建保留协议、执行引擎和可注入的 `attach_host`，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。
+
+原生目标发现只读取元数据，不捕获像素或请求系统授权。发现前后均检查交互会话与已有屏幕权限；最小化和零尺寸目标被排除，目录超过 512 项则拒绝。目标标签去除控制字符并限制为 512 个字符；`DesktopTarget` 的 Debug 输出省略可能含私密内容的标签。窗口描述符保留进程 ID，挂接后按窗口 ID 与进程 ID 核对，拒绝将替换窗口当成原目标。标题与几何信息按新观察核对，不把旧目录当成当前画面。
 
 `agent-computer` 封装屏幕观察、输入和桌面租约；`agent-computer-runtime` 在进程内保留准备好的操作，并按 daemon Session、Run 和 `owner_epoch` 校验调用归属。执行消息只引用原准备记录、动作标识和内容摘要，不能替换输入内容。等待审批后，Runtime 使用原租约和原观察限制重新观察；内容变化、租约失效或取消都会阻止输入。准备记录在刷新或输入前消耗，失败后也不能重放同一动作。
 
@@ -53,4 +55,4 @@ BrowserRuntime 以 crate 嵌入客户端，CEF helper 通过客户端私有模�
 
 同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 协议版本为 2，包含准确令牌的 `RenewLease`。续租只延长当前未撤销、未过期的令牌，不能取得新令牌或恢复旧控制权。消息总上限为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。daemon 将能力响应限制为 4 KiB、观察响应限制为 68 MiB、其他响应与请求限制为 16 KiB。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。
 
-daemon 已通过这条认证连接装配 Harness 的 `computer_observe` 与 `computer_act`，启用条件、准确审批和持久回执见[本地工具与浏览器操作](tools.md#模型计算机工具)。CLI/Desktop 尚未接入交互式原生桌面范围选择与连接入口；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 `SessionStateUnknown`，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。
+daemon 已通过这条认证连接装配 Harness 的 `computer_observe` 与 `computer_act`，启用条件、准确审批和持久回执见[本地工具与浏览器操作](tools.md#模型计算机工具)。CLI/TUI 与 Desktop 已提供显式目标选择和会话连接入口，见[原生计算机连接](clients.md#原生计算机连接)；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 `SessionStateUnknown`，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。

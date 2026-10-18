@@ -68,7 +68,7 @@ cargo test -p agentd --test browser_tools --test command_tools --locked
 
 ## 模型计算机工具
 
-`computer_observe` 与 `computer_act` 默认关闭。受信任的 daemon 配置使用顶层 `computer_tools = true` 启用，环境变量为 `LYONBROWN_COMPUTER_TOOLS`。`computer_lease_secs` 默认为 `300` 秒，允许 `10..=300` 秒，环境变量为 `LYONBROWN_COMPUTER_LEASE_SECS`；配置沿用共享分层规则。这些开关不建立原生连接，CLI/Desktop 的交互式桌面范围选择与连接入口尚未接入。
+`computer_observe` 与 `computer_act` 默认关闭。受信任的 daemon 配置使用顶层 `computer_tools = true` 启用，环境变量为 `LYONBROWN_COMPUTER_TOOLS`。`computer_lease_secs` 默认为 `300` 秒，允许 `10..=300` 秒，环境变量为 `LYONBROWN_COMPUTER_LEASE_SECS`；配置沿用共享分层规则。这些开关不建立原生连接。CLI/TUI 和 Desktop 必须另行显式选择目标并挂接到会话，操作见[终端与桌面客户端](clients.md#原生计算机连接)。
 
 向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 `owner_epoch` 下、桌面范围已经固定的认证宿主，并确认能力响应的 `can_control()` 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Harness 执行，不创建另一套 Agent Loop。
 

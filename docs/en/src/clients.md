@@ -26,6 +26,34 @@ The approval panel displays the tool and arguments. The daemon validates and sav
 
 `--theme auto` uses `COLORFGBG` to choose text colors while preserving the terminal background. Without a hint it uses a dark-terminal palette; select `--theme light` or `--theme dark` explicitly when needed.
 
+## Native computer attachment
+
+CLI/TUI and Desktop embed ComputerRuntime in their own processes. Default builds omit native SDKs; explicitly enable the client `native-computer` feature as described in [development and verification](development.md#native-computer-client-builds). This neither enables daemon model tools nor requests OS permission. Target discovery lists window or display metadata under existing permissions, without screenshots or input. A locked or unknown session, or missing screen permission, prevents discovery.
+
+List targets, then explicitly attach using an existing non-nil daemon Session UUID and one target ID:
+
+```sh
+cargo run -p agent-cli --features native-computer -- computer targets
+cargo run -p agent-cli --features native-computer -- computer attach --session SESSION_UUID --window WINDOW_ID --process-id PID
+# For a display, use --display DISPLAY_ID without --window or --process-id
+```
+
+`computer targets` does not connect to a daemon. For a window, copy both its ID and `process_id` from that catalog. `computer attach` discovers targets again and requires an exact PID match before retaining the descriptor, authenticating and checking session ownership. A reused window ID cannot silently select a different process. The command stays in the foreground until `Ctrl+C` detaches; process exit also revokes the host connection. Attachment failure reports unavailability without automatically selecting another target.
+
+In the TUI, connect and select a session, then enter local commands in the composer:
+
+```text
+/computer targets
+/computer attach window WINDOW_ID
+/computer attach display DISPLAY_ID
+/computer status
+/computer detach
+```
+
+Use one of the two `attach` forms. Run `/computer targets` first and choose from that catalog. Attachment uses the exact cached descriptor rather than replacing the target by ID. The Computer area displays the originally bound session, scope and connection state; `Alt+PageUp` / `Alt+PageDown` scroll its details. Switching sessions does not transfer the connection; detach before choosing another target or session. Even invalid `/computer` syntax stays local and is never submitted to the model. Reconnection or disconnect revokes the host and clears the catalog, requiring fresh discovery before attachment; actions are not replayed automatically.
+
+See “Computer pane” below for Desktop controls and binding state, and [native desktop execution boundary](protocol.md#native-desktop-execution-boundary) for discovery, permission and fixed window identity limits. Wired entry points do not establish native-control acceptance. macOS still rejects an indeterminate unlocked session with `SessionStateUnknown`, without capture or input.
+
 ## Terminal task management
 
 ```sh
@@ -44,7 +72,7 @@ Pairing identity and credentials stay in the daemon; an address grants no trust.
 cargo run -p agent-desktop
 ```
 
-The desktop uses GPUI and `gpui-kit` for the session sidebar, multiple chat tabs, conversation input and Browser, Files, Editor, Diff and Tasks dock panels. The custom title bar reuses the library's `TitleBar`; macOS uses native close, minimize and zoom controls. The session sidebar starts open and the right workbench starts closed. Title bar buttons toggle each side independently and remain available to restore either panel when both are hidden.
+The desktop uses GPUI and `gpui-kit` for the session sidebar, multiple chat tabs, conversation input and Browser, Computer, Files, Editor, Diff and Tasks dock panels. The custom title bar reuses the library's `TitleBar`; macOS uses native close, minimize and zoom controls. The session sidebar starts open and the right workbench starts closed. Title bar buttons toggle each side independently and remain available to restore either panel when both are hidden.
 
 ### Settings and connection
 
@@ -61,6 +89,19 @@ Closing a tab stops only its local event subscription and sends no cancellation 
 Editor and diff views reuse library components; file operations use the daemon workspace protocol. Switching chats caches and restores the open file and unsaved Editor text by session. A pending file save must finish before switching chats, creating a tab or closing the current tab. Tabs, drafts, panel visibility and appearance choices have no restoration guarantee across application restarts.
 
 Browser attachment, navigation, close and takeover requests must finish before creating, switching or closing the current chat, or reconnecting to the daemon. If a Space is created but opening its URL fails, the view retains that Space so the address can be corrected or the Space explicitly closed. A control change clears the old frame and requests a fresh one; late frames, empty results and errors from the previous frame generation cannot replace the new read state.
+
+### Computer pane
+
+Connect to the daemon and select an existing chat, then open Computer:
+
+1. Choose Refresh targets to read the local catalog.
+2. Explicitly choose a window or monitor in the library's searchable Select. Refresh leaves the selection empty rather than selecting the first item.
+3. Choose Attach to selected chat to attach that exact descriptor to the selected chat.
+4. Choose Detach when finished.
+
+The pane separately displays Selected chat, Bound chat and Bound scope. Switching or closing chat tabs does not transfer the original connection; Bound chat continues to show its original session. Refresh and another target selection are unavailable while attached. Wait for target discovery, attachment or detachment to finish before switching, creating or closing chats, or reconnecting.
+
+Starting a Connect attempt revokes the old host and clears the catalog even if authentication to the new connection fails. Refresh, chat binding and connection changes invalidate obsolete asynchronous results; a late attachment result is dropped and its host cancelled. Disconnects never replay actions. Explicitly Detach, refresh and choose again. Failed detachment warns that native calls may still be draining and another attachment can remain temporarily unavailable. Closing Desktop revokes the local host without automatically cancelling daemon jobs.
 
 ### Desktop shortcuts
 

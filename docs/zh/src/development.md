@@ -31,11 +31,35 @@ cargo dev --help
 
 Cargo 别名使用参数数组调用 `apps/agent-dev`，不依赖平台 Shell，也无需安装额外的任务运行器。根 `README.md` 列出常用命令，`cargo --list` 也会展示 `dev` 别名。
 
+`cargo dev tui` 等价于 `cargo run --locked -p agent-dev -- tui`。首次执行时，Cargo 按 `Cargo.lock` 下载并编译 Rust 依赖，无需通过 `cargo install` 安装开发启动器、`just` 或 `cargo-make`。GPUI 和可选原生 SDK 所需的平台构建依赖仍需准备，见[本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
+
 需要单独运行前台 daemon 时，使用 `cargo dev daemon`。其他开发客户端仍可自动连接并复用它。
 
 默认配置为开发数据目录中的 `config.toml`，dotenv 文件位于配置文件旁边。`--config` 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 `agent-config` 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 `agent-telemetry` 写入日志；默认位于开发数据目录的 `logs` 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 `auth.token`，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。
 
-`--dry-run` 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 `agent-dev`。默认 Desktop/TUI 构建不启用 `native-cef`，浏览器执行能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 [本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
+`--dry-run` 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 `agent-dev`。默认 Desktop/TUI 构建不启用 `native-cef` 或 `native-computer`，对应的浏览器执行或原生计算机宿主能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 [本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
+
+## 原生计算机客户端构建
+
+CLI 与 Desktop 的 `native-computer` feature 默认关闭，显式转发到 `agent-computer-runtime/native`，再启用 `agent-computer/native`。`cargo dev desktop` 和 `cargo dev tui` 的默认构建不自动启用它；`native-cef` 也不会启用原生计算机能力。开发启动器支持显式启用客户端 feature：
+
+```sh
+cargo dev desktop --native-computer
+cargo dev tui --native-computer
+cargo dev desktop --native-computer --dry-run
+```
+
+该参数只转发到客户端构建，不传给 agentd，也不修改 `computer_tools` 配置；`cargo dev daemon --native-computer` 会拒绝。也可以单独构建和启动客户端：
+
+```sh
+cargo build -p agent-cli -p agent-desktop --features agent-cli/native-computer,agent-desktop/native-computer --locked
+cargo run -p agent-cli --features native-computer -- computer targets
+cargo run -p agent-desktop --features native-computer
+```
+
+客户端通过共享 launcher 连接或复用原生 daemon 服务；开发前台 daemon 的使用方式见上方。原生 feature 不改变 daemon 的 `computer_tools = false` 默认值，也不代替系统权限、交互会话检查或准确动作审批。默认依赖和测试依赖均不通过 Cargo feature 合并隐式启用原生 SDK。目标选择、会话挂接和断开操作见[终端与桌面客户端](clients.md#原生计算机连接)。
+
+构建通过只说明对应主机上的代码可编译。原生目标发现、GUI 选择、客户端到 Harness 的连接、屏幕观察与获批输入均需实际运行验收。macOS 会话探测无法确认解锁状态时返回 `SessionStateUnknown`，不得将拒绝路径或合成宿主回归称为原生控制验收；Windows 和 Linux 也需要各自环境中的运行证据。
 
 ## 检查命令
 
@@ -78,7 +102,7 @@ cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 ```
 
-`apps/agentd/tests/computer_tools.rs` 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 `attach_host`，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 `Uncertain` 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能作为 CLI/Desktop 原生连接入口或三平台桌面控制验收。
+`apps/agentd/tests/computer_tools.rs` 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 `attach_host`，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 `Uncertain` 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能替代 CLI/Desktop 原生连接入口的实际运行或三平台桌面控制验收。
 
 ```sh
 cargo test -p agentd --test computer_tools --locked

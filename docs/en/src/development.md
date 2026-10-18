@@ -31,11 +31,35 @@ cargo dev --help
 
 The Cargo alias invokes `apps/agent-dev` with an argument array, without a platform shell or an extra task runner. The root `README.md` lists common commands; `cargo --list` also displays the `dev` alias.
 
+`cargo dev tui` expands to `cargo run --locked -p agent-dev -- tui`. On first use, Cargo downloads and compiles Rust dependencies from `Cargo.lock`; no `cargo install` step is needed for the launcher, `just` or `cargo-make`. Platform build dependencies for GPUI and optional native SDKs still need to be available; see the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md).
+
 Use `cargo dev daemon` when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.
 
 The default configuration is `config.toml` inside the development data directory, with `.env` beside it. `--config` selects an existing TOML file. The commands do not create or overwrite configuration or dotenv files. Model, tool and log settings use the shared `agent-config` layering rules. agentd, TUI, Desktop and the development launcher all use shared `agent-telemetry` logging. Files default to the development data directory's `logs` subdirectory, use separate process prefixes and follow the configured rotation and retention settings. The launcher forces the selected development address and data directory, reads that directory's `auth.token` and ignores inherited connection credentials. Tokens pass only through the client child environment, never command arguments or launch output.
 
-`--dry-run` displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile `agent-dev`. Default Desktop/TUI builds do not enable `native-cef`; browser execution reports unavailable. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md) for the full CEF SDK, helper and application bundle layout.
+`--dry-run` displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile `agent-dev`. Default Desktop/TUI builds enable neither `native-cef` nor `native-computer`; their browser execution and native computer hosting capabilities report unavailable. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md) for the full CEF SDK, helper and application bundle layout.
+
+## Native computer client builds
+
+CLI and Desktop disable `native-computer` by default. It explicitly forwards to `agent-computer-runtime/native`, which enables `agent-computer/native`. Default `cargo dev desktop` and `cargo dev tui` builds do not enable it automatically; `native-cef` does not enable computer hosting either. The development launcher supports explicit client feature selection:
+
+```sh
+cargo dev desktop --native-computer
+cargo dev tui --native-computer
+cargo dev desktop --native-computer --dry-run
+```
+
+The flag affects only the client build, without forwarding to agentd or changing `computer_tools` configuration. `cargo dev daemon --native-computer` is rejected. Clients can also be built and started separately:
+
+```sh
+cargo build -p agent-cli -p agent-desktop --features agent-cli/native-computer,agent-desktop/native-computer --locked
+cargo run -p agent-cli --features native-computer -- computer targets
+cargo run -p agent-desktop --features native-computer
+```
+
+Clients connect to or reuse the native daemon service through the shared launcher; the foreground development daemon is described above. The native feature does not change the daemon's `computer_tools = false` default or replace OS permissions, interactive session checks or exact action approval. Neither default nor test dependencies implicitly enable native SDKs through Cargo feature unification. See [terminal and desktop clients](clients.md#native-computer-attachment) for selection, attachment and detachment.
+
+Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Harness attachment, observation and approved input require actual runtime acceptance. macOS returns `SessionStateUnknown` when it cannot confirm unlocked session state; rejection paths and synthetic-host regressions do not establish native-control acceptance. Windows and Linux require runtime evidence from their respective environments too.
 
 ## Verification commands
 
@@ -78,7 +102,7 @@ cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 ```
 
-`apps/agentd/tests/computer_tools.rs` uses local model mocks, the real adapters for all three standard protocols, the Harness and an injectable synthetic `attach_host`. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable `Uncertain` with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not establish CLI/Desktop native attachment or desktop-control acceptance on three platforms.
+`apps/agentd/tests/computer_tools.rs` uses local model mocks, the real adapters for all three standard protocols, the Harness and an injectable synthetic `attach_host`. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable `Uncertain` with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not replace actual CLI/Desktop native attachment checks or establish desktop-control acceptance on three platforms.
 
 ```sh
 cargo test -p agentd --test computer_tools --locked
