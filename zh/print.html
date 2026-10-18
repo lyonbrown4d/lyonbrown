@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0a45cf4f.js";
+            window.path_to_searchindex_js = "searchindex-3d63333f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -205,7 +205,14 @@
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="本地运行"><a class="header" href="#本地运行">本地运行</a></h1>
 <p>先准备根 <code>Cargo.toml</code> 要求的 Rust 工具链。模型、原生图形和浏览器 SDK 的前置条件取决于启用的能力；缺少原生依赖时不能仅凭 crate 名称认定该能力可用。</p>
-<h2 id="启动-daemon"><a class="header" href="#启动-daemon">启动 daemon</a></h2>
+<h2 id="启动开发环境"><a class="header" href="#启动开发环境">启动开发环境</a></h2>
+<p>在仓库根目录直接使用 Cargo 选择客户端，无需安装额外任务工具：</p>
+<pre><code class="language-sh">cargo dev tui
+# 或启动桌面客户端
+cargo dev desktop
+</code></pre>
+<p>命令自动构建、启动或复用开发 agentd，并传入客户端连接配置。多个终端与 Desktop 可共用默认的 <code>.local/dev/agentd</code> 数据目录和 <code>127.0.0.1:7547</code> 地址。数据目录、配置与停止方式见<a href="#开发与验证">开发与验证</a>。</p>
+<h2 id="独立运行-daemon"><a class="header" href="#独立运行-daemon">独立运行 daemon</a></h2>
 <p>在仓库根目录执行：</p>
 <pre><code class="language-sh">cargo run -p agentd -- --data-dir /path/to/lyonbrown-data
 </code></pre>
@@ -227,17 +234,17 @@
 </tbody>
 </table>
 </div>
-<p>配置按默认值、TOML、配置文件旁的 <code>.env</code>、进程环境、显式 CLI 参数依次覆盖。默认文件为数据目录下的 <code>config.toml</code>；<code>--config-file</code> 或 <code>LYONBROWN_CONFIG</code> 可选择其他文件。dotenv 解析不会修改全局进程环境。模型端点必须使用 HTTPS，回环地址可使用 HTTP；地址不能包含凭证、查询参数或 fragment。不同 API 模式需要与实际端点匹配。</p>
+<p>共享 <code>agent-config</code> 基于 <code>config</code> 与 <code>dotenvy</code> 加载配置。配置按默认值、TOML、配置文件旁的 <code>.env</code>、进程环境、显式 CLI 参数依次覆盖。默认文件为数据目录下的 <code>config.toml</code>；<code>--config-file</code> 或 <code>LYONBROWN_CONFIG</code> 可选择其他文件。dotenv 解析不会修改全局进程环境。模型端点必须使用 HTTPS，回环地址可使用 HTTP；地址不能包含凭证、查询参数或 fragment。不同 API 模式需要与实际端点匹配。</p>
 <p><code>supports_images</code> 默认 <code>false</code>，仅在提供方和所选模型均支持图片时显式开启 <code>--supports-images</code> 或 <code>LYONBROWN_SUPPORTS_IMAGES=true</code>。分类器、配置示例与协议对应关系见<a href="#模型与执行决策">模型与执行决策</a>。</p>
-<p>所有产品进程通过共享 <code>agent-telemetry</code> 写入 JSON 行日志，默认位于数据目录的 <code>logs</code>，按天轮转，每个进程前缀保留 14 个文件。<code>LYONBROWN_LOG_DIRECTORY</code> 和 <code>LYONBROWN_LOG_RETENTION</code> 可覆盖目录与保留数量；保留数量允许 <code>1..=365</code>。凭证不进入 UI 模型或配置调试输出。</p>
-<h2 id="连接终端"><a class="header" href="#连接终端">连接终端</a></h2>
-<p>开发时可按上文手动运行 daemon。安装后的终端与 Desktop 在连接本机默认地址时，通过共享 launcher 检查并复用同一用户的原生服务，校验版本、协议和能力。macOS 使用 launchd，Linux 使用 systemd 用户服务；Windows 使用按当前用户 SID 区分的 SCM 服务。</p>
+<p>所有产品进程通过共享 <code>agent-telemetry</code>，使用 <code>tracing</code>、<code>tracing-subscriber</code> 与 <code>tracing-appender</code> 写入 JSON 行日志，默认位于数据目录的 <code>logs</code>，按天轮转，每个进程前缀保留 14 个文件。<code>LYONBROWN_LOG_DIRECTORY</code> 和 <code>LYONBROWN_LOG_RETENTION</code> 可覆盖目录与保留数量；保留数量允许 <code>1..=365</code>。凭证不进入 UI 模型或配置调试输出。</p>
+<h2 id="直接运行客户端与原生服务"><a class="header" href="#直接运行客户端与原生服务">直接运行客户端与原生服务</a></h2>
+<p>开发时使用 <code>cargo dev tui</code> 或 <code>cargo dev desktop</code> 自动启动并连接共享开发 daemon，参数见<a href="#开发与验证">开发与验证</a>。安装后的终端与 Desktop 在连接本机默认地址时，通过共享 launcher 检查并复用同一用户的原生服务，校验版本、协议和能力。macOS 使用 launchd，Linux 使用 systemd 用户服务；Windows 使用按当前用户 SID 区分的 SCM 服务。</p>
 <p>服务注册锁和 <code>service.json</code> 固定保存在默认用户数据目录，不随客户端的 <code>--data-dir</code> 改变。已有服务使用其他数据目录时，launcher 会拒绝替换；修改客户端目录不能注册第二个同名服务。认证令牌仍保存在该 daemon 实际使用的数据目录中。</p>
 <p>Windows 先安装 MSI，再从开始菜单运行 <strong>Set up Lyonbrown service</strong>。设置入口要求同一 Windows 账号完成 UAC 提权，并在原生凭据窗口输入服务登录密码；切换到另一个管理员账号会被拒绝。CLI 与 Desktop 共享 Program Files 中受保护的 daemon，密码不会进入命令行或配置文件。服务升级等待活动任务结束，并检查存储兼容范围与回滚条件。</p>
-<p>从源码运行客户端也要求能找到完整安装包中的 daemon，或同目录下已构建的 <code>agentd</code>。运行终端：</p>
+<p>直接使用 <code>cargo run</code> 连接本机默认地址时，客户端也会检查原生服务，因此要求能找到完整安装包中的 daemon，或同目录下已构建的 <code>agentd</code>。开发时优先使用上面的 <code>cargo dev</code> 命令；以下命令用于直接运行终端：</p>
 <pre><code class="language-sh">cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/lyonbrown-data
 </code></pre>
-<p>客户端优先使用 <code>--token</code> 或 <code>LYONBROWN_TOKEN</code>。未显式提供 token 时读取数据目录中的 <code>auth.token</code>。令牌不应写入文档、Git 或聊天记录；通过环境变量或本地文件提供可避免将值写入命令历史。</p>
+<p>客户端通过 <code>--token</code>、<code>LYONBROWN_TOKEN</code> 或配置文件旁的 dotenv 接收 token。本机默认地址由共享 launcher 从所复用 daemon 的数据目录读取 <code>auth.token</code>；其他地址必须显式提供 token。令牌不应写入文档、Git 或聊天记录；通过环境变量或本地文件提供可避免将值写入命令历史。</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -245,7 +252,7 @@
 </thead>
 <tbody>
 <tr><td><code>--endpoint</code></td><td><code>LYONBROWN_ENDPOINT</code></td><td><code>http://127.0.0.1:7447</code></td></tr>
-<tr><td><code>--token</code></td><td><code>LYONBROWN_TOKEN</code></td><td>未设置时读取 <code>auth.token</code></td></tr>
+<tr><td><code>--token</code></td><td><code>LYONBROWN_TOKEN</code></td><td>本机默认地址通过 launcher 读取 <code>auth.token</code>；其他地址须提供 token</td></tr>
 <tr><td><code>--data-dir</code></td><td><code>LYONBROWN_DATA_DIR</code></td><td><code>ProjectDirs::from("org", "Lyonbrown", "Lyonbrown")</code> 的本地数据目录</td></tr>
 <tr><td><code>--theme</code></td><td>无</td><td><code>auto</code>；还可选 <code>light</code>、<code>dark</code></td></tr>
 </tbody>
@@ -430,6 +437,7 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 </table>
 </div>
 <p>变更操作要求准确动作人工审批。daemon 检查会话、所有者代次、runtime host 绑定、取消状态和人工接管状态。人工接管期间暂停模型变更；模型工具不开放原始输入和接管能力。快照过期后重新观察，未知结果先核对记录，禁止自动重放。Profile 保存不代表活页面恢复。</p>
+<p>模型侧变更在同一本地事务中消费准确审批、保存浏览器执行意图，并写入事件和 Outbox；事务再次检查运行仍在执行、会话及所有者代次一致。事务失败时审批和意图一同回滚。提交后才向获批的 runtime host 发送操作；等待回执时取消或断线会保留 <code>Uncertain</code>，不重放动作。客户端的人工浏览器操作使用独立的认证入口，并保存相同类型的执行意图和结果回执。</p>
 <p><code>apps/agentd/tests/browser_tools.rs</code> 通过本地 HTTP 模型 mock 和真实协议适配器覆盖 Responses、Chat Completions、Anthropic Messages，以及批准、拒绝、所有权/会话边界、取消和截图 artifact。其 runtime host 是合成实现，验证的是 Harness 到 daemon 的工具契约与持久状态，不能替代原生 CEF 自主浏览器操作验收。</p>
 <p>原生链路使用 <code>apps/agentd/tests/native_browser_tools.rs</code> 单独验收。在 macOS 27.0.1 arm64 的调试 CEF 环境中，三个协议分别完成真实 AX 观察、准确审批后的填入与点击，并通过本地 HTTP 页面副作用和持久回执核对结果；另三种场景在点击成功后丢弃回执，确认取消与恢复不重放，运行保持 <code>Uncertain</code>。测试只操作合成页面和独立 Profile，使用调试测试钥匙串，不证明生产钥匙串或其他平台已验收。</p>
 <pre><code class="language-sh">cargo test -p agentd --test browser_tools --test command_tools --locked
@@ -922,6 +930,26 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="开发与验证"><a class="header" href="#开发与验证">开发与验证</a></h1>
 <p>工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 <code>Cargo.lock</code> 管理。Rust 工具链最低版本见根 <code>Cargo.toml</code> 的 <code>rust-version</code>。工程约束统一维护在根 <code>AGENTS.md</code>。</p>
+<p>异步入口优先使用 <code>#[tokio::main]</code>，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。</p>
+<h2 id="本地开发启动"><a class="header" href="#本地开发启动">本地开发启动</a></h2>
+<p>仓库的 <code>.cargo/config.toml</code> 定义了 <code>dev</code> 别名，直接使用 Cargo，无需安装额外任务工具。在仓库根目录执行一条命令，自动构建、启动开发 agentd 并打开客户端：</p>
+<pre><code class="language-sh">cargo dev desktop
+# 或启动终端界面
+cargo dev tui
+</code></pre>
+<p>可以在不同终端多次执行 <code>cargo dev tui</code>，同时打开 Desktop。使用相同数据目录、地址和配置的客户端共用一个开发 agentd；命令自动传入连接地址和认证信息，无需先手动启动 daemon。</p>
+<p>默认数据目录为 <code>.local/dev/agentd</code>，地址为 <code>http://127.0.0.1:7547</code>。开发目录在 <code>cargo clean</code> 后保留。命令使用前台开发进程，不注册或替换操作系统服务。首次启动 daemon 的终端保留其监督进程；关闭该终端中的客户端后，daemon 继续运行。在这个终端按 Ctrl+C 停止开发 daemon。后续终端只复用 daemon，退出客户端不会停止 daemon。</p>
+<p>启动时会串行检查同一数据目录，避免多个客户端同时创建 daemon。复用前通过认证握手检查节点身份、协议、构建和配置。端口被其他进程占用、凭据不匹配或已有 daemon 与本次构建、配置不一致时，命令报错并保留已有进程。需要使用新构建或配置时，先在原终端停止开发 daemon，再重新执行启动命令。</p>
+<p>路径相对于仓库根目录解析，可包含空格。多个客户端应使用相同参数；开发端口必须是非零回环端口，且不能使用产品默认端口 7447：</p>
+<pre><code class="language-sh">cargo dev desktop --dry-run
+cargo dev tui --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev --help
+</code></pre>
+<p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
+<p>需要单独运行前台 daemon 时，使用 <code>cargo dev daemon</code>。其他开发客户端仍可自动连接并复用它。</p>
+<p>默认配置为开发数据目录中的 <code>config.toml</code>，dotenv 文件位于配置文件旁边。<code>--config</code> 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 <code>agent-config</code> 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 <code>agent-telemetry</code> 写入日志；默认位于开发数据目录的 <code>logs</code> 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 <code>auth.token</code>，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。</p>
+<p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code>，浏览器执行能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
 <h2 id="检查命令"><a class="header" href="#检查命令">检查命令</a></h2>
 <p>在仓库根目录执行：</p>
 <pre><code class="language-sh">cargo fmt --all -- --check

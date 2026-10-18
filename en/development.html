@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-15893738.js";
+            window.path_to_searchindex_js = "searchindex-58129ad1.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -178,6 +178,26 @@
                     <main>
                         <h1 id="development-and-verification"><a class="header" href="#development-and-verification">Development and verification</a></h1>
 <p>The workspace uses Rust edition 2024. Cargo workspace declarations and <code>Cargo.lock</code> manage product dependencies. The root <code>Cargo.toml</code> records the minimum Rust version in <code>rust-version</code>. Engineering constraints live in the root <code>AGENTS.md</code>.</p>
+<p>Async entry points prefer <code>#[tokio::main]</code>. Clap, Serde and fluxdi macros provide argument parsing, serialization and dependency injection. CEF helper and Windows SCM dispatch run before runtime initialization. GPUI retains its main-thread event loop; explicitly owned or shared runtimes remain part of its composition.</p>
+<h2 id="run-locally-during-development"><a class="header" href="#run-locally-during-development">Run locally during development</a></h2>
+<p>The repository’s <code>.cargo/config.toml</code> defines the <code>dev</code> alias. It uses Cargo directly, with no additional task runner to install. Run one command from the repository root to build the required binaries, start a development agentd and open the client:</p>
+<pre><code class="language-sh">cargo dev desktop
+# Or open the terminal UI:
+cargo dev tui
+</code></pre>
+<p>Run <code>cargo dev tui</code> in multiple terminals alongside Desktop. Clients using the same data directory, address and configuration share one development agentd. The command supplies the connection address and credentials automatically; no separate daemon startup is required.</p>
+<p>Defaults are <code>.local/dev/agentd</code> for persistent development data and <code>http://127.0.0.1:7547</code> for the endpoint. <code>cargo clean</code> preserves the data. These commands supervise foreground development processes without registering or replacing OS services. The terminal that first starts the daemon keeps its supervisor running after its client closes. Press Ctrl+C there to stop the development daemon. Later terminals reuse the daemon and can exit their clients without stopping it.</p>
+<p>Startup checks are serialized for each data directory to prevent concurrent clients from creating multiple daemons. Reuse requires an authenticated handshake and matching node identity, protocol, build and configuration. An endpoint occupied by an unrelated process, invalid credentials or a different live build/configuration produces an error and leaves the existing process running. To use a new build or configuration, stop the development daemon in its original terminal and run the command again.</p>
+<p>Relative paths resolve from the repository root and may contain spaces. Use matching options for all clients. Development requires a nonzero loopback port other than the product default 7447:</p>
+<pre><code class="language-sh">cargo dev desktop --dry-run
+cargo dev tui --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev --help
+</code></pre>
+<p>The Cargo alias invokes <code>apps/agent-dev</code> with an argument array, without a platform shell. The root <code>README.md</code> lists common commands; <code>cargo --list</code> also displays the <code>dev</code> alias.</p>
+<p>Use <code>cargo dev daemon</code> when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.</p>
+<p>The default configuration is <code>config.toml</code> inside the development data directory, with <code>.env</code> beside it. <code>--config</code> selects an existing TOML file. The commands do not create or overwrite configuration or dotenv files. Model, tool and log settings use the shared <code>agent-config</code> layering rules. agentd, TUI, Desktop and the development launcher all use shared <code>agent-telemetry</code> logging. Files default to the development data directory’s <code>logs</code> subdirectory, use separate process prefixes and follow the configured rotation and retention settings. The launcher forces the selected development address and data directory, reads that directory’s <code>auth.token</code> and ignores inherited connection credentials. Tokens pass only through the client child environment, never command arguments or launch output.</p>
+<p><code>--dry-run</code> displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile <code>agent-dev</code>. Default Desktop/TUI builds do not enable <code>native-cef</code>; browser execution reports unavailable. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for the full CEF SDK, helper and application bundle layout.</p>
 <h2 id="verification-commands"><a class="header" href="#verification-commands">Verification commands</a></h2>
 <p>Run from the repository root:</p>
 <pre><code class="language-sh">cargo fmt --all -- --check
