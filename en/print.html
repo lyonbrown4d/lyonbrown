@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0d29cec5.js";
+            window.path_to_searchindex_js = "searchindex-8e7a19c9.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -655,6 +655,7 @@ capabilities = ["workspace.read"]
 <h2 id="disconnection-and-restart"><a class="header" href="#disconnection-and-restart">Disconnection and restart</a></h2>
 <p>After reconnecting, query runs in the original session. Events are ordered by run ID and <code>cursor</code>; <code>WatchRun.after_cursor</code> requests later events. A disconnected stream does not establish task failure and must not trigger prompt replay.</p>
 <p>The store’s <code>recover_interrupted</code> marks executing records without a durable terminal result as <code>uncertain</code>. Accepted work that has not started is handled separately from work already executing. Runtime recovery checks unfinished Harness tool records: a missing committed tool result produces <code>Uncertain</code> instead of guessing whether the side effect happened.</p>
+<p>The same recovery transaction changes the run’s <code>pending</code> approvals to <code>cancelled</code> and writes <code>approval_closed</code>, <code>run_uncertain</code> events and Outbox entries. If any write fails, these state and event changes roll back together; repeated recovery creates no additional records. Closing an old approval neither resolves an unknown run outcome nor authorizes tool replay.</p>
 <p>An <code>uncertain</code> run remains unresolved. Starting another run in the same session cannot bypass it. Preserve the database, events and external operation evidence, then reconcile the actual outcome before choosing the next action. The current protocol has no general-purpose endpoint for manually changing terminal state.</p>
 <h2 id="approvals"><a class="header" href="#approvals">Approvals</a></h2>
 <p>An approval records the tool, arguments, owning run and expiry. <code>decide_approval</code> accepts only unexpired requests whose run is still awaiting approval. Consumption rechecks the run, tool and arguments and changes the approval to <code>consumed</code>, preventing reuse of the same authorization.</p>

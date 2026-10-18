@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-bd3682ea.js";
+            window.path_to_searchindex_js = "searchindex-a91df114.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -655,6 +655,7 @@ capabilities = ["workspace.read"]
 <h2 id="断线与重启"><a class="header" href="#断线与重启">断线与重启</a></h2>
 <p>客户端断线后，使用原会话重新查询运行状态。事件按运行 ID 和 <code>cursor</code> 排序，<code>WatchRun</code> 的 <code>after_cursor</code> 用于请求后续事件。事件流断开不能证明任务失败，也不能触发 prompt 重放。</p>
 <p>存储层的 <code>recover_interrupted</code> 将执行中而没有持久终态的记录标记为 <code>uncertain</code>。尚未开始的 <code>accepted</code> 记录与已经进入执行的记录分开处理。Runtime 恢复 Harness 会话时检查未完成的工具记录：工具结果未提交时返回 <code>Uncertain</code>，不会猜测副作用是否发生。</p>
+<p>恢复事务同时将对应运行的 <code>pending</code> 审批改为 <code>cancelled</code>，并写入 <code>approval_closed</code>、<code>run_uncertain</code> 事件及 Outbox。任一写入失败时，这些状态和事件一并回滚；重复恢复不再次生成记录。关闭旧审批不会解决运行的未知结果，也不会授权重放工具。</p>
 <p><code>uncertain</code> 仍属于未解决的运行，不能通过创建同会话的新运行绕过。应保留数据库、事件和对应外部操作证据，核对实际结果后再决定后续操作。当前协议没有通用的人工修改终态接口。</p>
 <h2 id="审批"><a class="header" href="#审批">审批</a></h2>
 <p>审批保存工具名、参数、所属运行和过期时间。<code>decide_approval</code> 只接受尚未过期且仍处于等待审批的请求。消费审批时再次核对运行、工具和参数，并将审批状态改为 <code>consumed</code>，防止同一授权被重复使用。</p>
