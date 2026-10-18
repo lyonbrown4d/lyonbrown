@@ -3,7 +3,9 @@
 
 mod classification;
 mod contracts;
+mod event_projection;
 mod events;
+mod image_recovery;
 mod input;
 mod local_provider;
 mod local_stream;

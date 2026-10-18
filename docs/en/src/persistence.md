@@ -32,6 +32,14 @@ sequenceDiagram
 
 The runtime delegates tools to host adapters, which own authorization, workspace confinement and cancellation. Harness provider retries are disabled; retry policy belongs to durable orchestration. Recording intent before a side effect allows recovery to distinguish unexecuted work from unknown outcomes.
 
+## Images in snapshots and events
+
+Harness snapshots retain original message content. The separate `entry_appended` and `record_appended` projections retain only `type`, `mimeType`, `dataRedacted` and `encodedBytes` for image blocks, without Base64 content. `encodedBytes` is the byte length of the original Base64 string. This applies to tool results, compaction tails, execution intents, queued messages and stream-start messages. Store, Outbox and `WatchRun` carry the same projected payload. Projection happens when Runtime commits new events; reading existing events does not recompute their payloads.
+
+Projection follows known message schemas rather than recursively removing arbitrary JSON `data` fields. Tool arguments and custom business data remain the responsibility of their adapters. Unrecognized queue payloads or frames expose only a `projectionOmitted` marker. Input-image Debug output includes only MIME and length.
+
+Image-bearing session recovery is unavailable. The recovery entry point retains the snapshot and returns an explicit error without calling a model or replaying a request. rpi-ai 0.5.0 emits duplicate `type` keys in raw JSON serialization; see [upstream issue #59](https://github.com/bigfish1913/pi-rust/issues/59). No snapshot normalization workaround is included. The daemon's `StartRun` still accepts text only; internal Runtime image input does not establish client image-session support.
+
 ## Disconnection and restart
 
 After reconnecting, query runs in the original session. Events are ordered by run ID and `cursor`; `WatchRun.after_cursor` requests later events. A disconnected stream does not establish task failure and must not trigger prompt replay.

@@ -32,6 +32,14 @@ sequenceDiagram
 
 Runtime 将工具交给主机适配器执行，主机负责授权、工作区约束和取消。Harness 自身的 provider 自动重试被禁用；重试策略属于持久任务编排。先保存执行意图，再产生副作用，是恢复时区分「未执行」与「结果未知」的依据。
 
+## 快照与事件中的图像
+
+Harness 快照保留原始消息内容。`entry_appended` 和 `record_appended` 则使用独立投影：图像块只保留 `type`、`mimeType`、`dataRedacted` 和 `encodedBytes`，不携带 Base64 内容。`encodedBytes` 表示原 Base64 字符串的字节数。该规则也适用于工具结果、压缩保留的消息、执行意图、排队消息和流式起始消息；Store、Outbox 与 `WatchRun` 使用同一投影载荷。投影发生在 Runtime 提交新事件时，读取既有事件不会重新计算载荷。
+
+投影按已知消息类型处理图像，不递归删除任意 JSON 中的 `data` 字段。工具参数和自定义业务数据仍由对应适配器约束；无法识别的排队载荷或消息帧只返回 `projectionOmitted` 标记。输入图像的调试输出只含 MIME 和长度。
+
+含图像会话的恢复暂不开放。恢复入口保留原快照并明确返回不可用，不调用模型或重放请求。原因是 rpi-ai 0.5.0 的原始 JSON 序列化会产生重复的 `type` 字段，见[上游问题 #59](https://github.com/bigfish1913/pi-rust/issues/59)。代码没有加入快照规范化适配。daemon 的 `StartRun` 接口仍只接收文本；Runtime 内部的图像输入不代表客户端支持图像会话。
+
 ## 断线与重启
 
 客户端断线后，使用原会话重新查询运行状态。事件按运行 ID 和 `cursor` 排序，`WatchRun` 的 `after_cursor` 用于请求后续事件。事件流断开不能证明任务失败，也不能触发 prompt 重放。

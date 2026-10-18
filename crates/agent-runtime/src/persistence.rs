@@ -34,6 +34,7 @@ impl DurableSession {
   ) -> Result<Self> {
     let snapshot = match persistence.load(id).await? {
       Some(bytes) => {
+        crate::image_recovery::check(&bytes)?;
         let snapshot: Snapshot = serde_json::from_slice(&bytes)
           .map_err(|error| RuntimeError::Persistence(error.to_string()))?;
         if snapshot.version != 1 || snapshot.metadata.id != id {
@@ -187,7 +188,7 @@ impl SessionStorage for DurableSession {
       .persist(
         before,
         "entry_appended",
-        json!({"lane": lane, "entry": entry}),
+        json!({"lane": lane, "entry": crate::event_projection::entry(&entry)}),
       )
       .await?;
     Ok(entry)
@@ -198,7 +199,11 @@ impl SessionStorage for DurableSession {
     let before = self.inner.snapshot_state();
     let record = self.inner.append_record(record).await?;
     self
-      .persist(before, "record_appended", json!({"record": record}))
+      .persist(
+        before,
+        "record_appended",
+        json!({"record": crate::event_projection::record(&record)}),
+      )
       .await?;
     Ok(record)
   }

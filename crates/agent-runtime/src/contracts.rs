@@ -147,8 +147,17 @@ pub enum RuntimeEvent {
 
 pub type EventListener = Arc<dyn Fn(RuntimeEvent) + Send + Sync>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct RuntimeImage {
   pub mime_type: String,
   pub data_base64: String,
+}
+
+impl std::fmt::Debug for RuntimeImage {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("RuntimeImage")
+      .field("mime_type", &self.mime_type)
+      .field("encoded_bytes", &self.data_base64.len())
+      .finish_non_exhaustive()
+  }
 }
