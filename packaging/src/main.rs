@@ -113,6 +113,8 @@ fn main() -> Result<()> {
   );
   run(
     Command::new("tar")
+      // AppleDouble entries are host metadata, outside the checked product tree.
+      .env("COPYFILE_DISABLE", "1")
       .arg("-czf")
       .arg(&archive)
       .arg("-C")

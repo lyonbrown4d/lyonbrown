@@ -4,15 +4,24 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 import urllib.request
 
+from archive_payload import check_archive_payload
 
-class Archive(TypedDict):
+
+class ArchiveIdentity(TypedDict):
   name: str
   sha1: str
-  size: int
   type: str
+
+
+class Archive(ArchiveIdentity):
+  size: int
+
+
+class SdkArchive(ArchiveIdentity):
+  size: NotRequired[int]
 
 
 class Selected(TypedDict):
@@ -44,14 +53,28 @@ def digest(path: Path, algorithm: str) -> str:
     return hashlib.file_digest(stream, algorithm).hexdigest()
 
 
-def parse_archive(value: object) -> Archive:
+def parse_sdk_archive(value: object) -> SdkArchive:
   if not isinstance(value, dict):
     raise SystemExit("CEF archive metadata must be an object")
-  name, sha1, size, kind = (value.get(k) for k in ("name", "sha1", "size", "type"))
+  name, sha1, kind = (value.get(k) for k in ("name", "sha1", "type"))
   if not (isinstance(name, str) and isinstance(sha1, str)
-    and isinstance(size, int) and isinstance(kind, str)):
+    and isinstance(kind, str)):
     raise SystemExit("CEF archive metadata has invalid field types")
-  return {"name": name, "sha1": sha1, "size": size, "type": kind}
+  metadata: SdkArchive = {"name": name, "sha1": sha1, "type": kind}
+  if "size" in value:
+    size = value["size"]
+    if not isinstance(size, int) or isinstance(size, bool):
+      raise SystemExit("CEF archive metadata has invalid field types")
+    metadata["size"] = size
+  return metadata
+
+
+def parse_archive(value: object) -> Archive:
+  metadata = parse_sdk_archive(value)
+  if "size" not in metadata:
+    raise SystemExit("CEF archive metadata has invalid field types")
+  return {"name": metadata["name"], "sha1": metadata["sha1"],
+    "size": metadata["size"], "type": metadata["type"]}
 
 
 def check_metadata(actual: object, expected: Archive) -> None:
@@ -79,7 +102,13 @@ def check_index(pin: Pin, selected: Selected) -> None:
 
 
 def check_sdk(sdk: Path, expected: Archive) -> None:
-  check_metadata(json.loads((sdk / "archive.json").read_text()), expected)
+  expected = parse_archive(expected)
+  # download-cef serializes CefFile without size; the vendor index still requires it.
+  metadata = parse_sdk_archive(json.loads((sdk / "archive.json").read_text()))
+  require(metadata["name"] == expected["name"] and metadata["sha1"] == expected["sha1"]
+    and metadata["type"] == expected["type"]
+    and ("size" not in metadata or metadata["size"] == expected["size"]),
+    "CEF archive metadata differs from pin")
   archive = sdk.parent / expected["name"]
   require(archive.stat().st_size == expected["size"], "CEF archive size differs from pin")
   require(digest(archive, "sha1") == expected["sha1"], "CEF archive SHA-1 differs from pin")
@@ -114,12 +143,25 @@ def check_outputs(output: Path, target: str) -> list[Artifact]:
     apps = [output / "Lyonbrown.app", *output.glob("lyonbrown-cli-*/Lyonbrown CLI.app")]
     require(len(apps) == 2, "Expected CLI and Desktop native app bundles")
     for app in apps:
+      main = "agent-cli" if app.name == "Lyonbrown CLI.app" else "agent-desktop"
+      check_files(app, ["Contents/Info.plist", f"Contents/MacOS/{main}",
+        "Contents/MacOS/agentd"])
+      for executable in (app / f"Contents/MacOS/{main}", app / "Contents/MacOS/agentd"):
+        require(executable.stat().st_size > 0 and executable.stat().st_mode & 0o111 != 0,
+          f"Missing nonempty executable payload: {executable}")
       frameworks = app / "Contents/Frameworks"
       require((frameworks / "Chromium Embedded Framework.framework").is_dir(),
         f"Missing native CEF framework in {app}")
       helpers = list(frameworks.glob("*.app/Contents/MacOS/*"))
-      require(len(helpers) == 5 and all(p.is_file() for p in helpers),
+      require(len(helpers) == 5 and all(p.is_file() and p.stat().st_size > 0
+        and p.stat().st_mode & 0o111 != 0 for p in helpers),
         f"Expected all five maintained sandbox helper executables in {app}")
+    archives = list(output.glob("lyonbrown-cli-*.tar.gz"))
+    desktop_archives = list(output.glob("Lyonbrown-app-*.tar.gz"))
+    require(len(archives) == 1 and len(desktop_archives) == 1,
+      "Expected one CLI tar archive and one Desktop tar archive")
+    check_archive_payload(archives[0], output / archives[0].name.removesuffix(".tar.gz"))
+    check_archive_payload(desktop_archives[0], output / "Lyonbrown.app")
   artifacts: list[Artifact] = []
   for pattern, count in expected.items():
     paths = sorted(output.glob(pattern))

@@ -144,7 +144,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           cargo run --release --locked -p agent-launch --features cef-bundle --bin agent-package -- --cef-runtime "$CEF_PATH" --native-installers --dmg
-          tar -czf 'dist/Lyonbrown-app-${{ matrix.target }}.tar.gz' -C dist Lyonbrown.app
+          COPYFILE_DISABLE=1 tar -czf 'dist/Lyonbrown-app-${{ matrix.target }}.tar.gz' -C dist Lyonbrown.app
           hdiutil verify dist/*.dmg
           for package in dist/*.pkg; do xar -tf "$package"; done > dist/pkg-inspection.txt
       - name: Inspect Linux native package metadata and file lists
