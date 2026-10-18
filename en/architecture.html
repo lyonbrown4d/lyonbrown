@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d490809a.js";
+            window.path_to_searchindex_js = "searchindex-b518decf.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -194,7 +194,7 @@
         Desktop --&gt; Browser
     end
     subgraph Agentd[Local agentd / FluxDI composition]
-        API[Client / Workspace / Browser / Orchestration services]
+        API[Client / Workspace / Browser / ComputerRuntime / Orchestration services]
         Decision[Decision Engine / rules and structured classification]
         Run[Run lifecycle / concurrency / cancellation / recovery]
         Harness[agent-runtime / sole rpi-harness loop]
@@ -218,6 +218,12 @@
     Client --&gt; API
     Launcher --&gt; Agentd
     Browser &lt;--&gt;|Authenticated attachment / commands and frames| API
+    subgraph NativeHost[Interactive-user host interface]
+        Computer[agent-computer-runtime / embedded library]
+        OS[agent-computer / OS session and permissions]
+        Computer --&gt; OS
+    end
+    Computer &lt;--&gt;|Authenticated session attachment / read-only capabilities| API
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --&gt; Workspace[Workspace / Git / artifacts / notify]
@@ -304,16 +310,21 @@
     Daemon --&gt;|Authorized commands| Runtime
     Runtime --&gt; Helper[Client private-mode CEF helper]
     Helper --&gt; Web[Untrusted web content]
+    Computer[ComputerRuntime host library] --&gt;|Authenticated fixed session scope| Daemon
+    Daemon --&gt;|Read-only capability inspection| Computer
+    Computer --&gt; Native[Blocking worker / OS session exclusion]
     Daemon --&gt; Local[Local SQLite]
     Daemon --&gt;|TaskService / PeerService| Worker[Trusted worker daemon]
     Worker --&gt; Remote[Worker local persistence]
 </code></pre>
 <p>Disconnecting the browser attachment does not replay actions. Web content cannot access privileged application interfaces. Profiles preserve browser data on disk, without restoring live in-memory pages. Node discovery grants no execution authority; pairing and task authorization remain with the daemon. Public registration and relay use a separate control-plane protocol; discovery does not establish trust.</p>
+<p>ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. The daemon host interface exposes capability inspection; model tools do not invoke native input through this interface. See <a href="protocol.html#native-desktop-execution-boundary">Native desktop execution boundary</a> for permissions, leases and execution limits.</p>
 <h2 id="source-references"><a class="header" href="#source-references">Source references</a></h2>
 <ul>
 <li>Services and messages: <code>proto/agent/v1/agent.proto</code>.</li>
 <li>Authenticated connection: <code>crates/agent-client/src/lib.rs</code>.</li>
 <li>Runtime interfaces: <code>crates/agent-runtime/src/contracts.rs</code>.</li>
+<li>Native host attachment: <code>crates/agent-computer-runtime/src/attachment.rs</code>, <code>apps/agentd/src/computer/service.rs</code>.</li>
 <li>Durable state: <code>crates/agent-storage/src/schema.sql</code>.</li>
 </ul>
 <p>A successful worker attempt and a master’s acceptance of its result have different meanings. The protocol keeps <code>attempt_id</code>, <code>owner_epoch</code> and explicit <code>AcceptResult</code>; receiving a result does not establish acceptance.</p>

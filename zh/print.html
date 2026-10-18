@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-1153c5aa.js";
+            window.path_to_searchindex_js = "searchindex-d280e104.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -466,7 +466,7 @@ capabilities = ["workspace.read"]
         Desktop --&gt; Browser
     end
     subgraph Agentd[本机 agentd / FluxDI 组合根]
-        API[Client / Workspace / Browser / Orchestration 服务]
+        API[Client / Workspace / Browser / ComputerRuntime / Orchestration 服务]
         Decision[Decision Engine / 规则与结构化分类]
         Run[Run 生命周期 / 并发限制 / 取消与恢复]
         Harness[agent-runtime / 唯一 rpi-harness Loop]
@@ -490,6 +490,12 @@ capabilities = ["workspace.read"]
     Client --&gt; API
     Launcher --&gt; Agentd
     Browser &lt;--&gt;|认证双向挂接 / 命令与帧| API
+    subgraph NativeHost[交互用户宿主接口]
+        Computer[agent-computer-runtime / 嵌入库]
+        OS[agent-computer / 操作系统会话与权限]
+        Computer --&gt; OS
+    end
+    Computer &lt;--&gt;|认证会话挂接 / 只读能力检查| API
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --&gt; Workspace[工作区 / Git / Artifact / notify]
@@ -576,16 +582,21 @@ capabilities = ["workspace.read"]
     Daemon --&gt;|已授权命令| Runtime
     Runtime --&gt; Helper[客户端私有模式 CEF helper]
     Helper --&gt; Web[不可信网页]
+    Computer[ComputerRuntime 宿主库] --&gt;|认证固定会话范围| Daemon
+    Daemon --&gt;|只读能力检查| Computer
+    Computer --&gt; Native[阻塞线程 / 操作系统会话互斥]
     Daemon --&gt; Local[本地 SQLite]
     Daemon --&gt;|TaskService / PeerService| Worker[受信 Worker daemon]
     Worker --&gt; Remote[Worker 本地持久化]
 </code></pre>
 <p>浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。</p>
+<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 的宿主接口只提供能力检查，原生输入不由模型通过此接口直接调用。权限、租约与执行限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>。</p>
 <h2 id="源码依据"><a class="header" href="#源码依据">源码依据</a></h2>
 <ul>
 <li>服务和消息：<code>proto/agent/v1/agent.proto</code>。</li>
 <li>认证连接：<code>crates/agent-client/src/lib.rs</code>。</li>
 <li>Runtime 接口：<code>crates/agent-runtime/src/contracts.rs</code>。</li>
+<li>原生宿主挂接：<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>。</li>
 <li>持久状态：<code>crates/agent-storage/src/schema.sql</code>。</li>
 </ul>
 <p>跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 <code>attempt_id</code>、<code>owner_epoch</code> 和显式 <code>AcceptResult</code>，不能把收到结果当成已经采纳。</p>
