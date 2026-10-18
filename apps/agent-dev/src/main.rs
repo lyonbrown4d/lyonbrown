@@ -1,4 +1,4 @@
-use agent_dev::{DevelopmentDaemon, Options, Plan, Target, build_binary, client_command};
+use agent_dev::{DevelopmentDaemon, Options, Plan, ProductBuild, Target, client_command};
 use anyhow::{Context, Result};
 use clap::Parser;
 use std::{collections::BTreeMap, path::Path, process::ExitCode, time::Duration};
@@ -21,12 +21,9 @@ async fn main() -> Result<ExitCode> {
       .unwrap_or_else(|| plan.data_dir.join("config.toml"))
       .display()
   );
-  eprintln!("cargo build --locked -p agentd --bin agentd --no-default-features");
+  eprintln!("{}", ProductBuild::Daemon.display_command());
   if plan.target != Target::Daemon {
-    eprintln!(
-      "cargo build --locked -p {0} --bin {0} --no-default-features",
-      plan.package()
-    );
+    eprintln!("{}", plan.product_build().display_command());
   }
   if options.dry_run {
     return Ok(ExitCode::SUCCESS);
@@ -63,7 +60,7 @@ async fn main() -> Result<ExitCode> {
 async fn launch(root: &Path, plan: &Plan, ambient: &BTreeMap<String, String>) -> Result<ExitCode> {
   let binary = tokio::select! {
     _ = tokio::signal::ctrl_c() => anyhow::bail!("development build cancelled"),
-    binary = build_binary(root, "agentd") => binary?,
+    binary = ProductBuild::Daemon.build(root) => binary?,
   };
   let mut daemon =
     DevelopmentDaemon::start(root, plan, &binary, ambient, Duration::from_secs(60)).await?;
@@ -101,7 +98,7 @@ async fn run(
     let binary = tokio::select! {
       _ = tokio::signal::ctrl_c() => return Ok(ExitCode::FAILURE),
       result = daemon.wait() => return result.map(|()| ExitCode::FAILURE),
-      binary = build_binary(root, plan.package()) => binary?,
+      binary = plan.product_build().build(root) => binary?,
     };
     let mut command = tokio::process::Command::from(client_command(
       &binary,

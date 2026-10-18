@@ -9,6 +9,7 @@ fn options(target: Target) -> Options {
     config: None,
     listen: "127.0.0.1:7547".parse().expect("fixture socket"),
     dry_run: false,
+    native_computer: false,
   }
 }
 #[test]

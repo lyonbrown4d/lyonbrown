@@ -16,6 +16,7 @@ pub fn plan(root: &Path) -> Result<Plan> {
       config: None,
       listen,
       dry_run: false,
+      native_computer: false,
     },
   )?;
   plan.prepare(&BTreeMap::new())?;

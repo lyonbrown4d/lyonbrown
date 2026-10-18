@@ -5,7 +5,7 @@ mod instance;
 mod process;
 
 pub use bootstrap::{Connection, DevelopmentDaemon};
-pub use build::{build_binary, client_command};
+pub use build::{ProductBuild, build_binary, client_command};
 
 use anyhow::{Context, Result, ensure};
 use clap::{Parser, ValueEnum};
@@ -35,6 +35,9 @@ pub struct Options {
   /// Non-production loopback socket shared by daemon and clients.
   #[arg(long, default_value = "127.0.0.1:7547")]
   pub listen: SocketAddr,
+  /// Build the embedded native Computer host into the client; daemon tools still require trusted configuration.
+  #[arg(long)]
+  pub native_computer: bool,
   /// Print paths and build commands without creating files or reading credentials.
   #[arg(long)]
   pub dry_run: bool,
@@ -43,6 +46,7 @@ pub struct Options {
 #[derive(Clone)]
 pub struct Plan {
   pub target: Target,
+  pub native_computer: bool,
   pub data_dir: PathBuf,
   pub listen: SocketAddr,
   pub config: Option<PathBuf>,
@@ -50,6 +54,10 @@ pub struct Plan {
 impl Plan {
   pub fn new(root: &Path, options: &Options) -> Result<Self> {
     ensure!(root.is_absolute(), "repository root must be absolute");
+    ensure!(
+      !options.native_computer || options.target != Target::Daemon,
+      "--native-computer requires desktop or tui; it cannot be used with daemon"
+    );
     ensure!(
       options.listen.ip().is_loopback()
         && options.listen.port() != 0
@@ -69,6 +77,7 @@ impl Plan {
     }
     Ok(Self {
       target: options.target,
+      native_computer: options.native_computer,
       data_dir,
       listen: options.listen,
       config,
@@ -77,12 +86,19 @@ impl Plan {
   pub fn endpoint(&self) -> String {
     format!("http://{}", self.listen)
   }
-  pub fn package(&self) -> &'static str {
+  pub fn product_build(&self) -> ProductBuild {
     match self.target {
-      Target::Daemon => "agentd",
-      Target::Desktop => "agent-desktop",
-      Target::Tui => "agent-cli",
+      Target::Daemon => ProductBuild::Daemon,
+      Target::Desktop => ProductBuild::Desktop {
+        native_computer: self.native_computer,
+      },
+      Target::Tui => ProductBuild::Tui {
+        native_computer: self.native_computer,
+      },
     }
+  }
+  pub fn package(&self) -> &'static str {
+    self.product_build().package()
   }
   pub fn environment(&self, ambient: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     let mut environment = ambient.clone();

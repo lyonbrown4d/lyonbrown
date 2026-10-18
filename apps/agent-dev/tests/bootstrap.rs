@@ -14,6 +14,7 @@ fn fixture(root: &std::path::Path, script: &str) -> Result<(Plan, std::path::Pat
     config: None,
     listen: socket,
     dry_run: false,
+    native_computer: false,
   };
   let mut plan = Plan::new(root, &options)?;
   plan.prepare(&BTreeMap::new())?;
