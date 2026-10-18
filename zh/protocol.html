@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6b9b1fee.js";
+            window.path_to_searchindex_js = "searchindex-bd3682ea.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -221,12 +221,13 @@
 <p>本地推理的工程边界是 <code>mistral.rs</code> 与 <code>llama-cpp-2</code> 推理适配；推理库不接管 Session、Tools 或 Agent Loop。模型配置与决策权限见<a href="models.html">模型与执行决策</a>，真实模型的独立运行方法见<a href="development.html">开发与验证</a>。</p>
 <p>BrowserRuntime 以 crate 嵌入客户端，CEF helper 通过客户端私有模式运行，浏览器执行与 GPUI UI 状态隔离。没有匹配的 CEF SDK 和运行资源时，浏览器能力不能被视为可用。Profile 的持久化与活页面恢复分开说明，避免把磁盘目录存在误认为网页状态已经恢复。</p>
 <h2 id="原生桌面执行边界"><a class="header" href="#原生桌面执行边界">原生桌面执行边界</a></h2>
-<p>原生 SDK 通过显式 <code>native</code> feature 启用：<code>agent-computer-runtime/native</code> 同时启用 <code>agent-computer/native</code>，并提供 <code>attach_native</code> 工厂。默认构建保留协议、执行引擎和可注入的 <code>attach_host</code>，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。</p>
+<p>CLI 与 Desktop 以默认关闭的 <code>native-computer</code> feature 转发启用 <code>agent-computer-runtime/native</code>。原生 SDK 通过显式 <code>native</code> feature 启用：<code>agent-computer-runtime/native</code> 同时启用 <code>agent-computer/native</code>，并提供 <code>attach_native</code> 工厂。默认构建保留协议、执行引擎和可注入的 <code>attach_host</code>，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。</p>
+<p>原生目标发现只读取元数据，不捕获像素或请求系统授权。发现前后均检查交互会话与已有屏幕权限；最小化和零尺寸目标被排除，目录超过 512 项则拒绝。目标标签去除控制字符并限制为 512 个字符；<code>DesktopTarget</code> 的 Debug 输出省略可能含私密内容的标签。窗口描述符保留进程 ID，挂接后按窗口 ID 与进程 ID 核对，拒绝将替换窗口当成原目标。标题与几何信息按新观察核对，不把旧目录当成当前画面。</p>
 <p><code>agent-computer</code> 封装屏幕观察、输入和桌面租约；<code>agent-computer-runtime</code> 在进程内保留准备好的操作，并按 daemon Session、Run 和 <code>owner_epoch</code> 校验调用归属。执行消息只引用原准备记录、动作标识和内容摘要，不能替换输入内容。等待审批后，Runtime 使用原租约和原观察限制重新观察；内容变化、租约失效或取消都会阻止输入。准备记录在刷新或输入前消耗，失败后也不能重放同一动作。</p>
 <p>客户端库可通过 <code>attach_native</code> 将原生宿主嵌入客户端进程并连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 <code>owner_epoch</code>。每个会话只允许一个宿主连接，模型工具固定本次连接代次，每次操作均在发送前和接收后核对 Run 状态及会话归属；重新连接不能替换运行已经选定的宿主。连接成功本身不授予截图或输入权限。</p>
 <p>连接只允许一个待返回命令；同一连接代次的请求串行排队，续租不能抢占已派发命令。等待可取消，超过 35 秒则拒绝，派发前再次校验连接代次。daemon 按请求标识、宿主、连接代次、Session、<code>owner_epoch</code>、私有协议版本和预期响应类型校验返回值，并检查租约、观察范围与图像、窗口、AX 节点边界。非法响应或断线会取消连接，不自动重放输入。原生调用和消息编解码在阻塞线程执行。已经进入操作系统的调用仍需实际结束；取消不会强行终止线程。原生宿主使用用户数据目录中的文件锁，按操作系统图形会话互斥，改变 daemon 节点标识或客户端数据目录不能绕过这把锁。执行线程持有文件锁至调用结束。</p>
 <p>同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 协议版本为 2，包含准确令牌的 <code>RenewLease</code>。续租只延长当前未撤销、未过期的令牌，不能取得新令牌或恢复旧控制权。消息总上限为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。daemon 将能力响应限制为 4 KiB、观察响应限制为 68 MiB、其他响应与请求限制为 16 KiB。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。</p>
-<p>daemon 已通过这条认证连接装配 Harness 的 <code>computer_observe</code> 与 <code>computer_act</code>，启用条件、准确审批和持久回执见<a href="tools.html#模型计算机工具">本地工具与浏览器操作</a>。CLI/Desktop 尚未接入交互式原生桌面范围选择与连接入口；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
+<p>daemon 已通过这条认证连接装配 Harness 的 <code>computer_observe</code> 与 <code>computer_act</code>，启用条件、准确审批和持久回执见<a href="tools.html#模型计算机工具">本地工具与浏览器操作</a>。CLI/TUI 与 Desktop 已提供显式目标选择和会话连接入口，见<a href="clients.html#原生计算机连接">原生计算机连接</a>；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
 
                     </main>
 

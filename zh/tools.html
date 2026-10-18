@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6b9b1fee.js";
+            window.path_to_searchindex_js = "searchindex-bd3682ea.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -233,7 +233,7 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 </code></pre>
 <p>原生运行截图的覆盖范围见<a href="runtime-evidence.html">桌面运行截图与验收范围</a>。浏览器工具实现位于 <code>apps/agentd/src/browser/agent_tools/</code>，BrowserRuntime 生命周期契约见<a href="protocol.html">协议与平台能力</a>。</p>
 <h2 id="模型计算机工具"><a class="header" href="#模型计算机工具">模型计算机工具</a></h2>
-<p><code>computer_observe</code> 与 <code>computer_act</code> 默认关闭。受信任的 daemon 配置使用顶层 <code>computer_tools = true</code> 启用，环境变量为 <code>LYONBROWN_COMPUTER_TOOLS</code>。<code>computer_lease_secs</code> 默认为 <code>300</code> 秒，允许 <code>10..=300</code> 秒，环境变量为 <code>LYONBROWN_COMPUTER_LEASE_SECS</code>；配置沿用共享分层规则。这些开关不建立原生连接，CLI/Desktop 的交互式桌面范围选择与连接入口尚未接入。</p>
+<p><code>computer_observe</code> 与 <code>computer_act</code> 默认关闭。受信任的 daemon 配置使用顶层 <code>computer_tools = true</code> 启用，环境变量为 <code>LYONBROWN_COMPUTER_TOOLS</code>。<code>computer_lease_secs</code> 默认为 <code>300</code> 秒，允许 <code>10..=300</code> 秒，环境变量为 <code>LYONBROWN_COMPUTER_LEASE_SECS</code>；配置沿用共享分层规则。这些开关不建立原生连接。CLI/TUI 和 Desktop 必须另行显式选择目标并挂接到会话，操作见<a href="clients.html#原生计算机连接">终端与桌面客户端</a>。</p>
 <p>向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 <code>owner_epoch</code> 下、桌面范围已经固定的认证宿主，并确认能力响应的 <code>can_control()</code> 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Harness 执行，不创建另一套 Agent Loop。</p>
 <p><code>computer_observe</code> 接收可选的 <code>screenshot</code>（默认 <code>false</code>），返回 <code>snapshot_id</code>、<code>revision</code>、范围、窗口和有界 AX 语义，并标记 <code>untrusted_desktop_content</code>。语义输出限制为 1 MiB；截图按需编码为 PNG，返回 artifact 摘要，不把 RGBA 像素直接放入模型文本。桌面内容不能授予权限。</p>
 <p><code>computer_act</code> 要求上次观察的 <code>snapshot_id</code>、<code>revision</code> 和一个 <code>action</code>，支持 <code>move</code>、<code>click</code>、<code>scroll</code>、<code>key</code>、<code>text</code>。<code>timeout_ms</code> 默认 <code>5000</code>，范围为 <code>1..=30000</code> 毫秒。每次调用先消耗观察引用，重新捕获并比较原内容摘要；模型等待期间内容变化时，必须重新观察，不能静默采用新画面。内容一致后，Runtime 保留不可变的准备记录。</p>

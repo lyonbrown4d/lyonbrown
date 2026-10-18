@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6b9b1fee.js";
+            window.path_to_searchindex_js = "searchindex-bd3682ea.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -448,7 +448,7 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 </code></pre>
 <p>原生运行截图的覆盖范围见<a href="#桌面运行截图与验收范围">桌面运行截图与验收范围</a>。浏览器工具实现位于 <code>apps/agentd/src/browser/agent_tools/</code>，BrowserRuntime 生命周期契约见<a href="#协议与平台能力">协议与平台能力</a>。</p>
 <h2 id="模型计算机工具"><a class="header" href="#模型计算机工具">模型计算机工具</a></h2>
-<p><code>computer_observe</code> 与 <code>computer_act</code> 默认关闭。受信任的 daemon 配置使用顶层 <code>computer_tools = true</code> 启用，环境变量为 <code>LYONBROWN_COMPUTER_TOOLS</code>。<code>computer_lease_secs</code> 默认为 <code>300</code> 秒，允许 <code>10..=300</code> 秒，环境变量为 <code>LYONBROWN_COMPUTER_LEASE_SECS</code>；配置沿用共享分层规则。这些开关不建立原生连接，CLI/Desktop 的交互式桌面范围选择与连接入口尚未接入。</p>
+<p><code>computer_observe</code> 与 <code>computer_act</code> 默认关闭。受信任的 daemon 配置使用顶层 <code>computer_tools = true</code> 启用，环境变量为 <code>LYONBROWN_COMPUTER_TOOLS</code>。<code>computer_lease_secs</code> 默认为 <code>300</code> 秒，允许 <code>10..=300</code> 秒，环境变量为 <code>LYONBROWN_COMPUTER_LEASE_SECS</code>；配置沿用共享分层规则。这些开关不建立原生连接。CLI/TUI 和 Desktop 必须另行显式选择目标并挂接到会话，操作见<a href="#原生计算机连接">终端与桌面客户端</a>。</p>
 <p>向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 <code>owner_epoch</code> 下、桌面范围已经固定的认证宿主，并确认能力响应的 <code>can_control()</code> 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Harness 执行，不创建另一套 Agent Loop。</p>
 <p><code>computer_observe</code> 接收可选的 <code>screenshot</code>（默认 <code>false</code>），返回 <code>snapshot_id</code>、<code>revision</code>、范围、窗口和有界 AX 语义，并标记 <code>untrusted_desktop_content</code>。语义输出限制为 1 MiB；截图按需编码为 PNG，返回 artifact 摘要，不把 RGBA 像素直接放入模型文本。桌面内容不能授予权限。</p>
 <p><code>computer_act</code> 要求上次观察的 <code>snapshot_id</code>、<code>revision</code> 和一个 <code>action</code>，支持 <code>move</code>、<code>click</code>、<code>scroll</code>、<code>key</code>、<code>text</code>。<code>timeout_ms</code> 默认 <code>5000</code>，范围为 <code>1..=30000</code> 毫秒。每次调用先消耗观察引用，重新捕获并比较原内容摘要；模型等待期间内容变化时，必须重新观察，不能静默采用新画面。内容一致后，Runtime 保留不可变的准备记录。</p>
@@ -610,13 +610,13 @@ capabilities = ["workspace.read"]
     Worker --&gt; Remote[Worker 本地持久化]
 </code></pre>
 <p>浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。</p>
-<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 <code>computer_observe</code> 与 <code>computer_act</code>；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/Desktop 尚未接入交互式原生范围选择与连接入口，这条库连接不代表原生运行验收完成。macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝操作。权限、租约与执行限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>，工具机制见<a href="#模型计算机工具">模型计算机工具</a>。</p>
+<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 <code>computer_observe</code> 与 <code>computer_act</code>；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/TUI 和 Desktop 通过注入的 <code>ComputerHostFactory</code> 显式发现并选择本地窗口或显示器，再将宿主固定到选定 daemon 会话；切换聊天不会转移已有挂接。ComputerRuntime 嵌入客户端进程，不是独立产品进程，也不创建 Agent Loop。客户端的 <code>native-computer</code> feature 默认关闭，入口接线不代表原生控制运行验收完成。macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝操作。权限、租约与执行限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>，工具机制见<a href="#模型计算机工具">模型计算机工具</a>。</p>
 <h2 id="源码依据"><a class="header" href="#源码依据">源码依据</a></h2>
 <ul>
 <li>服务和消息：<code>proto/agent/v1/agent.proto</code>。</li>
 <li>认证连接：<code>crates/agent-client/src/lib.rs</code>。</li>
 <li>Runtime 接口：<code>crates/agent-runtime/src/contracts.rs</code>。</li>
-<li>原生宿主挂接：<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>、<code>apps/agentd/src/computer/tools/</code> 与 <code>apps/agentd/src/computer/mutation.rs</code>。</li>
+<li>原生宿主挂接：<code>apps/agent-cli/src/computer_backend.rs</code>、<code>apps/agent-desktop/src/computer.rs</code>、<code>crates/agent-computer-runtime/src/client.rs</code>、<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>、<code>apps/agentd/src/computer/tools/</code> 与 <code>apps/agentd/src/computer/mutation.rs</code>。</li>
 <li>持久状态：<code>crates/agent-storage/src/schema.sql</code>。</li>
 </ul>
 <p>跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 <code>attempt_id</code>、<code>owner_epoch</code> 和显式 <code>AcceptResult</code>，不能把收到结果当成已经采纳。</p>
@@ -696,6 +696,23 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 </div>
 <p>审批区展示工具和参数。审批决定由 daemon 校验并保存，界面按服务端结果更新。任务记录每两秒刷新一次，新提交的运行同时订阅事件流。客户端退出时恢复终端状态，不向 daemon 发送取消请求。</p>
 <p><code>--theme auto</code> 根据 <code>COLORFGBG</code> 选择文字配色，并保留终端背景。无法检测时使用深色终端配色；可显式指定 <code>--theme light</code> 或 <code>--theme dark</code>。</p>
+<h2 id="原生计算机连接"><a class="header" href="#原生计算机连接">原生计算机连接</a></h2>
+<p>CLI/TUI 与 Desktop 在自身进程内嵌入 ComputerRuntime。默认构建不启用原生 SDK；需要显式构建客户端的 <code>native-computer</code> feature，见<a href="#原生计算机客户端构建">开发与验证</a>。这不启用 daemon 的模型工具，也不请求操作系统权限。目标发现只列出已有权限下的窗口或显示器元数据，不截图、不发送输入；会话锁定、状态未知或缺少屏幕权限时会拒绝发现。</p>
+<p>CLI 先列出目标，再用 daemon 中已有的非零 Session UUID 和一个目标 ID 显式挂接：</p>
+<pre><code class="language-sh">cargo run -p agent-cli --features native-computer -- computer targets
+cargo run -p agent-cli --features native-computer -- computer attach --session SESSION_UUID --window WINDOW_ID --process-id PID
+# 显示器范围使用 --display DISPLAY_ID，不传 --window 或 --process-id
+</code></pre>
+<p><code>computer targets</code> 不连接 daemon。选择窗口时，需要同时复制目录中的窗口 ID 和 <code>process_id</code>。<code>computer attach</code> 重新发现目标，先核对 PID 完全一致，再保留描述符、建立认证连接并检查会话归属；窗口 ID 被其他进程复用时不会静默采用新目标。命令保持前台运行，按 <code>Ctrl+C</code> 断开；进程退出也撤销宿主连接。挂接失败会显示不可用原因，不自动选择其他目标。</p>
+<p>TUI 在已连接并选定会话后，通过输入区执行本地命令：</p>
+<pre><code class="language-text">/computer targets
+/computer attach window WINDOW_ID
+/computer attach display DISPLAY_ID
+/computer status
+/computer detach
+</code></pre>
+<p>两个 <code>attach</code> 示例择一使用。必须先运行 <code>/computer targets</code>，再从当前目录选择；挂接使用缓存中的准确目标描述符，不按 ID 临时替换目标。Computer 区显示原绑定会话、范围和连接状态，<code>Alt+PageUp</code> / <code>Alt+PageDown</code> 滚动详情。切换会话不转移已有连接；换目标或会话前先 detach。<code>/computer</code> 前缀即使语法错误也不会提交给模型。重连或断线会撤销宿主并清空目标目录，重新挂接前必须再次发现；动作不会自动重放。</p>
+<p>Desktop 的操作与绑定状态见下方「Computer 面板」。目标目录与权限、固定窗口身份的限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>。入口接线不等于原生控制验收；macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝，不捕获画面或输入。</p>
 <h2 id="终端任务管理"><a class="header" href="#终端任务管理">终端任务管理</a></h2>
 <pre><code class="language-sh">cargo run -p agent-cli -- task list --session SESSION_ID --page-size 100
 cargo run -p agent-cli -- task get TASK_ID
@@ -706,7 +723,7 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <h2 id="gpui-桌面"><a class="header" href="#gpui-桌面">GPUI 桌面</a></h2>
 <pre><code class="language-sh">cargo run -p agent-desktop
 </code></pre>
-<p>桌面使用 GPUI 和 <code>gpui-kit</code> 组件，包含会话侧栏、多聊天标签页、对话输入，以及 Browser、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 <code>TitleBar</code>；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开。</p>
+<p>桌面使用 GPUI 和 <code>gpui-kit</code> 组件，包含会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 <code>TitleBar</code>；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开。</p>
 <h3 id="设置与连接"><a class="header" href="#设置与连接">设置与连接</a></h3>
 <p>标题栏的 Settings 按钮打开独立设置页。Daemon 地址和访问令牌只在设置页编辑；Workspace path 用于当前标签页的新聊天。连接地址、令牌和工作区路径应与 daemon 对应；远程 daemon 的工作区路径指向远端文件系统。Appearance 提供手动选择的 Light 和 Dark 外观。选择 Back to chats 或按 <code>Esc</code> 返回聊天时，保留两侧面板的展开状态和聊天草稿。</p>
 <p>存在活动运行、尚未结束的请求或未保存的文件修改时，Connect 不可用。保存未改动的文件时，也要等待保存请求结束后再重连。未保存修改检查同时覆盖当前 Editor 和其他会话缓存的文件草稿。连接请求尚未完成时，旧 Editor 保持只读，避免向待切换的连接写入。</p>
@@ -715,6 +732,16 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <p>关闭标签页只停止该标签页的本地事件订阅，不向 daemon 发送取消请求。关闭最后一个标签页后，界面保留一个新的空白标签页。关闭桌面也不默认取消 daemon 作业。</p>
 <p>Editor 与差异视图复用组件库，文件操作通过 daemon 的工作区协议执行。切换聊天时，Editor 按会话缓存并恢复打开文件及未保存文本；文件保存请求尚未完成时，必须等待保存结束才能切换、新建或关闭当前聊天。标签页、草稿、面板状态和外观选择均没有跨应用重启的恢复保证。</p>
 <p>Browser 的连接、导航、关闭或接管请求尚未完成时，也必须等待结果才能切换、新建或关闭当前聊天，以及重新连接 daemon。Space 创建成功但地址打开失败时，界面保留该 Space，可修正地址后继续打开，或显式关闭。切换接管状态后，面板清除旧帧并重新获取；迟到的旧帧、空帧或错误不会覆盖新的读取状态。</p>
+<h3 id="computer-面板"><a class="header" href="#computer-面板">Computer 面板</a></h3>
+<p>先连接 daemon 并选择已有聊天，再打开 Computer 面板：</p>
+<ol>
+<li>选择 Refresh targets，读取本机目标目录。</li>
+<li>在组件库提供的可搜索 Select 中明确选择窗口或显示器。刷新后的选择为空，不自动选中第一项。</li>
+<li>选择 Attach to selected chat，将准确的目标描述符挂接到当前选定聊天。</li>
+<li>使用完毕后选择 Detach。</li>
+</ol>
+<p>面板分别显示 Selected chat、Bound chat 和 Bound scope。切换或关闭聊天标签页不会将原连接转给其他聊天；Bound chat 始终显示原会话，挂接期间不能刷新或另选目标。目标发现、挂接或断开尚未完成时，先等待结果，再切换、新建或关闭聊天及重新连接。</p>
+<p>Connect 开始尝试时就撤销旧宿主并清空目录，即使新连接认证失败也不保留旧授权。刷新、聊天绑定及连接变化使过期异步结果失效；迟到的挂接结果被丢弃并取消宿主。断线不会重放动作；显式 Detach 后再刷新并重新选择。断开失败会提示原生调用可能仍在结束，新的挂接可能暂不可用。关闭桌面撤销本地宿主，不默认取消 daemon 作业。</p>
 <h3 id="桌面快捷键"><a class="header" href="#桌面快捷键">桌面快捷键</a></h3>
 <p>以下 <code>Cmd/Ctrl</code> 表示使用 <code>Cmd</code> 或 <code>Ctrl</code> 组合键。</p>
 <div class="table-wrapper">
@@ -933,12 +960,13 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&
 <p>本地推理的工程边界是 <code>mistral.rs</code> 与 <code>llama-cpp-2</code> 推理适配；推理库不接管 Session、Tools 或 Agent Loop。模型配置与决策权限见<a href="#模型与执行决策">模型与执行决策</a>，真实模型的独立运行方法见<a href="#开发与验证">开发与验证</a>。</p>
 <p>BrowserRuntime 以 crate 嵌入客户端，CEF helper 通过客户端私有模式运行，浏览器执行与 GPUI UI 状态隔离。没有匹配的 CEF SDK 和运行资源时，浏览器能力不能被视为可用。Profile 的持久化与活页面恢复分开说明，避免把磁盘目录存在误认为网页状态已经恢复。</p>
 <h2 id="原生桌面执行边界"><a class="header" href="#原生桌面执行边界">原生桌面执行边界</a></h2>
-<p>原生 SDK 通过显式 <code>native</code> feature 启用：<code>agent-computer-runtime/native</code> 同时启用 <code>agent-computer/native</code>，并提供 <code>attach_native</code> 工厂。默认构建保留协议、执行引擎和可注入的 <code>attach_host</code>，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。</p>
+<p>CLI 与 Desktop 以默认关闭的 <code>native-computer</code> feature 转发启用 <code>agent-computer-runtime/native</code>。原生 SDK 通过显式 <code>native</code> feature 启用：<code>agent-computer-runtime/native</code> 同时启用 <code>agent-computer/native</code>，并提供 <code>attach_native</code> 工厂。默认构建保留协议、执行引擎和可注入的 <code>attach_host</code>，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。</p>
+<p>原生目标发现只读取元数据，不捕获像素或请求系统授权。发现前后均检查交互会话与已有屏幕权限；最小化和零尺寸目标被排除，目录超过 512 项则拒绝。目标标签去除控制字符并限制为 512 个字符；<code>DesktopTarget</code> 的 Debug 输出省略可能含私密内容的标签。窗口描述符保留进程 ID，挂接后按窗口 ID 与进程 ID 核对，拒绝将替换窗口当成原目标。标题与几何信息按新观察核对，不把旧目录当成当前画面。</p>
 <p><code>agent-computer</code> 封装屏幕观察、输入和桌面租约；<code>agent-computer-runtime</code> 在进程内保留准备好的操作，并按 daemon Session、Run 和 <code>owner_epoch</code> 校验调用归属。执行消息只引用原准备记录、动作标识和内容摘要，不能替换输入内容。等待审批后，Runtime 使用原租约和原观察限制重新观察；内容变化、租约失效或取消都会阻止输入。准备记录在刷新或输入前消耗，失败后也不能重放同一动作。</p>
 <p>客户端库可通过 <code>attach_native</code> 将原生宿主嵌入客户端进程并连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 <code>owner_epoch</code>。每个会话只允许一个宿主连接，模型工具固定本次连接代次，每次操作均在发送前和接收后核对 Run 状态及会话归属；重新连接不能替换运行已经选定的宿主。连接成功本身不授予截图或输入权限。</p>
 <p>连接只允许一个待返回命令；同一连接代次的请求串行排队，续租不能抢占已派发命令。等待可取消，超过 35 秒则拒绝，派发前再次校验连接代次。daemon 按请求标识、宿主、连接代次、Session、<code>owner_epoch</code>、私有协议版本和预期响应类型校验返回值，并检查租约、观察范围与图像、窗口、AX 节点边界。非法响应或断线会取消连接，不自动重放输入。原生调用和消息编解码在阻塞线程执行。已经进入操作系统的调用仍需实际结束；取消不会强行终止线程。原生宿主使用用户数据目录中的文件锁，按操作系统图形会话互斥，改变 daemon 节点标识或客户端数据目录不能绕过这把锁。执行线程持有文件锁至调用结束。</p>
 <p>同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 协议版本为 2，包含准确令牌的 <code>RenewLease</code>。续租只延长当前未撤销、未过期的令牌，不能取得新令牌或恢复旧控制权。消息总上限为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。daemon 将能力响应限制为 4 KiB、观察响应限制为 68 MiB、其他响应与请求限制为 16 KiB。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。</p>
-<p>daemon 已通过这条认证连接装配 Harness 的 <code>computer_observe</code> 与 <code>computer_act</code>，启用条件、准确审批和持久回执见<a href="#模型计算机工具">本地工具与浏览器操作</a>。CLI/Desktop 尚未接入交互式原生桌面范围选择与连接入口；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
+<p>daemon 已通过这条认证连接装配 Harness 的 <code>computer_observe</code> 与 <code>computer_act</code>，启用条件、准确审批和持久回执见<a href="#模型计算机工具">本地工具与浏览器操作</a>。CLI/TUI 与 Desktop 已提供显式目标选择和会话连接入口，见<a href="#原生计算机连接">原生计算机连接</a>；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="开发与验证"><a class="header" href="#开发与验证">开发与验证</a></h1>
 <p>工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 <code>Cargo.lock</code> 管理。Rust 工具链最低版本见根 <code>Cargo.toml</code> 的 <code>rust-version</code>。工程约束统一维护在根 <code>AGENTS.md</code>。</p>
@@ -959,9 +987,23 @@ cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /a
 cargo dev --help
 </code></pre>
 <p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell，也无需安装额外的任务运行器。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
+<p><code>cargo dev tui</code> 等价于 <code>cargo run --locked -p agent-dev -- tui</code>。首次执行时，Cargo 按 <code>Cargo.lock</code> 下载并编译 Rust 依赖，无需通过 <code>cargo install</code> 安装开发启动器、<code>just</code> 或 <code>cargo-make</code>。GPUI 和可选原生 SDK 所需的平台构建依赖仍需准备，见<a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
 <p>需要单独运行前台 daemon 时，使用 <code>cargo dev daemon</code>。其他开发客户端仍可自动连接并复用它。</p>
 <p>默认配置为开发数据目录中的 <code>config.toml</code>，dotenv 文件位于配置文件旁边。<code>--config</code> 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 <code>agent-config</code> 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 <code>agent-telemetry</code> 写入日志；默认位于开发数据目录的 <code>logs</code> 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 <code>auth.token</code>，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。</p>
-<p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code>，浏览器执行能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
+<p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code> 或 <code>native-computer</code>，对应的浏览器执行或原生计算机宿主能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
+<h2 id="原生计算机客户端构建"><a class="header" href="#原生计算机客户端构建">原生计算机客户端构建</a></h2>
+<p>CLI 与 Desktop 的 <code>native-computer</code> feature 默认关闭，显式转发到 <code>agent-computer-runtime/native</code>，再启用 <code>agent-computer/native</code>。<code>cargo dev desktop</code> 和 <code>cargo dev tui</code> 的默认构建不自动启用它；<code>native-cef</code> 也不会启用原生计算机能力。开发启动器支持显式启用客户端 feature：</p>
+<pre><code class="language-sh">cargo dev desktop --native-computer
+cargo dev tui --native-computer
+cargo dev desktop --native-computer --dry-run
+</code></pre>
+<p>该参数只转发到客户端构建，不传给 agentd，也不修改 <code>computer_tools</code> 配置；<code>cargo dev daemon --native-computer</code> 会拒绝。也可以单独构建和启动客户端：</p>
+<pre><code class="language-sh">cargo build -p agent-cli -p agent-desktop --features agent-cli/native-computer,agent-desktop/native-computer --locked
+cargo run -p agent-cli --features native-computer -- computer targets
+cargo run -p agent-desktop --features native-computer
+</code></pre>
+<p>客户端通过共享 launcher 连接或复用原生 daemon 服务；开发前台 daemon 的使用方式见上方。原生 feature 不改变 daemon 的 <code>computer_tools = false</code> 默认值，也不代替系统权限、交互会话检查或准确动作审批。默认依赖和测试依赖均不通过 Cargo feature 合并隐式启用原生 SDK。目标选择、会话挂接和断开操作见<a href="#原生计算机连接">终端与桌面客户端</a>。</p>
+<p>构建通过只说明对应主机上的代码可编译。原生目标发现、GUI 选择、客户端到 Harness 的连接、屏幕观察与获批输入均需实际运行验收。macOS 会话探测无法确认解锁状态时返回 <code>SessionStateUnknown</code>，不得将拒绝路径或合成宿主回归称为原生控制验收；Windows 和 Linux 也需要各自环境中的运行证据。</p>
 <h2 id="检查命令"><a class="header" href="#检查命令">检查命令</a></h2>
 <p>在仓库根目录执行：</p>
 <pre><code class="language-sh">cargo fmt --all -- --check
@@ -986,7 +1028,7 @@ mdbook serve docs/en --open
 <pre><code class="language-sh">cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 </code></pre>
-<p><code>apps/agentd/tests/computer_tools.rs</code> 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 <code>attach_host</code>，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 <code>Uncertain</code> 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能作为 CLI/Desktop 原生连接入口或三平台桌面控制验收。</p>
+<p><code>apps/agentd/tests/computer_tools.rs</code> 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 <code>attach_host</code>，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 <code>Uncertain</code> 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能替代 CLI/Desktop 原生连接入口的实际运行或三平台桌面控制验收。</p>
 <pre><code class="language-sh">cargo test -p agentd --test computer_tools --locked
 </code></pre>
 <p>本地推理真实模型测试显式忽略，需自行提供已有的聊天 GGUF 文件。每条命令只验收所选后端、模型与当前主机：</p>

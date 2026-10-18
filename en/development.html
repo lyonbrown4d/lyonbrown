@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-60ea5b95.js";
+            window.path_to_searchindex_js = "searchindex-0d29cec5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -195,9 +195,23 @@ cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /a
 cargo dev --help
 </code></pre>
 <p>The Cargo alias invokes <code>apps/agent-dev</code> with an argument array, without a platform shell or an extra task runner. The root <code>README.md</code> lists common commands; <code>cargo --list</code> also displays the <code>dev</code> alias.</p>
+<p><code>cargo dev tui</code> expands to <code>cargo run --locked -p agent-dev -- tui</code>. On first use, Cargo downloads and compiles Rust dependencies from <code>Cargo.lock</code>; no <code>cargo install</code> step is needed for the launcher, <code>just</code> or <code>cargo-make</code>. Platform build dependencies for GPUI and optional native SDKs still need to be available; see the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a>.</p>
 <p>Use <code>cargo dev daemon</code> when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.</p>
 <p>The default configuration is <code>config.toml</code> inside the development data directory, with <code>.env</code> beside it. <code>--config</code> selects an existing TOML file. The commands do not create or overwrite configuration or dotenv files. Model, tool and log settings use the shared <code>agent-config</code> layering rules. agentd, TUI, Desktop and the development launcher all use shared <code>agent-telemetry</code> logging. Files default to the development data directory’s <code>logs</code> subdirectory, use separate process prefixes and follow the configured rotation and retention settings. The launcher forces the selected development address and data directory, reads that directory’s <code>auth.token</code> and ignores inherited connection credentials. Tokens pass only through the client child environment, never command arguments or launch output.</p>
-<p><code>--dry-run</code> displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile <code>agent-dev</code>. Default Desktop/TUI builds do not enable <code>native-cef</code>; browser execution reports unavailable. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for the full CEF SDK, helper and application bundle layout.</p>
+<p><code>--dry-run</code> displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile <code>agent-dev</code>. Default Desktop/TUI builds enable neither <code>native-cef</code> nor <code>native-computer</code>; their browser execution and native computer hosting capabilities report unavailable. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for the full CEF SDK, helper and application bundle layout.</p>
+<h2 id="native-computer-client-builds"><a class="header" href="#native-computer-client-builds">Native computer client builds</a></h2>
+<p>CLI and Desktop disable <code>native-computer</code> by default. It explicitly forwards to <code>agent-computer-runtime/native</code>, which enables <code>agent-computer/native</code>. Default <code>cargo dev desktop</code> and <code>cargo dev tui</code> builds do not enable it automatically; <code>native-cef</code> does not enable computer hosting either. The development launcher supports explicit client feature selection:</p>
+<pre><code class="language-sh">cargo dev desktop --native-computer
+cargo dev tui --native-computer
+cargo dev desktop --native-computer --dry-run
+</code></pre>
+<p>The flag affects only the client build, without forwarding to agentd or changing <code>computer_tools</code> configuration. <code>cargo dev daemon --native-computer</code> is rejected. Clients can also be built and started separately:</p>
+<pre><code class="language-sh">cargo build -p agent-cli -p agent-desktop --features agent-cli/native-computer,agent-desktop/native-computer --locked
+cargo run -p agent-cli --features native-computer -- computer targets
+cargo run -p agent-desktop --features native-computer
+</code></pre>
+<p>Clients connect to or reuse the native daemon service through the shared launcher; the foreground development daemon is described above. The native feature does not change the daemon’s <code>computer_tools = false</code> default or replace OS permissions, interactive session checks or exact action approval. Neither default nor test dependencies implicitly enable native SDKs through Cargo feature unification. See <a href="clients.html#native-computer-attachment">terminal and desktop clients</a> for selection, attachment and detachment.</p>
+<p>Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Harness attachment, observation and approved input require actual runtime acceptance. macOS returns <code>SessionStateUnknown</code> when it cannot confirm unlocked session state; rejection paths and synthetic-host regressions do not establish native-control acceptance. Windows and Linux require runtime evidence from their respective environments too.</p>
 <h2 id="verification-commands"><a class="header" href="#verification-commands">Verification commands</a></h2>
 <p>Run from the repository root:</p>
 <pre><code class="language-sh">cargo fmt --all -- --check
@@ -222,7 +236,7 @@ mdbook serve docs/en --open
 <pre><code class="language-sh">cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 </code></pre>
-<p><code>apps/agentd/tests/computer_tools.rs</code> uses local model mocks, the real adapters for all three standard protocols, the Harness and an injectable synthetic <code>attach_host</code>. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable <code>Uncertain</code> with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not establish CLI/Desktop native attachment or desktop-control acceptance on three platforms.</p>
+<p><code>apps/agentd/tests/computer_tools.rs</code> uses local model mocks, the real adapters for all three standard protocols, the Harness and an injectable synthetic <code>attach_host</code>. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable <code>Uncertain</code> with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not replace actual CLI/Desktop native attachment checks or establish desktop-control acceptance on three platforms.</p>
 <pre><code class="language-sh">cargo test -p agentd --test computer_tools --locked
 </code></pre>
 <p>Real local-model tests are explicitly ignored and require an existing chat GGUF file. Each command checks only the selected backend, model and current host:</p>

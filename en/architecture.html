@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-60ea5b95.js";
+            window.path_to_searchindex_js = "searchindex-0d29cec5.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -318,13 +318,13 @@
     Worker --&gt; Remote[Worker local persistence]
 </code></pre>
 <p>Disconnecting the browser attachment does not replay actions. Web content cannot access privileged application interfaces. Profiles preserve browser data on disk, without restoring live in-memory pages. Node discovery grants no execution authority; pairing and task authorization remain with the daemon. Public registration and relay use a separate control-plane protocol; discovery does not establish trust.</p>
-<p>ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. After checking trusted configuration, session ownership and control permissions, the daemon provides <code>computer_observe</code> and <code>computer_act</code> through the sole Harness. Observation, immutable action preparation and execution after exact approval use this authenticated connection; approval consumption and intent become durable before execution. CLI/Desktop do not yet wire interactive native scope selection and attachment into their entry points. This library connection does not establish native runtime acceptance. On macOS, an indeterminate unlocked session still fails closed with <code>SessionStateUnknown</code>. See <a href="protocol.html#native-desktop-execution-boundary">Native desktop execution boundary</a> for permissions, leases and execution limits, and <a href="tools.html#model-computer-tools">model computer tools</a> for tool behavior.</p>
+<p>ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. After checking trusted configuration, session ownership and control permissions, the daemon provides <code>computer_observe</code> and <code>computer_act</code> through the sole Harness. Observation, immutable action preparation and execution after exact approval use this authenticated connection; approval consumption and intent become durable before execution. CLI/TUI and Desktop use an injected <code>ComputerHostFactory</code> to explicitly discover and select a local window or display, then bind the host to the selected daemon session. Switching chats does not transfer an existing attachment. ComputerRuntime is embedded in the client process, without a standalone product process or another Agent Loop. The client <code>native-computer</code> feature is disabled by default; wired entry points do not establish native-control runtime acceptance. On macOS, an indeterminate unlocked session still fails closed with <code>SessionStateUnknown</code>. See <a href="protocol.html#native-desktop-execution-boundary">Native desktop execution boundary</a> for permissions, leases and execution limits, and <a href="tools.html#model-computer-tools">model computer tools</a> for tool behavior.</p>
 <h2 id="source-references"><a class="header" href="#source-references">Source references</a></h2>
 <ul>
 <li>Services and messages: <code>proto/agent/v1/agent.proto</code>.</li>
 <li>Authenticated connection: <code>crates/agent-client/src/lib.rs</code>.</li>
 <li>Runtime interfaces: <code>crates/agent-runtime/src/contracts.rs</code>.</li>
-<li>Native host attachment: <code>crates/agent-computer-runtime/src/attachment.rs</code>, <code>apps/agentd/src/computer/service.rs</code>, <code>apps/agentd/src/computer/tools/</code> and <code>apps/agentd/src/computer/mutation.rs</code>.</li>
+<li>Native host attachment: <code>apps/agent-cli/src/computer_backend.rs</code>, <code>apps/agent-desktop/src/computer.rs</code>, <code>crates/agent-computer-runtime/src/client.rs</code>, <code>crates/agent-computer-runtime/src/attachment.rs</code>, <code>apps/agentd/src/computer/service.rs</code>, <code>apps/agentd/src/computer/tools/</code> and <code>apps/agentd/src/computer/mutation.rs</code>.</li>
 <li>Durable state: <code>crates/agent-storage/src/schema.sql</code>.</li>
 </ul>
 <p>A successful worker attempt and a master’s acceptance of its result have different meanings. The protocol keeps <code>attempt_id</code>, <code>owner_epoch</code> and explicit <code>AcceptResult</code>; receiving a result does not establish acceptance.</p>
