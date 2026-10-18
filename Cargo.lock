@@ -253,11 +253,22 @@ dependencies = [
 name = "agent-computer-runtime"
 version = "0.1.0"
 dependencies = [
+ "agent-client",
  "agent-computer",
+ "agent-protocol",
+ "anyhow",
+ "directories",
+ "fs2",
+ "hex",
  "postcard",
  "serde",
+ "sha2 0.11.1",
+ "tempfile",
  "thiserror 2.0.21",
+ "tokio",
+ "tokio-stream",
  "tokio-util",
+ "tonic",
  "uuid 1.28.0",
 ]
 
@@ -566,6 +577,8 @@ version = "0.1.0"
 dependencies = [
  "agent-browser",
  "agent-client",
+ "agent-computer",
+ "agent-computer-runtime",
  "agent-config",
  "agent-core",
  "agent-decision",

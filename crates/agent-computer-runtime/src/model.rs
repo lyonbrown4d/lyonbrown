@@ -1,12 +1,20 @@
 use agent_computer::{
-  DesktopActionReceipt, DesktopActionRequest, DesktopCapabilities, DesktopError, DesktopSnapshot,
-  LeaseToken, ObservationLimits,
+  DesktopActionReceipt, DesktopActionRequest, DesktopCapabilities, DesktopError, DesktopSession,
+  DesktopSnapshot, LeaseToken, ObservationLimits,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
+
+pub const RUNTIME_PROTOCOL_VERSION: u32 = 1;
+
+/// Immutable native scope selected by the interactive user before attachment.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct RuntimeHello {
+  pub desktop_session: DesktopSession,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RunBinding {
@@ -18,8 +26,8 @@ pub struct RunBinding {
 impl RunBinding {
   pub fn validate(&self) -> RuntimeResult<()> {
     if self.owner_epoch == 0
-      || Uuid::parse_str(&self.daemon_session_id).is_err()
-      || Uuid::parse_str(&self.run_id).is_err()
+      || !Uuid::parse_str(&self.daemon_session_id).is_ok_and(|id| !id.is_nil())
+      || !Uuid::parse_str(&self.run_id).is_ok_and(|id| !id.is_nil())
     {
       return Err(RuntimeError::InvalidBinding);
     }

@@ -40,6 +40,7 @@ pub(crate) struct State {
 /// Capacity exhaustion fails closed until a new process; durable replay protection
 /// across process replacement is the daemon's responsibility.
 pub struct ComputerRuntime {
+  desktop_session: DesktopSession,
   pub(crate) runtime: DesktopRuntime,
   pub(crate) leases: Arc<LeaseRegistry>,
   pub(crate) clock: Arc<dyn DesktopClock>,
@@ -63,11 +64,17 @@ impl ComputerRuntime {
     clock: Arc<dyn DesktopClock>,
   ) -> Self {
     Self {
+      desktop_session: session.clone(),
       runtime: DesktopRuntime::new(session, leases.clone(), backend),
       leases,
       clock,
       state: Mutex::new(State::default()),
     }
+  }
+
+  /// Immutable authenticated native desktop identity for attachment hello.
+  pub fn session(&self) -> &DesktopSession {
+    &self.desktop_session
   }
 
   pub fn handle(&self, command: Command, cancellation: CancellationToken) -> RuntimeResult<Reply> {

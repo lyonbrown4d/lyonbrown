@@ -20,7 +20,7 @@ flowchart TB
         Desktop --> Browser
     end
     subgraph Agentd[Local agentd / FluxDI composition]
-        API[Client / Workspace / Browser / Orchestration services]
+        API[Client / Workspace / Browser / ComputerRuntime / Orchestration services]
         Decision[Decision Engine / rules and structured classification]
         Run[Run lifecycle / concurrency / cancellation / recovery]
         Harness[agent-runtime / sole rpi-harness loop]
@@ -44,6 +44,12 @@ flowchart TB
     Client --> API
     Launcher --> Agentd
     Browser <-->|Authenticated attachment / commands and frames| API
+    subgraph NativeHost[Interactive-user host interface]
+        Computer[agent-computer-runtime / embedded library]
+        OS[agent-computer / OS session and permissions]
+        Computer --> OS
+    end
+    Computer <-->|Authenticated session attachment / read-only capabilities| API
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --> Workspace[Workspace / Git / artifacts / notify]
@@ -147,6 +153,9 @@ flowchart LR
     Daemon -->|Authorized commands| Runtime
     Runtime --> Helper[Client private-mode CEF helper]
     Helper --> Web[Untrusted web content]
+    Computer[ComputerRuntime host library] -->|Authenticated fixed session scope| Daemon
+    Daemon -->|Read-only capability inspection| Computer
+    Computer --> Native[Blocking worker / OS session exclusion]
     Daemon --> Local[Local SQLite]
     Daemon -->|TaskService / PeerService| Worker[Trusted worker daemon]
     Worker --> Remote[Worker local persistence]
@@ -154,11 +163,14 @@ flowchart LR
 
 Disconnecting the browser attachment does not replay actions. Web content cannot access privileged application interfaces. Profiles preserve browser data on disk, without restoring live in-memory pages. Node discovery grants no execution authority; pairing and task authorization remain with the daemon. Public registration and relay use a separate control-plane protocol; discovery does not establish trust.
 
+ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. The daemon host interface exposes capability inspection; model tools do not invoke native input through this interface. See [Native desktop execution boundary](protocol.md#native-desktop-execution-boundary) for permissions, leases and execution limits.
+
 ## Source references
 
 - Services and messages: `proto/agent/v1/agent.proto`.
 - Authenticated connection: `crates/agent-client/src/lib.rs`.
 - Runtime interfaces: `crates/agent-runtime/src/contracts.rs`.
+- Native host attachment: `crates/agent-computer-runtime/src/attachment.rs`, `apps/agentd/src/computer/service.rs`.
 - Durable state: `crates/agent-storage/src/schema.sql`.
 
 A successful worker attempt and a master's acceptance of its result have different meanings. The protocol keeps `attempt_id`, `owner_epoch` and explicit `AcceptResult`; receiving a result does not establish acceptance.

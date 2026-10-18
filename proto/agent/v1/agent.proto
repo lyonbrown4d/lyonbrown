@@ -131,4 +131,4 @@ message BrowserInput { string tab_id = 1; uint64 revision = 2; string kind = 3; 
 message BrowserRuntimeRequest { string request_id = 1; bytes payload = 2; }
 message BrowserRuntimeResponse { string request_id = 1; string host_id = 2; uint32 protocol_version = 3; bytes payload = 4; }
 message ComputerRuntimeRequest { string request_id = 1; bytes payload = 2; }
-message ComputerRuntimeResponse { string request_id = 1; string host_id = 2; uint32 protocol_version = 3; bytes payload = 4; }
+message ComputerRuntimeResponse { string request_id = 1; string host_id = 2; uint32 protocol_version = 3; bytes payload = 4; string daemon_session_id = 5; }

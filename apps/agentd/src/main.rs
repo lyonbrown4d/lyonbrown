@@ -63,6 +63,7 @@ async fn run(
     .add_service(agentd::workspace_service(daemon.clone()))
     .add_service(agentd::browser_service(daemon.clone()))
     .add_service(agentd::runtime_service(daemon.clone()))
+    .add_service(agentd::computer_runtime_service(daemon.clone()))
     .add_service(agentd::orchestration_service(daemon.clone()))
     .serve_with_incoming_shutdown(incoming, async {
       shutdown.await;

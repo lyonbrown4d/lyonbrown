@@ -50,12 +50,14 @@ impl TestNode {
     let workspace_service = agentd::workspace_service(daemon.clone());
     let browser_service = agentd::browser_service(daemon.clone());
     let runtime_service = agentd::runtime_service(daemon.clone());
+    let computer_runtime_service = agentd::computer_runtime_service(daemon.clone());
     let server = tokio::spawn(async move {
       tonic::transport::Server::builder()
         .add_service(service)
         .add_service(workspace_service)
         .add_service(browser_service)
         .add_service(runtime_service)
+        .add_service(computer_runtime_service)
         .serve_with_incoming(TcpListenerStream::new(listener))
         .await
         .unwrap();
