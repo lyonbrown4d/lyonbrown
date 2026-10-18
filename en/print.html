@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6dd3112e.js";
+            window.path_to_searchindex_js = "searchindex-0811b283.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -810,6 +810,21 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <p>These images come from an actual <code>agent-cli</code> process in an isolated 140-column, 38-row PTY on macOS. It authenticated to the local daemon, created a session, received streamed replies and approved the exact <code>notes.txt</code> write using <code>Ctrl+Y</code>. The second Run reached <code>completed</code>; exiting restored terminal state.</p>
 <p>pyte 0.8.2 parsed the recorded ANSI output for terminal-state rendering. <strong>These are not screenshots of an operating-system Terminal window.</strong> Session, reply and approval content were not inserted manually. Synthetic replies reuse the Desktop fixture; references to GPUI, Files and Diff do not imply that those desktop panels exist in the TUI.</p>
 <p>Inspect the <a href="evidence/tui-pty-approval.txt">approval text</a>, <a href="evidence/tui-pty-completed.txt">completed text</a> and <a href="evidence/tui-pty-capture.json">capture metadata</a>. They establish this PTY workflow, without replacing native-terminal font, color or input-method acceptance.</p>
+<h2 id="macos-package-content-checks"><a class="header" href="#macos-package-content-checks">macOS package-content checks</a></h2>
+<p>The 0.1.0 ARM64 release build completed on macOS 27.0.1. Client builds enable <code>native-cef</code> and <code>native-computer</code>; agentd includes both <code>local-llama</code> and <code>local-mistral</code> CPU inference adapters. The <a href="evidence/native-packages-macos.json">package verification record</a> lists build features, executable and packaging-tool digests, and the sizes and SHA-256 hashes of five artifacts.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Format</th><th>Artifacts</th><th>Checks performed</th></tr>
+</thead>
+<tbody>
+<tr><td>PKG</td><td>One each for CLI and Desktop</td><td>Component metadata, complete app trees, shared agentd, entry links and BOM inventories</td></tr>
+<tr><td>tar.gz</td><td>One each for CLI and Desktop</td><td>Final archive entries match staging types, modes, contents and links</td></tr>
+<tr><td>DMG</td><td>One for Desktop</td><td>Read-only mounted app tree matches staging; image detached afterward</td></tr>
+</tbody>
+</table>
+</div>
+<p>Each client’s five Helpers match its main executable digest, and all 232 CEF files match the pinned SDK. Both PKGs are unsigned and the artifacts are not notarized. These records cover generation and package contents; operating-system installation, native service lifecycle, upgrades and rollback require separate runtime acceptance. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for build commands.</p>
 <h2 id="capabilities-outside-this-screenshot-set"><a class="header" href="#capabilities-outside-this-screenshot-set">Capabilities outside this screenshot set</a></h2>
 <p>These images do not show model-driven browser semantic actions or native terminal-window presentation. Synthetic-host protocol regressions and actual autonomous CEF acceptance have separate records. See <a href="#local-tools-and-browser-actions">Local tools and browser actions</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div>

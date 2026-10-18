@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-43410440.js";
+            window.path_to_searchindex_js = "searchindex-18edb68a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -215,6 +215,21 @@
 <p>这两张图来自 macOS 上真实 <code>agent-cli</code> 进程的独立 PTY 记录，尺寸为 140 列、38 行。客户端经认证连接上述本地 daemon，创建会话、接收流式回复，并通过 <code>Ctrl+Y</code> 批准 <code>notes.txt</code> 的精确写入；第二次 Run 最终进入 <code>completed</code>，退出时恢复终端状态。</p>
 <p>图片使用 pyte 0.8.2 解析实际 ANSI 输出后进行终端状态渲染，<strong>不是操作系统 Terminal 窗口截图</strong>。未手工填入会话、回复或审批内容。截图中的合成回复复用桌面 fixture，提及 GPUI、Files 和 Diff 不表示 TUI 内置这些桌面面板。</p>
 <p>可核对<a href="evidence/tui-pty-approval.txt">审批文本</a>、<a href="evidence/tui-pty-completed.txt">完成文本</a>及<a href="evidence/tui-pty-capture.json">记录元数据</a>。它们证明本次 PTY 工作流，不替代原生终端窗口的字体、颜色和输入法验收。</p>
+<h2 id="macos-安装包内容校验"><a class="header" href="#macos-安装包内容校验">macOS 安装包内容校验</a></h2>
+<p>0.1.0 的 ARM64 发布构建在 macOS 27.0.1 完成。客户端构建启用 <code>native-cef</code> 和 <code>native-computer</code>，agentd 包含 <code>local-llama</code> 和 <code>local-mistral</code> 两种 CPU 推理适配器。<a href="evidence/native-packages-macos.json">安装包校验记录</a>列出构建配置、程序与打包工具摘要，以及五份产物的大小和 SHA-256。</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>格式</th><th>产物</th><th>实际检查</th></tr>
+</thead>
+<tbody>
+<tr><td>PKG</td><td>CLI、Desktop 各一份</td><td>组件元数据、完整应用目录、共享 agentd、入口链接和 BOM 文件清单</td></tr>
+<tr><td>tar.gz</td><td>CLI、Desktop 各一份</td><td>最终归档与打包目录的文件类型、权限、内容和链接逐项一致</td></tr>
+<tr><td>DMG</td><td>Desktop 一份</td><td>只读挂载后的应用目录与打包目录一致，检查后卸载</td></tr>
+</tbody>
+</table>
+</div>
+<p>每个客户端的 5 个 Helper 均与对应主程序的摘要一致，232 个 CEF 文件与固定 SDK 一致。两份 PKG 未签名，产物未经过公证。这些记录覆盖生成与包内容校验；操作系统实际安装、原生服务生命周期、升级和回滚仍需单独运行验收。构建命令见<a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
 <h2 id="尚未由本组截图覆盖的能力"><a class="header" href="#尚未由本组截图覆盖的能力">尚未由本组截图覆盖的能力</a></h2>
 <p>本组截图未展示模型浏览器语义操作或原生终端窗口呈现。模型工具的合成 host 协议回归与真实 CEF 自主操作验收分别保留，见<a href="tools.html">本地工具与浏览器操作</a>。</p>
 

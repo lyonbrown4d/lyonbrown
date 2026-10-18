@@ -1,0 +1,100 @@
+{
+  "version": "0.1.0",
+  "captured_at_utc": "2026-10-18T20:31:53.185613+00:00",
+  "platform": {
+    "os": "macOS",
+    "version": "27.0.1",
+    "build": "26A434",
+    "architecture": "arm64"
+  },
+  "worktree_revision_at_inspection": "d32d7e7eeaea35101cd9633af73a222dc01ddd60",
+  "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13) (Homebrew)",
+  "cef": {
+    "version": "154.0.34",
+    "crate_version": "154.5.0+154.0.34",
+    "runtime_files_per_app": 232,
+    "copied_helpers_per_client": 5
+  },
+  "features": {
+    "agentd": [
+      "local-llama",
+      "local-mistral"
+    ],
+    "clients": [
+      "native-cef",
+      "native-computer"
+    ],
+    "packager": [
+      "cef-bundle"
+    ]
+  },
+  "binary_inputs": {
+    "agentd": {
+      "sha256": "d1b4d46c4db1c47341be6a7640a0a10477d7221e97b725af8555f78aed9a9ace",
+      "size": 108603552,
+      "architecture": "arm64"
+    },
+    "agent-cli": {
+      "sha256": "232e47711b92ba65669bb2adea8fd41dbb0920ddd5419282bf610f6898be728e",
+      "size": 12739696,
+      "architecture": "arm64"
+    },
+    "agent-desktop": {
+      "sha256": "3c890e5c022d37730336203356132b50f91bec1d73e926aab3984cfd0082cc57",
+      "size": 39957152,
+      "architecture": "arm64"
+    },
+    "agent-install": {
+      "sha256": "04838f025e79ba2448cadcb1879f05baa0007f301b49c47b32960d5d33a6ef73",
+      "size": 6221520,
+      "architecture": "arm64"
+    },
+    "agent-package": {
+      "sha256": "b594c0f939093a33b24ac72b8cf0a5e9aa05bcf3f2406a3aa8f46801c2683f4c",
+      "size": 1060480,
+      "architecture": "arm64"
+    }
+  },
+  "artifacts": [
+    {
+      "name": "Lyonbrown-cli-0.1.0.pkg",
+      "size": 242212395,
+      "sha256": "1aa0a4ac34657332f97325c9ea5cf483a984efc54d7e26ecd214de19d54cb48a"
+    },
+    {
+      "name": "Lyonbrown-desktop-0.1.0.pkg",
+      "size": 293246568,
+      "sha256": "acc023cdbff1d53117be8f3c1d324cf6ace91972e7673b6b1a9b5a8182733152"
+    },
+    {
+      "name": "Lyonbrown-0.1.0-macos-aarch64.dmg",
+      "size": 285988491,
+      "sha256": "aa7d5e46266cb7b90f3031cd21ebf3555dad352bcfba40af194799f026e52aba"
+    },
+    {
+      "name": "Lyonbrown-app-aarch64-apple-darwin.tar.gz",
+      "size": 258907017,
+      "sha256": "b63f757fd767d8cd8d60f7a51fb00fc5f5f6a7a5fbfaa113d13e34aceee9fcb7"
+    },
+    {
+      "name": "lyonbrown-cli-0.1.0-macos-aarch64.tar.gz",
+      "size": 244712019,
+      "sha256": "6476af239fe277f404b633f5fdcab72c9f767927b1d82125a97721278f448167"
+    }
+  ],
+  "verified": {
+    "rust_and_manifest_input_hashes_unchanged": 492,
+    "cli_help_and_version": true,
+    "daemon_compatibility_json": true,
+    "final_tar_complete_trees": true,
+    "final_pkg_complete_trees_metadata_and_bom": true,
+    "dmg_readonly_tree": true,
+    "dmg_detached": true,
+    "retained_artifact_hashes": true
+  },
+  "scope": "macOS ARM64 release generation and final payload checks; no operating-system installation, service lifecycle, upgrade, rollback, GUI, native Computer input, model inference or other-platform acceptance. agent-package is an inspected build tool, not an installed product.",
+  "signing": {
+    "pkg_developer_id_signed": false,
+    "notarized": false
+  }
+}
