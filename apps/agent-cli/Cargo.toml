@@ -1,0 +1,40 @@
+[package]
+name = "agent-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+directories.workspace = true
+futures.workspace = true
+tokio.workspace = true
+ratatui = "0.30.2"
+crossterm = { version = "0.29", features = ["event-stream"] }
+agent-client = { path = "../../crates/agent-client" }
+agent-protocol = { path = "../../crates/agent-protocol" }
+uuid.workspace = true
+tracing.workspace = true
+agent-config = { path = "../../crates/agent-config" }
+agent-telemetry = { path = "../../crates/agent-telemetry" }
+agent-launch = { path = "../../crates/agent-launch" }
+agent-browser-runtime = { path = "../../crates/agent-browser-runtime" }
+fluxdi.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+agentd = { path = "../agentd" }
+agent-test-support = { path = "../../crates/agent-test-support" }
+portable-pty = "0.9"
+vt100 = "0.16"
+tempfile.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+
+[features]
+default = []
+native-cef = ["agent-browser-runtime/native-cef"]
+
+[lib]
+crate-type = ["rlib", "cdylib"]

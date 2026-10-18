@@ -1,0 +1,14 @@
+# Summary
+
+- [Overview](overview.md)
+- [Run locally](quickstart.md)
+- [Models and execution decisions](models.md)
+- [Connect MCP tools](mcp.md)
+- [Local tools and browser actions](tools.md)
+- [Components and calls](architecture.md)
+- [Sessions, tasks and recovery](persistence.md)
+- [Terminal and desktop clients](clients.md)
+- [Desktop screenshots and acceptance scope](runtime-evidence.md)
+- [Connect peers and Control Relay](network.md)
+- [Protocol and platform capabilities](protocol.md)
+- [Development and verification](development.md)

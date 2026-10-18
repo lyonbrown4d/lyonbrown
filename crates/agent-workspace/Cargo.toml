@@ -1,0 +1,35 @@
+[package]
+name = "agent-workspace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-core = { path = "../agent-core" }
+anyhow.workspace = true
+cap-std = "3.4.5"
+sha2.workspace = true
+hex.workspace = true
+serde.workspace = true
+notify = "8.2.0"
+notify-debouncer-full = "0.7.0"
+tokio.workspace = true
+async-trait.workspace = true
+tokio-util.workspace = true
+process-wrap = { version = "=10.0.1", default-features = false, features = ["tokio1", "process-group", "job-object", "kill-on-drop"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+test-fixtures = []
+
+[[bin]]
+name = "agent-process-fixture"
+path = "tests/process_support/fixture.rs"
+required-features = ["test-fixtures"]
+
+[[test]]
+name = "process"
+path = "tests/process.rs"
+required-features = ["test-fixtures"]

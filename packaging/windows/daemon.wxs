@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <!-- Both products install exactly this immutable, protected version path.
+       Auto-generated GUIDs derive from the key path, so a new version gets a
+       new component identity while identical CLI/Desktop payloads share one.
+       Permanent keeps daemon versions after client removal for running services
+       and rollback. Cleanup requires an explicit service-aware maintenance tool. -->
+  <Fragment>
+    <DirectoryRef Id="LYONBROWNROOT">
+      <Directory Id="DAEMONROOT" Name="Daemon">
+        <Directory Id="DAEMONVERSION" Name="$(var.Version)">
+          <Component Id="SharedDaemon" Guid="*" Permanent="yes" NeverOverwrite="yes" SharedDllRefCount="yes" Win64="yes">
+            <File Id="DaemonExe" Source="$(var.BinDir)\agentd.exe" KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </DirectoryRef>
+  </Fragment>
+</Wix>

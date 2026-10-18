@@ -1,0 +1,31 @@
+[package]
+name = "lyonbrown-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Lyonbrown terminal user interface"
+
+[lib]
+path = "../metadata.rs"
+
+[package.metadata.deb]
+name = "lyonbrown-cli"
+section = "utils"
+depends = "$auto, lyonbrown-agentd (>= 0.1.0), lyonbrown-agentd (<< 0.2.0)"
+assets = [
+  ["../../../target/release/lyonbrown-linux/cli/programs/*", "usr/lib/lyonbrown/cli/", "755"],
+  ["../../../target/release/lyonbrown-linux/cli/runtime/**/*", "usr/lib/lyonbrown/cli/", "644"],
+  ["../../../target/release/lyonbrown-linux/cli/launcher", "usr/bin/agent", "755"],
+]
+
+[package.metadata.generate-rpm]
+name = "lyonbrown-cli"
+assets = [
+  { source = "../../../target/release/lyonbrown-linux/cli/programs/*", dest = "/usr/lib/lyonbrown/cli/", mode = "755" },
+  { source = "../../../target/release/lyonbrown-linux/cli/runtime/**/*", dest = "/usr/lib/lyonbrown/cli/", mode = "644" },
+  { source = "../../../target/release/lyonbrown-linux/cli/launcher", dest = "/usr/bin/agent", mode = "755" },
+]
+
+[package.metadata.generate-rpm.requires]
+lyonbrown-agentd = ">= 0.1.0, < 0.2.0"

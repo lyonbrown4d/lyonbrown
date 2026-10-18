@@ -1,0 +1,81 @@
+# 桌面运行截图与验收范围
+
+以下截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate `cef` 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。[原生截图记录](evidence/desktop-native-capture.json)保存了对应程序、源文件与图片摘要、两次已持久化为 `completed` 的 Run，以及状态为 `consumed` 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见[客户端文档](clients.md)。
+
+浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。
+
+## 设置与原生窗口
+
+![macOS 上的独立 Settings 页面](images/desktop-settings-macos.png)
+
+Settings 独立页面显示连接地址、已掩码的访问令牌、工作区和明暗外观选项。对话主窗口标题栏未显示地址或令牌。此次原生操作还观察到 macOS 系统窗口控制按钮，并实际执行了原生缩放动作；记录见[原生截图记录](evidence/desktop-native-capture.json)。
+
+## 明暗对话
+
+![macOS 上的 GPUI 浅色对话窗口](images/desktop-chat-light-macos.png)
+
+浅色窗口展示经 daemon 流式返回的合成回复、会话列表和原生输入区。右侧工作台已关闭；此图不作为 CEF 页面运行证据。
+
+![macOS 上的 GPUI 深色对话窗口](images/desktop-chat-dark-macos.png)
+
+同一会话手动切换为深色；此截图不证明操作系统主题变化已自动同步。
+
+## 标签页与面板开关
+
+![切回首个聊天标签页后恢复独立草稿](images/desktop-tabs-macos.png)
+
+两个标签页分别输入不同草稿，再切回首个标签页，输入区恢复 `Draft retained in the first tab.`。另一个标签页恢复 `A separate draft in the second tab.` 的原生辅助功能观察记录保存在[原生截图记录](evidence/desktop-native-capture.json)；两个草稿均未提交给模型。
+
+![左右面板均折叠后的 macOS 对话窗口](images/desktop-panels-collapsed-macos.png)
+
+原生操作分别折叠和展开左右面板；图中两侧均已折叠，标题栏仍保留重新展开按钮。
+
+## 审批与文件结果
+
+![macOS 上等待 write_file 审批的 GPUI 窗口](images/desktop-approval-macos.png)
+
+真实 daemon 请求对 `notes.txt` 执行 `write_file`，窗口显示准确路径和内容以及单次允许、拒绝按钮。此次运行完成了单次批准，对应审批已持久化为 `consumed`，Run 已持久化为 `completed`；审批截图本身记录批准前状态。
+
+![macOS 上通过 Editor 读取已批准写入文件的 GPUI 窗口](images/desktop-editor-macos.png)
+
+批准后，Editor 通过 daemon 的工作区接口读取 `notes.txt`，展示实际写入内容。此截图展示文件读取；编辑保存与冲突处理另由组件测试覆盖。
+
+## Git 差异
+
+![macOS 原生窗口中的真实非空 Git Diff](images/desktop-diff-macos.png)
+
+验收工作区先提交原始 `README.md`，再修改已跟踪内容。连接 daemon、创建会话并刷新 Diff 后，右侧在深色主题下显示实际 Git patch：删除 `Original tracked content.`，增加 `A real change for the native Diff workbench.`。左侧回复来自同一次原生窗口运行的本地模型 fixture。此图记录统一差异视图；未手工填入补丁内容。
+
+[截图记录](evidence/desktop-diff-capture.json)包含程序与图片摘要、实际补丁以及已持久化为 `completed` 的 Run 标识。验收程序使用产品原生视图和本地 fixture，版本为 0.1.0；此图不作为最终安装包验收记录。
+
+## 内嵌浏览器与人工接管
+
+本节两张浏览器图片来自同一份独立原生验收构建，不属于上述八张图的构建摘要范围。[浏览器截图记录](evidence/desktop-browser-capture.json)保存了程序与源码摘要、图片摘要、已完成的 Run，以及已持久化的 Space 打开、接管、归还和关闭结果。
+
+![GPUI 窗口中的真实 Chromium 页面](images/desktop-browser-macos.png)
+
+CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium 像素帧传到 Browser 面板。此时界面处于 Agent control，只读展示。
+
+![人工接管后的真实 Chromium 文本与点击结果](images/desktop-browser-takeover-macos.png)
+
+点击 Take control 后，界面进入 Human control。通过原生输入桥输入 `Native takeover verified`，随后点击页面按钮，页面显示 `Click reached real Chromium.`。再从 Settings 选择 Dark 并返回聊天，输入和点击结果仍保留，形成上图。随后实际执行了归还控制与 Space 关闭。此组图片使用调试测试钥匙串。
+
+地址输入框保存导航输入，不能作为重定向后页面来源的可信显示。此组截图覆盖人工浏览器操作；模型自主操作的原生 CEF 验收使用独立合成页面，记录见[本地工具与浏览器操作](tools.md)。
+
+另行执行的 GPUI 组件测试通过真实 daemon 和 CEF 检查了像素帧、指针坐标、文字输入、接管释放后的输入拒绝及 Space 关闭。测试使用 GPUI 测试窗口和调试验收程序的测试钥匙串；它验证组件调用与实际 Chromium 行为，不代替上面的原生窗口截图。
+
+## 终端实际运行记录
+
+![实际 TUI 进程等待精确文件审批的 PTY 记录](images/tui-pty-approval-macos.png)
+
+![通过 TUI 批准文件写入后的完成状态](images/tui-pty-completed-macos.png)
+
+这两张图来自 macOS 上真实 `agent-cli` 进程的独立 PTY 记录，尺寸为 140 列、38 行。客户端经认证连接上述本地 daemon，创建会话、接收流式回复，并通过 `Ctrl+Y` 批准 `notes.txt` 的精确写入；第二次 Run 最终进入 `completed`，退出时恢复终端状态。
+
+图片使用 pyte 0.8.2 解析实际 ANSI 输出后进行终端状态渲染，**不是操作系统 Terminal 窗口截图**。未手工填入会话、回复或审批内容。截图中的合成回复复用桌面 fixture，提及 GPUI、Files 和 Diff 不表示 TUI 内置这些桌面面板。
+
+可核对[审批文本](evidence/tui-pty-approval.txt)、[完成文本](evidence/tui-pty-completed.txt)及[记录元数据](evidence/tui-pty-capture.json)。它们证明本次 PTY 工作流，不替代原生终端窗口的字体、颜色和输入法验收。
+
+## 尚未由本组截图覆盖的能力
+
+本组截图未展示模型浏览器语义操作或原生终端窗口呈现。模型工具的合成 host 协议回归与真实 CEF 自主操作验收分别保留，见[本地工具与浏览器操作](tools.md)。

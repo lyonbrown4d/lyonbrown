@@ -1,0 +1,34 @@
+[package]
+name = "agent-control"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-config = { path = "../../crates/agent-config" }
+agent-core = { path = "../../crates/agent-core" }
+agent-distributed = { path = "../../crates/agent-distributed" }
+agent-protocol = { path = "../../crates/agent-protocol" }
+agent-storage = { path = "../../crates/agent-storage" }
+agent-telemetry = { path = "../../crates/agent-telemetry" }
+anyhow.workspace = true
+clap.workspace = true
+config = { version = "0.15", default-features = false, features = ["toml"] }
+dotenvy.workspace = true
+fluxdi.workspace = true
+hex.workspace = true
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+agentd = { path = "../agentd" }
+agent-client = { path = "../../crates/agent-client" }
+agent-test-support = { path = "../../crates/agent-test-support" }
+tempfile.workspace = true
+tokio-util.workspace = true

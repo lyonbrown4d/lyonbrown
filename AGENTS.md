@@ -1,42 +1,37 @@
 # AGENTS.md
 
-本文件统一约定 Lyonbrown 的工程与架构约束。产品主线采用 Node.js / TypeScript，所有贡献者（人类与 AI agent）必须遵守。
+Lyonbrown 是 Rust monorepo。agentd、CLI/TUI、GPUI Desktop、BrowserRuntime 和公网控制面统一使用 Rust。文档使用 mdBook，维护中文和英文正文。
 
-## 工具链与代码风格
+## 工程约束
 
-1. 使用 Node.js 24 LTS 与仓库固定的 pnpm，不混用 npm、Yarn 或 Bun。依赖安装必须更新并提交 `pnpm-lock.yaml`，不得把 pnpm store/cache 重定向到仓库内。
-2. TypeScript 使用 ESM 与 `strict` 模式。不得在关键路径使用 `any` 或隐式 `any`；跨包只从公开入口导入。
-3. 手写 TypeScript 源文件禁止相对模块导入，统一使用 `@lyonbrown/...` 根路径别名；包内实现使用所属 workspace 的 `/internal/*`、测试 helper 使用 `/test/*`、脚本使用 `/script/*`，跨包仍只能从对方公开入口导入。别名不得携带 `.ts` 扩展名，生产构建必须将别名改写为 Node.js 可执行的 `.js` 路径；协议生成物由生成器管理，不得作为手写代码引用相对路径的先例。
-4. 统一使用 2 空格缩进，不使用 Tab。提交前运行根目录的格式、lint、类型、测试和构建门禁。
-5. 工具依赖放在 `devDependencies`；版本不得使用 `latest`、`*` 或 `~` 范围。复杂编排脚本放在 `scripts/*.ts`，通过 `tsx` 执行并使用 `zx` 管理子进程。
-6. Node 后端的业务级延迟任务、周期任务、重试编排和持久化作业必须优先采用经过维护的第三方库，不得用 `setInterval`、递归 `setTimeout`、自建 cron 解析器或临时数据库表实现调度器。原生 timer 仅用于有界的进程内 deadline、取消、资源清理等待和短退避；需要跨重启、并发 worker、幂等重试或可观测状态时，必须先定义 job port，再选择成熟的持久化队列/工作流引擎。
-7. moon 是 monorepo 任务图与缓存的唯一调度器，pnpm 仍是唯一包管理器。根目录的 `dev`、`dev:docs`、`lint`、`typecheck`、`test` 和 `build` 必须经 moon 执行；不得恢复并行的自制 workspace 调度器，也不得让 moon/proto 下载或替换仓库固定的 Node.js 与 pnpm。
-
-## 结构与边界
-
-1. 生产代码与测试代码分离：测试放在独立的 `tests/` 目录或 `*.test.ts` 文件中，不在生产模块中内嵌测试。
-2. 手写源文件达到或超过 300 行时，必须评估能否按职责、领域、层或可独立测试行为拆分。仅为压缩行数不得破坏内聚性；保留大文件时需在评审中说明理由。
-3. Pi Agent Core、Pi AI 与 Pi TUI 的具体类型只能存在于适配层；不得泄漏到 gRPC/proto 公共契约或 UI view model。
-4. `apps/agent-cli`（TUI）和重新设计的 `apps/agent-desktop`（Electron）只是经过认证的 client，不拥有 Runtime、模型、工具、MCP 连接或 EventStore；这些能力由 `apps/agentd` 组合和持有。
-5. EventStore 是会话与执行状态的真相源，Pi 是执行引擎。执行结果必须先映射为 Lyonbrown 领域事件，再投影给 client。
-6. 仓库只保留 Node.js / TypeScript 产品实现。允许基于现有 C/S 架构重新设计 Electron Desktop，不恢复旧 GUI；不得重新引入 Rust runtime 或双实现兼容路径。Desktop 主进程复用 launcher 和认证 gRPC client，renderer 只能访问受限的类型化 preload 接口，不得接触认证 token、通用 IPC 或 Node.js API。历史行为需要保留时，转换为语言无关 fixture 或 TypeScript 回归测试。
-7. 新的工程风格与结构约束必须收敛到本文件，不散落为口头约定。
-8. 每个 `apps/*`、`packages/*` workspace 包都必须在 `.moon/workspace.yml` 中注册，并在 `.moon/projects/*/moon.yml` 显式维护内部依赖边、输入与输出。新增、删除或重命名 workspace 包时必须同步更新 moon 项目图和配置契约测试。
-9. 操作能力以 Windows、macOS、Linux 跨平台为目标。文件、路径、权限、锁、进程、命令执行、模型存储和工作区操作通过类型化能力接口提供；优先复用跨平台实现，将必要的系统差异集中在平台适配层。统一输入输出、授权、取消、超时和错误语义，不要求不同系统使用相同底层机制。缺失能力必须明确报告，不得静默降级安全约束或把占位实现视为支持；按能力维护三平台契约测试与真实运行验收记录，新增操作同步纳入。
+1. Cargo workspace 与 Cargo.lock 管理产品依赖。优先复用维护中的第三方库，通过公开接口集成；不得恢复 Node Runtime、Electron、Tauri 或第二套 Agent Loop。
+2. 使用 Rust 2024 edition、rustfmt 和 Clippy，统一 2 空格缩进，不使用 Tab。生产代码避免 panic、unwrap 和未受控 unsafe；必要的 FFI 仅放在平台适配边界，说明安全条件。
+3. 单个手写源文件达到 300 行时评估按职责拆分。集成测试放在独立 tests/ 目录；不要为压缩行数损害内聚性。
+4. Client 只拥有呈现、输入和连接状态。agentd 持有 Session、Task、模型、Tools、MCP、权限和事件；GPUI Desktop 与 TUI 均通过认证协议访问。
+5. rpi-harness 是唯一 Agent Loop。rpi、CEF、推理库的具体类型不得泄漏到公共协议或 UI 模型。
+6. SessionStore 保存 Harness 会话语义，TaskStore 保存编排状态；关键边界在同一本地 SQLite 事务中写入状态、事件和 Outbox。先记录执行意图，再产生副作用。未知结果进入 Uncertain，禁止因断线盲目重放。
+7. Worker Attempt 成功不等于 Master 已采纳 Task。Session 单 Master 写入，持久化校验 owner_epoch；mDNS 发现不授信。
+8. BrowserRuntime 是嵌入 CLI/Desktop 的可复用执行环境 crate，不是单独产品 app；CEF 内部 helper 通过客户端可执行文件的私有运行模式启动。GPUI UI 与浏览器执行状态隔离。UI 关闭不默认取消 daemon 作业。网页内容不可信，不能访问应用特权接口；Profile 不等于活页面恢复。
+9. 操作能力面向 Windows、macOS、Linux。平台差异集中在适配层，统一授权、取消、超时和错误语义；缺失能力明确报告，不得把占位实现视为支持。
+10. 本地推理通过 mistral.rs 与 llama-cpp-2 适配；两者只负责推理。优先使用成熟库实现持久作业、网络、协议、编辑器和 UI 组件，避免重复开发。
+11. 文档只说明对应代码的机制、配置和限制，不写迁移流水或 M 阶段计划，不把声明和编译通过当成运行验收。
+12. 数据库操作优先使用成熟 ORM，通过共享事务维护 Session、Task、事件和 Outbox 的原子性；原生 SQL 仅用于 ORM 无法表达的数据库配置或明确评审的特殊查询。
+13. CLI 和 Desktop 安装包均包含 agentd，通过共享 launcher 检测并复用同一用户的原生服务；启动前检查 daemon 版本、协议兼容范围和能力。不得重复注册、静默降级或用普通后台子进程冒充原生服务；升级须处理活动任务和回滚。
+14. 配置使用成熟库分层合并配置文件、dotenv、环境变量和 CLI，凭据不得进入日志或 UI 模型；所有产品进程使用共享日志组件将结构化日志持久化到用户数据目录，保留滚动和清理策略。
+15. 业务服务按模块和依赖注入组织，使用固定版本的 fluxdi 及其 macros feature，优先类型化 static_module! 装配；构造函数显式接收端口，不把 Injector 或全局 service locator 传入业务逻辑。上游缺口或缺陷先最小复现并提交安全 issue，不复制、fork 或长期下游修补库。
+16. 文件监听优先复用 notify 及成熟 debounce 组件，统一事件、重命名和重新扫描语义，缺失监听能力明确报告；产品文档须包含经过实际运行验收的截图并标注平台和版本。
+17. 新工程约束统一维护在本文件。并行 agent 按目录分工，根配置、共享协议与最终集成由主 agent 协调。
+18. 模型接入测试使用本地 mock server，经真实协议适配器验证各个已开放的标准协议，不调用付费模型。重点验证决策模型的结构化输出、置信度、授权约束、保守回退、超时和取消；决策不得扩大工具、模型或节点权限，也不得绕过人工审批。测试必须检查最终执行行为与持久化状态，不能只断言 mock 返回值。
 
 ## 验证
 
-提交前至少执行：
-
 ```text
-pnpm install --frozen-lockfile
-pnpm preflight
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm ci-gate
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo build --workspace
+mdbook build docs/zh
+mdbook build docs/en
 ```
 
-涉及迁移行为时，必须补充 TypeScript 回归测试、协议 fixture 或黑盒测试；不得依赖已移除的 Rust oracle。
+涉及依赖原生 SDK、GUI、真实模型或跨设备环境的能力，还需对应运行验收。只通过单机检查时不得声称三平台或公网场景已验收。

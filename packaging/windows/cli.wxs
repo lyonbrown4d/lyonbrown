@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Lyonbrown CLI" Language="1033" Version="$(var.Version)" Manufacturer="Lyonbrown" UpgradeCode="D80476C4-4C01-4748-B54B-6C7755AE8C21">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" />
+    <MajorUpgrade DowngradeErrorMessage="A newer Lyonbrown CLI is already installed." Schedule="afterInstallExecute" />
+    <MediaTemplate EmbedCab="yes" />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="LYONBROWNROOT" Name="Lyonbrown">
+          <Directory Id="CLIENTROOT" Name="CLI">
+            <Directory Id="CLIENTDIR" Name="$(var.Version)" />
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="APPLICATIONMENU" Name="Lyonbrown CLI">
+          <Component Id="ApplicationShortcuts" Guid="*" Win64="yes">
+            <Shortcut Id="ClientShortcut" Name="Lyonbrown CLI" Target="[CLIENTDIR]agent.exe" WorkingDirectory="CLIENTDIR" />
+            <!-- Interactive user entry; never collect credentials in MSI/SYSTEM.
+                 agent-install requests UAC while binding the original user SID. -->
+            <Shortcut Id="ServiceSetupShortcut" Name="Set up Lyonbrown service" Target="[CLIENTDIR]agent-install.exe" Arguments="--register-service" WorkingDirectory="CLIENTDIR" />
+            <RegistryValue Root="HKLM" Key="Software\Lyonbrown\cli" Name="Version" Type="string" Value="$(var.Version)" KeyPath="yes" />
+            <RemoveFolder Id="RemoveApplicationMenu" On="uninstall" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+    <Feature Id="Application" Level="1">
+      <ComponentGroupRef Id="ClientPayload" />
+      <ComponentRef Id="SharedDaemon" />
+      <ComponentRef Id="ApplicationShortcuts" />
+    </Feature>
+  </Product>
+</Wix>

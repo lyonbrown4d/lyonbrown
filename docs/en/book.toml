@@ -1,0 +1,13 @@
+[book]
+title = "Lyonbrown User and Developer Guide"
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-js = ["theme/vendor/mermaid.min.js", "theme/vendor/photoswipe.umd.min.js", "theme/diagrams.js"]
+additional-css = ["theme/vendor/photoswipe.css", "theme/diagrams.css"]

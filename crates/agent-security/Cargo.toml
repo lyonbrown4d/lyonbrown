@@ -1,0 +1,20 @@
+[package]
+name = "agent-security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-core = { path = "../agent-core" }
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+fs2.workspace = true
+tonic.workspace = true
+sha2.workspace = true
+subtle = "2.6.1"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
+[dev-dependencies]
+tempfile.workspace = true

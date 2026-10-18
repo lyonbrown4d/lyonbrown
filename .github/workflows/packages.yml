@@ -1,0 +1,174 @@
+name: Native packages
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: ${{ matrix.target }} / CEF / llama + mistral CPU
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
+      # Both inference adapters are compiled into the same daemon. No model download.
+      PRODUCT_FEATURES: agent-cli/native-cef,agent-desktop/native-cef,agent-launch/cef-bundle,agentd/local-llama,agentd/local-mistral
+      CARGO_BUILD_JOBS: '1'
+      CMAKE_BUILD_PARALLEL_LEVEL: '1'
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      CARGO_PROFILE_RELEASE_DEBUG: '1'
+      CARGO_PROFILE_RELEASE_STRIP: none
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.1
+        with:
+          components: rustfmt, clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Require native Rust host
+        run: |
+          rustc -vV | tee rust-host.txt
+          grep -Fx 'host: ${{ matrix.target }}' rust-host.txt
+      - name: Linux native build and package dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libxcb1-dev libxrandr-dev libasound2-dev libfontconfig1-dev libglib2.0-dev libssl-dev libdbus-1-dev libpipewire-0.3-dev libegl-dev libclang-dev clang cmake ninja-build pkg-config binutils rpm libnss3 libatk1.0-0 libatk-bridge2.0-0 libxcomposite1 libxdamage1 libgbm1
+          cargo install cargo-deb --version '=3.8.0' --locked
+          cargo install cargo-generate-rpm --version '=0.21.0' --locked
+      - name: macOS native build dependencies
+        if: runner.os == 'macOS'
+        run: |
+          command -v ninja >/dev/null || brew install ninja
+          xcodebuild -version
+          xcrun --find clang
+          command -v pkgbuild productbuild hdiutil
+      - name: Windows MSVC developer environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+      - name: Require WiX 3.14.1 native tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $wixBin = Join-Path ${env:ProgramFiles(x86)} 'WiX Toolset v3.14\bin'
+          foreach ($tool in @('heat.exe', 'candle.exe', 'light.exe')) {
+            $binary = Join-Path $wixBin $tool
+            $version = (Get-Item $binary).VersionInfo.FileVersion
+            if ($version -notmatch '^3\.14\.1\.') { throw "Required WiX 3.14.1; $tool reports $version" }
+            Write-Output "$tool $version"
+          }
+          $wixBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Get-Command cmake, ninja, clang
+      - name: Verify the pinned published CEF distribution
+        run: |
+          python -m unittest discover -s packaging/ci -p 'test_*.py'
+          python packaging/ci/verify.py '${{ matrix.target }}' --index
+      - name: Install maintained CEF downloader
+        run: cargo install export-cef-dir --version '=154.5.0+154.0.34' --locked
+      - name: Download and extract the exact matching CEF SDK
+        shell: pwsh
+        run: |
+          $sdk = Join-Path $env:RUNNER_TEMP 'lyonbrown-cef'
+          export-cef-dir --target '${{ matrix.target }}' --version '154.0.34' --mirror-url 'https://cef-builds.spotifycdn.com' --save-archive $sdk
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned CEF SDK download/extraction failed' }
+          python packaging/ci/verify.py '${{ matrix.target }}' --sdk $sdk
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned CEF SDK integrity check failed' }
+          "CEF_PATH=$sdk" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if ($IsWindows) {
+            # CEF's official minimal Release payload already contains its sandbox broker.
+            if (-not (Test-Path (Join-Path $sdk 'bootstrap.exe') -PathType Leaf)) {
+              throw 'Official pinned CEF SDK is missing the prebuilt Windows sandbox bootstrap.exe'
+            }
+            $sdk | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+      - name: Check native feature branches and run workspace regressions
+        run: |
+          # Unbundled ELF test executables use this SDK; installed clients use $ORIGIN.
+          if [ "$RUNNER_OS" = Linux ]; then export LD_LIBRARY_PATH="$CEF_PATH"; fi
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked --features "$PRODUCT_FEATURES" -- -D warnings
+          cargo test --workspace --locked --features "$PRODUCT_FEATURES"
+          cargo test -p agent-mcp --locked --features test-fixtures
+      - name: Reclaim debug build space before native release build
+        run: cargo clean --profile dev
+      - name: Build native products with both CPU inference adapters
+        run: |
+          cargo build --release --locked -p agent-cli -p agent-desktop -p agentd -p agent-launch --bins --features "$PRODUCT_FEATURES"
+      - name: Build Windows sandbox client DLLs and release PDBs
+        if: runner.os == 'Windows'
+        run: cargo build --release --locked -p agent-cli -p agent-desktop --lib --features agent-cli/native-cef,agent-desktop/native-cef
+      - name: Reject incomplete standalone native client archives
+        if: runner.os != 'macOS'
+        run: |
+          binary=target/release/agent-package
+          if [ "$RUNNER_OS" = Windows ]; then binary="$binary.exe"; fi
+          if "$binary" --cli-only --output "$RUNNER_TEMP/incomplete-client" > "$RUNNER_TEMP/incomplete-client.log" 2>&1; then
+            cat "$RUNNER_TEMP/incomplete-client.log"
+            exit 1
+          fi
+          grep -F 'non-macOS distributions require --native-installers' "$RUNNER_TEMP/incomplete-client.log"
+          test ! -e "$RUNNER_TEMP/incomplete-client"
+      - name: Generate native installers
+        if: runner.os != 'macOS'
+        run: cargo run --release --locked -p agent-launch --features cef-bundle --bin agent-package -- --cef-runtime "$CEF_PATH" --native-installers
+      - name: Generate macOS app bundles, unsigned PKGs and DMG
+        if: runner.os == 'macOS'
+        run: |
+          cargo run --release --locked -p agent-launch --features cef-bundle --bin agent-package -- --cef-runtime "$CEF_PATH" --native-installers --dmg
+          tar -czf 'dist/Lyonbrown-app-${{ matrix.target }}.tar.gz' -C dist Lyonbrown.app
+          hdiutil verify dist/*.dmg
+          for package in dist/*.pkg; do xar -tf "$package"; done > dist/pkg-inspection.txt
+      - name: Inspect Linux native package metadata and file lists
+        if: runner.os == 'Linux'
+        run: |
+          for package in dist/*.deb; do dpkg-deb --info "$package"; dpkg-deb --contents "$package"; done > dist/deb-inspection.txt
+          for package in dist/*.rpm; do rpm -qp --info "$package"; rpm -qp --list "$package"; rpm -qp --requires "$package"; done > dist/rpm-inspection.txt
+      - name: Verify complete native payloads and record artifact integrity
+        run: |
+          python packaging/ci/verify.py '${{ matrix.target }}' --artifacts dist
+          python -c 'import json,os,pathlib; p=pathlib.Path("dist/build.json"); p.write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "features": os.environ["PRODUCT_FEATURES"], "target": "${{ matrix.target }}", "runner_image": os.environ.get("ImageVersion", "unknown"), "signed": False}, indent=2)+"\n")'
+      - name: Upload reviewable native packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}-cef154.0.34-llama-mistral-cpu-unsigned
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: |
+            dist/*.msi
+            dist/*.deb
+            dist/*.rpm
+            dist/*.pkg
+            dist/*.dmg
+            dist/*.tar.gz
+            dist/*.json
+            dist/*-inspection.txt

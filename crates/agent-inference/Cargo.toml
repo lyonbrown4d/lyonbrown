@@ -1,0 +1,28 @@
+[package]
+name = "agent-inference"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+futures.workspace = true
+mistralrs = { version = "=0.8.1", default-features = false, optional = true }
+llama-cpp-2 = { version = "=0.1.156", default-features = false, optional = true }
+encoding_rs = { version = "0.8", optional = true }
+base64 = { version = "0.22", optional = true }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"], optional = true }
+
+[features]
+default = []
+mistral = ["dep:mistralrs", "dep:base64", "dep:image"]
+llama = ["dep:llama-cpp-2", "dep:encoding_rs"]
+mistral-metal = ["mistral", "mistralrs/metal"]
+mistral-cuda = ["mistral", "mistralrs/cuda"]
+llama-metal = ["llama", "llama-cpp-2/metal"]
+llama-cuda = ["llama", "llama-cpp-2/cuda"]

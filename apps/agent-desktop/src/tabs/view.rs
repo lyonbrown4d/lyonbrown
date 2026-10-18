@@ -1,0 +1,73 @@
+use crate::shell::Desktop;
+use gpui_kit::component::{
+  Sizable,
+  button::{Button, ButtonVariants},
+  tab::{Tab, TabBar},
+};
+use gpui_kit::{TestSupportExt as _, *};
+
+impl Desktop {
+  pub(crate) fn chat_tabs(&self, cx: &mut Context<Self>) -> AnyElement {
+    let tabs = self.chat_tab_snapshots(cx);
+    let selected = tabs.iter().position(|tab| tab.selected).unwrap_or_default();
+    let ids = tabs.iter().map(|tab| tab.id).collect::<Vec<_>>();
+    TabBar::new("chat-tabs")
+      .flex_shrink_0()
+      .w_full()
+      .selected_index(selected)
+      .max_width(px(240.))
+      .children(tabs.into_iter().map(|tab| {
+        let id = tab.id;
+        let pending = if tab.selected {
+          self.busy || !self.approvals.is_empty()
+        } else {
+          self
+            .navigation
+            .inactive
+            .get(&id)
+            .is_some_and(|state| state.busy || !state.approvals.is_empty())
+        };
+        let marker = if tab.active_run.is_some() || pending {
+          " ●"
+        } else {
+          ""
+        };
+        Tab::new()
+          .aria_label(format!("{}{marker}", tab.title))
+          .child(
+            div()
+              .id(("chat-tab", id))
+              .test_support()
+              .max_w(px(180.))
+              .min_w_0()
+              .whitespace_nowrap()
+              .text_ellipsis()
+              .child(format!("{}{marker}", tab.title)),
+          )
+          .suffix(
+            Button::new(("close-chat-tab", id))
+              .ghost()
+              .xsmall()
+              .label("×")
+              .accessibility_label(format!("Close {}", tab.title))
+              .on_click(cx.listener(move |this, _, window, cx| {
+                cx.stop_propagation();
+                this.close_chat_tab(id, window, cx);
+              })),
+          )
+      }))
+      .on_click(cx.listener(move |this, index: &usize, window, cx| {
+        if let Some(id) = ids.get(*index) {
+          this.activate_chat_tab(*id, window, cx);
+        }
+      }))
+      .suffix(
+        Button::new("new-chat-tab")
+          .ghost()
+          .small()
+          .label("＋ New chat")
+          .on_click(cx.listener(|this, _, window, cx| this.new_chat_tab(window, cx))),
+      )
+      .into_any_element()
+  }
+}

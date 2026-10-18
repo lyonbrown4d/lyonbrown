@@ -1,0 +1,61 @@
+# 会话、任务与恢复
+
+会话保存可继续对话的 Harness 语义，运行记录保存一次用户请求的编排状态。SQLite 将这两类数据分开存储，并在关键写入中一并记录事件和 Outbox。
+
+## 提交与执行
+
+`accept_run` 校验 `owner_epoch`，用 `(session_id, idempotency_key)` 去重。同一键再次提交相同 prompt 会返回既有运行；换用不同 prompt 会报错。数据库的 `one_active_run` 唯一索引阻止一个会话同时拥有多个未结束运行。
+
+```mermaid
+sequenceDiagram
+    participant UI as Client
+    participant D as agentd
+    participant S as SQLite
+    participant H as rpi-harness
+    participant T as Host tool
+    UI->>D: StartRun(session, prompt, key, epoch)
+    D->>S: Persist accepted run + event + outbox
+    S-->>D: Commit
+    D-->>UI: Run ID
+    D->>D: Decide and restrict execution plan
+    D->>S: Persist execution_plan event
+    D->>H: Execute prompt
+    H->>S: Commit session and tool intent
+    S-->>H: Commit
+    H->>T: Authorized side effect
+    T-->>H: Tool result
+    H->>S: Commit session result + event + outbox
+    D->>S: Persist terminal run state + event + outbox
+    UI->>D: WatchRun / ListRuns
+    D-->>UI: Durable events and result
+```
+
+Runtime 将工具交给主机适配器执行，主机负责授权、工作区约束和取消。Harness 自身的 provider 自动重试被禁用；重试策略属于持久任务编排。先保存执行意图，再产生副作用，是恢复时区分「未执行」与「结果未知」的依据。
+
+## 断线与重启
+
+客户端断线后，使用原会话重新查询运行状态。事件按运行 ID 和 `cursor` 排序，`WatchRun` 的 `after_cursor` 用于请求后续事件。事件流断开不能证明任务失败，也不能触发 prompt 重放。
+
+存储层的 `recover_interrupted` 将执行中而没有持久终态的记录标记为 `uncertain`。尚未开始的 `accepted` 记录与已经进入执行的记录分开处理。Runtime 恢复 Harness 会话时检查未完成的工具记录：工具结果未提交时返回 `Uncertain`，不会猜测副作用是否发生。
+
+`uncertain` 仍属于未解决的运行，不能通过创建同会话的新运行绕过。应保留数据库、事件和对应外部操作证据，核对实际结果后再决定后续操作。当前协议没有通用的人工修改终态接口。
+
+## 审批
+
+审批保存工具名、参数、所属运行和过期时间。`decide_approval` 只接受尚未过期且仍处于等待审批的请求。消费审批时再次核对运行、工具和参数，并将审批状态改为 `consumed`，防止同一授权被重复使用。
+
+## Master 与 Worker
+
+TaskStore 在更新 Worker Attempt 或采纳结果时校验 `attempt_id` 与 `owner_epoch`。成功的 Attempt 先进入 `awaiting_acceptance`；只有显式接受结果后 Task 才进入 `completed`。
+
+```mermaid
+stateDiagram-v2
+    [*] --> accepted
+    accepted --> awaiting_acceptance: Attempt succeeded
+    accepted --> failed: Attempt failed
+    awaiting_acceptance --> completed: Master accepts result
+    awaiting_acceptance --> rejected: Master rejects result
+    accepted --> cancel_requested: Cancellation requested
+```
+
+图示反映存储层的状态边界，不代表已经验证了跨设备调度、网络分区或公网转发。相关实现依据为 `crates/agent-storage/src/runs.rs`、`tasks.rs`、`approvals.rs` 与 `crates/agent-runtime/src/runtime.rs`。

@@ -1,0 +1,4 @@
+# Copy to the shared data directory as .env and restrict access to the current user.
+# OPENAI_API_KEY=
+# ANTHROPIC_API_KEY=
+# LYONBROWN_TOKEN=  # Only for an explicitly configured remote daemon.

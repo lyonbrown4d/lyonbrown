@@ -1,0 +1,78 @@
+# Local distributions
+
+Build the Rust executables, then package their actual outputs:
+
+```sh
+# macOS: select the same published CEF SDK for build and packaging.
+export CEF_PATH="/absolute/path/to/cef-sdk"
+cargo build --release -p agent-cli -p agentd -p agent-desktop -p agent-launch --features agent-cli/native-cef,agent-desktop/native-cef,agent-launch/cef-bundle --bins
+cargo run --release -p agent-launch --features cef-bundle --bin agent-package -- --cef-runtime "$CEF_PATH" --dmg --native-installers
+```
+
+`--bin-dir PATH` selects an existing binary directory; `--output PATH` selects an output directory. `--cli-only` selects only the terminal client. Linux and Windows require `--native-installers`, including for CLI-only output, so the native runtime is included in the DEB/RPM or MSI payload. macOS also provides a CLI archive containing `bin/agent`, `bin/agentd`, and the Rust `bin/agent-install` installer. The tool refuses missing executable files and existing output paths. In the macOS archive, `bin/agent` links to an internal `Lyonbrown CLI.app` containing the same client executable, CEF framework and five sandbox Helper bundles. The installer retains versioned app directories and atomically updates the terminal command; running helpers can keep using their original files. Run the installer after extracting the archive; its `--bin-dir PATH` option overrides the default `~/.local/bin` destination. Installation registers the shared native user service. With `--native-installers`, CLI-only output also includes the CLI installer and its shared daemon dependency.
+
+`--native-installers` delegates host installer generation to existing tools:
+
+| Host | Required tools | Outputs |
+| --- | --- | --- |
+| macOS | Xcode command line tools: `pkgbuild`, `productbuild`; `hdiutil` for DMG | CLI PKG, Desktop PKG, `.app`, optional DMG |
+| Linux | Matching CEF SDK; `cargo-deb 3.8.0`, `cargo-generate-rpm 0.21.0`, `readelf`, native dynamic library discovery tools | Shared daemon DEB/RPM, CLI DEB/RPM, Desktop DEB/RPM |
+| Windows | Matching sandbox-enabled CEF SDK; WiX Toolset 3.14.1 `heat.exe`, `candle.exe` and `light.exe` | CLI MSI, Desktop MSI |
+
+Install the Linux build helpers on a build machine with `cargo install cargo-deb --version 3.8.0 --locked` and `cargo install cargo-generate-rpm --version 0.21.0 --locked`. Select the matching Linux SDK with `CEF_PATH`, then build and package:
+
+```sh
+cargo build --release -p agent-cli -p agent-desktop -p agentd -p agent-launch --bins --features agent-cli/native-cef,agent-desktop/native-cef,agent-launch/cef-bundle
+cargo run --release -p agent-launch --features cef-bundle --bin agent-package -- --native-installers
+```
+
+Linux native installer metadata uses the main workspace's `target/release` directory; a different `--bin-dir` is rejected. Packaging metadata lives in the separate `packaging/installers` workspace; its version and compatible daemon range must match the product release. These host installer commands have not established cross-platform runtime acceptance.
+
+Linux `lyonbrown-cli` and `lyonbrown-desktop` depend on the shared `lyonbrown-agentd` package in the supported `0.1` range. Only that package owns `/usr/bin/agentd`. Its unit template is installed under `/usr/share/lyonbrown`; each client registers the user-specific unit through the shared launcher. A system package installation does not guess a login user or run an agent as root. Removing one client leaves the daemon dependency required by the other client.
+
+Each Linux client owns its complete native app directory under `/usr/lib/lyonbrown/cli` or `/usr/lib/lyonbrown/desktop`. The maintained CEF bundler stages the client, matching library, resources and locales; recursive DEB/RPM assets preserve subdirectories. Fixed `/usr/bin` launchers execute those binaries without extending `LD_LIBRARY_PATH`. The packager checks that each ELF binary links `libcef.so` and has an exact `$ORIGIN` runtime search path. Client and sandbox executables install with mode `0755`; data and libraries use `0644`. Packaging never enables a setuid helper or disables Chromium's sandbox. The target Linux host must support the sandbox's namespace requirements; native sandbox startup and package lifecycle require Linux execution.
+
+Both MSI sources install machine-wide under Program Files. Each client owns its versioned `Lyonbrown/CLI/<version>` or `Lyonbrown/Desktop/<version>` payload. The shared daemon component uses `Lyonbrown/Daemon/<version>/agentd.exe`; WiX derives its component GUID from the same key path in both products. A different version has a different component identity. Permanent daemon components preserve executables used by an existing service or rollback after either client is removed. Each product has its own upgrade code and refuses product downgrades. Cleaning retained daemon versions requires service-aware maintenance.
+
+On Windows, build the CEF client libraries as well as the daemon and installer. The maintained CEF bundler requires the matching PDB files, including for release builds:
+
+```powershell
+$env:CEF_PATH = 'C:\absolute\path\to\sandbox-cef-sdk'
+$env:CARGO_PROFILE_RELEASE_DEBUG = '1'
+$env:CARGO_PROFILE_RELEASE_STRIP = 'none'
+cargo build --release -p agent-cli -p agent-desktop --lib --features agent-cli/native-cef,agent-desktop/native-cef
+cargo build --release -p agentd -p agent-launch --bins --features agent-launch/cef-bundle
+cargo run --release -p agent-launch --features cef-bundle --bin agent-package -- --cef-runtime $env:CEF_PATH --native-installers
+```
+
+The packager uses `cef::build_util::win::bundle` for the sandbox bootstrap executable, client DLL, CEF DLLs, resources and locales. WiX Heat harvests the complete resulting payload before Candle and Light create each MSI. Building an MSI requires a Windows host and the Windows CEF SDK; cross-checking Rust source on macOS does not produce an installer.
+
+After installing either MSI, the signed-in user runs **Set up Lyonbrown service** from the Start menu, or runs the installed `agent-install.exe --register-service`. Setup requests UAC for the same Windows account and collects its service login password only in the native credential dialog. Switching to another administrator account during UAC is rejected before registration. MSI itself neither collects credentials nor provisions a user service as SYSTEM. The current setup path therefore requires an account that can elevate without switching its SID.
+
+The SCM identity is derived from the user's SID, so CLI and Desktop share one service for that account. Setup validates the immutable Program Files executable and its ancestor ACLs before using credentials or changing SCM state. It never copies a user-writable daemon into a service location. Existing service upgrades use an in-place configuration update that preserves the stored SCM account secret. A compatible registered daemon is reused before any machine-directory write. Windows API source checks and portable lifecycle regressions passed; native credential UI, SCM lifecycle and MSI upgrade, repair and uninstall still require Windows execution.
+
+Both macOS product installers include a daemon component identified by the stable `org.lyonbrown.agentd` package identifier. CLI installs its command under `/usr/local/bin` and its native app under `/Library/Application Support/Lyonbrown/Clients`; the shared bundled daemon installs under `/Library/Application Support/Lyonbrown`; Desktop installs under `/Applications`. User service registration occurs when a client starts in that user's session. Removing an app or CLI executable does not remove the retained user daemon or its data. The installer does not silently stop an active service or use a privileged service account.
+
+On macOS the tool also creates `Lyonbrown.app`; `--dmg` creates a disk image with `hdiutil`. Copy the app to Applications and launch it. Its executable and bundled daemon share `Contents/MacOS`. Client startup retains a versioned daemon outside either client installation, so removing a client does not remove the shared service. Signing and notarization require release credentials and are not performed by this tool.
+
+macOS packaging requires the `cef-bundle` feature. It uses `cef::build_util::mac::bundle` to assemble the CEF framework and maintained Helper layout for both clients. `--cef-runtime PATH` validates the SDK selected by `CEF_PATH`; it does not switch SDKs or copy an arbitrary distribution. Build the clients with `native-cef` against the same SDK. Browser execution remains a runtime crate embedded into each client; the internal CLI app and CEF helpers are packaging resources of that client. The packager does not download an SDK or disable Chromium's sandbox. Real native execution and installer lifecycle checks are separate from creating a package file.
+
+CLI and Desktop use the native service identity `org.lyonbrown.agentd` on macOS and Linux; Windows uses `Lyonbrown.Agentd.<SID digest>`. The registration lock and `service.json` always live under `ProjectDirs::from("org", "Lyonbrown", "Lyonbrown").data_local_dir()`, including when a client overrides the daemon data directory. This serializes registration across those clients; a different data directory is rejected when a managed service already exists. The authentication token lives in the selected daemon data directory. An interrupted native transition leaves `service.json` with its previous and desired registration; startup refuses to replay it automatically. Inspect native service state and authenticate the running daemon before recovery. Do not delete that record or stop an unresponsive running daemon when task completion is unknown.
+
+Linux user services persist beyond logout only when the host's user manager remains active; this installer does not enable lingering or request system privileges. The Windows dispatcher reports SCM readiness after local endpoint binding and recovery, and forwards STOP/SHUTDOWN to daemon cancellation and drain.
+
+Configuration defaults, file validation, dotenv precedence, and credentials are implemented by `crates/agent-config`. Put `config.toml` and its adjacent `.env` in the shared data directory; the example files in this directory contain no credentials. Settings load in the order defaults, TOML, dotenv, process environment, then explicit client arguments. Process environment values override dotenv values without changing the process environment. Daemon/client logs use `crates/agent-telemetry`: JSON lines under `logs`, daily rotation, fourteen retained files per process prefix by default, and a private log directory on Unix. Keep its writer guard alive until process shutdown; an abrupt process termination can still lose queued records.
+
+The format integration follows the [cargo-deb documentation](https://github.com/kornelski/cargo-deb), [cargo-generate-rpm metadata reference](https://github.com/cat-in-136/cargo-generate-rpm), and [WiX tooling described by cargo-wix](https://github.com/volks73/cargo-wix). macOS and Linux user services use [service-manager](https://docs.rs/service-manager/0.11.0/service_manager/); the Windows adapter uses `windows-service` and native SCM APIs. Source definitions and deterministic tests verify configuration and lifecycle decisions; real installation and uninstall checks remain separate.
+
+## Native package CI
+
+`.github/workflows/packages.yml` runs on manual dispatch and `v*` tags. Its native hosts are Ubuntu 24.04 x64, Windows Server 2022 x64, and macOS 15 ARM64 and x64. Each job compiles the actual CEF client branches, runs Clippy and the non-ignored workspace tests with those features, and builds one daemon containing both `local-llama` and `local-mistral` CPU adapters. Cargo and CMake each use one build job to bound peak memory. No model weights are downloaded; compiler resource exhaustion is a failed job, without a reduced-feature retry.
+
+The checked-in `packaging/ci/cef-sdk.json` pins the exact `154.0.34+g14c5a08+chromium-154.0.8037.98` SDK filenames, sizes and vendor SHA-1 values from the [CEF distribution index](https://cef-builds.spotifycdn.com/index.html). The workflow checks the current vendor index against that pin, then uses the maintained [export-cef-dir](https://github.com/tauri-apps/cef-rs/tree/dev/export-cef-dir) utility at `154.5.0+154.0.34` for download and extraction. A second check verifies the saved archive and extracted `archive.json` before any product build. Missing versions or changed metadata fail the job. SDK extraction and native bundle/helper layouts remain owned by cef-rs. The small standard-library Python verification scripts have no Python project or third-party dependencies.
+
+Windows requires the runner's WiX `3.14.1` Heat, Candle and Light tools and builds the sandbox client DLLs with release PDBs. Linux uses the exact package helper versions above, verifies `$ORIGIN` linkage through the product packager, and records DEB/RPM dependency and file listings. macOS generates both native app bundles, unsigned CLI/Desktop PKGs and a verified DMG. The Desktop app is also archived with `tar` to preserve its executable modes and framework symlinks in the uploaded artifact.
+
+The pinned Windows minimal SDK already contains the official prebuilt sandbox broker: CEF's [distribution generator at SDK commit `14c5a08`](https://github.com/chromiumembedded/cef/blob/14c5a08/tools/make_distrib.py#L1160-L1223) includes `bootstrap.exe` and `bootstrapc.exe` in its minimal `Release` payload. `export-cef-dir` delegates to `download-cef`, which moves that `Release` directory to the selected SDK root. The workflow checks `bootstrap.exe` immediately after extraction; cef-rs later copies it beside the client DLL during bundling. No separate bootstrap build or replacement is needed. This follows the [M138 and newer Windows sandbox requirements](https://github.com/chromiumembedded/cef/blob/14c5a08/docs/sandbox_setup.md#windows); the broker must come from the matching official CEF/Chromium build.
+
+Jobs upload packages for review with target, commit, enabled features, SDK metadata and SHA-256 package digests. They do not publish a release, sign or notarize products, or access release credentials. A successful job establishes native compilation, non-ignored regression tests, payload checks and installer generation on the listed host. It does not establish GUI rendering, native sandbox startup, model inference, native service lifecycle, installation, upgrade, repair or uninstall acceptance. Ignored native acceptance tests require their documented execution environments. This workflow has not yet been run on those hosts.

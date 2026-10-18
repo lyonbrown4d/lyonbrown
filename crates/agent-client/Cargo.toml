@@ -1,0 +1,13 @@
+[package]
+name = "agent-client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-protocol = { path = "../agent-protocol" }
+agent-security = { path = "../agent-security" }
+anyhow.workspace = true
+tonic = { workspace = true, features = ["tls-webpki-roots"] }
+url = "2.5"
+futures.workspace = true

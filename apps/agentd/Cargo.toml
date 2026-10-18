@@ -1,0 +1,57 @@
+[package]
+name = "agentd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+local-llama = ["agent-inference/llama"]
+local-mistral = ["agent-inference/mistral"]
+
+[dependencies]
+sha2.workspace = true
+hex.workspace = true
+url = "2.5"
+agent-mcp = { path = "../../crates/agent-mcp" }
+agent-inference = { path = "../../crates/agent-inference" }
+fluxdi.workspace = true
+agent-config = { path = "../../crates/agent-config" }
+agent-decision = { path = "../../crates/agent-decision" }
+agent-distributed = { path = "../../crates/agent-distributed" }
+agent-browser = { path = "../../crates/agent-browser" }
+uuid.workspace = true
+image = { version = "0.25", default-features = false, features = ["png"] }
+agent-telemetry = { path = "../../crates/agent-telemetry" }
+agent-core = { path = "../../crates/agent-core" }
+agent-protocol = { path = "../../crates/agent-protocol" }
+agent-runtime = { path = "../../crates/agent-runtime" }
+agent-security = { path = "../../crates/agent-security" }
+agent-storage = { path = "../../crates/agent-storage" }
+agent-workspace = { path = "../../crates/agent-workspace" }
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+directories.workspace = true
+dotenvy.workspace = true
+futures.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+async-stream = "0.3.6"
+
+[dev-dependencies]
+agent-test-support = { path = "../../crates/agent-test-support" }
+agent-client = { path = "../../crates/agent-client" }
+tempfile.workspace = true
+tokio-stream.workspace = true
+rmcp = { version = "=3.5.1", default-features = false, features = ["server", "transport-streamable-http-server"] }
+axum = "0.8"
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "=0.8.1"

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" Name="Lyonbrown Desktop" Language="1033" Version="$(var.Version)" Manufacturer="Lyonbrown" UpgradeCode="A75BCA5D-C617-4E5E-9F03-591AB7DA3B7D">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" />
+    <MajorUpgrade DowngradeErrorMessage="A newer Lyonbrown Desktop is already installed." Schedule="afterInstallExecute" />
+    <MediaTemplate EmbedCab="yes" />
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="LYONBROWNROOT" Name="Lyonbrown">
+          <Directory Id="CLIENTROOT" Name="Desktop">
+            <Directory Id="CLIENTDIR" Name="$(var.Version)" />
+          </Directory>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="APPLICATIONMENU" Name="Lyonbrown Desktop">
+          <Component Id="ApplicationShortcuts" Guid="*" Win64="yes">
+            <Shortcut Id="ClientShortcut" Name="Lyonbrown Desktop" Target="[CLIENTDIR]agent-desktop.exe" WorkingDirectory="CLIENTDIR" />
+            <!-- Interactive user entry; never collect credentials in MSI/SYSTEM.
+                 agent-install requests UAC while binding the original user SID. -->
+            <Shortcut Id="ServiceSetupShortcut" Name="Set up Lyonbrown service" Target="[CLIENTDIR]agent-install.exe" Arguments="--register-service" WorkingDirectory="CLIENTDIR" />
+            <RegistryValue Root="HKLM" Key="Software\Lyonbrown\desktop" Name="Version" Type="string" Value="$(var.Version)" KeyPath="yes" />
+            <RemoveFolder Id="RemoveApplicationMenu" On="uninstall" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+    <Feature Id="Application" Level="1">
+      <ComponentGroupRef Id="ClientPayload" />
+      <ComponentRef Id="SharedDaemon" />
+      <ComponentRef Id="ApplicationShortcuts" />
+    </Feature>
+  </Product>
+</Wix>

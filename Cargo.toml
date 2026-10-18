@@ -1,0 +1,43 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/agentd", "apps/agent-cli", "apps/agent-desktop", "apps/agent-control"]
+default-members = ["apps/agentd", "apps/agent-cli", "apps/agent-control"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.99"
+
+[workspace.dependencies]
+fluxdi = { version = "=2.0.0", default-features = false, features = ["thread-safe", "macros", "async-factory", "lifecycle"] }
+anyhow = "1.0.104"
+async-trait = "0.1.89"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.150"
+tokio = { version = "1.53.3", features = ["full"] }
+tokio-util = "0.7.20"
+tokio-stream = { version = "0.1.19", features = ["net", "sync"] }
+tower = { version = "0.5.3", features = ["util"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+futures = "0.3.34"
+thiserror = "2.0.21"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+uuid = { version = "1.28.0", features = ["v4", "v7", "serde"] }
+diesel = { version = "2.3.14", features = ["sqlite", "returning_clauses_for_sqlite_3_35"] }
+libsqlite3-sys = { version = "0.28", features = ["bundled"] }
+tempfile = "3.27.0"
+tonic = { version = "0.14", features = ["transport", "tls-ring"] }
+tonic-prost = "0.14"
+prost = "0.14"
+sha2 = "0.11.1"
+hex = "0.4.3"
+fs2 = "0.4.3"
+directories = "6.0.0"
+dotenvy = "0.15.7"
+
+[profile.release]
+lto = "thin"
+strip = "debuginfo"

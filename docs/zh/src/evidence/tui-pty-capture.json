@@ -1,0 +1,28 @@
+{
+  "completed": {
+    "sha256": "4d8e83e5857986c21fabbface01474e74782b7d79755cae4dcc32a08107b0a44",
+    "bytes": 9860,
+    "columns": 140,
+    "rows": 38
+  },
+  "approval": {
+    "sha256": "7647475a39d6b4d4f5548b72b83edf79e60fb297d329bd407236c0fbd907cd0c",
+    "bytes": 13280,
+    "columns": 140,
+    "rows": 38
+  },
+  "approved": {
+    "sha256": "08580cd814e902ef473826e51d336afb2c8016efad3e9baee140ee1600cf5965",
+    "bytes": 15674,
+    "columns": 140,
+    "rows": 38
+  },
+  "environment": {
+    "os": "27.0.1",
+    "architecture": "arm64",
+    "source": "actual script(1) PTY output",
+    "parser": "pyte 0.8.2",
+    "model": "loopback HTTP fixture",
+    "native_terminal_window": false
+  }
+}

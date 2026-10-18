@@ -1,0 +1,8 @@
+listen = "127.0.0.1:7447"
+endpoint = "http://127.0.0.1:7447"
+provider = "openai"
+model = "gpt-4.1"
+max_runs = 4
+run_timeout_secs = 900
+log_directory = "logs"
+log_retention = 14

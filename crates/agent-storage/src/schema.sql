@@ -1,0 +1,15 @@
+PRAGMA journal_mode=WAL;
+PRAGMA synchronous=FULL;
+PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY, owner_epoch INTEGER NOT NULL, record TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS harness_sessions(session_id TEXT PRIMARY KEY REFERENCES sessions(id), snapshot BLOB NOT NULL);
+CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, session_id TEXT NOT NULL REFERENCES sessions(id), idempotency_key TEXT NOT NULL, status TEXT NOT NULL, created_at_ms INTEGER NOT NULL, record TEXT NOT NULL, UNIQUE(session_id,idempotency_key));
+CREATE UNIQUE INDEX IF NOT EXISTS one_active_run ON runs(session_id) WHERE status NOT IN ('completed','failed','cancelled');
+CREATE TABLE IF NOT EXISTS events(run_id TEXT NOT NULL, cursor INTEGER NOT NULL, record TEXT NOT NULL, PRIMARY KEY(run_id,cursor));
+CREATE TABLE IF NOT EXISTS outbox(run_id TEXT NOT NULL, cursor INTEGER NOT NULL, delivered INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(run_id,cursor));
+CREATE TABLE IF NOT EXISTS approvals(id TEXT PRIMARY KEY, run_id TEXT NOT NULL, status TEXT NOT NULL, record TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS tasks(id TEXT PRIMARY KEY, idempotency_key TEXT NOT NULL UNIQUE, owner_epoch INTEGER NOT NULL, record TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS peers(node_id TEXT PRIMARY KEY, record TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS control_directory(node_id TEXT PRIMARY KEY, record TEXT NOT NULL, expires_at_ms INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS control_links(source TEXT NOT NULL, target TEXT NOT NULL, PRIMARY KEY(source,target));
+PRAGMA user_version=1;

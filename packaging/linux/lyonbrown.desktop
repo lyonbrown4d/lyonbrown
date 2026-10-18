@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Lyonbrown
+Comment=Native agent workspace
+Exec=agent-desktop
+Terminal=false
+Categories=Development;Utility;

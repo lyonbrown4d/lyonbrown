@@ -1,0 +1,14 @@
+# Reference only: agent-launch generates the user-specific native unit with a retained binary.
+[Unit]
+Description=Lyonbrown per-user agent daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/agentd --listen 127.0.0.1:7447
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+
+[Install]
+WantedBy=default.target

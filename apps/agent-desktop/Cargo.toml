@@ -1,0 +1,43 @@
+[package]
+name = "agent-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[[example]]
+name = "desktop-native-acceptance"
+path = "examples/native_acceptance.rs"
+required-features = ["native-cef"]
+
+[dependencies]
+gpui-kit = { version = "0.7.3", features = ["tree-sitter-rust", "tree-sitter-markdown", "tree-sitter-toml"] }
+image = { version = "0.25", default-features = false }
+anyhow.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+uuid.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+fluxdi.workspace = true
+agent-client = { path = "../../crates/agent-client" }
+agent-protocol = { path = "../../crates/agent-protocol" }
+agent-launch = { path = "../../crates/agent-launch" }
+agent-browser-runtime = { path = "../../crates/agent-browser-runtime" }
+agent-config = { path = "../../crates/agent-config" }
+agent-telemetry = { path = "../../crates/agent-telemetry" }
+
+[features]
+default = []
+native-cef = ["agent-browser-runtime/native-cef"]
+
+[dev-dependencies]
+clap.workspace = true
+gpui-kit = { version = "0.7.3", features = ["test-support"] }
+agent-test-support = { path = "../../crates/agent-test-support" }
+agentd = { path = "../agentd" }
+tempfile.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true

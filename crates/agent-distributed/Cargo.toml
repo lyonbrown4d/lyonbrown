@@ -1,0 +1,32 @@
+[package]
+name = "agent-distributed"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-core = { path = "../agent-core" }
+agent-protocol = { path = "../agent-protocol" }
+agent-storage = { path = "../agent-storage" }
+agent-security = { path = "../agent-security" }
+anyhow.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tonic.workspace = true
+tower.workspace = true
+hyper-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+mdns-sd = "0.21.1"
+rcgen = "0.14"
+rustls-pemfile = "2.2"
+snow = "0.10"
+
+[dev-dependencies]
+tempfile.workspace = true

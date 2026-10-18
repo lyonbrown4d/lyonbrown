@@ -1,0 +1,27 @@
+[package]
+name = "lyonbrown-agentd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Shared per-user Lyonbrown agent daemon"
+
+[lib]
+path = "../metadata.rs"
+
+[package.metadata.deb]
+name = "lyonbrown-agentd"
+section = "utils"
+assets = [
+  ["../../../target/release/agentd", "usr/bin/agentd", "755"],
+  ["../../linux/lyonbrown-agentd.service.in", "usr/share/lyonbrown/lyonbrown-agentd.service.in", "644"],
+  ["../../config.example.toml", "usr/share/doc/lyonbrown-agentd/config.example.toml", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "lyonbrown-agentd"
+assets = [
+  { source = "../../../target/release/agentd", dest = "/usr/bin/agentd", mode = "755" },
+  { source = "../../linux/lyonbrown-agentd.service.in", dest = "/usr/share/lyonbrown/lyonbrown-agentd.service.in", mode = "644" },
+  { source = "../../config.example.toml", dest = "/usr/share/doc/lyonbrown-agentd/config.example.toml", mode = "644", doc = true },
+]

@@ -1,0 +1,33 @@
+[package]
+name = "lyonbrown-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Lyonbrown native GPUI desktop client"
+
+[lib]
+path = "../metadata.rs"
+
+[package.metadata.deb]
+name = "lyonbrown-desktop"
+section = "utils"
+depends = "$auto, lyonbrown-agentd (>= 0.1.0), lyonbrown-agentd (<< 0.2.0)"
+assets = [
+  ["../../../target/release/lyonbrown-linux/desktop/programs/*", "usr/lib/lyonbrown/desktop/", "755"],
+  ["../../../target/release/lyonbrown-linux/desktop/runtime/**/*", "usr/lib/lyonbrown/desktop/", "644"],
+  ["../../../target/release/lyonbrown-linux/desktop/launcher", "usr/bin/agent-desktop", "755"],
+  ["../../linux/lyonbrown.desktop", "usr/share/applications/lyonbrown.desktop", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "lyonbrown-desktop"
+assets = [
+  { source = "../../../target/release/lyonbrown-linux/desktop/programs/*", dest = "/usr/lib/lyonbrown/desktop/", mode = "755" },
+  { source = "../../../target/release/lyonbrown-linux/desktop/runtime/**/*", dest = "/usr/lib/lyonbrown/desktop/", mode = "644" },
+  { source = "../../../target/release/lyonbrown-linux/desktop/launcher", dest = "/usr/bin/agent-desktop", mode = "755" },
+  { source = "../../linux/lyonbrown.desktop", dest = "/usr/share/applications/lyonbrown.desktop", mode = "644" },
+]
+
+[package.metadata.generate-rpm.requires]
+lyonbrown-agentd = ">= 0.1.0, < 0.2.0"

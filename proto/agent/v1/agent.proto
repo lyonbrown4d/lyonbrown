@@ -1,0 +1,134 @@
+syntax = "proto3";
+package agent.v1;
+
+service ClientService {
+  rpc GetNode(Empty) returns (Node);
+  rpc PrepareUpgrade(Empty) returns (Node);
+  rpc ResumeAccepting(Empty) returns (Node);
+  rpc ListSessions(Empty) returns (Sessions);
+  rpc CreateSession(CreateSessionRequest) returns (Session);
+  rpc GetSession(SessionRequest) returns (Session);
+  rpc StartRun(StartRunRequest) returns (Run);
+  rpc ListRuns(SessionRequest) returns (Runs);
+  rpc GetRun(RunRequest) returns (Run);
+  rpc WatchRun(WatchRequest) returns (stream Event);
+  rpc CancelRun(RunRequest) returns (Run);
+  rpc ListApprovals(RunRequest) returns (Approvals);
+  rpc ApproveAction(ApproveRequest) returns (Approval);
+}
+service WorkspaceService {
+  rpc ListFiles(ListFilesRequest) returns (WorkspaceFiles);
+  rpc ReadFile(ReadFileRequest) returns (WorkspaceFile);
+  rpc WriteFile(WriteFileRequest) returns (WorkspaceFile);
+  rpc GetDiff(DiffRequest) returns (WorkspaceDiff);
+  rpc WatchFiles(SessionRequest) returns (stream WorkspaceChange);
+}
+service TaskService {
+  rpc SubmitTask(TaskEnvelope) returns (Task);
+  rpc GetTask(TaskRequest) returns (Task);
+  rpc WatchTask(WatchRequest) returns (stream Event);
+  rpc CancelTask(TaskRequest) returns (Task);
+  rpc AcceptResult(AcceptResultRequest) returns (Task);
+}
+// Local authenticated Master management. Peer TaskService is a separate mTLS
+// boundary; clients never acquire peer credentials or execute Worker tasks.
+service OrchestrationService {
+  rpc DispatchTask(DispatchTaskRequest) returns (Task);
+  rpc GetTask(TaskRequest) returns (Task);
+  rpc ListTasks(ListTasksRequest) returns (Tasks);
+  rpc ReconcileTask(RemoteTaskRequest) returns (Task);
+  rpc CancelTask(RemoteTaskRequest) returns (Task);
+  rpc AcceptResult(AcceptRemoteResultRequest) returns (Task);
+}
+service PeerService {
+  rpc Hello(Node) returns (Node);
+  rpc ListPeers(Empty) returns (Nodes);
+  rpc Pair(PairRequest) returns (PeerTrust);
+  rpc Revoke(PeerRequest) returns (PeerTrust);
+}
+service BrowserService {
+  rpc GetFrame(FrameRequest) returns (BrowserFrame);
+  rpc SendInput(BrowserInput) returns (Empty);
+  rpc OpenSpace(OpenSpaceRequest) returns (BrowserSpace);
+  rpc ListSpaces(Empty) returns (BrowserSpaces);
+  rpc OpenTab(OpenTabRequest) returns (BrowserTab);
+  rpc Observe(ObserveRequest) returns (BrowserObservation);
+  rpc Act(BrowserAction) returns (BrowserActionResult);
+  rpc Takeover(TakeoverRequest) returns (BrowserSpace);
+  rpc CloseSpace(SpaceRequest) returns (Empty);
+}
+// Authenticated local client owns the native execution surface. agentd owns
+// routing and session authorization; command payloads contain no CEF pointers.
+service BrowserRuntimeService {
+  rpc Attach(stream BrowserRuntimeResponse) returns (stream BrowserRuntimeRequest);
+}
+// Interactive-user native execution uses an authenticated reverse channel.
+// Payloads are versioned runtime messages, never OS handles or model commands.
+// Attaching a helper does not authorize an action: agentd owns exact approvals.
+service ComputerRuntimeService {
+  rpc Attach(stream ComputerRuntimeResponse) returns (stream ComputerRuntimeRequest);
+}
+service ControlService {
+  rpc Register(RegisterRequest) returns (Node);
+  rpc Resolve(PeerRequest) returns (Node);
+  rpc Pair(PairRequest) returns (PeerTrust);
+  rpc Relay(stream RelayEnvelope) returns (stream RelayEnvelope);
+}
+message Empty {}
+message Node { string id = 1; string name = 2; string os = 3; string endpoint = 4; string fingerprint = 5; repeated string capabilities = 6; uint32 protocol_version = 7; string daemon_version = 8; uint32 protocol_min = 9; uint32 protocol_max = 10; uint32 active_runs = 11; uint32 storage_schema_version = 12; bool draining = 13; }
+message Nodes { repeated Node nodes = 1; }
+message Session { string id = 1; string title = 2; string workspace = 3; string owner_node_id = 4; uint64 owner_epoch = 5; int64 created_at_ms = 6; }
+message Sessions { repeated Session sessions = 1; }
+message CreateSessionRequest { string title = 1; string workspace = 2; }
+message SessionRequest { string session_id = 1; }
+message StartRunRequest { string session_id = 1; string prompt = 2; string idempotency_key = 3; uint64 owner_epoch = 4; }
+message Run { string id = 1; string session_id = 2; string status = 3; string prompt = 4; string result = 5; string error = 6; int64 created_at_ms = 7; }
+message Runs { repeated Run runs = 1; }
+message RunRequest { string run_id = 1; }
+message WatchRequest { string run_id = 1; uint64 after_cursor = 2; }
+message Event { uint64 cursor = 1; string run_id = 2; string kind = 3; string payload_json = 4; int64 created_at_ms = 5; }
+message Approval { string id = 1; string run_id = 2; string tool = 3; string arguments_json = 4; string status = 5; int64 expires_at_ms = 6; }
+message Approvals { repeated Approval approvals = 1; }
+message ApproveRequest { string approval_id = 1; bool approved = 2; }
+message TaskEnvelope { string task_id = 1; string parent_run_id = 2; string session_id = 3; string owner_node_id = 4; uint64 owner_epoch = 5; string attempt_id = 6; string instructions = 7; repeated string capabilities = 8; string workspace = 9; string idempotency_key = 10; int64 deadline_ms = 11; }
+message Task { TaskEnvelope envelope = 1; string status = 2; string attempt_status = 3; string result = 4; string error = 5; uint64 cursor = 6; }
+message TaskRequest { string task_id = 1; }
+message Tasks { repeated Task tasks = 1; string next_task_id = 2; }
+message ListTasksRequest { string session_id = 1; string after_task_id = 2; uint32 page_size = 3; }
+message DispatchTaskRequest { Node target = 1; TaskEnvelope envelope = 2; }
+message RemoteTaskRequest { Node target = 1; string task_id = 2; }
+message AcceptRemoteResultRequest { Node target = 1; string task_id = 2; bool accepted = 3; }
+message AcceptResultRequest { string task_id = 1; string attempt_id = 2; uint64 owner_epoch = 3; bool accepted = 4; }
+message PeerRequest { string node_id = 1; }
+message PairRequest { string node_id = 1; string fingerprint = 2; string pairing_code = 3; repeated string capabilities = 4; string certificate_pem = 5; string noise_public_key = 6; }
+message PeerTrust { string node_id = 1; string fingerprint = 2; repeated string capabilities = 3; bool revoked = 4; string certificate_pem = 5; string noise_public_key = 6; }
+message RegisterRequest { Node node = 1; string public_key = 2; }
+message RelayEnvelope { string link_id = 1; string source_node_id = 2; string target_node_id = 3; uint64 seq = 4; bytes ciphertext = 5; }
+message OpenSpaceRequest { string session_id = 1; string profile_id = 2; bool headless = 3; string host_id = 4; }
+message BrowserSpace { string id = 1; string profile_id = 2; string session_id = 3; string host_id = 4; bool human_control = 5; }
+message BrowserSpaces { repeated BrowserSpace spaces = 1; }
+message OpenTabRequest { string space_id = 1; string url = 2; }
+message BrowserTab { string id = 1; string space_id = 2; string url = 3; string title = 4; }
+message SpaceRequest { string space_id = 1; }
+message ObserveRequest { string tab_id = 1; bool screenshot = 2; }
+message BrowserObservation { string snapshot_id = 1; string tab_id = 2; uint64 revision = 3; string accessibility_json = 4; string screenshot_artifact = 5; }
+message BrowserAction { string action_id = 1; string tab_id = 2; string snapshot_id = 3; uint64 revision = 4; string kind = 5; string element_ref = 6; string text = 7; uint32 timeout_ms = 8; }
+message BrowserActionResult { string action_id = 1; string status = 2; string error = 3; BrowserObservation observation = 4; }
+message TakeoverRequest { string space_id = 1; bool human_control = 2; }
+
+message ListFilesRequest { string session_id = 1; string directory = 2; }
+message WorkspaceEntry { string path = 1; bool directory = 2; uint64 size = 3; }
+message WorkspaceFiles { repeated WorkspaceEntry entries = 1; }
+message ReadFileRequest { string session_id = 1; string path = 2; }
+message WorkspaceFile { string path = 1; string content = 2; string revision = 3; }
+message WriteFileRequest { string session_id = 1; string path = 2; string content = 3; string expected_revision = 4; }
+message DiffRequest { string session_id = 1; string path = 2; }
+message WorkspaceDiff { string patch = 1; }
+message WorkspaceChange { string kind = 1; repeated string paths = 2; }
+message FrameRequest { string tab_id = 1; uint64 after_sequence = 2; }
+message BrowserFrame { string tab_id = 1; uint64 revision = 2; uint64 sequence = 3; uint32 width = 4; uint32 height = 5; uint32 stride = 6; bytes bgra8 = 7; }
+message BrowserInput { string tab_id = 1; uint64 revision = 2; string kind = 3; int32 x = 4; int32 y = 5; int32 button = 6; int32 key_code = 7; string text = 8; uint32 width = 9; uint32 height = 10; int32 delta_x = 11; int32 delta_y = 12; uint32 modifiers = 13; }
+message BrowserRuntimeRequest { string request_id = 1; bytes payload = 2; }
+message BrowserRuntimeResponse { string request_id = 1; string host_id = 2; uint32 protocol_version = 3; bytes payload = 4; }
+message ComputerRuntimeRequest { string request_id = 1; bytes payload = 2; }
+message ComputerRuntimeResponse { string request_id = 1; string host_id = 2; uint32 protocol_version = 3; bytes payload = 4; }
