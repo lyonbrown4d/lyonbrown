@@ -65,4 +65,8 @@ This path passed with the actual product binary on macOS 27.0.1, arm64, without 
 
 ## Publish the documentation site
 
-`.github/workflows/pages.yml` builds both books with a fixed mdBook version and puts a language entry page, `zh/` and `en/` into one Pages artifact. Set the repository's GitHub Pages build source to GitHub Actions. Documentation changes on `main` or a manual dispatch trigger the workflow; deployment uses the `github-pages` environment. Deployment results and a rendered page check establish actual site availability.
+Documentation is built locally and published from a GitHub Pages branch. Run `mdbook build docs/zh` and `mdbook build docs/en`. Place `docs/index.html` at the publication root, put the two generated books under `zh/` and `en/`, and add an empty `.nojekyll` file at the root. Cargo artifacts, local configuration and credentials are excluded.
+
+Commit the static files to the separate `gh-pages` branch. Configure Pages with build type `legacy`, using `/` on that branch. Check both languages' local resources and links before pushing, then inspect the Pages build and read back the public site. A successful branch push alone does not establish a successful deployment.
+
+`.github/workflows/pages.yml` remains a manual publishing entry for environments with GitHub Actions enabled; switch the Pages source to GitHub Actions before using it. The manual branch deployment does not invoke that workflow.

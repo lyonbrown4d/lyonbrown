@@ -65,4 +65,8 @@ LYONBROWN_SERVICE_AGENTD=/absolute/path/agentd cargo test -p agent-launch --test
 
 ## 文档站点发布
 
-`.github/workflows/pages.yml` 使用固定版本 mdBook 构建中英文书籍，将语言入口、`zh/` 与 `en/` 放入同一个 Pages artifact。仓库须将 GitHub Pages 的构建来源设为 GitHub Actions。工作流在 `main` 的文档变更或手动触发时运行，部署作业使用 `github-pages` 环境；实际站点可用性以部署结果与页面回读为准。
+文档使用本机构建、分支发布的方式部署到 GitHub Pages。执行 `mdbook build docs/zh` 和 `mdbook build docs/en`，将 `docs/index.html` 放到发布根目录，两套构建结果分别放到 `zh/` 和 `en/`，根目录另放一个空的 `.nojekyll` 文件。构建目录不包含 Cargo 产物、本机配置或凭据。
+
+静态文件提交到独立的 `gh-pages` 分支；Pages 的构建类型设为 `legacy`，发布来源为该分支的 `/`。发布前检查两种语言的本地资源与链接，推送后检查 Pages 构建结果，并回读公开站点。分支推送成功不等于站点已发布成功。
+
+`.github/workflows/pages.yml` 保留为支持 GitHub Actions 的环境使用的手动发布入口；使用该方式前须将 Pages 来源切换为 GitHub Actions。当前手动分支发布不调用这个工作流。

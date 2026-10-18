@@ -2,8 +2,9 @@
 
 Lyonbrown is a Rust workspace for a daemon-owned agent runtime, an authenticated terminal client and a native GPUI desktop. `rpi-harness` owns the agent loop. Clients present sessions and tasks; they do not run a second loop.
 
-- [中文文档](docs/zh/src/overview.md)
-- [English guide](docs/en/src/overview.md)
+- [中文文档](https://lyonbrown4d.github.io/lyonbrown/zh/)
+- [English guide](https://lyonbrown4d.github.io/lyonbrown/en/)
+- [Documentation sources](docs/)
 - [Engineering constraints](AGENTS.md)
 
 Build the documentation with mdBook:
