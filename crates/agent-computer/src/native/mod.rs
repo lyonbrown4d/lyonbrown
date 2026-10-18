@@ -10,6 +10,7 @@ mod linux;
 mod macos;
 #[cfg(target_os = "macos")]
 mod macos_accessibility;
+mod targets;
 #[cfg(target_os = "windows")]
 mod windows;
 
@@ -22,9 +23,12 @@ use windows as platform;
 
 use crate::*;
 
+pub use targets::list_targets;
+
 pub struct NativeDesktopBackend {
   identity: DesktopIdentity,
   captured: Option<NativeCapture>,
+  target: Option<targets::TargetBinding>,
 }
 
 struct NativeCapture {
@@ -68,11 +72,32 @@ impl NativeDesktopBackend {
     }
     Ok(Self {
       captured: None,
+      target: None,
       identity: DesktopIdentity {
         node_id,
         user_session: platform::session()?,
       },
     })
+  }
+
+  /// Bind an attachment to a current native display or exact window/PID pair.
+  /// This reads metadata and existing permissions without requesting access.
+  pub fn for_target(node_id: String, target: DesktopTarget) -> Result<Self, DesktopError> {
+    let mut backend = Self::new(node_id)?;
+    backend.check_capture()?;
+    let binding = targets::TargetBinding::new(&target)?;
+    targets::validate(&binding)?;
+    backend.check_capture()?;
+    backend.target = Some(binding);
+    Ok(backend)
+  }
+
+  fn check_target(&self, scope: &TargetScope) -> Result<(), DesktopError> {
+    if let Some(target) = &self.target {
+      target.check_scope(scope)?;
+      targets::validate(target)?;
+    }
+    Ok(())
   }
 
   fn check_session(&self) -> Result<(), DesktopError> {
@@ -101,10 +126,12 @@ impl NativeDesktopBackend {
     if session.identity != self.identity {
       return Err(DesktopError::SessionUnavailable);
     }
+    self.check_target(&session.scope)?;
     control.checkpoint(std::time::Instant::now())?;
-    let mut observation = capture::observe(&session.scope, limits, control)?;
+    let mut observation = capture::observe(&session.scope, self.target.as_ref(), limits, control)?;
     observation.accessibility = platform::accessibility(&observation.windows, limits, control)?;
     self.check_capture()?;
+    self.check_target(&session.scope)?;
     Ok(observation)
   }
   fn validate_session_snapshot(&self, snapshot: &DesktopSnapshot) -> Result<(), DesktopError> {
@@ -112,6 +139,7 @@ impl NativeDesktopBackend {
     if snapshot.session.identity != self.identity {
       return Err(DesktopError::SessionUnavailable);
     }
+    self.check_target(&snapshot.session.scope)?;
     if platform::input_permission() != PermissionState::Granted {
       return Err(DesktopError::PermissionDenied("desktop input".into()));
     }

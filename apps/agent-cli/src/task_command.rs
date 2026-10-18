@@ -3,6 +3,11 @@ use clap::{Args, Subcommand};
 
 #[derive(Subcommand)]
 pub enum Command {
+  /// Attach this interactive client to an explicitly selected native desktop target.
+  Computer {
+    #[command(subcommand)]
+    command: crate::computer::ComputerCommand,
+  },
   /// Manage durable tasks through the authenticated Master daemon.
   Task {
     #[command(subcommand)]

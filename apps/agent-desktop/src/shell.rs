@@ -71,13 +71,15 @@ impl Desktop {
     runtime: Arc<tokio::runtime::Runtime>,
     connector: fluxdi::Shared<crate::composition::ClientPort>,
     browser: fluxdi::Shared<crate::composition::BrowserPort>,
-    settings: agent_config::Settings,
-    data_dir: std::path::PathBuf,
+    computer: fluxdi::Shared<crate::composition::ComputerPort>,
+    configuration: fluxdi::Shared<crate::DesktopConfiguration>,
     window: &mut Window,
     cx: &mut Context<Self>,
   ) -> Self {
+    let settings = &configuration.settings;
+    let data_dir = &configuration.data_dir;
     let (sender, receiver) = mpsc::channel();
-    let (dock, tasks) = workbench::build(runtime.clone(), browser, window, cx);
+    let (dock, tasks) = workbench::build(runtime.clone(), browser, computer, window, cx);
     let composer = cx.new(|cx| {
       TextareaState::new(window, cx).placeholder("Ask Lyonbrown to work on your project…")
     });
@@ -96,6 +98,9 @@ impl Desktop {
               Some(crate::tabs::SAVE_WAIT_MESSAGE) => !view.tasks.read(cx).pending_save,
               Some(crate::tabs::BROWSER_WAIT_MESSAGE) => {
                 !view.tasks.read(cx).pending_browser_operation
+              }
+              Some(crate::tabs::COMPUTER_WAIT_MESSAGE) => {
+                !view.tasks.read(cx).computer.read(cx).pending
               }
               _ => false,
             };
@@ -136,7 +141,7 @@ impl Desktop {
           .default_value(
             settings
               .credential("daemon")
-              .unwrap_or_else(|| crate::connection::local_token(&data_dir)),
+              .unwrap_or_else(|| crate::connection::local_token(data_dir)),
           )
           .placeholder("Access token")
       }),

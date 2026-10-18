@@ -12,6 +12,11 @@ name = "desktop-native-acceptance"
 path = "examples/native_acceptance.rs"
 required-features = ["native-cef"]
 
+[[example]]
+name = "desktop-computer-acceptance"
+path = "examples/computer_acceptance.rs"
+required-features = ["native-computer"]
+
 [dependencies]
 gpui-kit = { version = "0.7.3", features = ["tree-sitter-rust", "tree-sitter-markdown", "tree-sitter-toml"] }
 image = { version = "0.25", default-features = false }
@@ -26,14 +31,18 @@ agent-client = { path = "../../crates/agent-client" }
 agent-protocol = { path = "../../crates/agent-protocol" }
 agent-launch = { path = "../../crates/agent-launch" }
 agent-browser-runtime = { path = "../../crates/agent-browser-runtime" }
+agent-computer-runtime = { path = "../../crates/agent-computer-runtime", default-features = false }
 agent-config = { path = "../../crates/agent-config" }
 agent-telemetry = { path = "../../crates/agent-telemetry" }
 
 [features]
 default = []
+native-computer = ["agent-computer-runtime/native"]
 native-cef = ["agent-browser-runtime/native-cef"]
 
 [dev-dependencies]
+async-trait.workspace = true
+agent-computer = { path = "../../crates/agent-computer", default-features = false }
 clap.workspace = true
 gpui-kit = { version = "0.7.3", features = ["test-support"] }
 agent-test-support = { path = "../../crates/agent-test-support" }

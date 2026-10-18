@@ -2,18 +2,41 @@ use agent_client::AgentClient;
 use agent_protocol::v1::{Approval, Event, Run, Session};
 use tokio::sync::mpsc;
 
-use crate::{bootstrap::ClientModule, config::ResolvedConfig};
+use crate::{
+  bootstrap::ClientModule,
+  computer::{ComputerStatus, LocalCommand},
+  computer_backend::ComputerOwner,
+  config::ResolvedConfig,
+  session_backend::{refresh_session, watch},
+};
+use agent_computer_runtime::{ComputerHostFactory, NativeComputerHost};
+use std::sync::Arc;
 
 pub enum Action {
   Connect,
+  Computer {
+    session: Option<String>,
+    command: LocalCommand,
+  },
+  Shutdown(tokio::sync::oneshot::Sender<()>),
   NewSession,
   Select(String),
-  Submit { session: String, prompt: String },
+  Submit {
+    session: String,
+    prompt: String,
+  },
   Cancel(String),
-  Approve { id: String, approved: bool },
+  Approve {
+    id: String,
+    approved: bool,
+  },
 }
 
 pub enum Update {
+  Computer {
+    status: ComputerStatus,
+    detail: String,
+  },
   Connected(Vec<Session>),
   Disconnected(String),
   Selected(Session),
@@ -29,11 +52,21 @@ pub enum Update {
 }
 
 pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Update>) {
+  spawn_with_computer_factory(config, Arc::new(NativeComputerHost))
+}
+
+/// Embed a host factory; native selection and execution remain behind its port.
+pub fn spawn_with_computer_factory(
+  config: ResolvedConfig,
+  factory: Arc<dyn ComputerHostFactory>,
+) -> (mpsc::Sender<Action>, mpsc::Receiver<Update>) {
   let profiles = config.data_dir.join("browser-profiles").join("cli");
   let services = ClientModule::new(fluxdi::Shared::new(config));
   let (actions, mut receiver) = mpsc::channel(32);
   let (updates, output) = mpsc::channel(128);
   tokio::spawn(async move {
+    let mut computer = ComputerOwner::new(factory);
+    let _ = updates.send(computer.snapshot()).await;
     let mut client = None;
     let mut selected = None;
     let mut browser: Option<agent_browser_runtime::RuntimeAttachment> = None;
@@ -43,7 +76,24 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
       tokio::select! {
           action = receiver.recv() => {
               let Some(action) = action else { break };
+              if let Action::Shutdown(done) = action {
+                  computer.disconnected();
+                  drop(browser.take());
+                  if let Some(task) = stream.take() { task.abort(); }
+                  let _ = done.send(());
+                  break;
+              }
+              if let Action::Computer { session, command } = action {
+                  if client.is_some() && let Some(update) = computer.pending(session.as_deref(), &command) {
+                    let _ = updates.send(update).await;
+                  }
+                  computer.execute(client.as_ref(), session.as_deref(), command).await;
+                  let _ = updates.send(computer.snapshot()).await;
+                  continue;
+              }
               if matches!(action, Action::Connect) {
+                  computer.disconnected();
+                  let _ = updates.send(computer.snapshot()).await;
                   browser = None;
                   if let Some(task) = stream.take() { task.abort(); }
                   client = None;
@@ -76,6 +126,7 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
               };
               let operation = match &action {
                   Action::Connect => "client.connect",
+                  Action::Computer { .. } | Action::Shutdown(_) => "computer.control",
                   Action::NewSession => "session.create",
                   Action::Select(_) => "session.select",
                   Action::Submit { .. } => "run.submit",
@@ -96,6 +147,7 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
               }
           }
           _ = refresh.tick() => {
+              if computer.poll() { let _ = updates.send(computer.snapshot()).await; }
               if browser.as_ref().is_some_and(|attachment| attachment.is_finished()) {
                   let reason = browser.as_ref().and_then(|attachment| attachment.error())
                       .unwrap_or_else(|| "runtime stopped".into());
@@ -107,6 +159,8 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
                   && let Err(error) = refresh_session(connected, session, &updates).await {
                       tracing::warn!(operation = "session.refresh", outcome = "disconnected", process_id = std::process::id(), session_id = session.as_str(), error_category = "refresh_failed", "Terminal client disconnected after refresh failed");
                       let _ = updates.send(Update::Disconnected(error.to_string())).await;
+                      computer.disconnected();
+                      let _ = updates.send(computer.snapshot()).await;
                       client = None;
                       browser = None;
                       if let Some(task) = stream.take() { task.abort(); }
@@ -114,6 +168,7 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
           }
       }
     }
+    computer.disconnected();
     tracing::info!(
       operation = "client.disconnect",
       outcome = "closed",
@@ -142,7 +197,7 @@ async fn execute(
   updates: &mpsc::Sender<Update>,
 ) -> anyhow::Result<()> {
   match action {
-    Action::Connect => {}
+    Action::Connect | Action::Computer { .. } | Action::Shutdown(_) => {}
     Action::NewSession => {
       let workspace = std::env::current_dir()?.to_string_lossy().into_owned();
       let session = client
@@ -192,80 +247,4 @@ async fn execute(
     }
   }
   Ok(())
-}
-
-async fn refresh_session(
-  client: &AgentClient,
-  session: &str,
-  updates: &mpsc::Sender<Update>,
-) -> anyhow::Result<Option<String>> {
-  let runs = client.list_runs(session).await?;
-  let active = runs
-    .iter()
-    .rev()
-    .find(|run| {
-      matches!(
-        run.status.as_str(),
-        "accepted" | "running" | "awaiting_approval"
-      )
-    })
-    .map(|run| run.id.clone());
-  let batches = futures::future::try_join_all(
-    runs
-      .iter()
-      .filter(|run| run.status == "awaiting_approval")
-      .map(|run| client.list_approvals(&run.id)),
-  )
-  .await?;
-  let approvals = batches
-    .into_iter()
-    .flatten()
-    .filter(|approval| approval.status == "pending")
-    .collect();
-  let _ = updates.send(Update::Runs(runs)).await;
-  let _ = updates
-    .send(Update::Approvals {
-      session: session.to_owned(),
-      approvals,
-    })
-    .await;
-  Ok(active)
-}
-
-async fn watch(
-  client: &AgentClient,
-  run: &str,
-  updates: &mpsc::Sender<Update>,
-) -> anyhow::Result<tokio::task::JoinHandle<()>> {
-  let mut events = client.watch_run(run, 0).await?;
-  let updates = updates.clone();
-  let run_id = run.to_owned();
-  Ok(tokio::spawn(async move {
-    loop {
-      match events.message().await {
-        Ok(Some(event)) => {
-          if updates.send(Update::Event(event)).await.is_err() {
-            break;
-          }
-        }
-        Ok(None) => break,
-        Err(error) => {
-          tracing::warn!(
-            operation = "run.watch",
-            outcome = "disconnected",
-            process_id = std::process::id(),
-            run_id,
-            status_code = ?error.code(),
-            "Terminal run event stream interrupted"
-          );
-          let _ = updates
-            .send(Update::Notice(format!(
-              "Event stream interrupted: {error}. Task state remains in agentd."
-            )))
-            .await;
-          break;
-        }
-      }
-    }
-  }))
 }

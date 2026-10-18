@@ -1,7 +1,11 @@
 pub mod backend;
 mod bootstrap;
+pub mod computer;
+mod computer_backend;
+mod computer_command;
 pub mod config;
 pub mod model;
+mod session_backend;
 pub mod theme;
 pub mod update;
 pub mod view;

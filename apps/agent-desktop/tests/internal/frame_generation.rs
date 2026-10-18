@@ -59,7 +59,17 @@ fn takeover_discards_every_obsolete_frame_completion(cx: &mut TestAppContext) {
   });
   let view = cx
     .update_window(window.into(), |_, window, cx| {
-      cx.new(|cx| Workbench::new(runtime, browser, window, cx))
+      cx.new(|cx| {
+        Workbench::new(
+          runtime,
+          browser,
+          fluxdi::Shared::new(crate::ComputerPort(Arc::new(
+            agent_computer_runtime::NativeComputerHost,
+          ))),
+          window,
+          cx,
+        )
+      })
     })
     .expect("workbench fixture");
   cx.update(|cx| {

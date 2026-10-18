@@ -17,7 +17,7 @@ pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
     return;
   }
   let rows = Layout::vertical([
-    Constraint::Length(2),
+    Constraint::Length(3),
     Constraint::Min(5),
     Constraint::Length(4),
     Constraint::Length(2),
@@ -29,15 +29,19 @@ pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
     Connection::Disconnected(reason) => (format!("Disconnected · {reason}"), theme.warning),
   };
   frame.render_widget(
-    Paragraph::new(Line::from(vec![
-      Span::styled(
-        " Lyonbrown ",
-        Style::default()
-          .fg(theme.accent)
-          .add_modifier(Modifier::BOLD),
-      ),
-      Span::styled(status, Style::default().fg(color)),
-    ])),
+    Paragraph::new(vec![
+      Line::from(vec![
+        Span::styled(
+          " Lyonbrown ",
+          Style::default()
+            .fg(theme.accent)
+            .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(status, Style::default().fg(color)),
+      ]),
+      Line::from(app.computer.summary()),
+    ])
+    .wrap(Wrap { trim: false }),
     rows[0],
   );
   let columns = Layout::horizontal([
@@ -98,8 +102,12 @@ pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
       .block(panel("Conversation", theme)),
     columns[1],
   );
-  let side =
-    Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).split(columns[2]);
+  let side = Layout::vertical([
+    Constraint::Percentage(35),
+    Constraint::Percentage(35),
+    Constraint::Percentage(30),
+  ])
+  .split(columns[2]);
   let tasks = if app.tasks.is_empty() {
     "No tasks".into()
   } else {
@@ -126,6 +134,17 @@ pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
       .wrap(Wrap { trim: false })
       .block(panel("Approvals", theme)),
     side[1],
+  );
+  frame.render_widget(
+    Paragraph::new(if app.computer_detail.is_empty() {
+      "/computer targets · attach window ID|display ID · detach · status"
+    } else {
+      &app.computer_detail
+    })
+    .wrap(Wrap { trim: false })
+    .scroll((app.computer_scroll, 0))
+    .block(panel("Computer · Alt+PgUp/PgDn", theme)),
+    side[2],
   );
   frame.render_widget(
     Paragraph::new(format!("{}▏", app.input))
@@ -155,7 +174,16 @@ fn compact(frame: &mut Frame, app: &App, theme: Theme) {
         .add_modifier(Modifier::BOLD),
     ),
     Line::from(connection),
+    Line::from(app.computer.summary()),
   ];
+  lines.extend(
+    app
+      .computer_detail
+      .lines()
+      .skip(usize::from(app.computer_scroll))
+      .take(3)
+      .map(|line| Line::from(line.to_owned())),
+  );
   if let Some(session) = app.selected_session() {
     lines.push(Line::from(session.title.clone()));
   }

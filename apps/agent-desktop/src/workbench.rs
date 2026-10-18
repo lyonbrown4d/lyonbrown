@@ -19,6 +19,7 @@ use std::sync::Arc;
 #[derive(Clone, Copy)]
 enum Kind {
   Browser,
+  Computer,
   Files,
   Editor,
   Diff,
@@ -71,6 +72,7 @@ impl Render for WorkbenchPanel {
     let kind = self.kind;
     let content = self.state.update(cx, |state, cx| match kind {
       Kind::Browser => state.browser_view(window, cx),
+      Kind::Computer => state.computer.clone().into_any_element(),
       Kind::Files => state.files_view(cx),
       Kind::Editor => state.editor_view(cx),
       Kind::Diff => state.diff_view(cx),
@@ -87,10 +89,11 @@ impl Render for WorkbenchPanel {
 pub fn build(
   runtime: Arc<tokio::runtime::Runtime>,
   browser: fluxdi::Shared<crate::composition::BrowserPort>,
+  computer: fluxdi::Shared<crate::composition::ComputerPort>,
   window: &mut Window,
   cx: &mut App,
 ) -> (Entity<DockArea>, Entity<Workbench>) {
-  let state = cx.new(|cx| Workbench::new(runtime, browser, window, cx));
+  let state = cx.new(|cx| Workbench::new(runtime, browser, computer, window, cx));
   let (area, _) = DockSkin::dock_area("workbench", Some(1), window, cx);
   let panels = [
     ("Browser", Kind::Browser),
@@ -98,6 +101,7 @@ pub fn build(
     ("Editor", Kind::Editor),
     ("Diff", Kind::Diff),
     ("Tasks", Kind::Tasks),
+    ("Computer", Kind::Computer),
   ];
   let layout = panels
     .into_iter()

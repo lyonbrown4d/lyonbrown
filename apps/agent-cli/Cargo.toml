@@ -20,10 +20,14 @@ agent-config = { path = "../../crates/agent-config" }
 agent-telemetry = { path = "../../crates/agent-telemetry" }
 agent-launch = { path = "../../crates/agent-launch" }
 agent-browser-runtime = { path = "../../crates/agent-browser-runtime" }
+agent-computer-runtime = { path = "../../crates/agent-computer-runtime", default-features = false }
+thiserror.workspace = true
 fluxdi.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+async-trait.workspace = true
+agent-computer = { path = "../../crates/agent-computer", default-features = false }
 agentd = { path = "../agentd" }
 agent-test-support = { path = "../../crates/agent-test-support" }
 portable-pty = "0.9"
@@ -35,6 +39,7 @@ tonic.workspace = true
 [features]
 default = []
 native-cef = ["agent-browser-runtime/native-cef"]
+native-computer = ["agent-computer-runtime/native"]
 
 [lib]
 crate-type = ["rlib", "cdylib"]

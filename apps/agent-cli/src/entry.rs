@@ -34,6 +34,9 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
     &std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
   )?;
   if let Some(command) = config.command.take() {
+    if let crate::task_command::Command::Computer { command } = command {
+      return crate::computer_command::execute(&config, command).await;
+    }
     let client = crate::bootstrap::connect_client(&config).await?;
     let value = crate::task_management::execute(&client, command).await?;
     println!("{}", serde_json::to_string_pretty(&value)?);
@@ -89,7 +92,15 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
                         KeyCode::Backspace => { app.input.pop(); }
                         KeyCode::Enter if key.modifiers.contains(KeyModifiers::ALT) || key.modifiers.contains(KeyModifiers::SHIFT) => app.input.push('\n'),
                         KeyCode::Enter => {
-                            if app.connection != Connection::Connected {
+                            if let Some(command) = crate::computer::parse_local(&app.input) {
+                                match command {
+                                    Ok(command) => {
+                                        send(&actions, Action::Computer { session: app.selected_session().map(|session| session.id.clone()), command })?;
+                                        app.input.clear();
+                                    }
+                                    Err(error) => app.computer_detail = error.to_string(),
+                                }
+                            } else if app.connection != Connection::Connected {
                                 app.notice = "Disconnected: Ctrl+R reconnects. Your draft is preserved.".into();
                             } else if let Some(session) = app.selected_session() {
                                 if !app.submitting && !app.input.trim().is_empty() {
@@ -102,6 +113,8 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
                             app.next_session();
                             if let Some(session) = app.selected_session() { send(&actions, Action::Select(session.id.clone()))?; }
                         }
+                        KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => app.computer_scroll = app.computer_scroll.saturating_add(3),
+                        KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => app.computer_scroll = app.computer_scroll.saturating_sub(3),
                         KeyCode::PageDown => app.scroll = app.scroll.saturating_add(5),
                         KeyCode::PageUp => app.scroll = app.scroll.saturating_sub(5),
                         _ => {}
@@ -114,6 +127,10 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
             _ => {}
         }
     }
+  }
+  let (done, closed) = tokio::sync::oneshot::channel();
+  if actions.send(Action::Shutdown(done)).await.is_ok() {
+    let _ = closed.await;
   }
   Ok(())
 }

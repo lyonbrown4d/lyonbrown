@@ -7,6 +7,9 @@ use state::ChatState;
 pub(super) use state::Navigation;
 use std::sync::mpsc;
 
+pub(super) const COMPUTER_WAIT_MESSAGE: &str =
+  "Wait for the computer operation to finish before changing chats or the connection.";
+
 pub(super) const SAVE_WAIT_MESSAGE: &str =
   "Wait for the file save to finish before switching chats.";
 pub(super) const BROWSER_WAIT_MESSAGE: &str =
@@ -89,6 +92,10 @@ impl Desktop {
         self.navigation.connecting = false;
         self.tasks.update(cx, |tasks, cx| {
           tasks.connection_pending = false;
+          tasks.computer.update(cx, |computer, cx| {
+            computer.connection_pending = false;
+            cx.notify();
+          });
           cx.notify();
         });
         if matches!(update, Update::Connected(..)) {
@@ -152,6 +159,11 @@ impl Desktop {
   }
 
   pub(super) fn can_change_chat(&mut self, cx: &mut Context<Self>) -> bool {
+    if self.tasks.read(cx).computer.read(cx).pending {
+      self.error = Some(COMPUTER_WAIT_MESSAGE.into());
+      cx.notify();
+      return false;
+    }
     if self.tasks.read(cx).pending_save {
       self.error = Some(SAVE_WAIT_MESSAGE.into());
       cx.notify();

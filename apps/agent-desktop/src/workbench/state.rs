@@ -37,6 +37,7 @@ pub(crate) enum Reply {
 }
 
 pub struct Workbench {
+  pub(crate) computer: Entity<crate::computer::ComputerPane>,
   pub(crate) runtime: Arc<tokio::runtime::Runtime>,
   pub(crate) browser: fluxdi::Shared<crate::composition::BrowserPort>,
   pub(crate) attachment: Option<agent_browser_runtime::RuntimeAttachment>,
@@ -85,6 +86,7 @@ impl Workbench {
   pub(crate) fn new(
     runtime: Arc<tokio::runtime::Runtime>,
     browser: fluxdi::Shared<crate::composition::BrowserPort>,
+    computer: fluxdi::Shared<crate::composition::ComputerPort>,
     window: &mut Window,
     cx: &mut Context<Self>,
   ) -> Self {
@@ -117,7 +119,10 @@ impl Workbench {
         }
       }
     });
+    let computer =
+      cx.new(|cx| crate::computer::ComputerPane::new(runtime.clone(), computer, window, cx));
     Self {
+      computer,
       runtime,
       browser,
       attachment: None,
@@ -174,6 +179,9 @@ impl Workbench {
     window: &mut Window,
     cx: &mut Context<Self>,
   ) {
+    self.computer.update(cx, |computer, cx| {
+      computer.bind(client.clone(), session.clone(), window, cx)
+    });
     self.runs = runs;
     let connected_changed = self.client.is_some() != client.is_some();
     self.client = client.clone();

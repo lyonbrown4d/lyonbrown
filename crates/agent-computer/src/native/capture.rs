@@ -22,7 +22,7 @@ fn window_data(window: &Window) -> Result<WindowObservation, DesktopError> {
   })
 }
 
-fn monitor(id: u32) -> Result<Monitor, DesktopError> {
+pub(super) fn monitor(id: u32) -> Result<Monitor, DesktopError> {
   Monitor::all()
     .map_err(failure)?
     .into_iter()
@@ -30,7 +30,7 @@ fn monitor(id: u32) -> Result<Monitor, DesktopError> {
     .ok_or(DesktopError::StaleSnapshot)
 }
 
-fn monitor_bounds(monitor: &Monitor) -> Result<Bounds, DesktopError> {
+pub(super) fn monitor_bounds(monitor: &Monitor) -> Result<Bounds, DesktopError> {
   Ok(Bounds {
     x: monitor.x().map_err(failure)?,
     y: monitor.y().map_err(failure)?,
@@ -39,7 +39,7 @@ fn monitor_bounds(monitor: &Monitor) -> Result<Bounds, DesktopError> {
   })
 }
 
-fn window(id: u32) -> Result<Window, DesktopError> {
+pub(super) fn window(id: u32) -> Result<Window, DesktopError> {
   Window::all()
     .map_err(failure)?
     .into_iter()
@@ -49,9 +49,13 @@ fn window(id: u32) -> Result<Window, DesktopError> {
 
 pub(super) fn observe(
   scope: &TargetScope,
+  target: Option<&super::targets::TargetBinding>,
   limits: ObservationLimits,
   control: &OperationControl,
 ) -> Result<DesktopObservation, DesktopError> {
+  if let Some(target) = target {
+    target.check_scope(scope)?;
+  }
   let (bounds, image, windows, windows_truncated) = match scope {
     TargetScope::Display(id) => {
       let monitor = monitor(*id)?;
@@ -83,6 +87,9 @@ pub(super) fn observe(
         return Err(DesktopError::SessionUnavailable);
       }
       let data = window_data(&window)?;
+      if let Some(target) = target {
+        target.check_identity(&TargetScope::Window(data.id), Some(data.process_id))?;
+      }
       let scale = window
         .current_monitor()
         .map_err(failure)?

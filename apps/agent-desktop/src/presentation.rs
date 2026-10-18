@@ -23,6 +23,7 @@ pub struct DesktopSnapshot {
 
 #[derive(Clone, Debug)]
 pub struct WorkbenchSnapshot {
+  pub computer: ComputerSnapshot,
   pub paths: Vec<String>,
   pub file: Option<String>,
   pub content: String,
@@ -92,6 +93,7 @@ impl Desktop {
       workbench: {
         let state = self.tasks.read(cx);
         WorkbenchSnapshot {
+          computer: state.computer.read(cx).snapshot(cx),
           paths: state.files.iter().map(|file| file.path.clone()).collect(),
           file: state.file.as_ref().map(|file| file.path.clone()),
           content: state.editor.read(cx).value().to_string(),
@@ -117,5 +119,35 @@ impl Desktop {
         }
       },
     }
+  }
+}
+
+/// Presentation-only ownership and selection; contains no native handles or credentials.
+#[derive(Clone)]
+pub struct ComputerSnapshot {
+  pub available: bool,
+  pub pending: bool,
+  pub selected_session: Option<String>,
+  pub bound_session: Option<String>,
+  pub bound_scope: Option<String>,
+  pub targets: Vec<String>,
+  pub selected_scope: Option<String>,
+  pub attached: bool,
+  pub detach_warning: bool,
+  pub error: Option<String>,
+}
+
+impl std::fmt::Debug for ComputerSnapshot {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("ComputerSnapshot")
+      .field("available", &self.available)
+      .field("pending", &self.pending)
+      .field("selected_session", &self.selected_session)
+      .field("bound_session", &self.bound_session)
+      .field("attached", &self.attached)
+      .field("detach_warning", &self.detach_warning)
+      .field("error", &self.error)
+      .finish_non_exhaustive()
   }
 }

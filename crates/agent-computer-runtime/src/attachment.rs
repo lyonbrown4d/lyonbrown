@@ -6,7 +6,7 @@ use std::{collections::HashSet, sync::Arc, time::Duration};
 use agent_client::AgentClient;
 #[cfg(feature = "native")]
 use agent_computer::{
-  DesktopBackend, DesktopSession, LeaseRegistry, TargetScope, native::NativeDesktopBackend,
+  DesktopBackend, DesktopSession, DesktopTarget, LeaseRegistry, native::NativeDesktopBackend,
 };
 use agent_protocol::v1::{ComputerRuntimeRequest, ComputerRuntimeResponse};
 use anyhow::{Context, bail, ensure};
@@ -30,28 +30,38 @@ type NativeGuard = Option<Arc<NativeDesktopLease>>;
 /// runtime and native exclusion; cancellation cannot terminate an OS thread.
 pub struct RuntimeAttachment {
   pub host_id: String,
-  task: tokio::task::JoinHandle<anyhow::Result<()>>,
+  task: Option<tokio::task::JoinHandle<anyhow::Result<()>>>,
   status: watch::Receiver<Option<String>>,
   cancellation: CancellationToken,
 }
 impl RuntimeAttachment {
   pub async fn shutdown(&mut self) -> anyhow::Result<()> {
     self.cancellation.cancel();
-    (&mut self.task)
-      .await
-      .context("computer attachment task unavailable")?
+    self.wait_closed().await
+  }
+  /// Cancellation-safe waiting; repeated close/wait does not poll a completed
+  /// JoinHandle again or restart the attachment.
+  pub async fn wait_closed(&mut self) -> anyhow::Result<()> {
+    let result = match self.task.as_mut() {
+      Some(task) => task.await.context("computer attachment task unavailable"),
+      None => return Ok(()),
+    };
+    self.task = None;
+    result?
   }
   pub fn error(&self) -> Option<String> {
     self.status.borrow().clone()
   }
   pub fn is_finished(&self) -> bool {
-    self.task.is_finished()
+    self.task.as_ref().is_none_or(|task| task.is_finished())
   }
 }
 impl Drop for RuntimeAttachment {
   fn drop(&mut self) {
     self.cancellation.cancel();
-    self.task.abort();
+    if let Some(task) = &self.task {
+      task.abort();
+    }
   }
 }
 /// Read-only native construction. The caller supplies a trusted desktop scope;
@@ -60,12 +70,17 @@ impl Drop for RuntimeAttachment {
 pub async fn attach_native(
   client: AgentClient,
   daemon_session_id: &str,
-  scope: TargetScope,
+  target: DesktopTarget,
 ) -> anyhow::Result<RuntimeAttachment> {
   let node_id = selected_node(&client, daemon_session_id).await?;
-  let (runtime, exclusion) = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
-    let mut backend = NativeDesktopBackend::new(node_id)?;
+  let construction = tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+    let scope = target.scope.clone();
+    let mut backend = NativeDesktopBackend::for_target(node_id, target)?;
     let capabilities = backend.capabilities()?;
+    ensure!(
+      capabilities.can_control(),
+      agent_computer::DesktopError::PermissionDenied("desktop control".into())
+    );
     let exclusion = NativeDesktopLease::acquire(&capabilities.identity)?;
     let session = DesktopSession {
       id: Uuid::new_v4(),
@@ -80,9 +95,11 @@ pub async fn attach_native(
       Arc::new(ComputerRuntime::new(session, Box::new(backend), leases)),
       exclusion,
     ))
-  })
-  .await
-  .context("native computer construction worker unavailable")??;
+  });
+  let (runtime, exclusion) = tokio::time::timeout(CHANNEL_DEADLINE, construction)
+    .await
+    .context("native computer construction timed out")?
+    .context("native computer construction worker unavailable")??;
   attach_validated(client, daemon_session_id, runtime, Some(exclusion)).await
 }
 
@@ -177,7 +194,7 @@ async fn attach_validated(
   });
   Ok(RuntimeAttachment {
     host_id,
-    task,
+    task: Some(task),
     status,
     cancellation,
   })

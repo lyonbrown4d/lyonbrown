@@ -1,5 +1,9 @@
+#[cfg(test)]
+extern crate self as agent_desktop;
+
 mod chrome;
 mod composition;
+mod computer;
 mod connection;
 mod message;
 mod operations;
@@ -15,9 +19,15 @@ mod workbench;
 #[path = "../tests/internal/frame_generation.rs"]
 mod frame_generation;
 
-pub use composition::{BrowserPort, ClientPort, DesktopConfiguration, DesktopModule, ExecutorPort};
+#[cfg(test)]
+#[path = "../tests/internal/computer_generation.rs"]
+mod computer_generation;
+
+pub use composition::{
+  BrowserPort, ClientPort, ComputerPort, DesktopConfiguration, DesktopModule, ExecutorPort,
+};
 use gpui_kit::*;
-pub use presentation::{DesktopSnapshot, WorkbenchSnapshot};
+pub use presentation::{ComputerSnapshot, DesktopSnapshot, WorkbenchSnapshot};
 pub use shell::Desktop;
 pub use tabs::ChatTabSnapshot;
 
@@ -78,6 +88,7 @@ pub fn run() -> anyhow::Result<std::process::ExitCode> {
   let runtime = module.executor()?.0.clone();
   let client = module.client()?;
   let browser = module.browser()?;
+  let computer = module.computer()?;
   let configuration = module.configuration()?;
   gpui_kit::application()
     .with_assets(gpui_kit::assets::Assets)
@@ -103,7 +114,7 @@ pub fn run() -> anyhow::Result<std::process::ExitCode> {
         window.activate_window();
         window.set_window_title("Lyonbrown");
         cx.new(|cx| {
-          let mut desktop = Desktop::new(runtime.clone(), client.clone(), browser.clone(), configuration.settings.clone(), configuration.data_dir.clone(), window, cx);
+          let mut desktop = Desktop::new(runtime.clone(), client.clone(), browser.clone(), computer.clone(), configuration.clone(), window, cx);
           desktop.connect(cx);
           desktop
         })

@@ -13,6 +13,7 @@ agent-client = { path = "../agent-client" }
 agent-computer = { path = "../agent-computer", default-features = false }
 agent-protocol = { path = "../agent-protocol" }
 anyhow.workspace = true
+async-trait.workspace = true
 directories.workspace = true
 fs2.workspace = true
 hex.workspace = true

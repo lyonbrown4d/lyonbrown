@@ -9,7 +9,9 @@ use crate::task_command::{Command, Dispatch, TaskCommand};
 
 /// Executes each management operation once; a transport failure never resubmits a task.
 pub async fn execute(client: &AgentClient, command: Command) -> Result<Value> {
-  let Command::Task { command } = command;
+  let Command::Task { command } = command else {
+    anyhow::bail!("computer commands require the interactive runtime entry");
+  };
   let node = client.node().await?;
   ensure!(
     node

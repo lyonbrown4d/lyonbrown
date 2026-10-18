@@ -18,7 +18,10 @@ impl Desktop {
           session_count = sessions.len(),
           "Desktop client connected"
         );
-        self.tasks.update(cx, |state, _| {
+        self.tasks.update(cx, |state, cx| {
+          state
+            .computer
+            .update(cx, |computer, cx| computer.reset_connection(window, cx));
           state.client = None;
           state.attachment = None;
           state.browser_sessions.clear();

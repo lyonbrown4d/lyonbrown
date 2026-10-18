@@ -26,6 +26,9 @@ pub struct Approval {
 #[derive(Debug)]
 pub struct App {
   pub connection: Connection,
+  pub computer: crate::computer::ComputerStatus,
+  pub computer_detail: String,
+  pub computer_scroll: u16,
   pub sessions: Vec<Session>,
   pub selected: usize,
   pub messages: Vec<Message>,
@@ -43,6 +46,9 @@ impl Default for App {
   fn default() -> Self {
     Self {
             connection: Connection::Disconnected("Not connected".into()),
+            computer: if cfg!(feature = "native-computer") { crate::computer::ComputerStatus::Detached } else { crate::computer::ComputerStatus::Unavailable },
+            computer_detail: String::new(),
+            computer_scroll: 0,
             sessions: Vec::new(),
             selected: 0,
             messages: Vec::new(),

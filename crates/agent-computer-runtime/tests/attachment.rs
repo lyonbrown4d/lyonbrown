@@ -83,7 +83,18 @@ async fn attachment_checks_selected_session_and_authenticated_node_before_hello(
     .await
     .expect("valid attachment");
   let _hello = server.response().await;
+  {
+    use std::{
+      future::{Future, poll_fn},
+      task::Poll,
+    };
+    let mut waiting = Box::pin(attachment.wait_closed());
+    assert!(poll_fn(|cx| Poll::Ready(waiting.as_mut().poll(cx).is_pending())).await);
+    // Cancelling a wait future must retain its task for explicit shutdown.
+  }
   attachment.shutdown().await.expect("shutdown");
+  attachment.wait_closed().await.expect("already closed");
+  attachment.shutdown().await.expect("idempotent shutdown");
   assert!(attachment.is_finished());
   assert!(attachment.error().is_none());
   assert_eq!(host.gate.input_count(), 0);

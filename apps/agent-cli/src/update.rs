@@ -5,6 +5,11 @@ use crate::{
 
 pub fn apply(app: &mut App, update: Update) {
   match update {
+    Update::Computer { status, detail } => {
+      app.computer = status;
+      app.computer_detail = detail;
+      app.computer_scroll = 0;
+    }
     Update::Connected(sessions) => {
       let selected = app.selected_session().map(|session| session.id.clone());
       app.connection = Connection::Connected;

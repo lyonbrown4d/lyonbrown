@@ -8,6 +8,11 @@ use gpui_kit::*;
 
 impl Desktop {
   pub(super) fn connect(&mut self, cx: &mut Context<Self>) {
+    if self.tasks.read(cx).computer.read(cx).pending {
+      self.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
+      cx.notify();
+      return;
+    }
     if self.tasks.read(cx).pending_browser_operation {
       self.error = Some(crate::tabs::BROWSER_WAIT_MESSAGE.into());
       cx.notify();
@@ -19,6 +24,9 @@ impl Desktop {
     self.navigation.connecting = true;
     self.tasks.update(cx, |tasks, cx| {
       tasks.connection_pending = true;
+      tasks.computer.update(cx, |computer, cx| {
+        computer.begin_connection(cx);
+      });
       cx.notify();
     });
     self.error = None;

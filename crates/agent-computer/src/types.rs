@@ -22,6 +22,26 @@ pub enum TargetScope {
   Window(u32),
 }
 
+/// Read-only native target metadata. Labels can contain private desktop content.
+#[derive(Clone, Eq, PartialEq, Serialize)]
+pub struct DesktopTarget {
+  pub scope: TargetScope,
+  pub label: String,
+  pub process_id: Option<u32>,
+  pub bounds: Bounds,
+}
+
+impl std::fmt::Debug for DesktopTarget {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter
+      .debug_struct("DesktopTarget")
+      .field("scope", &self.scope)
+      .field("process_id", &self.process_id)
+      .field("bounds", &self.bounds)
+      .finish_non_exhaustive()
+  }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Bounds {
   pub x: i32,

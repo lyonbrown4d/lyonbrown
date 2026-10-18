@@ -1,5 +1,6 @@
 // Shared native fixtures expose helpers used by different integration test binaries.
 #![allow(dead_code)]
+pub mod computer;
 mod workspace;
 use agent_desktop::{Desktop, DesktopConfiguration, DesktopModule, DesktopSnapshot};
 use agent_test_support::{MockModelServer, ScriptedReply, StandardProtocol};
@@ -26,7 +27,7 @@ pub struct Harness {
 
 impl Harness {
   pub fn new(cx: &mut TestAppContext, replies: Vec<ScriptedReply>) -> Self {
-    Self::with_optional_write_gate(cx, replies, None)
+    Self::with_optional_write_gate(cx, replies, None, None)
   }
 
   pub fn with_write_gate(
@@ -34,13 +35,21 @@ impl Harness {
     replies: Vec<ScriptedReply>,
     gate: Arc<tokio::sync::Semaphore>,
   ) -> Self {
-    Self::with_optional_write_gate(cx, replies, Some(gate))
+    Self::with_optional_write_gate(cx, replies, Some(gate), None)
+  }
+
+  pub fn with_computer(
+    cx: &mut TestAppContext,
+    factory: Arc<dyn agent_computer_runtime::ComputerHostFactory>,
+  ) -> Self {
+    Self::with_optional_write_gate(cx, Vec::new(), None, Some(factory))
   }
 
   fn with_optional_write_gate(
     cx: &mut TestAppContext,
     replies: Vec<ScriptedReply>,
     write_gate: Option<Arc<tokio::sync::Semaphore>>,
+    computer: Option<Arc<dyn agent_computer_runtime::ComputerHostFactory>>,
   ) -> Self {
     let runtime = Arc::new(
       tokio::runtime::Builder::new_multi_thread()
@@ -106,12 +115,14 @@ impl Harness {
         );
       let browser_service = agentd::browser_service(daemon.clone());
       let runtime_service = agentd::runtime_service(daemon.clone());
+      let computer_service = agentd::computer_runtime_service(daemon.clone());
       tokio::spawn(async move {
         tonic::transport::Server::builder()
           .add_service(service)
           .add_service(workspace_service)
           .add_service(browser_service)
           .add_service(runtime_service)
+          .add_service(computer_service)
           .serve_with_incoming_shutdown(TcpListenerStream::new(listener), stop.cancelled_owned())
           .await
           .expect("daemon RPC server");
@@ -135,8 +146,14 @@ impl Harness {
       data_dir: directory.path().into(),
       browser_executable: std::env::var_os("LYONBROWN_NATIVE_CLIENT").map(std::path::PathBuf::from),
     }));
+    let configuration = module
+      .configuration()
+      .expect("production desktop configuration");
     let connector = module.client().expect("production client port");
     let browser = module.browser().expect("production browser port");
+    let computer = computer
+      .map(|factory| fluxdi::Shared::new(agent_desktop::ComputerPort(factory)))
+      .unwrap_or_else(|| module.computer().expect("production computer port"));
     let (window, view) = cx.update(|cx| {
       agent_desktop::init(cx);
       let (window, view) = gpui_kit::open_window(
@@ -154,8 +171,8 @@ impl Harness {
               runtime.clone(),
               connector,
               browser,
-              settings,
-              directory.path().into(),
+              computer,
+              configuration,
               window,
               cx,
             )

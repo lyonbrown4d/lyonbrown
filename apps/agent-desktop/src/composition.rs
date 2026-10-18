@@ -8,6 +8,15 @@ pub struct DesktopConfiguration {
   pub browser_executable: Option<PathBuf>,
 }
 
+/// Interactive computer host construction is injected independently from UI state.
+pub struct ComputerPort(pub Arc<dyn agent_computer_runtime::ComputerHostFactory>);
+
+fn computer() -> Result<Shared<ComputerPort>, Error> {
+  Ok(Shared::new(ComputerPort(Arc::new(
+    agent_computer_runtime::NativeComputerHost,
+  ))))
+}
+
 pub struct ExecutorPort(pub Arc<tokio::runtime::Runtime>);
 pub struct ClientPort(Shared<DesktopConfiguration>);
 pub struct BrowserPort {
@@ -71,5 +80,7 @@ static_module! {
     client: ClientPort = client(configuration);
     #[scope(root)]
     browser: BrowserPort = browser(configuration);
+    #[scope(root)]
+    computer: ComputerPort = computer();
   }
 }

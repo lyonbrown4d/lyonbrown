@@ -96,8 +96,10 @@ fn main() -> anyhow::Result<std::process::ExitCode> {
     data_dir: directory.path().into(),
     browser_executable: None,
   }));
+  let configuration = module.configuration()?;
   let connector = module.client()?;
   let browser = module.browser()?;
+  let computer = module.computer()?;
   std::fs::write(
     directory.path().join("acceptance.json"),
     serde_json::to_vec_pretty(&serde_json::json!({
@@ -115,13 +117,13 @@ fn main() -> anyhow::Result<std::process::ExitCode> {
   println!("Native acceptance endpoint: {}", settings.endpoint);
   println!("Native browser fixture URL: {browser_url}");
   gpui_kit::application().with_assets(gpui_kit::assets::Assets).run({
-    let runtime=runtime.clone();let data_dir=directory.path().to_path_buf();
+    let runtime=runtime.clone();
     move|cx| {
       agent_desktop::init(cx);
       cx.on_window_closed(|cx,_|if cx.windows().is_empty(){cx.quit();}).detach();
       if let Err(error)=gpui_kit::open_window(WindowOptions {window_bounds:Some(WindowBounds::Windowed(Bounds::centered(None,size(px(1440.),px(920.)),cx))),..gpui_kit::component::TitleBar::window_options()},cx,move|window,cx| {
         window.set_window_title("Lyonbrown · native acceptance · local model fixture");window.activate_window();
-        cx.new(|cx|Desktop::new(runtime,connector,browser,settings,data_dir,window,cx))
+        cx.new(|cx|Desktop::new(runtime,connector,browser,computer,configuration,window,cx))
       }) {tracing::error!(event="native_acceptance_window_failed",error=%error,"Native acceptance window failed");cx.quit();}
       cx.activate(true);
     }

@@ -84,7 +84,8 @@ impl Desktop {
                   .disabled(
                     self.any_active_work()
                       || self.tasks.read(cx).blocks_connection(cx)
-                      || self.tasks.read(cx).pending_browser_operation,
+                      || self.tasks.read(cx).pending_browser_operation
+                      || self.tasks.read(cx).computer.read(cx).pending,
                   )
                   .on_click(cx.listener(|this, _, _, cx| this.connect(cx))),
               )
@@ -98,7 +99,8 @@ impl Desktop {
           .when(
             self.any_active_work()
               || self.tasks.read(cx).blocks_connection(cx)
-              || self.tasks.read(cx).pending_browser_operation,
+              || self.tasks.read(cx).pending_browser_operation
+              || self.tasks.read(cx).computer.read(cx).pending,
             |this| {
               this.child(
                 div()

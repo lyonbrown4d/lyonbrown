@@ -184,3 +184,58 @@ fn session_failure_during_text_remains_uncertain_and_stops_remaining_input() {
   assert_eq!(outcome, ActionOutcome::Uncertain(DesktopError::Locked));
   assert_eq!(effects.borrow().text, "a");
 }
+
+#[test]
+fn pinned_process_reuse_rejects_before_input_and_stops_remaining_text() {
+  let binding = crate::native::targets::TargetBinding::new(&DesktopTarget {
+    scope: TargetScope::Window(42),
+    process_id: Some(7),
+    label: "private title".into(),
+    bounds: Bounds {
+      x: 0,
+      y: 0,
+      width: 2,
+      height: 2,
+    },
+  })
+  .expect("selected target");
+  let effects = Rc::new(RefCell::new(Effects::default()));
+  let outcome = execute_with_input(
+    &DesktopAction::Click {
+      x: 1,
+      y: 1,
+      button: MouseButton::Left,
+    },
+    &guard(),
+    &mut Input(effects.clone()),
+    || binding.check_identity(&TargetScope::Window(42), Some(8)),
+    || Ok(()),
+  );
+  assert_eq!(
+    outcome,
+    ActionOutcome::Rejected(DesktopError::StaleSnapshot)
+  );
+  assert_eq!(effects.borrow().moves, 0);
+  assert_eq!(effects.borrow().steps, 0);
+
+  let outcome = execute_with_input(
+    &DesktopAction::Text { text: "abc".into() },
+    &guard(),
+    &mut Input(effects.clone()),
+    || binding.check_identity(&TargetScope::Window(42), Some(7)),
+    || {
+      let pid = if effects.borrow().text.is_empty() {
+        7
+      } else {
+        8
+      };
+      binding.check_identity(&TargetScope::Window(42), Some(pid))
+    },
+  );
+  assert_eq!(
+    outcome,
+    ActionOutcome::Uncertain(DesktopError::StaleSnapshot)
+  );
+  assert_eq!(effects.borrow().text, "a");
+  assert_eq!(effects.borrow().steps, 0);
+}
