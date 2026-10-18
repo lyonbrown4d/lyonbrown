@@ -36,7 +36,9 @@ jobs:
       CARGO_TERM_COLOR: always
       CARGO_INCREMENTAL: '0'
       # Both inference adapters are compiled into the same daemon. No model download.
-      PRODUCT_FEATURES: agent-cli/native-cef,agent-desktop/native-cef,agent-launch/cef-bundle,agentd/local-llama,agentd/local-mistral
+      DAEMON_FEATURES: local-llama,local-mistral
+      CLIENT_FEATURES: agent-cli/native-cef,agent-desktop/native-cef,agent-cli/native-computer,agent-desktop/native-computer
+      PRODUCT_FEATURES: agent-cli/native-cef,agent-desktop/native-cef,agent-cli/native-computer,agent-desktop/native-computer,agent-launch/cef-bundle,agentd/local-llama,agentd/local-mistral
       CARGO_BUILD_JOBS: '1'
       CMAKE_BUILD_PARALLEL_LEVEL: '1'
       CARGO_PROFILE_DEV_DEBUG: '0'
@@ -122,10 +124,22 @@ jobs:
         run: cargo clean --profile dev
       - name: Build native products with both CPU inference adapters
         run: |
-          cargo build --release --locked -p agent-cli -p agent-desktop -p agentd -p agent-launch --bins --features "$PRODUCT_FEATURES"
+          # Separate Cargo graphs keep client SDK features out of the daemon artifact.
+          cargo build --release --locked -p agentd --bin agentd --features "$DAEMON_FEATURES"
+          cargo build --release --locked -p agent-cli -p agent-desktop --bins --features "$CLIENT_FEATURES"
+          cargo build --release --locked -p agent-launch --bins --features cef-bundle
       - name: Build Windows sandbox client DLLs and release PDBs
         if: runner.os == 'Windows'
-        run: cargo build --release --locked -p agent-cli -p agent-desktop --lib --features agent-cli/native-cef,agent-desktop/native-cef
+        run: cargo build --release --locked -p agent-cli -p agent-desktop --lib --features "$CLIENT_FEATURES"
+      - name: Verify macOS daemon stays independent of client SDKs
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist
+          otool -L target/release/agentd > dist/daemon-linkage-inspection.txt
+          if grep -E '/(AppKit|CoreGraphics|ApplicationServices|ScreenCaptureKit)\.framework/|Chromium Embedded Framework' dist/daemon-linkage-inspection.txt; then
+            printf '%s\n' 'agentd unexpectedly links a client native SDK' >&2
+            exit 1
+          fi
       - name: Reject incomplete standalone native client archives
         if: runner.os != 'macOS'
         run: |
@@ -155,7 +169,7 @@ jobs:
       - name: Verify complete native payloads and record artifact integrity
         run: |
           python packaging/ci/verify.py '${{ matrix.target }}' --artifacts dist
-          python -c 'import json,os,pathlib; p=pathlib.Path("dist/build.json"); p.write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "features": os.environ["PRODUCT_FEATURES"], "target": "${{ matrix.target }}", "runner_image": os.environ.get("ImageVersion", "unknown"), "signed": False}, indent=2)+"\n")'
+          python -c 'import json,os,pathlib; p=pathlib.Path("dist/build.json"); p.write_text(json.dumps({"commit": os.environ["GITHUB_SHA"], "features": os.environ["PRODUCT_FEATURES"], "daemon_features": os.environ["DAEMON_FEATURES"].split(","), "client_features": os.environ["CLIENT_FEATURES"].split(","), "packager_features": ["cef-bundle"], "target": "${{ matrix.target }}", "runner_image": os.environ.get("ImageVersion", "unknown"), "signed": False}, indent=2)+"\n")'
       - name: Upload reviewable native packages
         uses: actions/upload-artifact@v4
         with:
