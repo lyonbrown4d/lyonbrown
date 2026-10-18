@@ -76,6 +76,18 @@ pyte 0.8.2 parsed the recorded ANSI output for terminal-state rendering. **These
 
 Inspect the [approval text](evidence/tui-pty-approval.txt), [completed text](evidence/tui-pty-completed.txt) and [capture metadata](evidence/tui-pty-capture.json). They establish this PTY workflow, without replacing native-terminal font, color or input-method acceptance.
 
+## macOS package-content checks
+
+The 0.1.0 ARM64 release build completed on macOS 27.0.1. Client builds enable `native-cef` and `native-computer`; agentd includes both `local-llama` and `local-mistral` CPU inference adapters. The [package verification record](evidence/native-packages-macos.json) lists build features, executable and packaging-tool digests, and the sizes and SHA-256 hashes of five artifacts.
+
+| Format | Artifacts | Checks performed |
+| --- | --- | --- |
+| PKG | One each for CLI and Desktop | Component metadata, complete app trees, shared agentd, entry links and BOM inventories |
+| tar.gz | One each for CLI and Desktop | Final archive entries match staging types, modes, contents and links |
+| DMG | One for Desktop | Read-only mounted app tree matches staging; image detached afterward |
+
+Each client's five Helpers match its main executable digest, and all 232 CEF files match the pinned SDK. Both PKGs are unsigned and the artifacts are not notarized. These records cover generation and package contents; operating-system installation, native service lifecycle, upgrades and rollback require separate runtime acceptance. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md) for build commands.
+
 ## Capabilities outside this screenshot set
 
 These images do not show model-driven browser semantic actions or native terminal-window presentation. Synthetic-host protocol regressions and actual autonomous CEF acceptance have separate records. See [Local tools and browser actions](tools.md).

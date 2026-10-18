@@ -76,6 +76,18 @@ CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium �
 
 可核对[审批文本](evidence/tui-pty-approval.txt)、[完成文本](evidence/tui-pty-completed.txt)及[记录元数据](evidence/tui-pty-capture.json)。它们证明本次 PTY 工作流，不替代原生终端窗口的字体、颜色和输入法验收。
 
+## macOS 安装包内容校验
+
+0.1.0 的 ARM64 发布构建在 macOS 27.0.1 完成。客户端构建启用 `native-cef` 和 `native-computer`，agentd 包含 `local-llama` 和 `local-mistral` 两种 CPU 推理适配器。[安装包校验记录](evidence/native-packages-macos.json)列出构建配置、程序与打包工具摘要，以及五份产物的大小和 SHA-256。
+
+| 格式 | 产物 | 实际检查 |
+| --- | --- | --- |
+| PKG | CLI、Desktop 各一份 | 组件元数据、完整应用目录、共享 agentd、入口链接和 BOM 文件清单 |
+| tar.gz | CLI、Desktop 各一份 | 最终归档与打包目录的文件类型、权限、内容和链接逐项一致 |
+| DMG | Desktop 一份 | 只读挂载后的应用目录与打包目录一致，检查后卸载 |
+
+每个客户端的 5 个 Helper 均与对应主程序的摘要一致，232 个 CEF 文件与固定 SDK 一致。两份 PKG 未签名，产物未经过公证。这些记录覆盖生成与包内容校验；操作系统实际安装、原生服务生命周期、升级和回滚仍需单独运行验收。构建命令见[本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
+
 ## 尚未由本组截图覆盖的能力
 
 本组截图未展示模型浏览器语义操作或原生终端窗口呈现。模型工具的合成 host 协议回归与真实 CEF 自主操作验收分别保留，见[本地工具与浏览器操作](tools.md)。
