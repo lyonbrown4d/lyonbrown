@@ -1,20 +1,27 @@
 //! Canonical per-user native desktop exclusion, independent of client data paths.
-use std::{
-  fs::{self, File, OpenOptions},
-  path::Path,
-  sync::Arc,
-};
+use std::{fs::File, sync::Arc};
 
+#[cfg(any(feature = "native", test))]
 use agent_computer::DesktopIdentity;
+#[cfg(any(feature = "native", test))]
 use anyhow::{Context, ensure};
+#[cfg(feature = "native")]
 use directories::ProjectDirs;
+#[cfg(any(feature = "native", test))]
 use sha2::{Digest, Sha256};
+#[cfg(any(feature = "native", test))]
+use std::{
+  fs::{self, OpenOptions},
+  path::Path,
+};
 
 pub(crate) struct NativeDesktopLease {
   _file: File,
 }
 
+#[cfg(any(feature = "native", test))]
 impl NativeDesktopLease {
+  #[cfg(feature = "native")]
   pub(crate) fn acquire(identity: &DesktopIdentity) -> anyhow::Result<Arc<Self>> {
     let directories = ProjectDirs::from("org", "Lyonbrown", "Lyonbrown")
       .context("native runtime data directory unavailable")?;

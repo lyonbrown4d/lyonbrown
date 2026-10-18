@@ -9,6 +9,7 @@ mod action;
 mod backend;
 mod content;
 mod lease;
+#[cfg(feature = "native")]
 pub mod native;
 mod observation;
 mod prepared;

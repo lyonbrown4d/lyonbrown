@@ -43,6 +43,8 @@ BrowserRuntime is a crate embedded in the client; CEF helpers use the client’s
 
 ## Native desktop execution boundary
 
+Native SDKs require the explicit `native` feature. `agent-computer-runtime/native` enables `agent-computer/native` and the `attach_native` factory. Default builds retain the protocol, engine and injectable `attach_host` without capture or input SDKs. The daemon uses this default dependency path.
+
 `agent-computer` encapsulates screen observation, input and desktop leases. `agent-computer-runtime` retains prepared actions in process and checks their daemon Session, Run and `owner_epoch` binding. Execution messages refer to the original preparation, action identity and content digest; they cannot replace the input. After approval, the runtime observes again using the original lease and limits. Changed content, an invalid lease or cancellation prevents input. The preparation is consumed before refresh or input, so a failure cannot replay that action.
 
 The client embeds a native host and connects through `attach_native`. Before attachment it checks the authenticated daemon node and selected session ownership. The handshake fixes the desktop scope; the daemon verifies identity again and records the session's `owner_epoch`. A session permits one host attachment. Every capability inspection checks Run state and session ownership before dispatch and after response. Attaching grants no capture or input permission.

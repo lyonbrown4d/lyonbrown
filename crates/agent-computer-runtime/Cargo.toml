@@ -4,9 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = []
+native = ["agent-computer/native"]
+
 [dependencies]
 agent-client = { path = "../agent-client" }
-agent-computer = { path = "../agent-computer" }
+agent-computer = { path = "../agent-computer", default-features = false }
 agent-protocol = { path = "../agent-protocol" }
 anyhow.workspace = true
 directories.workspace = true

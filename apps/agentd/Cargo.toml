@@ -20,8 +20,8 @@ agent-config = { path = "../../crates/agent-config" }
 agent-decision = { path = "../../crates/agent-decision" }
 agent-distributed = { path = "../../crates/agent-distributed" }
 agent-browser = { path = "../../crates/agent-browser" }
-agent-computer = { path = "../../crates/agent-computer" }
-agent-computer-runtime = { path = "../../crates/agent-computer-runtime" }
+agent-computer = { path = "../../crates/agent-computer", default-features = false }
+agent-computer-runtime = { path = "../../crates/agent-computer-runtime", default-features = false }
 uuid.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }
 agent-telemetry = { path = "../../crates/agent-telemetry" }

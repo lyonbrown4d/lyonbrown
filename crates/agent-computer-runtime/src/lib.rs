@@ -11,6 +11,8 @@ mod model;
 mod native_lease;
 pub mod wire;
 
-pub use attachment::{RuntimeAttachment, attach_host, attach_native};
+#[cfg(feature = "native")]
+pub use attachment::attach_native;
+pub use attachment::{RuntimeAttachment, attach_host};
 pub use engine::{ComputerRuntime, MAX_TIMEOUT_MS};
 pub use model::*;

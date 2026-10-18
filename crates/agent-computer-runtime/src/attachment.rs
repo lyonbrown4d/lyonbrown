@@ -1,11 +1,10 @@
 //! Authenticated reverse channel embedded in the interactive client process.
-use std::{
-  collections::HashSet,
-  sync::{Arc, OnceLock},
-  time::Duration,
-};
+#[cfg(feature = "native")]
+use std::sync::OnceLock;
+use std::{collections::HashSet, sync::Arc, time::Duration};
 
 use agent_client::AgentClient;
+#[cfg(feature = "native")]
 use agent_computer::{
   DesktopBackend, DesktopSession, LeaseRegistry, TargetScope, native::NativeDesktopBackend,
 };
@@ -57,6 +56,7 @@ impl Drop for RuntimeAttachment {
 }
 /// Read-only native construction. The caller supplies a trusted desktop scope;
 /// web content and models cannot create or expand that scope.
+#[cfg(feature = "native")]
 pub async fn attach_native(
   client: AgentClient,
   daemon_session_id: &str,

@@ -43,6 +43,8 @@ BrowserRuntime 以 crate 嵌入客户端，CEF helper 通过客户端私有模�
 
 ## 原生桌面执行边界
 
+原生 SDK 通过显式 `native` feature 启用：`agent-computer-runtime/native` 同时启用 `agent-computer/native`，并提供 `attach_native` 工厂。默认构建保留协议、执行引擎和可注入的 `attach_host`，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。
+
 `agent-computer` 封装屏幕观察、输入和桌面租约；`agent-computer-runtime` 在进程内保留准备好的操作，并按 daemon Session、Run 和 `owner_epoch` 校验调用归属。执行消息只引用原准备记录、动作标识和内容摘要，不能替换输入内容。等待审批后，Runtime 使用原租约和原观察限制重新观察；内容变化、租约失效或取消都会阻止输入。准备记录在刷新或输入前消耗，失败后也不能重放同一动作。
 
 原生宿主由客户端进程嵌入，通过 `attach_native` 连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 `owner_epoch`。每个会话只允许一个宿主连接，每次能力检查均在发送前和接收后核对 Run 状态及会话归属。连接成功本身不授予截图或输入权限。
