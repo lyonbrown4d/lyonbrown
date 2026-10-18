@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b518decf.js";
+            window.path_to_searchindex_js = "searchindex-15893738.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -221,6 +221,7 @@
 <p>The local-inference boundary is inference adapters for <code>mistral.rs</code> and <code>llama-cpp-2</code>; inference libraries do not own sessions, tools or the agent loop. See <a href="models.html">Models and execution decisions</a> for configuration and authority, and <a href="development.html">Development and verification</a> for separate real-model checks.</p>
 <p>BrowserRuntime is a crate embedded in the client; CEF helpers use the client’s private runtime mode, with browser execution isolated from GPUI UI state. Browser capability is unavailable without a matching CEF SDK and runtime resources. Persistent profile storage and restoration of live pages have different semantics; a profile directory does not establish restored page state.</p>
 <h2 id="native-desktop-execution-boundary"><a class="header" href="#native-desktop-execution-boundary">Native desktop execution boundary</a></h2>
+<p>Native SDKs require the explicit <code>native</code> feature. <code>agent-computer-runtime/native</code> enables <code>agent-computer/native</code> and the <code>attach_native</code> factory. Default builds retain the protocol, engine and injectable <code>attach_host</code> without capture or input SDKs. The daemon uses this default dependency path.</p>
 <p><code>agent-computer</code> encapsulates screen observation, input and desktop leases. <code>agent-computer-runtime</code> retains prepared actions in process and checks their daemon Session, Run and <code>owner_epoch</code> binding. Execution messages refer to the original preparation, action identity and content digest; they cannot replace the input. After approval, the runtime observes again using the original lease and limits. Changed content, an invalid lease or cancellation prevents input. The preparation is consumed before refresh or input, so a failure cannot replay that action.</p>
 <p>The client embeds a native host and connects through <code>attach_native</code>. Before attachment it checks the authenticated daemon node and selected session ownership. The handshake fixes the desktop scope; the daemon verifies identity again and records the session’s <code>owner_epoch</code>. A session permits one host attachment. Every capability inspection checks Run state and session ownership before dispatch and after response. Attaching grants no capture or input permission.</p>
 <p>An attachment permits one command in flight, with native calls and message codecs running on a blocking worker. Duplicate requests, overlapping commands, malformed messages or disconnects cancel the attachment without replaying input. Calls already inside the OS still need to drain; cancellation does not terminate their threads. A native host holds a file lock in the user data directory keyed by the OS graphical session. Changing daemon node identity or a configurable client data path cannot split this lock. The executing worker retains it until the call drains.</p>

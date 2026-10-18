@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b518decf.js";
+            window.path_to_searchindex_js = "searchindex-15893738.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -203,6 +203,10 @@
     D--&gt;&gt;UI: Durable events and result
 </code></pre>
 <p>The runtime delegates tools to host adapters, which own authorization, workspace confinement and cancellation. Harness provider retries are disabled; retry policy belongs to durable orchestration. Recording intent before a side effect allows recovery to distinguish unexecuted work from unknown outcomes.</p>
+<h2 id="images-in-snapshots-and-events"><a class="header" href="#images-in-snapshots-and-events">Images in snapshots and events</a></h2>
+<p>Harness snapshots retain original message content. The separate <code>entry_appended</code> and <code>record_appended</code> projections retain only <code>type</code>, <code>mimeType</code>, <code>dataRedacted</code> and <code>encodedBytes</code> for image blocks, without Base64 content. <code>encodedBytes</code> is the byte length of the original Base64 string. This applies to tool results, compaction tails, execution intents, queued messages and stream-start messages. Store, Outbox and <code>WatchRun</code> carry the same projected payload. Projection happens when Runtime commits new events; reading existing events does not recompute their payloads.</p>
+<p>Projection follows known message schemas rather than recursively removing arbitrary JSON <code>data</code> fields. Tool arguments and custom business data remain the responsibility of their adapters. Unrecognized queue payloads or frames expose only a <code>projectionOmitted</code> marker. Input-image Debug output includes only MIME and length.</p>
+<p>Image-bearing session recovery is unavailable. The recovery entry point retains the snapshot and returns an explicit error without calling a model or replaying a request. rpi-ai 0.5.0 emits duplicate <code>type</code> keys in raw JSON serialization; see <a href="https://github.com/bigfish1913/pi-rust/issues/59">upstream issue #59</a>. No snapshot normalization workaround is included. The daemon’s <code>StartRun</code> still accepts text only; internal Runtime image input does not establish client image-session support.</p>
 <h2 id="disconnection-and-restart"><a class="header" href="#disconnection-and-restart">Disconnection and restart</a></h2>
 <p>After reconnecting, query runs in the original session. Events are ordered by run ID and <code>cursor</code>; <code>WatchRun.after_cursor</code> requests later events. A disconnected stream does not establish task failure and must not trigger prompt replay.</p>
 <p>The store’s <code>recover_interrupted</code> marks executing records without a durable terminal result as <code>uncertain</code>. Accepted work that has not started is handled separately from work already executing. Runtime recovery checks unfinished Harness tool records: a missing committed tool result produces <code>Uncertain</code> instead of guessing whether the side effect happened.</p>

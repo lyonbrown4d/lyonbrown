@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d280e104.js";
+            window.path_to_searchindex_js = "searchindex-0a45cf4f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -628,6 +628,10 @@ capabilities = ["workspace.read"]
     D--&gt;&gt;UI: Durable events and result
 </code></pre>
 <p>Runtime 将工具交给主机适配器执行，主机负责授权、工作区约束和取消。Harness 自身的 provider 自动重试被禁用；重试策略属于持久任务编排。先保存执行意图，再产生副作用，是恢复时区分「未执行」与「结果未知」的依据。</p>
+<h2 id="快照与事件中的图像"><a class="header" href="#快照与事件中的图像">快照与事件中的图像</a></h2>
+<p>Harness 快照保留原始消息内容。<code>entry_appended</code> 和 <code>record_appended</code> 则使用独立投影：图像块只保留 <code>type</code>、<code>mimeType</code>、<code>dataRedacted</code> 和 <code>encodedBytes</code>，不携带 Base64 内容。<code>encodedBytes</code> 表示原 Base64 字符串的字节数。该规则也适用于工具结果、压缩保留的消息、执行意图、排队消息和流式起始消息；Store、Outbox 与 <code>WatchRun</code> 使用同一投影载荷。投影发生在 Runtime 提交新事件时，读取既有事件不会重新计算载荷。</p>
+<p>投影按已知消息类型处理图像，不递归删除任意 JSON 中的 <code>data</code> 字段。工具参数和自定义业务数据仍由对应适配器约束；无法识别的排队载荷或消息帧只返回 <code>projectionOmitted</code> 标记。输入图像的调试输出只含 MIME 和长度。</p>
+<p>含图像会话的恢复暂不开放。恢复入口保留原快照并明确返回不可用，不调用模型或重放请求。原因是 rpi-ai 0.5.0 的原始 JSON 序列化会产生重复的 <code>type</code> 字段，见<a href="https://github.com/bigfish1913/pi-rust/issues/59">上游问题 #59</a>。代码没有加入快照规范化适配。daemon 的 <code>StartRun</code> 接口仍只接收文本；Runtime 内部的图像输入不代表客户端支持图像会话。</p>
 <h2 id="断线与重启"><a class="header" href="#断线与重启">断线与重启</a></h2>
 <p>客户端断线后，使用原会话重新查询运行状态。事件按运行 ID 和 <code>cursor</code> 排序，<code>WatchRun</code> 的 <code>after_cursor</code> 用于请求后续事件。事件流断开不能证明任务失败，也不能触发 prompt 重放。</p>
 <p>存储层的 <code>recover_interrupted</code> 将执行中而没有持久终态的记录标记为 <code>uncertain</code>。尚未开始的 <code>accepted</code> 记录与已经进入执行的记录分开处理。Runtime 恢复 Harness 会话时检查未完成的工具记录：工具结果未提交时返回 <code>Uncertain</code>，不会猜测副作用是否发生。</p>
@@ -909,6 +913,7 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&
 <p>本地推理的工程边界是 <code>mistral.rs</code> 与 <code>llama-cpp-2</code> 推理适配；推理库不接管 Session、Tools 或 Agent Loop。模型配置与决策权限见<a href="#模型与执行决策">模型与执行决策</a>，真实模型的独立运行方法见<a href="#开发与验证">开发与验证</a>。</p>
 <p>BrowserRuntime 以 crate 嵌入客户端，CEF helper 通过客户端私有模式运行，浏览器执行与 GPUI UI 状态隔离。没有匹配的 CEF SDK 和运行资源时，浏览器能力不能被视为可用。Profile 的持久化与活页面恢复分开说明，避免把磁盘目录存在误认为网页状态已经恢复。</p>
 <h2 id="原生桌面执行边界"><a class="header" href="#原生桌面执行边界">原生桌面执行边界</a></h2>
+<p>原生 SDK 通过显式 <code>native</code> feature 启用：<code>agent-computer-runtime/native</code> 同时启用 <code>agent-computer/native</code>，并提供 <code>attach_native</code> 工厂。默认构建保留协议、执行引擎和可注入的 <code>attach_host</code>，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。</p>
 <p><code>agent-computer</code> 封装屏幕观察、输入和桌面租约；<code>agent-computer-runtime</code> 在进程内保留准备好的操作，并按 daemon Session、Run 和 <code>owner_epoch</code> 校验调用归属。执行消息只引用原准备记录、动作标识和内容摘要，不能替换输入内容。等待审批后，Runtime 使用原租约和原观察限制重新观察；内容变化、租约失效或取消都会阻止输入。准备记录在刷新或输入前消耗，失败后也不能重放同一动作。</p>
 <p>原生宿主由客户端进程嵌入，通过 <code>attach_native</code> 连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 <code>owner_epoch</code>。每个会话只允许一个宿主连接，每次能力检查均在发送前和接收后核对 Run 状态及会话归属。连接成功本身不授予截图或输入权限。</p>
 <p>连接只允许一个执行中的命令，原生调用和消息编解码在阻塞线程执行。重复请求、重叠命令、非法消息或断线会取消连接，不自动重放输入。已经进入操作系统的调用仍需实际结束；取消不会强行终止线程。原生宿主使用用户数据目录中的文件锁，按操作系统图形会话互斥，改变 daemon 节点标识或客户端数据目录不能绕过这把锁。执行线程持有文件锁至调用结束。</p>

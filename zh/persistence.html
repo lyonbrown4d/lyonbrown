@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d280e104.js";
+            window.path_to_searchindex_js = "searchindex-0a45cf4f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -203,6 +203,10 @@
     D--&gt;&gt;UI: Durable events and result
 </code></pre>
 <p>Runtime 将工具交给主机适配器执行，主机负责授权、工作区约束和取消。Harness 自身的 provider 自动重试被禁用；重试策略属于持久任务编排。先保存执行意图，再产生副作用，是恢复时区分「未执行」与「结果未知」的依据。</p>
+<h2 id="快照与事件中的图像"><a class="header" href="#快照与事件中的图像">快照与事件中的图像</a></h2>
+<p>Harness 快照保留原始消息内容。<code>entry_appended</code> 和 <code>record_appended</code> 则使用独立投影：图像块只保留 <code>type</code>、<code>mimeType</code>、<code>dataRedacted</code> 和 <code>encodedBytes</code>，不携带 Base64 内容。<code>encodedBytes</code> 表示原 Base64 字符串的字节数。该规则也适用于工具结果、压缩保留的消息、执行意图、排队消息和流式起始消息；Store、Outbox 与 <code>WatchRun</code> 使用同一投影载荷。投影发生在 Runtime 提交新事件时，读取既有事件不会重新计算载荷。</p>
+<p>投影按已知消息类型处理图像，不递归删除任意 JSON 中的 <code>data</code> 字段。工具参数和自定义业务数据仍由对应适配器约束；无法识别的排队载荷或消息帧只返回 <code>projectionOmitted</code> 标记。输入图像的调试输出只含 MIME 和长度。</p>
+<p>含图像会话的恢复暂不开放。恢复入口保留原快照并明确返回不可用，不调用模型或重放请求。原因是 rpi-ai 0.5.0 的原始 JSON 序列化会产生重复的 <code>type</code> 字段，见<a href="https://github.com/bigfish1913/pi-rust/issues/59">上游问题 #59</a>。代码没有加入快照规范化适配。daemon 的 <code>StartRun</code> 接口仍只接收文本；Runtime 内部的图像输入不代表客户端支持图像会话。</p>
 <h2 id="断线与重启"><a class="header" href="#断线与重启">断线与重启</a></h2>
 <p>客户端断线后，使用原会话重新查询运行状态。事件按运行 ID 和 <code>cursor</code> 排序，<code>WatchRun</code> 的 <code>after_cursor</code> 用于请求后续事件。事件流断开不能证明任务失败，也不能触发 prompt 重放。</p>
 <p>存储层的 <code>recover_interrupted</code> 将执行中而没有持久终态的记录标记为 <code>uncertain</code>。尚未开始的 <code>accepted</code> 记录与已经进入执行的记录分开处理。Runtime 恢复 Harness 会话时检查未完成的工具记录：工具结果未提交时返回 <code>Uncertain</code>，不会猜测副作用是否发生。</p>
