@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0e04d40d.js";
+            window.path_to_searchindex_js = "searchindex-60ea5b95.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -221,6 +221,9 @@ mdbook serve docs/en --open
 <p><code>agent-test-support</code> provides a shared local HTTP mock server. Integration tests in <code>agent-runtime</code> and <code>agent-decision</code> use the real protocol adapters for Responses, Chat Completions and Anthropic Messages without paid model calls. They cover structured output, authority restrictions, low confidence, conservative fallback, timeout and cancellation. Daemon tests also inspect actual tool behavior and durable events; mock output alone does not establish successful execution.</p>
 <pre><code class="language-sh">cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
+</code></pre>
+<p><code>apps/agentd/tests/computer_tools.rs</code> uses local model mocks, the real adapters for all three standard protocols, the Harness and an injectable synthetic <code>attach_host</code>. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable <code>Uncertain</code> with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not establish CLI/Desktop native attachment or desktop-control acceptance on three platforms.</p>
+<pre><code class="language-sh">cargo test -p agentd --test computer_tools --locked
 </code></pre>
 <p>Real local-model tests are explicitly ignored and require an existing chat GGUF file. Each command checks only the selected backend, model and current host:</p>
 <pre><code class="language-sh">LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --features llama --test native_models -- --ignored --nocapture

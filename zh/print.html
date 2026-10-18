@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b84a6383.js";
+            window.path_to_searchindex_js = "searchindex-6b9b1fee.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -447,6 +447,14 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 <pre><code class="language-sh">cargo test -p agentd --test browser_tools --test command_tools --locked
 </code></pre>
 <p>原生运行截图的覆盖范围见<a href="#桌面运行截图与验收范围">桌面运行截图与验收范围</a>。浏览器工具实现位于 <code>apps/agentd/src/browser/agent_tools/</code>，BrowserRuntime 生命周期契约见<a href="#协议与平台能力">协议与平台能力</a>。</p>
+<h2 id="模型计算机工具"><a class="header" href="#模型计算机工具">模型计算机工具</a></h2>
+<p><code>computer_observe</code> 与 <code>computer_act</code> 默认关闭。受信任的 daemon 配置使用顶层 <code>computer_tools = true</code> 启用，环境变量为 <code>LYONBROWN_COMPUTER_TOOLS</code>。<code>computer_lease_secs</code> 默认为 <code>300</code> 秒，允许 <code>10..=300</code> 秒，环境变量为 <code>LYONBROWN_COMPUTER_LEASE_SECS</code>；配置沿用共享分层规则。这些开关不建立原生连接，CLI/Desktop 的交互式桌面范围选择与连接入口尚未接入。</p>
+<p>向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 <code>owner_epoch</code> 下、桌面范围已经固定的认证宿主，并确认能力响应的 <code>can_control()</code> 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Harness 执行，不创建另一套 Agent Loop。</p>
+<p><code>computer_observe</code> 接收可选的 <code>screenshot</code>（默认 <code>false</code>），返回 <code>snapshot_id</code>、<code>revision</code>、范围、窗口和有界 AX 语义，并标记 <code>untrusted_desktop_content</code>。语义输出限制为 1 MiB；截图按需编码为 PNG，返回 artifact 摘要，不把 RGBA 像素直接放入模型文本。桌面内容不能授予权限。</p>
+<p><code>computer_act</code> 要求上次观察的 <code>snapshot_id</code>、<code>revision</code> 和一个 <code>action</code>，支持 <code>move</code>、<code>click</code>、<code>scroll</code>、<code>key</code>、<code>text</code>。<code>timeout_ms</code> 默认 <code>5000</code>，范围为 <code>1..=30000</code> 毫秒。每次调用先消耗观察引用，重新捕获并比较原内容摘要；模型等待期间内容变化时，必须重新观察，不能静默采用新画面。内容一致后，Runtime 保留不可变的准备记录。</p>
+<p>人工审批绑定动作、宿主、Session、<code>owner_epoch</code>、Run、模型调用、原观察引用、完整准备记录及超时。daemon 在同一本地事务中消费准确审批、保存执行意图、事件和 Outbox，提交后才发送 <code>Execute</code>。Runtime 按原租约和观察限制在输入前再次捕获；内容变化、租约失效或取消都会阻止输入，准备记录失败后也不能重放。已提交动作的实际响应保存为持久回执；取消、断线、无效回执或无法确认的结果进入 <code>Uncertain</code>，停止继续运行并要求核对，不自动重放。</p>
+<p>Run 持有的续租任务在模型生成和人工审批等待期间维持当前有效令牌，每隔租期的三分之一尝试续租。它不能恢复已过期或撤销的控制权；Run 关闭时停止续租并撤销准确令牌，撤销失败则断开原连接。认证、传输限额与平台限制见<a href="#原生桌面执行边界">协议与平台能力</a>。</p>
+<p>依据：<code>apps/agentd/src/computer/tools/</code>、<code>apps/agentd/src/computer/mutation.rs</code>、<code>apps/agentd/src/execution.rs</code> 与 <code>crates/agent-computer-runtime/src/</code>。合成宿主回归的覆盖范围见<a href="#模型协议与决策回归">开发与验证</a>，不能替代原生桌面运行验收。</p>
 <h2 id="委派给配对节点"><a class="header" href="#委派给配对节点">委派给配对节点</a></h2>
 <p><code>delegate_task</code> 默认关闭。先通过 daemon 的 <code>peer-pair</code> 操作核对完整 TLS 与 Noise 配对指纹，再在 <code>config.toml</code> 中列出允许的节点、HTTPS 地址与能力。发现结果和模型输出都不能添加配对或修改目标地址。</p>
 <pre><code class="language-toml">[[delegation_targets]]
@@ -507,7 +515,7 @@ capabilities = ["workspace.read"]
         OS[agent-computer / 操作系统会话与权限]
         Computer --&gt; OS
     end
-    Computer &lt;--&gt;|认证会话挂接 / 只读能力检查| API
+    Computer &lt;--&gt;|认证会话挂接 / 观察与获批执行| API
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --&gt; Workspace[工作区 / Git / Artifact / notify]
@@ -554,7 +562,7 @@ capabilities = ["workspace.read"]
     H-&gt;&gt;S: 保存 Harness 会话语义
     D--&gt;&gt;C: 领域事件 / 游标恢复
 </code></pre>
-<p>审批不能扩大执行计划。命令与浏览器动作使用稳定动作标识记录意图和结果；连接丢失、取消或进程退出造成结果未知时，状态进入 <code>Uncertain</code>，按原标识核对，不自动重新执行。文件写入、MCP 和其他工具各自遵循适配器的授权及错误契约，不能将一种工具的回执能力推断到所有工具。</p>
+<p>审批不能扩大执行计划。命令、浏览器和计算机动作使用稳定动作标识记录意图和结果；连接丢失、取消或进程退出造成结果未知时，状态进入 <code>Uncertain</code>，按原标识核对，不自动重新执行。文件写入、MCP 和其他工具各自遵循适配器的授权及错误契约，不能将一种工具的回执能力推断到所有工具。</p>
 <h2 id="模型与分布式任务"><a class="header" href="#模型与分布式任务">模型与分布式任务</a></h2>
 <p>远程模型协议、本地推理引擎和决策分类器共用领域边界。模型元数据决定是否支持工具、图片和上下文规模；决策结果还要经过主机策略、实际可用能力和 Worker 授权范围限制。本地模型通过显式配置的路径加载，不自动下载或回退到云端。</p>
 <p><code>OrchestrationService</code> 面向本地认证客户端；对端 <code>TaskService</code> 面向配对后的 mTLS 节点。派发事务校验 Master、Session、<code>owner_epoch</code>、父 Run 与工作区，保存 Worker 绑定后才能发送。客户端以任务 ID 分页读取、核对或取消任务。Worker 返回成功后，Master 的任务停留在 <code>awaiting_acceptance</code>，只有显式采纳才进入 <code>completed</code>。</p>
@@ -595,20 +603,20 @@ capabilities = ["workspace.read"]
     Runtime --&gt; Helper[客户端私有模式 CEF helper]
     Helper --&gt; Web[不可信网页]
     Computer[ComputerRuntime 宿主库] --&gt;|认证固定会话范围| Daemon
-    Daemon --&gt;|只读能力检查| Computer
+    Daemon --&gt;|观察 / 准备 / 准确审批后执行| Computer
     Computer --&gt; Native[阻塞线程 / 操作系统会话互斥]
     Daemon --&gt; Local[本地 SQLite]
     Daemon --&gt;|TaskService / PeerService| Worker[受信 Worker daemon]
     Worker --&gt; Remote[Worker 本地持久化]
 </code></pre>
 <p>浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。</p>
-<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 的宿主接口只提供能力检查，原生输入不由模型通过此接口直接调用。权限、租约与执行限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>。</p>
+<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 <code>computer_observe</code> 与 <code>computer_act</code>；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/Desktop 尚未接入交互式原生范围选择与连接入口，这条库连接不代表原生运行验收完成。macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝操作。权限、租约与执行限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>，工具机制见<a href="#模型计算机工具">模型计算机工具</a>。</p>
 <h2 id="源码依据"><a class="header" href="#源码依据">源码依据</a></h2>
 <ul>
 <li>服务和消息：<code>proto/agent/v1/agent.proto</code>。</li>
 <li>认证连接：<code>crates/agent-client/src/lib.rs</code>。</li>
 <li>Runtime 接口：<code>crates/agent-runtime/src/contracts.rs</code>。</li>
-<li>原生宿主挂接：<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>。</li>
+<li>原生宿主挂接：<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>、<code>apps/agentd/src/computer/tools/</code> 与 <code>apps/agentd/src/computer/mutation.rs</code>。</li>
 <li>持久状态：<code>crates/agent-storage/src/schema.sql</code>。</li>
 </ul>
 <p>跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 <code>attempt_id</code>、<code>owner_epoch</code> 和显式 <code>AcceptResult</code>，不能把收到结果当成已经采纳。</p>
@@ -927,10 +935,10 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&
 <h2 id="原生桌面执行边界"><a class="header" href="#原生桌面执行边界">原生桌面执行边界</a></h2>
 <p>原生 SDK 通过显式 <code>native</code> feature 启用：<code>agent-computer-runtime/native</code> 同时启用 <code>agent-computer/native</code>，并提供 <code>attach_native</code> 工厂。默认构建保留协议、执行引擎和可注入的 <code>attach_host</code>，不引入截图与输入 SDK。daemon 使用这条默认依赖路径。</p>
 <p><code>agent-computer</code> 封装屏幕观察、输入和桌面租约；<code>agent-computer-runtime</code> 在进程内保留准备好的操作，并按 daemon Session、Run 和 <code>owner_epoch</code> 校验调用归属。执行消息只引用原准备记录、动作标识和内容摘要，不能替换输入内容。等待审批后，Runtime 使用原租约和原观察限制重新观察；内容变化、租约失效或取消都会阻止输入。准备记录在刷新或输入前消耗，失败后也不能重放同一动作。</p>
-<p>原生宿主由客户端进程嵌入，通过 <code>attach_native</code> 连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 <code>owner_epoch</code>。每个会话只允许一个宿主连接，每次能力检查均在发送前和接收后核对 Run 状态及会话归属。连接成功本身不授予截图或输入权限。</p>
-<p>连接只允许一个执行中的命令，原生调用和消息编解码在阻塞线程执行。重复请求、重叠命令、非法消息或断线会取消连接，不自动重放输入。已经进入操作系统的调用仍需实际结束；取消不会强行终止线程。原生宿主使用用户数据目录中的文件锁，按操作系统图形会话互斥，改变 daemon 节点标识或客户端数据目录不能绕过这把锁。执行线程持有文件锁至调用结束。</p>
-<p>同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 消息限制为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。</p>
-<p>daemon 的连接接口只开放只读能力检查；模型工具不通过这条接口执行原生输入。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
+<p>客户端库可通过 <code>attach_native</code> 将原生宿主嵌入客户端进程并连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 <code>owner_epoch</code>。每个会话只允许一个宿主连接，模型工具固定本次连接代次，每次操作均在发送前和接收后核对 Run 状态及会话归属；重新连接不能替换运行已经选定的宿主。连接成功本身不授予截图或输入权限。</p>
+<p>连接只允许一个待返回命令；同一连接代次的请求串行排队，续租不能抢占已派发命令。等待可取消，超过 35 秒则拒绝，派发前再次校验连接代次。daemon 按请求标识、宿主、连接代次、Session、<code>owner_epoch</code>、私有协议版本和预期响应类型校验返回值，并检查租约、观察范围与图像、窗口、AX 节点边界。非法响应或断线会取消连接，不自动重放输入。原生调用和消息编解码在阻塞线程执行。已经进入操作系统的调用仍需实际结束；取消不会强行终止线程。原生宿主使用用户数据目录中的文件锁，按操作系统图形会话互斥，改变 daemon 节点标识或客户端数据目录不能绕过这把锁。执行线程持有文件锁至调用结束。</p>
+<p>同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 协议版本为 2，包含准确令牌的 <code>RenewLease</code>。续租只延长当前未撤销、未过期的令牌，不能取得新令牌或恢复旧控制权。消息总上限为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。daemon 将能力响应限制为 4 KiB、观察响应限制为 68 MiB、其他响应与请求限制为 16 KiB。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。</p>
+<p>daemon 已通过这条认证连接装配 Harness 的 <code>computer_observe</code> 与 <code>computer_act</code>，启用条件、准确审批和持久回执见<a href="#模型计算机工具">本地工具与浏览器操作</a>。CLI/Desktop 尚未接入交互式原生桌面范围选择与连接入口；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="开发与验证"><a class="header" href="#开发与验证">开发与验证</a></h1>
 <p>工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 <code>Cargo.lock</code> 管理。Rust 工具链最低版本见根 <code>Cargo.toml</code> 的 <code>rust-version</code>。工程约束统一维护在根 <code>AGENTS.md</code>。</p>
@@ -977,6 +985,9 @@ mdbook serve docs/en --open
 <p><code>agent-test-support</code> 提供共享本地 HTTP mock server。<code>agent-runtime</code> 与 <code>agent-decision</code> 的集成测试通过真实协议适配器验证 Responses、Chat Completions 和 Anthropic Messages，不调用付费模型。覆盖结构化输出、权限收缩、低置信度、保守回退、超时和取消；daemon 测试还核对实际工具行为和持久化事件，不能仅凭 mock 返回值认定执行成功。</p>
 <pre><code class="language-sh">cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
+</code></pre>
+<p><code>apps/agentd/tests/computer_tools.rs</code> 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 <code>attach_host</code>，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 <code>Uncertain</code> 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能作为 CLI/Desktop 原生连接入口或三平台桌面控制验收。</p>
+<pre><code class="language-sh">cargo test -p agentd --test computer_tools --locked
 </code></pre>
 <p>本地推理真实模型测试显式忽略，需自行提供已有的聊天 GGUF 文件。每条命令只验收所选后端、模型与当前主机：</p>
 <pre><code class="language-sh">LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --features llama --test native_models -- --ignored --nocapture

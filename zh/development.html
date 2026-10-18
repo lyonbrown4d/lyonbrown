@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b84a6383.js";
+            window.path_to_searchindex_js = "searchindex-6b9b1fee.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -221,6 +221,9 @@ mdbook serve docs/en --open
 <p><code>agent-test-support</code> 提供共享本地 HTTP mock server。<code>agent-runtime</code> 与 <code>agent-decision</code> 的集成测试通过真实协议适配器验证 Responses、Chat Completions 和 Anthropic Messages，不调用付费模型。覆盖结构化输出、权限收缩、低置信度、保守回退、超时和取消；daemon 测试还核对实际工具行为和持久化事件，不能仅凭 mock 返回值认定执行成功。</p>
 <pre><code class="language-sh">cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
+</code></pre>
+<p><code>apps/agentd/tests/computer_tools.rs</code> 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 <code>attach_host</code>，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 <code>Uncertain</code> 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能作为 CLI/Desktop 原生连接入口或三平台桌面控制验收。</p>
+<pre><code class="language-sh">cargo test -p agentd --test computer_tools --locked
 </code></pre>
 <p>本地推理真实模型测试显式忽略，需自行提供已有的聊天 GGUF 文件。每条命令只验收所选后端、模型与当前主机：</p>
 <pre><code class="language-sh">LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --features llama --test native_models -- --ignored --nocapture

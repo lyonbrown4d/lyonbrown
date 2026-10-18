@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b84a6383.js";
+            window.path_to_searchindex_js = "searchindex-6b9b1fee.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -232,6 +232,14 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 <pre><code class="language-sh">cargo test -p agentd --test browser_tools --test command_tools --locked
 </code></pre>
 <p>原生运行截图的覆盖范围见<a href="runtime-evidence.html">桌面运行截图与验收范围</a>。浏览器工具实现位于 <code>apps/agentd/src/browser/agent_tools/</code>，BrowserRuntime 生命周期契约见<a href="protocol.html">协议与平台能力</a>。</p>
+<h2 id="模型计算机工具"><a class="header" href="#模型计算机工具">模型计算机工具</a></h2>
+<p><code>computer_observe</code> 与 <code>computer_act</code> 默认关闭。受信任的 daemon 配置使用顶层 <code>computer_tools = true</code> 启用，环境变量为 <code>LYONBROWN_COMPUTER_TOOLS</code>。<code>computer_lease_secs</code> 默认为 <code>300</code> 秒，允许 <code>10..=300</code> 秒，环境变量为 <code>LYONBROWN_COMPUTER_LEASE_SECS</code>；配置沿用共享分层规则。这些开关不建立原生连接，CLI/Desktop 的交互式桌面范围选择与连接入口尚未接入。</p>
+<p>向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 <code>owner_epoch</code> 下、桌面范围已经固定的认证宿主，并确认能力响应的 <code>can_control()</code> 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Harness 执行，不创建另一套 Agent Loop。</p>
+<p><code>computer_observe</code> 接收可选的 <code>screenshot</code>（默认 <code>false</code>），返回 <code>snapshot_id</code>、<code>revision</code>、范围、窗口和有界 AX 语义，并标记 <code>untrusted_desktop_content</code>。语义输出限制为 1 MiB；截图按需编码为 PNG，返回 artifact 摘要，不把 RGBA 像素直接放入模型文本。桌面内容不能授予权限。</p>
+<p><code>computer_act</code> 要求上次观察的 <code>snapshot_id</code>、<code>revision</code> 和一个 <code>action</code>，支持 <code>move</code>、<code>click</code>、<code>scroll</code>、<code>key</code>、<code>text</code>。<code>timeout_ms</code> 默认 <code>5000</code>，范围为 <code>1..=30000</code> 毫秒。每次调用先消耗观察引用，重新捕获并比较原内容摘要；模型等待期间内容变化时，必须重新观察，不能静默采用新画面。内容一致后，Runtime 保留不可变的准备记录。</p>
+<p>人工审批绑定动作、宿主、Session、<code>owner_epoch</code>、Run、模型调用、原观察引用、完整准备记录及超时。daemon 在同一本地事务中消费准确审批、保存执行意图、事件和 Outbox，提交后才发送 <code>Execute</code>。Runtime 按原租约和观察限制在输入前再次捕获；内容变化、租约失效或取消都会阻止输入，准备记录失败后也不能重放。已提交动作的实际响应保存为持久回执；取消、断线、无效回执或无法确认的结果进入 <code>Uncertain</code>，停止继续运行并要求核对，不自动重放。</p>
+<p>Run 持有的续租任务在模型生成和人工审批等待期间维持当前有效令牌，每隔租期的三分之一尝试续租。它不能恢复已过期或撤销的控制权；Run 关闭时停止续租并撤销准确令牌，撤销失败则断开原连接。认证、传输限额与平台限制见<a href="protocol.html#原生桌面执行边界">协议与平台能力</a>。</p>
+<p>依据：<code>apps/agentd/src/computer/tools/</code>、<code>apps/agentd/src/computer/mutation.rs</code>、<code>apps/agentd/src/execution.rs</code> 与 <code>crates/agent-computer-runtime/src/</code>。合成宿主回归的覆盖范围见<a href="development.html#模型协议与决策回归">开发与验证</a>，不能替代原生桌面运行验收。</p>
 <h2 id="委派给配对节点"><a class="header" href="#委派给配对节点">委派给配对节点</a></h2>
 <p><code>delegate_task</code> 默认关闭。先通过 daemon 的 <code>peer-pair</code> 操作核对完整 TLS 与 Noise 配对指纹，再在 <code>config.toml</code> 中列出允许的节点、HTTPS 地址与能力。发现结果和模型输出都不能添加配对或修改目标地址。</p>
 <pre><code class="language-toml">[[delegation_targets]]

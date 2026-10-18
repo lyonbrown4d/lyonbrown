@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0e04d40d.js";
+            window.path_to_searchindex_js = "searchindex-60ea5b95.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -223,7 +223,7 @@
         OS[agent-computer / OS session and permissions]
         Computer --&gt; OS
     end
-    Computer &lt;--&gt;|Authenticated session attachment / read-only capabilities| API
+    Computer &lt;--&gt;|Authenticated session attachment / observe and approved execution| API
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --&gt; Workspace[Workspace / Git / artifacts / notify]
@@ -270,7 +270,7 @@
     H-&gt;&gt;S: Persist Harness session semantics
     D--&gt;&gt;C: Domain events / cursor recovery
 </code></pre>
-<p>Approval cannot broaden the execution plan. Command and browser actions record intent and outcome under stable action identifiers. A disconnect, cancellation or process exit that leaves an unknown outcome produces <code>Uncertain</code>; reconciliation uses the same identity without automatic replay. File writes, MCP and other tools follow their own adapter authorization and error contracts; one tool’s receipt guarantees do not apply to every tool.</p>
+<p>Approval cannot broaden the execution plan. Command, browser and computer actions record intent and outcome under stable action identifiers. A disconnect, cancellation or process exit that leaves an unknown outcome produces <code>Uncertain</code>; reconciliation uses the same identity without automatic replay. File writes, MCP and other tools follow their own adapter authorization and error contracts; one tool’s receipt guarantees do not apply to every tool.</p>
 <h2 id="models-and-distributed-tasks"><a class="header" href="#models-and-distributed-tasks">Models and distributed tasks</a></h2>
 <p>Remote model protocols, local inference engines and decision classifiers share domain boundaries. Model metadata determines tool, image and context support. Host policy, available capabilities and Worker grants further restrict decision output. Local models load from explicitly configured paths without automatic downloads or cloud fallback.</p>
 <p><code>OrchestrationService</code> serves authenticated local clients; peer <code>TaskService</code> serves paired mTLS nodes. Dispatch transactions validate Master identity, Session, <code>owner_epoch</code>, parent Run and workspace, and persist the Worker binding before sending. Clients page, reconcile or cancel using task identities. Worker success leaves the Master task <code>awaiting_acceptance</code>; only explicit acceptance changes it to <code>completed</code>.</p>
@@ -311,20 +311,20 @@
     Runtime --&gt; Helper[Client private-mode CEF helper]
     Helper --&gt; Web[Untrusted web content]
     Computer[ComputerRuntime host library] --&gt;|Authenticated fixed session scope| Daemon
-    Daemon --&gt;|Read-only capability inspection| Computer
+    Daemon --&gt;|Observe / prepare / execute after exact approval| Computer
     Computer --&gt; Native[Blocking worker / OS session exclusion]
     Daemon --&gt; Local[Local SQLite]
     Daemon --&gt;|TaskService / PeerService| Worker[Trusted worker daemon]
     Worker --&gt; Remote[Worker local persistence]
 </code></pre>
 <p>Disconnecting the browser attachment does not replay actions. Web content cannot access privileged application interfaces. Profiles preserve browser data on disk, without restoring live in-memory pages. Node discovery grants no execution authority; pairing and task authorization remain with the daemon. Public registration and relay use a separate control-plane protocol; discovery does not establish trust.</p>
-<p>ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. The daemon host interface exposes capability inspection; model tools do not invoke native input through this interface. See <a href="protocol.html#native-desktop-execution-boundary">Native desktop execution boundary</a> for permissions, leases and execution limits.</p>
+<p>ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. After checking trusted configuration, session ownership and control permissions, the daemon provides <code>computer_observe</code> and <code>computer_act</code> through the sole Harness. Observation, immutable action preparation and execution after exact approval use this authenticated connection; approval consumption and intent become durable before execution. CLI/Desktop do not yet wire interactive native scope selection and attachment into their entry points. This library connection does not establish native runtime acceptance. On macOS, an indeterminate unlocked session still fails closed with <code>SessionStateUnknown</code>. See <a href="protocol.html#native-desktop-execution-boundary">Native desktop execution boundary</a> for permissions, leases and execution limits, and <a href="tools.html#model-computer-tools">model computer tools</a> for tool behavior.</p>
 <h2 id="source-references"><a class="header" href="#source-references">Source references</a></h2>
 <ul>
 <li>Services and messages: <code>proto/agent/v1/agent.proto</code>.</li>
 <li>Authenticated connection: <code>crates/agent-client/src/lib.rs</code>.</li>
 <li>Runtime interfaces: <code>crates/agent-runtime/src/contracts.rs</code>.</li>
-<li>Native host attachment: <code>crates/agent-computer-runtime/src/attachment.rs</code>, <code>apps/agentd/src/computer/service.rs</code>.</li>
+<li>Native host attachment: <code>crates/agent-computer-runtime/src/attachment.rs</code>, <code>apps/agentd/src/computer/service.rs</code>, <code>apps/agentd/src/computer/tools/</code> and <code>apps/agentd/src/computer/mutation.rs</code>.</li>
 <li>Durable state: <code>crates/agent-storage/src/schema.sql</code>.</li>
 </ul>
 <p>A successful worker attempt and a master’s acceptance of its result have different meanings. The protocol keeps <code>attempt_id</code>, <code>owner_epoch</code> and explicit <code>AcceptResult</code>; receiving a result does not establish acceptance.</p>

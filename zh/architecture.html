@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b84a6383.js";
+            window.path_to_searchindex_js = "searchindex-6b9b1fee.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -223,7 +223,7 @@
         OS[agent-computer / 操作系统会话与权限]
         Computer --&gt; OS
     end
-    Computer &lt;--&gt;|认证会话挂接 / 只读能力检查| API
+    Computer &lt;--&gt;|认证会话挂接 / 观察与获批执行| API
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --&gt; Workspace[工作区 / Git / Artifact / notify]
@@ -270,7 +270,7 @@
     H-&gt;&gt;S: 保存 Harness 会话语义
     D--&gt;&gt;C: 领域事件 / 游标恢复
 </code></pre>
-<p>审批不能扩大执行计划。命令与浏览器动作使用稳定动作标识记录意图和结果；连接丢失、取消或进程退出造成结果未知时，状态进入 <code>Uncertain</code>，按原标识核对，不自动重新执行。文件写入、MCP 和其他工具各自遵循适配器的授权及错误契约，不能将一种工具的回执能力推断到所有工具。</p>
+<p>审批不能扩大执行计划。命令、浏览器和计算机动作使用稳定动作标识记录意图和结果；连接丢失、取消或进程退出造成结果未知时，状态进入 <code>Uncertain</code>，按原标识核对，不自动重新执行。文件写入、MCP 和其他工具各自遵循适配器的授权及错误契约，不能将一种工具的回执能力推断到所有工具。</p>
 <h2 id="模型与分布式任务"><a class="header" href="#模型与分布式任务">模型与分布式任务</a></h2>
 <p>远程模型协议、本地推理引擎和决策分类器共用领域边界。模型元数据决定是否支持工具、图片和上下文规模；决策结果还要经过主机策略、实际可用能力和 Worker 授权范围限制。本地模型通过显式配置的路径加载，不自动下载或回退到云端。</p>
 <p><code>OrchestrationService</code> 面向本地认证客户端；对端 <code>TaskService</code> 面向配对后的 mTLS 节点。派发事务校验 Master、Session、<code>owner_epoch</code>、父 Run 与工作区，保存 Worker 绑定后才能发送。客户端以任务 ID 分页读取、核对或取消任务。Worker 返回成功后，Master 的任务停留在 <code>awaiting_acceptance</code>，只有显式采纳才进入 <code>completed</code>。</p>
@@ -311,20 +311,20 @@
     Runtime --&gt; Helper[客户端私有模式 CEF helper]
     Helper --&gt; Web[不可信网页]
     Computer[ComputerRuntime 宿主库] --&gt;|认证固定会话范围| Daemon
-    Daemon --&gt;|只读能力检查| Computer
+    Daemon --&gt;|观察 / 准备 / 准确审批后执行| Computer
     Computer --&gt; Native[阻塞线程 / 操作系统会话互斥]
     Daemon --&gt; Local[本地 SQLite]
     Daemon --&gt;|TaskService / PeerService| Worker[受信 Worker daemon]
     Worker --&gt; Remote[Worker 本地持久化]
 </code></pre>
 <p>浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。</p>
-<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 的宿主接口只提供能力检查，原生输入不由模型通过此接口直接调用。权限、租约与执行限制见<a href="protocol.html#原生桌面执行边界">原生桌面执行边界</a>。</p>
+<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 <code>computer_observe</code> 与 <code>computer_act</code>；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/Desktop 尚未接入交互式原生范围选择与连接入口，这条库连接不代表原生运行验收完成。macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝操作。权限、租约与执行限制见<a href="protocol.html#原生桌面执行边界">原生桌面执行边界</a>，工具机制见<a href="tools.html#模型计算机工具">模型计算机工具</a>。</p>
 <h2 id="源码依据"><a class="header" href="#源码依据">源码依据</a></h2>
 <ul>
 <li>服务和消息：<code>proto/agent/v1/agent.proto</code>。</li>
 <li>认证连接：<code>crates/agent-client/src/lib.rs</code>。</li>
 <li>Runtime 接口：<code>crates/agent-runtime/src/contracts.rs</code>。</li>
-<li>原生宿主挂接：<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>。</li>
+<li>原生宿主挂接：<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>、<code>apps/agentd/src/computer/tools/</code> 与 <code>apps/agentd/src/computer/mutation.rs</code>。</li>
 <li>持久状态：<code>crates/agent-storage/src/schema.sql</code>。</li>
 </ul>
 <p>跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 <code>attempt_id</code>、<code>owner_epoch</code> 和显式 <code>AcceptResult</code>，不能把收到结果当成已经采纳。</p>
