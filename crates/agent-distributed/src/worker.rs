@@ -115,10 +115,18 @@ impl TaskWorker {
   }
 
   /// Call before exposing the listener after a process restart. Never restart old work.
+  /// Only recover attempts whose durable acceptance assigns them to this worker.
   pub fn recover_uncertain(&self) -> Result<usize> {
     let mut count = 0;
     for task in self.manager.store.tasks()? {
-      if matches!(task.attempt_status.as_str(), "accepted" | "running") {
+      if matches!(task.attempt_status.as_str(), "accepted" | "running")
+        && self
+          .manager
+          .store
+          .task_target(&task.envelope.task_id)?
+          .as_deref()
+          == Some(self.manager.node.id.as_str())
+      {
         self.manager.store.mark_task_uncertain(
           &task.envelope.task_id,
           &task.envelope.attempt_id,

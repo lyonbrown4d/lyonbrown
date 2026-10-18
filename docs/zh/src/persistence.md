@@ -58,6 +58,8 @@ Harness 快照保留原始消息内容。`entry_appended` 和 `record_appended` 
 
 TaskStore 在更新 Worker Attempt 或采纳结果时校验 `attempt_id` 与 `owner_epoch`。成功的 Attempt 先进入 `awaiting_acceptance`；只有显式接受结果后 Task 才进入 `completed`。
 
+Worker 启动恢复只处理持久分发目标为本机、Attempt 状态为 `accepted` 或 `running` 的记录，将其标记为 `uncertain`，同时保留所有权校验。发往其他节点的 Master 记录和未记录目标的通用 Task 保持原样；它们不会因 Worker 恢复而被改写。该操作不迁移 Master 所有权，也不重放 Attempt。
+
 ```mermaid
 stateDiagram-v2
     [*] --> accepted

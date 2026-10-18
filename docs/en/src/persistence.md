@@ -58,6 +58,8 @@ An approval records the tool, arguments, owning run and expiry. `decide_approval
 
 TaskStore checks `attempt_id` and `owner_epoch` when updating worker attempts or accepting results. A successful attempt first enters `awaiting_acceptance`; a task becomes `completed` only after explicit result acceptance.
 
+Worker startup recovery marks only `accepted` or `running` attempts whose persisted dispatch target is the local node as `uncertain`, preserving ownership checks. Master records dispatched to other nodes and generic tasks without a target remain unchanged. This routine neither transfers Master ownership nor replays attempts.
+
 ```mermaid
 stateDiagram-v2
     [*] --> accepted
