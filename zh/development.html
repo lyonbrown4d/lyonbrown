@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0cd9575c.js";
+            window.path_to_searchindex_js = "searchindex-b84a6383.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -194,7 +194,7 @@ cargo dev tui --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absol
 cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
 cargo dev --help
 </code></pre>
-<p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
+<p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell，也无需安装额外的任务运行器。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
 <p>需要单独运行前台 daemon 时，使用 <code>cargo dev daemon</code>。其他开发客户端仍可自动连接并复用它。</p>
 <p>默认配置为开发数据目录中的 <code>config.toml</code>，dotenv 文件位于配置文件旁边。<code>--config</code> 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 <code>agent-config</code> 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 <code>agent-telemetry</code> 写入日志；默认位于开发数据目录的 <code>logs</code> 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 <code>auth.token</code>，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。</p>
 <p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code>，浏览器执行能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>

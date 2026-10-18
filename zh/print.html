@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0cd9575c.js";
+            window.path_to_searchindex_js = "searchindex-b84a6383.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -439,9 +439,11 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 <p>变更操作要求准确动作人工审批。daemon 检查会话、所有者代次、runtime host 绑定、取消状态和人工接管状态。人工接管期间暂停模型变更；模型工具不开放原始输入和接管能力。快照过期后重新观察，未知结果先核对记录，禁止自动重放。Profile 保存不代表活页面恢复。</p>
 <p>模型侧变更在同一本地事务中消费准确审批、保存浏览器执行意图，并写入事件和 Outbox；事务再次检查运行仍在执行、会话及所有者代次一致。事务失败时审批和意图一同回滚。提交后才向获批的 runtime host 发送操作；等待回执时取消或断线会保留 <code>Uncertain</code>，不重放动作。客户端的人工浏览器操作使用独立的认证入口，并保存相同类型的执行意图和结果回执。</p>
 <p>原生 CEF 语义动作在滚动、聚焦、按键或导航之前撤销旧快照。进入这些步骤后，动作或后续观察失败会进入 <code>Uncertain</code>，停止本次模型运行，并保留持久回执供人工核对。输入、所有权和快照检查在动作之前完成。</p>
+<p>人工接管的原始输入在聚焦或派发前撤销旧语义快照；进入这些步骤后的错误保存为 <code>Uncertain</code>，恢复不自动重放。成功输入本身不递增帧版本，允许同一帧的按下与松开配对；页面变化仍可使帧失效。</p>
 <p><code>apps/agentd/tests/browser_tools.rs</code> 通过本地 HTTP 模型 mock 和真实协议适配器覆盖 Responses、Chat Completions、Anthropic Messages，以及批准、拒绝、所有权/会话边界、取消和截图 artifact。其 runtime host 是合成实现，验证的是 Harness 到 daemon 的工具契约与持久状态，不能替代原生 CEF 自主浏览器操作验收。</p>
 <p>原生链路使用 <code>apps/agentd/tests/native_browser_tools.rs</code> 单独验收。在 macOS 27.0.1 arm64 的调试 CEF 环境中，三个协议分别完成真实 AX 观察、准确审批后的填入与点击，并通过本地 HTTP 页面副作用和持久回执核对结果；另三种场景在点击成功后丢弃回执，确认取消与恢复不重放，运行保持 <code>Uncertain</code>。测试只操作合成页面和独立 Profile，使用调试测试钥匙串，不证明生产钥匙串或其他平台已验收。</p>
 <p><code>apps/agentd/tests/native_browser_post_effect.rs</code> 通过 Responses 协议验证点击后的页面错误：一次实际点击产生一次本地 HTTP 副作用，随后超限页面内容触发错误。测试确认运行与浏览器回执持久化为 <code>Uncertain</code>、模型停止继续执行、恢复不重放，并拒绝在未核对结果的会话中启动新运行。该场景与上述六个场景均使用重新构建并签名的原生宿主执行。</p>
+<p>同一调试环境还通过 <code>apps/agentd/tests/native_browser_human_input.rs</code> 验证人工接管：鼠标按下与松开只产生一次页面副作用，错误回执和 Outbox 保存为 <code>uncertain</code>，恢复不重放，也不启动模型运行。<code>crates/agent-browser-runtime/tests/cef_runtime.rs</code> 验证正常的同帧鼠标输入和文本提交。</p>
 <pre><code class="language-sh">cargo test -p agentd --test browser_tools --test command_tools --locked
 </code></pre>
 <p>原生运行截图的覆盖范围见<a href="#桌面运行截图与验收范围">桌面运行截图与验收范围</a>。浏览器工具实现位于 <code>apps/agentd/src/browser/agent_tools/</code>，BrowserRuntime 生命周期契约见<a href="#协议与平台能力">协议与平台能力</a>。</p>
@@ -948,7 +950,7 @@ cargo dev tui --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absol
 cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
 cargo dev --help
 </code></pre>
-<p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
+<p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell，也无需安装额外的任务运行器。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
 <p>需要单独运行前台 daemon 时，使用 <code>cargo dev daemon</code>。其他开发客户端仍可自动连接并复用它。</p>
 <p>默认配置为开发数据目录中的 <code>config.toml</code>，dotenv 文件位于配置文件旁边。<code>--config</code> 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 <code>agent-config</code> 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 <code>agent-telemetry</code> 写入日志；默认位于开发数据目录的 <code>logs</code> 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 <code>auth.token</code>，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。</p>
 <p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code>，浏览器执行能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>

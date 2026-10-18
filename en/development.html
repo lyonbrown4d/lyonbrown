@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2ec11fc8.js";
+            window.path_to_searchindex_js = "searchindex-0e04d40d.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -194,7 +194,7 @@ cargo dev tui --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absol
 cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
 cargo dev --help
 </code></pre>
-<p>The Cargo alias invokes <code>apps/agent-dev</code> with an argument array, without a platform shell. The root <code>README.md</code> lists common commands; <code>cargo --list</code> also displays the <code>dev</code> alias.</p>
+<p>The Cargo alias invokes <code>apps/agent-dev</code> with an argument array, without a platform shell or an extra task runner. The root <code>README.md</code> lists common commands; <code>cargo --list</code> also displays the <code>dev</code> alias.</p>
 <p>Use <code>cargo dev daemon</code> when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.</p>
 <p>The default configuration is <code>config.toml</code> inside the development data directory, with <code>.env</code> beside it. <code>--config</code> selects an existing TOML file. The commands do not create or overwrite configuration or dotenv files. Model, tool and log settings use the shared <code>agent-config</code> layering rules. agentd, TUI, Desktop and the development launcher all use shared <code>agent-telemetry</code> logging. Files default to the development data directory’s <code>logs</code> subdirectory, use separate process prefixes and follow the configured rotation and retention settings. The launcher forces the selected development address and data directory, reads that directory’s <code>auth.token</code> and ignores inherited connection credentials. Tokens pass only through the client child environment, never command arguments or launch output.</p>
 <p><code>--dry-run</code> displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile <code>agent-dev</code>. Default Desktop/TUI builds do not enable <code>native-cef</code>; browser execution reports unavailable. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for the full CEF SDK, helper and application bundle layout.</p>
