@@ -1,10 +1,13 @@
 //! Authenticated interactive-user attachment, scoped to one owned session.
-//! Only capability inspection is exposed here; this channel grants no native input.
+//! Models use bounded observations and exactly approved, durably recorded input.
+mod mutation;
 mod router;
 mod service;
+mod tools;
 
 pub(crate) use router::ComputerRouter;
 pub use service::computer_runtime_service;
+pub(crate) use tools::tools;
 
 use crate::Daemon;
 use agent_computer::{DesktopCapabilities, DesktopSession};

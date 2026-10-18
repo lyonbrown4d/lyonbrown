@@ -78,6 +78,12 @@ cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 ```
 
+`apps/agentd/tests/computer_tools.rs` uses local model mocks, the real adapters for all three standard protocols, the Harness and an injectable synthetic `attach_host`. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable `Uncertain` with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not establish CLI/Desktop native attachment or desktop-control acceptance on three platforms.
+
+```sh
+cargo test -p agentd --test computer_tools --locked
+```
+
 Real local-model tests are explicitly ignored and require an existing chat GGUF file. Each command checks only the selected backend, model and current host:
 
 ```sh

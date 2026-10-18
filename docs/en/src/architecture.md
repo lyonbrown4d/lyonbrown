@@ -49,7 +49,7 @@ flowchart TB
         OS[agent-computer / OS session and permissions]
         Computer --> OS
     end
-    Computer <-->|Authenticated session attachment / read-only capabilities| API
+    Computer <-->|Authenticated session attachment / observe and approved execution| API
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --> Workspace[Workspace / Git / artifacts / notify]
@@ -102,7 +102,7 @@ sequenceDiagram
     D-->>C: Domain events / cursor recovery
 ```
 
-Approval cannot broaden the execution plan. Command and browser actions record intent and outcome under stable action identifiers. A disconnect, cancellation or process exit that leaves an unknown outcome produces `Uncertain`; reconciliation uses the same identity without automatic replay. File writes, MCP and other tools follow their own adapter authorization and error contracts; one tool's receipt guarantees do not apply to every tool.
+Approval cannot broaden the execution plan. Command, browser and computer actions record intent and outcome under stable action identifiers. A disconnect, cancellation or process exit that leaves an unknown outcome produces `Uncertain`; reconciliation uses the same identity without automatic replay. File writes, MCP and other tools follow their own adapter authorization and error contracts; one tool's receipt guarantees do not apply to every tool.
 
 ## Models and distributed tasks
 
@@ -154,7 +154,7 @@ flowchart LR
     Runtime --> Helper[Client private-mode CEF helper]
     Helper --> Web[Untrusted web content]
     Computer[ComputerRuntime host library] -->|Authenticated fixed session scope| Daemon
-    Daemon -->|Read-only capability inspection| Computer
+    Daemon -->|Observe / prepare / execute after exact approval| Computer
     Computer --> Native[Blocking worker / OS session exclusion]
     Daemon --> Local[Local SQLite]
     Daemon -->|TaskService / PeerService| Worker[Trusted worker daemon]
@@ -163,14 +163,14 @@ flowchart LR
 
 Disconnecting the browser attachment does not replay actions. Web content cannot access privileged application interfaces. Profiles preserve browser data on disk, without restoring live in-memory pages. Node discovery grants no execution authority; pairing and task authorization remain with the daemon. Public registration and relay use a separate control-plane protocol; discovery does not establish trust.
 
-ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. The daemon host interface exposes capability inspection; model tools do not invoke native input through this interface. See [Native desktop execution boundary](protocol.md#native-desktop-execution-boundary) for permissions, leases and execution limits.
+ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. After checking trusted configuration, session ownership and control permissions, the daemon provides `computer_observe` and `computer_act` through the sole Harness. Observation, immutable action preparation and execution after exact approval use this authenticated connection; approval consumption and intent become durable before execution. CLI/Desktop do not yet wire interactive native scope selection and attachment into their entry points. This library connection does not establish native runtime acceptance. On macOS, an indeterminate unlocked session still fails closed with `SessionStateUnknown`. See [Native desktop execution boundary](protocol.md#native-desktop-execution-boundary) for permissions, leases and execution limits, and [model computer tools](tools.md#model-computer-tools) for tool behavior.
 
 ## Source references
 
 - Services and messages: `proto/agent/v1/agent.proto`.
 - Authenticated connection: `crates/agent-client/src/lib.rs`.
 - Runtime interfaces: `crates/agent-runtime/src/contracts.rs`.
-- Native host attachment: `crates/agent-computer-runtime/src/attachment.rs`, `apps/agentd/src/computer/service.rs`.
+- Native host attachment: `crates/agent-computer-runtime/src/attachment.rs`, `apps/agentd/src/computer/service.rs`, `apps/agentd/src/computer/tools/` and `apps/agentd/src/computer/mutation.rs`.
 - Durable state: `crates/agent-storage/src/schema.sql`.
 
 A successful worker attempt and a master's acceptance of its result have different meanings. The protocol keeps `attempt_id`, `owner_epoch` and explicit `AcceptResult`; receiving a result does not establish acceptance.

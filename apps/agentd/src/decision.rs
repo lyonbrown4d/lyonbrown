@@ -62,6 +62,10 @@ pub(crate) fn build(
     authorized_tools.extend([Tool::BrowserObserve, Tool::BrowserAct]);
     available_capabilities.insert(Capability::Browser);
   }
+  if config.computer_tools {
+    authorized_tools.extend([Tool::ComputerObserve, Tool::ComputerAct]);
+    available_capabilities.insert(Capability::Computer);
+  }
   if crate::commands::enabled(config) {
     authorized_tools.insert(Tool::ExecuteCommand);
     available_capabilities.insert(Capability::ProcessExecute);
@@ -94,6 +98,7 @@ pub(crate) fn workspace_rule(
   browser: bool,
   commands: bool,
   delegation: bool,
+  computer: bool,
 ) -> ExplicitRoute {
   let mut tools = [Tool::ReadFile, Tool::WriteFile]
     .into_iter()
@@ -109,6 +114,9 @@ pub(crate) fn workspace_rule(
   }
   if delegation {
     tools.insert(Tool::DelegateTask);
+  }
+  if computer {
+    tools.extend([Tool::ComputerObserve, Tool::ComputerAct]);
   }
   ExplicitRoute {
     task_kind: TaskKind::Code,

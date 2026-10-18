@@ -49,7 +49,7 @@ flowchart TB
         OS[agent-computer / 操作系统会话与权限]
         Computer --> OS
     end
-    Computer <-->|认证会话挂接 / 只读能力检查| API
+    Computer <-->|认证会话挂接 / 观察与获批执行| API
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --> Workspace[工作区 / Git / Artifact / notify]
@@ -102,7 +102,7 @@ sequenceDiagram
     D-->>C: 领域事件 / 游标恢复
 ```
 
-审批不能扩大执行计划。命令与浏览器动作使用稳定动作标识记录意图和结果；连接丢失、取消或进程退出造成结果未知时，状态进入 `Uncertain`，按原标识核对，不自动重新执行。文件写入、MCP 和其他工具各自遵循适配器的授权及错误契约，不能将一种工具的回执能力推断到所有工具。
+审批不能扩大执行计划。命令、浏览器和计算机动作使用稳定动作标识记录意图和结果；连接丢失、取消或进程退出造成结果未知时，状态进入 `Uncertain`，按原标识核对，不自动重新执行。文件写入、MCP 和其他工具各自遵循适配器的授权及错误契约，不能将一种工具的回执能力推断到所有工具。
 
 ## 模型与分布式任务
 
@@ -154,7 +154,7 @@ flowchart LR
     Runtime --> Helper[客户端私有模式 CEF helper]
     Helper --> Web[不可信网页]
     Computer[ComputerRuntime 宿主库] -->|认证固定会话范围| Daemon
-    Daemon -->|只读能力检查| Computer
+    Daemon -->|观察 / 准备 / 准确审批后执行| Computer
     Computer --> Native[阻塞线程 / 操作系统会话互斥]
     Daemon --> Local[本地 SQLite]
     Daemon -->|TaskService / PeerService| Worker[受信 Worker daemon]
@@ -163,14 +163,14 @@ flowchart LR
 
 浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。
 
-ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 的宿主接口只提供能力检查，原生输入不由模型通过此接口直接调用。权限、租约与执行限制见[原生桌面执行边界](protocol.md#原生桌面执行边界)。
+ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 `computer_observe` 与 `computer_act`；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/Desktop 尚未接入交互式原生范围选择与连接入口，这条库连接不代表原生运行验收完成。macOS 无法确认会话解锁状态时仍以 `SessionStateUnknown` 拒绝操作。权限、租约与执行限制见[原生桌面执行边界](protocol.md#原生桌面执行边界)，工具机制见[模型计算机工具](tools.md#模型计算机工具)。
 
 ## 源码依据
 
 - 服务和消息：`proto/agent/v1/agent.proto`。
 - 认证连接：`crates/agent-client/src/lib.rs`。
 - Runtime 接口：`crates/agent-runtime/src/contracts.rs`。
-- 原生宿主挂接：`crates/agent-computer-runtime/src/attachment.rs`、`apps/agentd/src/computer/service.rs`。
+- 原生宿主挂接：`crates/agent-computer-runtime/src/attachment.rs`、`apps/agentd/src/computer/service.rs`、`apps/agentd/src/computer/tools/` 与 `apps/agentd/src/computer/mutation.rs`。
 - 持久状态：`crates/agent-storage/src/schema.sql`。
 
 跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 `attempt_id`、`owner_epoch` 和显式 `AcceptResult`，不能把收到结果当成已经采纳。

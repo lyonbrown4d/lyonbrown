@@ -25,6 +25,10 @@ pub struct Config {
     std::collections::BTreeMap<std::ffi::OsString, std::ffi::OsString>,
   #[arg(skip = true)]
   pub browser_tools: bool,
+  #[arg(skip)]
+  pub computer_tools: bool,
+  #[arg(skip = 300u64)]
+  pub computer_lease_secs: u64,
   #[arg(long, env = "LYONBROWN_LISTEN", default_value = "127.0.0.1:7447")]
   pub listen: SocketAddr,
   #[arg(long)]
@@ -112,6 +116,8 @@ impl Config {
     cli.mcp = crate::mcp_config::resolve(&settings)?;
     cli.configure_commands(&settings)?;
     cli.browser_tools = settings.browser_tools;
+    cli.computer_tools = settings.computer_tools;
+    cli.computer_lease_secs = settings.computer_lease_secs;
     cli.delegation_targets = settings.delegation_targets;
     cli.local_models = settings.local_models;
     cli.decision = settings.decision;

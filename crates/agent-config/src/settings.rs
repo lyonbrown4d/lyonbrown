@@ -31,6 +31,10 @@ pub struct Settings {
   #[serde(default = "enabled")]
   pub browser_tools: bool,
   #[serde(default)]
+  pub computer_tools: bool,
+  #[serde(default = "computer_lease_secs")]
+  pub computer_lease_secs: u64,
+  #[serde(default)]
   pub supports_images: bool,
   #[serde(default)]
   pub api_base: Option<String>,
@@ -46,6 +50,10 @@ pub struct Settings {
   pub relay: Option<crate::RelaySettings>,
   #[serde(skip)]
   pub(crate) credentials: Credentials,
+}
+
+fn computer_lease_secs() -> u64 {
+  300
 }
 
 fn enabled() -> bool {
@@ -78,6 +86,10 @@ impl Settings {
 
   /// Revalidate after applying explicit command-line overrides.
   pub fn validate(&self) -> Result<()> {
+    ensure!(
+      (10..=300).contains(&self.computer_lease_secs),
+      "computer lease must be within 10..=300 seconds"
+    );
     ensure!(
       self.listen.ip().is_loopback() && self.listen.port() != 0,
       "local daemon listen address must be a nonzero loopback socket"

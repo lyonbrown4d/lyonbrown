@@ -78,6 +78,12 @@ cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 ```
 
+`apps/agentd/tests/computer_tools.rs` 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 `attach_host`，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 `Uncertain` 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能作为 CLI/Desktop 原生连接入口或三平台桌面控制验收。
+
+```sh
+cargo test -p agentd --test computer_tools --locked
+```
+
 本地推理真实模型测试显式忽略，需自行提供已有的聊天 GGUF 文件。每条命令只验收所选后端、模型与当前主机：
 
 ```sh

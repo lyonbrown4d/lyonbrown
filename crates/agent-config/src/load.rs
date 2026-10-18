@@ -12,6 +12,8 @@ const ALIASES: &[(&str, &str)] = &[
   ("LYONBROWN_MODEL", "model"),
   ("LYONBROWN_SUPPORTS_IMAGES", "supports_images"),
   ("LYONBROWN_BROWSER_TOOLS", "browser_tools"),
+  ("LYONBROWN_COMPUTER_TOOLS", "computer_tools"),
+  ("LYONBROWN_COMPUTER_LEASE_SECS", "computer_lease_secs"),
   ("LYONBROWN_API_BASE", "api_base"),
   ("LYONBROWN_MAX_RUNS", "max_runs"),
   ("LYONBROWN_RUN_TIMEOUT_SECS", "run_timeout_secs"),

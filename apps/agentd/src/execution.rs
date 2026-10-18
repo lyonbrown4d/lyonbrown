@@ -68,6 +68,7 @@ impl Daemon {
       .update_run_owned(&run.id, session.owner_epoch, RunStatus::Running, "", "")?;
     self.events.notify_waiters();
     let browser = self.config.browser_tools && self.browser.has_runtime().await;
+    let computer = crate::computer::tools(self.clone(), run, session, cancel.clone()).await;
     let commands = crate::commands::enabled(&self.config);
     let delegation_targets = crate::delegation::available_targets(self)?;
     let mut capabilities = [
@@ -78,6 +79,9 @@ impl Daemon {
     .collect::<std::collections::BTreeSet<_>>();
     if browser {
       capabilities.insert(agent_decision::Capability::Browser);
+    }
+    if computer.is_some() {
+      capabilities.insert(agent_decision::Capability::Computer);
     }
     if commands {
       capabilities.insert(agent_decision::Capability::ProcessExecute);
@@ -98,6 +102,7 @@ impl Daemon {
         browser,
         commands,
         !delegation_targets.is_empty(),
+        computer.is_some(),
       )
     });
     let mut plan = match decision.decide(&run.prompt, explicit, cancel.clone()).await {
@@ -187,6 +192,9 @@ impl Daemon {
       tools.extend(crate::browser::tools(self.clone(), run, session));
     }
     tools.extend(crate::commands::tools(self.clone(), run, session)?);
+    if let Some(computer) = &computer {
+      tools.extend(computer.definitions());
+    }
     if plan.execution_mode == agent_decision::ExecutionMode::DistributedAllowed {
       let targets = delegation_targets
         .into_iter()
@@ -252,7 +260,11 @@ impl Daemon {
       _=cancel.cancelled()=>{runtime.cancel().await?;tokio::time::timeout(Duration::from_secs(10),&mut execute).await.map_err(|_|RuntimeError::Uncertain("cancellation did not reach a durable terminal result".into()))?},
       result=&mut execute=>result,
       _=tokio::time::sleep(Duration::from_secs(self.config.run_timeout_secs))=>{runtime.cancel().await?;tokio::time::timeout(Duration::from_secs(10),&mut execute).await.map_err(|_|RuntimeError::Uncertain("execution deadline expired with unknown outcome".into()))?},
-    }?;
+    };
+    if let Some(computer) = &computer {
+      computer.close().await;
+    }
+    let result = result?;
     if persist_failed.load(Ordering::Acquire) {
       return Err(
         RuntimeError::Uncertain(

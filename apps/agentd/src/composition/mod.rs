@@ -24,6 +24,10 @@ static_module! {
 }
 pub fn build(config: Config, models: crate::models::Models) -> anyhow::Result<Daemon> {
   crate::commands::validate(&config)?;
+  anyhow::ensure!(
+    (10..=300).contains(&config.computer_lease_secs),
+    "computer lease must be within 10..=300 seconds"
+  );
   agent_config::validate_delegation_targets(&config.delegation_targets)?;
   if let Some(relay) = &config.relay {
     relay.validate()?;

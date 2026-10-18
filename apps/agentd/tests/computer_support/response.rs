@@ -6,7 +6,12 @@ use agent_computer_runtime::{
   attach_host, wire,
 };
 use agent_protocol::v1;
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{
+  future::{Future, poll_fn},
+  sync::atomic::Ordering,
+  task::Poll,
+  time::Duration,
+};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tonic::{Code, Status};
@@ -41,7 +46,7 @@ fn assert_running(node: &TestNode, binding: &RunBinding) {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn busy_host_rejects_second_inspection_and_aborted_caller_releases_attachment() {
+async fn queued_inspection_cancellation_preserves_active_request_and_abort_releases_attachment() {
   let (node, _mock) = node().await;
   let desktop = desktop(&node);
   let binding = binding(&node, &node.session_id);
@@ -50,22 +55,43 @@ async fn busy_host_rejects_second_inspection_and_aborted_caller_releases_attachm
   let first = host.next().await;
   let command: Command = wire::decode(&first.payload).unwrap();
   assert!(matches!(command.operation, Operation::Capabilities));
-  let second = tokio::time::timeout(
-    DEADLINE,
+  let cancellation = CancellationToken::new();
+  let mut second = Box::pin(
     node
       .daemon
-      .computer_capabilities(binding.clone(), CancellationToken::new()),
-  )
-  .await
-  .unwrap()
-  .unwrap_err();
-  assert_eq!(second.code(), Code::ResourceExhausted);
-  assert!(
-    tokio::time::timeout(Duration::from_millis(100), host.requests.message())
-      .await
-      .is_err(),
-    "busy rejection must not send a second command"
+      .computer_capabilities(binding.clone(), cancellation.clone()),
   );
+  assert!(
+    poll_fn(|cx| Poll::Ready(second.as_mut().poll(cx).is_pending())).await,
+    "a second inspection must wait behind the dispatched request"
+  );
+  cancellation.cancel();
+  let error = tokio::time::timeout(DEADLINE, second)
+    .await
+    .unwrap()
+    .unwrap_err();
+  assert_eq!(error.code(), Code::Cancelled);
+  assert!(
+    !pending.is_finished(),
+    "queued cancellation must not finish the first request"
+  );
+  assert_eq!(
+    node
+      .daemon
+      .computer_runtime_info(&node.session_id)
+      .await
+      .unwrap()
+      .unwrap()
+      .host_id,
+    host.host,
+    "queued cancellation must retain the same attachment generation"
+  );
+  let mut next = Box::pin(host.requests.message());
+  assert!(
+    poll_fn(|cx| Poll::Ready(next.as_mut().poll(cx).is_pending())).await,
+    "queued cancellation must not send a second command"
+  );
+  drop(next);
   pending.abort();
   assert!(
     tokio::time::timeout(DEADLINE, pending)

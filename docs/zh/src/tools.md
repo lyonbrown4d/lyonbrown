@@ -66,6 +66,22 @@ cargo test -p agentd --test browser_tools --test command_tools --locked
 
 原生运行截图的覆盖范围见[桌面运行截图与验收范围](runtime-evidence.md)。浏览器工具实现位于 `apps/agentd/src/browser/agent_tools/`，BrowserRuntime 生命周期契约见[协议与平台能力](protocol.md)。
 
+## 模型计算机工具
+
+`computer_observe` 与 `computer_act` 默认关闭。受信任的 daemon 配置使用顶层 `computer_tools = true` 启用，环境变量为 `LYONBROWN_COMPUTER_TOOLS`。`computer_lease_secs` 默认为 `300` 秒，允许 `10..=300` 秒，环境变量为 `LYONBROWN_COMPUTER_LEASE_SECS`；配置沿用共享分层规则。这些开关不建立原生连接，CLI/Desktop 的交互式桌面范围选择与连接入口尚未接入。
+
+向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 `owner_epoch` 下、桌面范围已经固定的认证宿主，并确认能力响应的 `can_control()` 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Harness 执行，不创建另一套 Agent Loop。
+
+`computer_observe` 接收可选的 `screenshot`（默认 `false`），返回 `snapshot_id`、`revision`、范围、窗口和有界 AX 语义，并标记 `untrusted_desktop_content`。语义输出限制为 1 MiB；截图按需编码为 PNG，返回 artifact 摘要，不把 RGBA 像素直接放入模型文本。桌面内容不能授予权限。
+
+`computer_act` 要求上次观察的 `snapshot_id`、`revision` 和一个 `action`，支持 `move`、`click`、`scroll`、`key`、`text`。`timeout_ms` 默认 `5000`，范围为 `1..=30000` 毫秒。每次调用先消耗观察引用，重新捕获并比较原内容摘要；模型等待期间内容变化时，必须重新观察，不能静默采用新画面。内容一致后，Runtime 保留不可变的准备记录。
+
+人工审批绑定动作、宿主、Session、`owner_epoch`、Run、模型调用、原观察引用、完整准备记录及超时。daemon 在同一本地事务中消费准确审批、保存执行意图、事件和 Outbox，提交后才发送 `Execute`。Runtime 按原租约和观察限制在输入前再次捕获；内容变化、租约失效或取消都会阻止输入，准备记录失败后也不能重放。已提交动作的实际响应保存为持久回执；取消、断线、无效回执或无法确认的结果进入 `Uncertain`，停止继续运行并要求核对，不自动重放。
+
+Run 持有的续租任务在模型生成和人工审批等待期间维持当前有效令牌，每隔租期的三分之一尝试续租。它不能恢复已过期或撤销的控制权；Run 关闭时停止续租并撤销准确令牌，撤销失败则断开原连接。认证、传输限额与平台限制见[协议与平台能力](protocol.md#原生桌面执行边界)。
+
+依据：`apps/agentd/src/computer/tools/`、`apps/agentd/src/computer/mutation.rs`、`apps/agentd/src/execution.rs` 与 `crates/agent-computer-runtime/src/`。合成宿主回归的覆盖范围见[开发与验证](development.md#模型协议与决策回归)，不能替代原生桌面运行验收。
+
 ## 委派给配对节点
 
 `delegate_task` 默认关闭。先通过 daemon 的 `peer-pair` 操作核对完整 TLS 与 Noise 配对指纹，再在 `config.toml` 中列出允许的节点、HTTPS 地址与能力。发现结果和模型输出都不能添加配对或修改目标地址。

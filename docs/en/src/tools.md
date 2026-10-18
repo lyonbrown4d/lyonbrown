@@ -65,6 +65,22 @@ cargo test -p agentd --test browser_tools --test command_tools --locked
 ```
 
 See [Desktop screenshots and acceptance scope](runtime-evidence.md) for native runtime evidence. Tool implementation is in `apps/agentd/src/browser/agent_tools/`; BrowserRuntime lifecycle contracts are described in [Protocol and platform capabilities](protocol.md).
+## Model computer tools
+
+`computer_observe` and `computer_act` are disabled by default. Trusted daemon configuration enables them with top-level `computer_tools = true`, or `LYONBROWN_COMPUTER_TOOLS`. `computer_lease_secs` defaults to `300` seconds and accepts `10..=300`; its environment variable is `LYONBROWN_COMPUTER_LEASE_SECS`. Both use shared configuration layering. These switches do not create a native attachment. CLI/Desktop do not yet wire interactive desktop scope selection and attachment into their entry points.
+
+Before advertising computer capability to the decision model, the daemon requires an authenticated host with a fixed desktop scope bound to the same owned Session and `owner_epoch`, plus a capability reply whose `can_control()` is true. Attachment, model selection or configuration alone cannot bypass screen and input permission checks. The sole Harness executes these tools without a separate Agent Loop.
+
+`computer_observe` accepts optional `screenshot` (default `false`) and returns `snapshot_id`, `revision`, scope, windows and bounded AX semantics, marked `untrusted_desktop_content`. Semantic output is limited to 1 MiB. Requested screenshots are encoded as PNG artifacts and returned as digests, without raw RGBA pixels in model text. Desktop content cannot grant authority.
+
+`computer_act` requires the last observation's `snapshot_id`, `revision` and one `action`: `move`, `click`, `scroll`, `key` or `text`. `timeout_ms` defaults to `5000` and accepts `1..=30000` milliseconds. Each call consumes the observation reference, captures again and compares the original content digest. Content changes during model latency require another observation; the tool cannot silently adopt a new screen. Matching content produces an immutable preparation retained by the runtime.
+
+Human approval binds the action, host, Session, `owner_epoch`, Run, model call, original observation reference, complete preparation and timeout. In one local transaction, the daemon consumes that exact approval and records the execution intent, events and Outbox before sending `Execute`. Before input, the runtime captures again using the original lease and limits. Changed content, an invalid lease or cancellation prevents input; failed preparations cannot be replayed. A committed action's actual reply becomes a durable receipt. Cancellation, disconnection, invalid receipts or unknown outcomes enter `Uncertain`, stop continuation and require verification without automatic replay.
+
+A Run-scoped keeper renews the current live token during model generation and approval waits, attempting renewal every third of the lease period. It cannot revive an expired or revoked controller. Run closure stops renewal and revokes the exact token, disconnecting the pinned attachment if revocation fails. See [protocol and platform capabilities](protocol.md#native-desktop-execution-boundary) for authentication, transport limits and platform restrictions.
+
+Sources: `apps/agentd/src/computer/tools/`, `apps/agentd/src/computer/mutation.rs`, `apps/agentd/src/execution.rs` and `crates/agent-computer-runtime/src/`. See [development and verification](development.md#model-protocol-and-decision-regression) for synthetic-host regression coverage; it does not replace native desktop acceptance.
+
 ## Delegating to paired nodes
 
 `delegate_task` is disabled by default. Verify the complete TLS and Noise pairing fingerprint through the daemon's `peer-pair` operation, then list the permitted node, HTTPS origin and capabilities in `config.toml`. Discovery results and model output cannot create pairings or change target origins.

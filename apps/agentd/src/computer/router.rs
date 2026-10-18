@@ -1,18 +1,29 @@
 use super::ComputerRuntimeInfo;
 use agent_computer::DesktopCapabilities;
-use agent_computer_runtime::{
-  Command, Operation, RUNTIME_PROTOCOL_VERSION, Reply, RunBinding, RuntimeResult, wire,
-};
+use agent_computer_runtime::{Command, Operation, Reply, RunBinding, RuntimeResult};
 use agent_protocol::v1;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tonic::Status;
 use uuid::Uuid;
 
+mod receive;
+mod request;
+mod validation;
+
+#[derive(Clone)]
+pub(super) struct PinnedHost {
+  pub info: ComputerRuntimeInfo,
+  pub generation: Uuid,
+  dispatch: Arc<Mutex<()>>,
+}
+
 pub(super) struct Pending {
   id: String,
-  result: oneshot::Sender<Result<DesktopCapabilities, Status>>,
+  expected: Command,
+  pinned: PinnedHost,
+  result: oneshot::Sender<Result<RuntimeResult<Reply>, Status>>,
 }
 pub(super) struct Host {
   pub info: ComputerRuntimeInfo,
@@ -20,6 +31,7 @@ pub(super) struct Host {
   pub outgoing: mpsc::Sender<Result<v1::ComputerRuntimeRequest, Status>>,
   pub stop: CancellationToken,
   pending: Option<Pending>,
+  dispatch: Arc<Mutex<()>>,
 }
 #[derive(Default)]
 pub(crate) struct ComputerRouter {
@@ -50,6 +62,7 @@ impl ComputerRouter {
         outgoing,
         stop,
         pending: None,
+        dispatch: Arc::new(Mutex::new(())),
       },
     );
     Ok(generation)
@@ -87,127 +100,42 @@ impl ComputerRouter {
     if cancellation.is_cancelled() {
       return Err(Status::cancelled("inspection cancelled"));
     }
-    let id = Uuid::new_v4().to_string();
-    let payload = wire::encode(&Command {
-      binding: binding.clone(),
-      operation: Operation::Capabilities,
-    })
-    .map_err(|_| Status::internal("native request encoding failed"))?;
-    let (result, response) = oneshot::channel();
-    let (outgoing, generation) = {
-      let mut hosts = self.hosts.lock().await;
-      let host = hosts
-        .get_mut(&binding.daemon_session_id)
-        .ok_or_else(disconnected)?;
-      if host.info.owner_epoch != binding.owner_epoch {
-        return Err(Status::failed_precondition("runtime owner epoch changed"));
-      }
-      if host.pending.is_some() {
-        return Err(Status::resource_exhausted("native runtime is busy"));
-      }
-      host.pending = Some(Pending {
-        id: id.clone(),
-        result,
-      });
-      (host.outgoing.clone(), host.generation)
-    };
-    let mut guard = PendingGuard {
-      router: self.clone(),
-      session: binding.daemon_session_id,
-      generation,
-      finished: false,
-    };
-    let operation = async {
-      outgoing
-        .send(Ok(v1::ComputerRuntimeRequest {
-          request_id: id,
-          payload,
-        }))
-        .await
-        .map_err(|_| disconnected())?;
-      response.await.map_err(|_| disconnected())?
-    };
-    let result = tokio::select! {
-      biased;
-      _ = cancellation.cancelled() => Err(Status::cancelled("inspection cancelled")),
-      result = tokio::time::timeout(Duration::from_secs(35), operation) => result.unwrap_or_else(|_| Err(Status::deadline_exceeded("native inspection deadline"))),
-    };
-    if result.is_ok() {
-      guard.finished = true;
-    }
-    // On failure Drop disconnects only this host generation; callers never replay.
-    result
-  }
-
-  pub(super) async fn receive(
-    &self,
-    session: &str,
-    generation: Uuid,
-    response: v1::ComputerRuntimeResponse,
-  ) -> Result<(), Status> {
+    let host = self
+      .pin(&binding.daemon_session_id, binding.owner_epoch)
+      .await?;
+    match self
+      .request(&host, binding, Operation::Capabilities, cancellation)
+      .await?
     {
-      let hosts = self.hosts.lock().await;
-      let host = hosts
-        .get(session)
-        .filter(|host| host.generation == generation)
-        .ok_or_else(disconnected)?;
-      if response.payload.len() > 4096
-        || response.host_id != host.info.host_id
-        || response.daemon_session_id != session
-        || response.protocol_version != RUNTIME_PROTOCOL_VERSION
-        || !host
-          .pending
-          .as_ref()
-          .is_some_and(|pending| pending.id == response.request_id)
-      {
-        return Err(Status::invalid_argument("native response binding mismatch"));
-      }
-    }
-    let decoded =
-      tokio::task::spawn_blocking(move || wire::decode::<RuntimeResult<Reply>>(&response.payload))
-        .await
-        .map_err(|_| Status::internal("native response decoding failed"))?
-        .map_err(|_| Status::invalid_argument("invalid native response"))?;
-    let mut hosts = self.hosts.lock().await;
-    let host = hosts
-      .get_mut(session)
-      .filter(|host| host.generation == generation)
-      .ok_or_else(disconnected)?;
-    let capabilities = match decoded {
-      Ok(Reply::Capabilities(capabilities))
-        if capabilities.identity == host.info.desktop_session.identity =>
-      {
-        Ok(capabilities)
-      }
+      Ok(Reply::Capabilities(capabilities)) => Ok(capabilities),
       Err(_) => Err(Status::failed_precondition("native inspection rejected")),
-      _ => return Err(Status::invalid_argument("unexpected native reply")),
-    };
-    let pending = host.pending.take().ok_or_else(disconnected)?;
-    let _ = pending.result.send(capabilities);
-    Ok(())
+      _ => Err(Status::invalid_argument("unexpected native reply")),
+    }
+  }
+
+  pub(super) async fn pin(&self, session: &str, epoch: u64) -> Result<PinnedHost, Status> {
+    let hosts = self.hosts.lock().await;
+    let host = hosts.get(session).ok_or_else(disconnected)?;
+    if host.info.owner_epoch != epoch || host.stop.is_cancelled() {
+      return Err(Status::failed_precondition("runtime owner epoch changed"));
+    }
+    Ok(PinnedHost {
+      info: host.info.clone(),
+      generation: host.generation,
+      dispatch: host.dispatch.clone(),
+    })
   }
 }
 
-struct PendingGuard {
-  router: Arc<ComputerRouter>,
-  session: String,
-  generation: Uuid,
-  finished: bool,
+fn matches_host(host: &Host, pinned: &PinnedHost) -> bool {
+  host.generation == pinned.generation
+    && host.info.host_id == pinned.info.host_id
+    && host.info.daemon_session_id == pinned.info.daemon_session_id
+    && host.info.owner_epoch == pinned.info.owner_epoch
+    && host.info.desktop_session == pinned.info.desktop_session
+    && !host.stop.is_cancelled()
 }
-impl Drop for PendingGuard {
-  fn drop(&mut self) {
-    if !self.finished
-      && let Ok(handle) = tokio::runtime::Handle::try_current()
-    {
-      let router = self.router.clone();
-      let session = self.session.clone();
-      let generation = self.generation;
-      handle.spawn(async move {
-        router.disconnect(&session, generation).await;
-      });
-    }
-  }
-}
+
 fn disconnected() -> Status {
   Status::unavailable("native runtime disconnected; reconnect explicitly")
 }
