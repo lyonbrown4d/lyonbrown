@@ -22,6 +22,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 hex.workspace = true
+walkdir = "2.5"
 service-manager = "0.11"
 plist = "1.10"
 tokio.workspace = true

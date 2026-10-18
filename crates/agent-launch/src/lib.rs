@@ -1,4 +1,6 @@
 //! Per-user native service registration shared by CLI and Desktop.
+#[cfg(unix)]
+pub mod bundle_identity;
 mod install;
 pub mod model;
 pub mod native;

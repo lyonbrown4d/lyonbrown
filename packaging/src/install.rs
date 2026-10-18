@@ -11,6 +11,8 @@ use directories::BaseDirs;
 #[cfg(unix)]
 use semver::Version;
 
+#[cfg(target_os = "macos")]
+mod install_bundle;
 #[cfg(windows)]
 mod install_windows;
 
@@ -67,7 +69,7 @@ async fn main() -> Result<()> {
   ensure_daemon(options).await?;
   fs::create_dir_all(&destination)?;
   #[cfg(target_os = "macos")]
-  install_native_cli(source, &destination, &version)?;
+  install_bundle::install_native_cli(source, &destination, &version)?;
   let names: &[&str] = if cfg!(target_os = "macos") {
     &["agentd"]
   } else {
@@ -85,50 +87,6 @@ async fn main() -> Result<()> {
     version,
     destination.display()
   );
-  Ok(())
-}
-
-#[cfg(target_os = "macos")]
-fn install_native_cli(source: &Path, destination: &Path, version: &Version) -> Result<()> {
-  use sha2::{Digest, Sha256};
-  use std::{io::Read, os::unix::fs::symlink, process::Command};
-  let bundle = source
-    .parent()
-    .context("CLI archive has no root")?
-    .join("Lyonbrown CLI.app");
-  ensure!(bundle.is_dir(), "package is missing the native CLI CEF app");
-  let mut digest = Sha256::new();
-  let mut executable = fs::File::open(bundle.join("Contents/MacOS/agent-cli"))?;
-  let mut buffer = [0; 64 * 1024];
-  loop {
-    let size = executable.read(&mut buffer)?;
-    if size == 0 {
-      break;
-    }
-    digest.update(&buffer[..size]);
-  }
-  let identity = hex::encode(digest.finalize());
-  let versions = destination
-    .parent()
-    .context("bin directory has no parent")?
-    .join("share/lyonbrown/cli");
-  fs::create_dir_all(&versions)?;
-  // Keep prior app versions intact while a running client's helpers still use them.
-  let installed = versions
-    .join(format!("{version}-{}", &identity[..16]))
-    .join("Lyonbrown CLI.app");
-  if !installed.exists() {
-    let parent = installed.parent().context("app has no version directory")?;
-    fs::create_dir_all(parent)?;
-    let pending = parent.join(format!("pending-{}.app", std::process::id()));
-    fs::create_dir(&pending)?;
-    let status = Command::new("ditto").arg(&bundle).arg(&pending).status()?;
-    ensure!(status.success(), "native CLI app installation failed");
-    fs::rename(pending, &installed)?;
-  }
-  let pending = destination.join("agent.install-pending");
-  symlink(installed.join("Contents/MacOS/agent-cli"), &pending)?;
-  fs::rename(pending, destination.join("agent"))?;
   Ok(())
 }
 
