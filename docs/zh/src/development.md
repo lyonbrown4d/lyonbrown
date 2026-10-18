@@ -29,7 +29,7 @@ cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /a
 cargo dev --help
 ```
 
-Cargo 别名使用参数数组调用 `apps/agent-dev`，不依赖平台 Shell。根 `README.md` 列出常用命令，`cargo --list` 也会展示 `dev` 别名。
+Cargo 别名使用参数数组调用 `apps/agent-dev`，不依赖平台 Shell，也无需安装额外的任务运行器。根 `README.md` 列出常用命令，`cargo --list` 也会展示 `dev` 别名。
 
 需要单独运行前台 daemon 时，使用 `cargo dev daemon`。其他开发客户端仍可自动连接并复用它。
 

@@ -16,7 +16,7 @@ cargo dev daemon
 cargo dev --help
 ```
 
-The repository's [Cargo alias](.cargo/config.toml) invokes `apps/agent-dev`. Client commands build the required binaries, start or reuse the same development agentd and connect automatically. See the [development guide](docs/en/src/development.md) for configuration and shutdown options.
+The repository's [Cargo alias](.cargo/config.toml) invokes `apps/agent-dev`. No extra task runner is required. Client commands build the required binaries, start or reuse the same development agentd and connect automatically. See the [development guide](docs/en/src/development.md) for configuration and shutdown options.
 
 Build the documentation with mdBook:
 

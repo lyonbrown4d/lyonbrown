@@ -29,7 +29,7 @@ cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /a
 cargo dev --help
 ```
 
-The Cargo alias invokes `apps/agent-dev` with an argument array, without a platform shell. The root `README.md` lists common commands; `cargo --list` also displays the `dev` alias.
+The Cargo alias invokes `apps/agent-dev` with an argument array, without a platform shell or an extra task runner. The root `README.md` lists common commands; `cargo --list` also displays the `dev` alias.
 
 Use `cargo dev daemon` when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.
 
