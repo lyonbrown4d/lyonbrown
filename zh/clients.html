@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a91df114.js";
+            window.path_to_searchindex_js = "searchindex-43410440.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -178,6 +178,9 @@
                     <main>
                         <h1 id="终端与桌面客户端"><a class="header" href="#终端与桌面客户端">终端与桌面客户端</a></h1>
 <p>两个客户端均使用 <code>agent-client</code> 访问 daemon。界面中的会话、运行结果和审批来自服务端；客户端不内置另一套 Agent Loop。</p>
+<h2 id="macos-安装入口"><a class="header" href="#macos-安装入口">macOS 安装入口</a></h2>
+<p>PKG 将应用文件放在 <code>/Library/Application Support/Lyonbrown/Clients/{cli|desktop}/{version}-{完整目录哈希}/</code>，每份内容使用独立的组件收据。资源或 Helper 改变时，即使主程序和产品版本相同，也会选择不同的目录与组件标识。<code>/usr/local/bin/agent</code> 和 <code>/Applications/Lyonbrown.app</code> 分别由独立组件管理，仅作为指向所选内容的符号链接。打包器校验复制后的目录，禁止 Installer 重定位各级 bundle，不清理旧内容组件或收据。</p>
+<p>共享 launcher 和 CEF 宿主使用 macOS 内核报告的已加载主程序路径，从对应应用目录查找随附的 agentd、framework 和 Helper。公共入口切换版本后，旧进程仍使用原版本的配套文件。Helper 是包内复制的可执行文件；沙箱入口在调用 cef-rs 前，按该加载器使用的同一路径校验沙箱库。包内容校验与操作系统安装、升级、回滚验收分别进行，详见<a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
 <h2 id="终端工作台"><a class="header" href="#终端工作台">终端工作台</a></h2>
 <pre><code class="language-sh">cargo run -p agent-cli -- --help
 cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/lyonbrown-data
