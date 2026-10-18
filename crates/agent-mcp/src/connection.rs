@@ -36,7 +36,9 @@ pub(crate) async fn connect(config: &McpServerConfig, limits: &McpLimits) -> Res
           .redirect(reqwest::redirect::Policy::none())
           .no_proxy()
           .connect_timeout(limits.connection_timeout)
-          .timeout(limits.call_timeout)
+          // Logical connection/catalog and tool deadlines are enforced by their
+          // callers. A shorter tool budget must not expire the HTTP handshake.
+          .timeout(limits.connection_timeout.max(limits.call_timeout))
           .build()
           .map_err(|_| invalid("cannot build MCP HTTP client"))?;
         let mut options = StreamableHttpClientTransportConfig::with_uri(url.clone())

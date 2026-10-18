@@ -11,7 +11,10 @@ use tokio_util::sync::CancellationToken;
 
 #[tokio::test]
 async fn timeout_cancels_protocol_request_and_reports_uncertain_without_replay() {
-  let fixture = Fixture::default();
+  let fixture = Fixture {
+    handshake_delay: Duration::from_millis(500),
+    ..Default::default()
+  };
   let (config, stop) = server(fixture.clone(), false).await;
   let limits = McpLimits {
     call_timeout: Duration::from_millis(200),
@@ -20,15 +23,38 @@ async fn timeout_cancels_protocol_request_and_reports_uncertain_without_replay()
   let manager = McpManager::connect(vec![config], approval(true), limits)
     .await
     .expect("connect");
-  let result = manager
-    .execute(call(json!("wait")), CancellationToken::new())
-    .await;
+  let result = tokio::time::timeout(
+    Duration::from_secs(2),
+    manager.execute(call(json!("wait")), CancellationToken::new()),
+  )
+  .await
+  .expect("tool deadline remains bounded after the slower handshake");
   assert!(matches!(result, Err(RuntimeError::Uncertain(_))));
   tokio::time::timeout(Duration::from_secs(2), fixture.cancelled.notified())
     .await
     .expect("protocol cancellation reached server");
   assert_eq!(fixture.calls.load(Ordering::SeqCst), 1);
   manager.shutdown().await;
+  stop.cancel();
+}
+
+#[tokio::test]
+async fn connection_deadline_bounds_handshake_before_any_tool_call() {
+  let fixture = Fixture {
+    handshake_delay: Duration::from_millis(500),
+    ..Default::default()
+  };
+  let (config, stop) = server(fixture.clone(), false).await;
+  let limits = McpLimits {
+    connection_timeout: Duration::from_millis(200),
+    ..Default::default()
+  };
+  let result = McpManager::connect(vec![config], approval(true), limits).await;
+  assert!(matches!(
+    result,
+    Err(RuntimeError::Configuration(message)) if message == "MCP handshake deadline exceeded"
+  ));
+  assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
   stop.cancel();
 }
 

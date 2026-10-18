@@ -1,12 +1,16 @@
 use rmcp::{ErrorData, RoleServer, ServerHandler, model::*, service::RequestContext};
 use serde_json::{Value, json};
-use std::sync::{
-  Arc,
-  atomic::{AtomicUsize, Ordering},
+use std::{
+  sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+  },
+  time::Duration,
 };
 
 #[derive(Clone, Default)]
 pub struct Fixture {
+  pub handshake_delay: Duration,
   pub calls: Arc<AtomicUsize>,
   pub arguments: Arc<tokio::sync::Mutex<Vec<Value>>>,
   pub started: Arc<tokio::sync::Notify>,
@@ -16,6 +20,18 @@ pub struct Fixture {
 impl ServerHandler for Fixture {
   fn get_info(&self) -> ServerConfig {
     ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+  }
+
+  async fn initialize(
+    &self,
+    request: InitializeRequestParams,
+    context: RequestContext<RoleServer>,
+  ) -> std::result::Result<InitializeResult, ErrorData> {
+    context.peer.set_peer_info(request.clone());
+    if !self.handshake_delay.is_zero() {
+      tokio::time::sleep(self.handshake_delay).await;
+    }
+    self.negotiate_initialize(&request)
   }
 
   async fn list_tools(
