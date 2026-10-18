@@ -216,7 +216,12 @@ impl Engine {
     }
     let tab = self.tab(&action.tab_id)?;
     tools::act(tab, action)?;
-    tools::observe(tab, false).map(Reply::Snapshot)
+    tools::observe(tab, false)
+      .map(Reply::Snapshot)
+      .map_err(|_| {
+        tools::invalidate_after_effect(tab);
+        BrowserError::Uncertain
+      })
   }
 
   fn input(&mut self, id: &str, revision: u64, event: ViewInput) -> BrowserResult<Reply> {

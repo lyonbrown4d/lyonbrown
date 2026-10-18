@@ -48,9 +48,13 @@ Mutations require exact-action human approval. The daemon checks the session, ow
 
 For model mutations, one local transaction consumes the exact approval, records browser intent, and writes events and Outbox. It rechecks that the run is executing and the session and owner epoch match. A failed transaction rolls back approval consumption and intent together. Only after commit is the command sent to the approved runtime host. Cancellation or disconnection while awaiting a receipt preserves `Uncertain` without replay. Human browser commands use a separate authenticated entry point and record the same kinds of intent and outcome receipts.
 
+Native CEF semantic actions invalidate the old snapshot before scrolling, focusing, key input or navigation. After entering these steps, an action error or failed follow-up observation produces `Uncertain`, stops the current model Run and retains durable receipts for human reconciliation. Input, ownership and snapshot checks precede the action.
+
 `apps/agentd/tests/browser_tools.rs` uses local HTTP model mocks and real protocol adapters for Responses, Chat Completions and Anthropic Messages. It covers approval, denial, ownership/session boundaries, cancellation and screenshot artifacts. Its runtime host is synthetic: it verifies the Harness-to-daemon tool contract and durable state, and does not replace autonomous browser acceptance with native CEF.
 
 `apps/agentd/tests/native_browser_tools.rs` separately verifies the native chain. In a debug CEF environment on macOS 27.0.1 arm64, all three protocols completed real AX observation, exactly approved fill and click actions, local HTTP page effects and durable receipts. Three additional scenarios discarded the receipt after an actual successful click; cancellation and recovery preserved `Uncertain` without replay. The test uses synthetic pages, isolated profiles and the debug test keychain. It does not establish production keychain or other-platform acceptance.
+
+`apps/agentd/tests/native_browser_post_effect.rs` verifies a post-click page error through the Responses protocol: one actual click produces one local HTTP effect, followed by an error from oversized page content. It checks durable `Uncertain` Run and browser receipts, stopped model continuation, recovery without replay and rejection of new Runs in the unresolved session. This case and the six scenarios above ran against a rebuilt and signed native host.
 
 ```sh
 cargo test -p agentd --test browser_tools --test command_tools --locked
