@@ -159,6 +159,7 @@ impl Store {
         run.status = "uncertain".into();
         run.error =
           "daemon stopped before a durable terminal result; reconcile before resuming".into();
+        crate::approvals::close_pending(connection, &run.id)?;
         diesel::update(runs::table.find(&run.id))
           .set((
             runs::status.eq(&run.status),

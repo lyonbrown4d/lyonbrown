@@ -11,6 +11,8 @@ fn restart_preserves_safe_pending_and_marks_interrupted_uncertain() -> anyhow::R
   let session = store.create_session("running", "/tmp", "local")?;
   let (running, _) = store.accept_run(&session.id, 1, "act", "first")?;
   store.update_run_owned(&running.id, 1, RunStatus::Running, "", "")?;
+  let approval = store.request_approval_owned(&running.id, 1, "write_file", &json!({}))?;
+  let before = store.events(&running.id, 0, 100)?;
   let other = store.create_session("pending", "/tmp", "local")?;
   let (pending, _) = store.accept_run(&other.id, 1, "wait", "second")?;
   drop(store);
@@ -24,6 +26,33 @@ fn restart_preserves_safe_pending_and_marks_interrupted_uncertain() -> anyhow::R
     [&running.id]
   );
   assert_eq!(restored.run(&running.id)?.expect("run").status, "uncertain");
+  assert_eq!(
+    restored.approval(&approval.id)?.expect("approval").status,
+    "cancelled"
+  );
+  assert!(restored.decide_approval(&approval.id, true).is_err());
+  let events = restored.events(&running.id, 0, 100)?;
+  let recovery_events = &events[before.len()..];
+  assert_eq!(
+    recovery_events
+      .iter()
+      .map(|event| event.kind.as_str())
+      .collect::<Vec<_>>(),
+    ["approval_closed", "run_uncertain"]
+  );
+  assert_eq!(
+    serde_json::from_str::<serde_json::Value>(&recovery_events[0].payload_json)?,
+    json!({"approval_id":approval.id,"status":"cancelled"})
+  );
+  let outbox = restored.pending_outbox(100)?;
+  assert_eq!(
+    outbox
+      .iter()
+      .filter(|event| event.run_id == running.id)
+      .cloned()
+      .collect::<Vec<_>>(),
+    events
+  );
   assert_eq!(restored.pending_runs()?, [pending]);
   assert!(
     restored
@@ -31,6 +60,46 @@ fn restart_preserves_safe_pending_and_marks_interrupted_uncertain() -> anyhow::R
       .is_err()
   );
   assert!(restored.recover_interrupted()?.is_empty());
+  assert_eq!(restored.events(&running.id, 0, 100)?, events);
+  assert_eq!(restored.pending_outbox(100)?, outbox);
+  Ok(())
+}
+
+#[test]
+fn interrupted_approval_recovery_outbox_failure_rolls_back_all_state() -> anyhow::Result<()> {
+  let directory = tempfile::tempdir()?;
+  let path = directory.path().join("state.sqlite");
+  let store = Store::open(&path)?;
+  let session = store.create_session("approval", "/tmp", "local")?;
+  let (run, _) = store.accept_run(&session.id, 1, "act", "first")?;
+  store.update_run_owned(&run.id, 1, RunStatus::Running, "", "")?;
+  let approval = store.request_approval_owned(&run.id, 1, "write_file", &json!({}))?;
+  let before = store.run(&run.id)?.expect("run");
+  let events = store.events(&run.id, 0, 100)?;
+  let outbox = store.pending_outbox(100)?;
+  drop(store);
+  let restored = Store::open(&path)?;
+  let mut injected = SqliteConnection::establish(path.to_str().expect("path"))?;
+  // Fail after the approval closure and its event/Outbox have already been written.
+  injected.batch_execute("CREATE TRIGGER reject_recovery_outbox BEFORE INSERT ON outbox WHEN EXISTS (SELECT 1 FROM events WHERE run_id = NEW.run_id AND cursor = NEW.cursor AND json_extract(record, '$.kind') = 'run_uncertain') BEGIN SELECT RAISE(ABORT, 'injected storage fault'); END;")?;
+  let error = restored
+    .recover_interrupted()
+    .expect_err("recovery must fail");
+  assert!(error.to_string().contains("injected storage fault"));
+  assert_eq!(restored.run(&run.id)?.expect("run"), before);
+  assert_eq!(
+    restored.approval(&approval.id)?.expect("approval"),
+    approval
+  );
+  assert_eq!(restored.events(&run.id, 0, 100)?, events);
+  assert_eq!(restored.pending_outbox(100)?, outbox);
+  injected.batch_execute("DROP TRIGGER reject_recovery_outbox;")?;
+  assert_eq!(restored.recover_interrupted()?.len(), 1);
+  assert_eq!(restored.run(&run.id)?.expect("run").status, "uncertain");
+  assert_eq!(
+    restored.approval(&approval.id)?.expect("approval").status,
+    "cancelled"
+  );
   Ok(())
 }
 
