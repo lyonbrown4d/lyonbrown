@@ -50,11 +50,15 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 
 原生 CEF 语义动作在滚动、聚焦、按键或导航之前撤销旧快照。进入这些步骤后，动作或后续观察失败会进入 `Uncertain`，停止本次模型运行，并保留持久回执供人工核对。输入、所有权和快照检查在动作之前完成。
 
+人工接管的原始输入在聚焦或派发前撤销旧语义快照；进入这些步骤后的错误保存为 `Uncertain`，恢复不自动重放。成功输入本身不递增帧版本，允许同一帧的按下与松开配对；页面变化仍可使帧失效。
+
 `apps/agentd/tests/browser_tools.rs` 通过本地 HTTP 模型 mock 和真实协议适配器覆盖 Responses、Chat Completions、Anthropic Messages，以及批准、拒绝、所有权/会话边界、取消和截图 artifact。其 runtime host 是合成实现，验证的是 Harness 到 daemon 的工具契约与持久状态，不能替代原生 CEF 自主浏览器操作验收。
 
 原生链路使用 `apps/agentd/tests/native_browser_tools.rs` 单独验收。在 macOS 27.0.1 arm64 的调试 CEF 环境中，三个协议分别完成真实 AX 观察、准确审批后的填入与点击，并通过本地 HTTP 页面副作用和持久回执核对结果；另三种场景在点击成功后丢弃回执，确认取消与恢复不重放，运行保持 `Uncertain`。测试只操作合成页面和独立 Profile，使用调试测试钥匙串，不证明生产钥匙串或其他平台已验收。
 
 `apps/agentd/tests/native_browser_post_effect.rs` 通过 Responses 协议验证点击后的页面错误：一次实际点击产生一次本地 HTTP 副作用，随后超限页面内容触发错误。测试确认运行与浏览器回执持久化为 `Uncertain`、模型停止继续执行、恢复不重放，并拒绝在未核对结果的会话中启动新运行。该场景与上述六个场景均使用重新构建并签名的原生宿主执行。
+
+同一调试环境还通过 `apps/agentd/tests/native_browser_human_input.rs` 验证人工接管：鼠标按下与松开只产生一次页面副作用，错误回执和 Outbox 保存为 `uncertain`，恢复不重放，也不启动模型运行。`crates/agent-browser-runtime/tests/cef_runtime.rs` 验证正常的同帧鼠标输入和文本提交。
 
 ```sh
 cargo test -p agentd --test browser_tools --test command_tools --locked

@@ -1,7 +1,7 @@
-use super::{TabRecord, call};
+use super::{TabRecord, call, invalidate_after_effect};
 use agent_browser::{BrowserError, BrowserResult, ViewInput};
 use cef::*;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::time::{Duration, Instant};
 
 pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> BrowserResult<()> {
@@ -18,11 +18,12 @@ pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> Browser
   match event {
     ViewInput::MouseMove { x, y } => {
       position(x, y)?;
-      call(
+      dispatch(
         tab,
         "Input.dispatchMouseEvent",
         json!({"type":"mouseMoved","x":x,"y":y}),
         deadline,
+        false,
       )?;
     }
     ViewInput::MouseButton {
@@ -32,22 +33,18 @@ pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> Browser
       pressed,
     } => {
       position(x, y)?;
-      if pressed && let Some(host) = tab.browser.host() {
-        // The GPUI focus belongs to another process. Transfer it explicitly to
-        // the windowless Chromium widget before native pointer/text input.
-        host.set_focus(1);
-      }
       let button = match button {
         0 => "left",
         1 => "middle",
         2 => "right",
         _ => return Err(BrowserError::InvalidInput("invalid mouse button".into())),
       };
-      call(
+      dispatch(
         tab,
         "Input.dispatchMouseEvent",
         json!({"type":if pressed {"mousePressed"} else {"mouseReleased"},"x":x,"y":y,"button":button,"clickCount":1}),
         deadline,
+        pressed,
       )?;
     }
     ViewInput::Wheel {
@@ -57,11 +54,12 @@ pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> Browser
       delta_y,
     } => {
       position(x, y)?;
-      call(
+      dispatch(
         tab,
         "Input.dispatchMouseEvent",
         json!({"type":"mouseWheel","x":x,"y":y,"deltaX":delta_x.clamp(-10000,10000),"deltaY":delta_y.clamp(-10000,10000)}),
         deadline,
+        false,
       )?;
     }
     ViewInput::Key {
@@ -74,11 +72,12 @@ pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> Browser
           "invalid key code or modifiers".into(),
         ));
       }
-      call(
+      dispatch(
         tab,
         "Input.dispatchKeyEvent",
         json!({"type":if pressed {"keyDown"} else {"keyUp"},"windowsVirtualKeyCode":virtual_key,"modifiers":modifiers}),
         deadline,
+        false,
       )?;
     }
     ViewInput::Text(text) => {
@@ -87,7 +86,13 @@ pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> Browser
           "input text exceeds 64 KiB".into(),
         ));
       }
-      call(tab, "Input.insertText", json!({"text":text}), deadline)?;
+      dispatch(
+        tab,
+        "Input.insertText",
+        json!({"text":text}),
+        deadline,
+        false,
+      )?;
     }
     ViewInput::Resize { width, height } => {
       let size = (width as usize)
@@ -99,6 +104,10 @@ pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> Browser
           "viewport exceeds CPU frame limit".into(),
         ));
       }
+      let host = tab
+        .browser
+        .host()
+        .ok_or_else(|| BrowserError::Unavailable("CEF browser host closed".into()))?;
       {
         let mut view = tab.view.borrow_mut();
         view.viewport = (width, height);
@@ -106,12 +115,37 @@ pub(in crate::native) fn input(tab: &mut TabRecord, event: ViewInput) -> Browser
         view.frame = None;
       }
       tab.snapshot = None;
-      let host = tab
-        .browser
-        .host()
-        .ok_or_else(|| BrowserError::Unavailable("CEF browser host closed".into()))?;
       host.was_resized();
     }
   }
   Ok(())
+}
+
+// All event validation happens before this boundary. Focus handlers and input
+// dispatch can affect the page even when Chromium cannot return a usable reply.
+fn dispatch(
+  tab: &mut TabRecord,
+  method: &str,
+  parameters: Value,
+  deadline: Instant,
+  focus: bool,
+) -> BrowserResult<()> {
+  let host = tab
+    .browser
+    .host()
+    .ok_or_else(|| BrowserError::Unavailable("CEF browser host closed".into()))?;
+  tab.snapshot = None;
+  if focus {
+    // GPUI focus belongs to another process; transfer it to Chromium first.
+    host.set_focus(1);
+  }
+  // Successful raw input preserves the frame revision: a paired mouse-up or
+  // key-up may still refer to the same frame as its preceding down event.
+  match call(tab, method, parameters, deadline) {
+    Ok(_) => Ok(()),
+    Err(_) => {
+      invalidate_after_effect(tab);
+      Err(BrowserError::Uncertain)
+    }
+  }
 }

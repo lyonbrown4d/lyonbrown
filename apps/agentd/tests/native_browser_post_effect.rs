@@ -1,7 +1,9 @@
-//! Candidate regression: real CEF effects must remain uncertain after AX failure.
+//! Native regression: real CEF effects must remain uncertain after AX failure.
 #[allow(dead_code)]
 #[path = "native_browser_support/mod.rs"]
 mod native_browser_support;
+#[path = "native_browser_support/poison_page.rs"]
+mod poison_page;
 #[path = "browser_tool_support/receipts.rs"]
 mod receipts;
 #[allow(dead_code)]
@@ -11,20 +13,10 @@ mod support;
 use agent_browser::Command;
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply_with_id};
 use native_browser_support::{NativeRuntime, approval, model_observation, semantic};
+use poison_page::PoisonPage;
 use serde_json::{Value, json};
-use std::{
-  sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-  },
-  time::Duration,
-};
+use std::time::Duration;
 use support::TestNode;
-use tokio::{
-  io::{AsyncReadExt, AsyncWriteExt},
-  sync::Notify,
-  task::{JoinHandle, JoinSet},
-};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 #[ignore = "requires a real bundled native-cef acceptance executable"]
@@ -46,7 +38,7 @@ async fn responses_native_poison_click_stops_after_one_effect_with_uncertain_rec
   })
   .await;
   let runtime = NativeRuntime::attach(&node.client, &executable, false).await;
-  let page = PoisonPage::start().await;
+  let page = PoisonPage::start("Poison once").await;
   let space = node
     .client
     .open_browser_space_on_host(
@@ -97,7 +89,7 @@ async fn responses_native_poison_click_stops_after_one_effect_with_uncertain_rec
     .push_reply(text_reply(protocol, "Synthetic continuation detected"))
     .await;
   node.client.approve(&pending.id, true).await.unwrap();
-  page.wait_effect().await;
+  assert!(page.wait_effect().await, "one actual synthetic HTTP effect");
   let result = node.terminal(&run.id).await;
   let requests = model.requests().await;
   let actions = runtime.actions.lock().await.clone();
@@ -168,106 +160,4 @@ async fn wait_requests(model: &MockModelServer, count: usize) {
   tokio::time::timeout(Duration::from_secs(30), model.wait_for_requests(count))
     .await
     .expect("Harness model request");
-}
-
-struct PoisonPage {
-  url: String,
-  effects: Arc<AtomicUsize>,
-  changed: Arc<Notify>,
-  server: JoinHandle<()>,
-}
-
-impl PoisonPage {
-  async fn start() -> Self {
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let url = format!("http://{}/", listener.local_addr().unwrap());
-    let effects = Arc::new(AtomicUsize::new(0));
-    let changed = Arc::new(Notify::new());
-    let recorded = effects.clone();
-    let notify = changed.clone();
-    let html = Arc::new(format!(
-      r#"<!doctype html><meta charset="utf-8"><title>Synthetic poison click</title><button onclick="fetch('/effect',{{method:'POST',keepalive:true}});this.setAttribute('aria-label','x'.repeat({}))">Poison once</button>"#,
-      agent_browser::MAX_AX_BYTES + 1024
-    ));
-    let server = tokio::spawn(async move {
-      let mut clients = JoinSet::new();
-      while let Ok((mut socket, _)) = listener.accept().await {
-        while clients.try_join_next().is_some() {}
-        let recorded = recorded.clone();
-        let notify = notify.clone();
-        let html = html.clone();
-        clients.spawn(async move {
-          let request = tokio::time::timeout(Duration::from_secs(2), async {
-            let mut bytes = Vec::new();
-            let mut chunk = [0; 1024];
-            while bytes.len() < 8192 {
-              let count = socket.read(&mut chunk).await.ok()?;
-              if count == 0 {
-                return None;
-              }
-              bytes.extend_from_slice(&chunk[..count]);
-              if bytes.windows(4).any(|part| part == b"\r\n\r\n") {
-                return Some(bytes);
-              }
-            }
-            None
-          })
-          .await;
-          let Ok(Some(bytes)) = request else { return };
-          let request = String::from_utf8_lossy(&bytes);
-          let first = request.lines().next().unwrap_or("");
-          let body = if first.starts_with("POST /effect ") {
-            recorded.fetch_add(1, Ordering::SeqCst);
-            notify.notify_waiters();
-            "ok"
-          } else if first.starts_with("GET / ") {
-            html.as_str()
-          } else {
-            ""
-          };
-          let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/html;charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-          );
-          let _ = tokio::time::timeout(
-            Duration::from_secs(2),
-            socket.write_all(response.as_bytes()),
-          )
-          .await;
-        });
-      }
-    });
-    Self {
-      url,
-      effects,
-      changed,
-      server,
-    }
-  }
-
-  fn count(&self) -> usize {
-    self.effects.load(Ordering::SeqCst)
-  }
-
-  async fn wait_effect(&self) {
-    tokio::time::timeout(Duration::from_secs(20), async {
-      loop {
-        let changed = self.changed.notified();
-        tokio::pin!(changed);
-        changed.as_mut().enable();
-        if self.count() > 0 {
-          return;
-        }
-        changed.await;
-      }
-    })
-    .await
-    .expect("one actual synthetic HTTP effect");
-  }
-}
-
-impl Drop for PoisonPage {
-  fn drop(&mut self) {
-    self.server.abort();
-  }
 }

@@ -50,11 +50,15 @@ For model mutations, one local transaction consumes the exact approval, records 
 
 Native CEF semantic actions invalidate the old snapshot before scrolling, focusing, key input or navigation. After entering these steps, an action error or failed follow-up observation produces `Uncertain`, stops the current model Run and retains durable receipts for human reconciliation. Input, ownership and snapshot checks precede the action.
 
+Human takeover input invalidates cached semantic observations before focus or dispatch. Errors after that boundary produce a durable `Uncertain` receipt without automatic replay. Successful input does not itself advance the frame revision, preserving paired down/up events; page changes may still invalidate that revision.
+
 `apps/agentd/tests/browser_tools.rs` uses local HTTP model mocks and real protocol adapters for Responses, Chat Completions and Anthropic Messages. It covers approval, denial, ownership/session boundaries, cancellation and screenshot artifacts. Its runtime host is synthetic: it verifies the Harness-to-daemon tool contract and durable state, and does not replace autonomous browser acceptance with native CEF.
 
 `apps/agentd/tests/native_browser_tools.rs` separately verifies the native chain. In a debug CEF environment on macOS 27.0.1 arm64, all three protocols completed real AX observation, exactly approved fill and click actions, local HTTP page effects and durable receipts. Three additional scenarios discarded the receipt after an actual successful click; cancellation and recovery preserved `Uncertain` without replay. The test uses synthetic pages, isolated profiles and the debug test keychain. It does not establish production keychain or other-platform acceptance.
 
 `apps/agentd/tests/native_browser_post_effect.rs` verifies a post-click page error through the Responses protocol: one actual click produces one local HTTP effect, followed by an error from oversized page content. It checks durable `Uncertain` Run and browser receipts, stopped model continuation, recovery without replay and rejection of new Runs in the unresolved session. This case and the six scenarios above ran against a rebuilt and signed native host.
+
+The same debug environment also passed `apps/agentd/tests/native_browser_human_input.rs`: paired human mouse input produced one page effect, persisted an `uncertain` receipt and matching Outbox, and recovered without replay or model execution. `crates/agent-browser-runtime/tests/cef_runtime.rs` verifies successful same-revision pointer input and committed text.
 
 ```sh
 cargo test -p agentd --test browser_tools --test command_tools --locked
