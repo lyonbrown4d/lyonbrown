@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d5e4f292.js";
+            window.path_to_searchindex_js = "searchindex-1153c5aa.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -214,7 +214,9 @@ LYONBROWN_SERVICE_AGENTD=/absolute/path/agentd cargo test -p agent-launch --test
 <p>测试检查两个客户端复用同一服务、不同数据目录不能替换服务，以及原生服务重启后节点身份和会话记录保持一致。成功后会验证注册归属和空闲状态，再移除本次服务与测试数据。失败时保留数据，避免删除仍在运行的 daemon；先核对 <code>service.json</code> 与原生服务状态，再处理遗留注册。</p>
 <p>此路径已在 macOS 27.0.1、arm64 上通过实际产品二进制验收，不涉及模型调用或钥匙串授权。它不替代 PKG 的操作系统安装验收，也不证明 Windows SCM 或 Linux systemd 的运行行为。</p>
 <h2 id="文档站点发布"><a class="header" href="#文档站点发布">文档站点发布</a></h2>
-<p><code>.github/workflows/pages.yml</code> 使用固定版本 mdBook 构建中英文书籍，将语言入口、<code>zh/</code> 与 <code>en/</code> 放入同一个 Pages artifact。仓库须将 GitHub Pages 的构建来源设为 GitHub Actions。工作流在 <code>main</code> 的文档变更或手动触发时运行，部署作业使用 <code>github-pages</code> 环境；实际站点可用性以部署结果与页面回读为准。</p>
+<p>文档使用本机构建、分支发布的方式部署到 GitHub Pages。执行 <code>mdbook build docs/zh</code> 和 <code>mdbook build docs/en</code>，将 <code>docs/index.html</code> 放到发布根目录，两套构建结果分别放到 <code>zh/</code> 和 <code>en/</code>，根目录另放一个空的 <code>.nojekyll</code> 文件。构建目录不包含 Cargo 产物、本机配置或凭据。</p>
+<p>静态文件提交到独立的 <code>gh-pages</code> 分支；Pages 的构建类型设为 <code>legacy</code>，发布来源为该分支的 <code>/</code>。发布前检查两种语言的本地资源与链接，推送后检查 Pages 构建结果，并回读公开站点。分支推送成功不等于站点已发布成功。</p>
+<p><code>.github/workflows/pages.yml</code> 保留为支持 GitHub Actions 的环境使用的手动发布入口；使用该方式前须将 Pages 来源切换为 GitHub Actions。当前手动分支发布不调用这个工作流。</p>
 
                     </main>
 

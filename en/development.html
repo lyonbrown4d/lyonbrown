@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-714922a7.js";
+            window.path_to_searchindex_js = "searchindex-d490809a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -214,7 +214,9 @@ LYONBROWN_SERVICE_AGENTD=/absolute/path/agentd cargo test -p agent-launch --test
 <p>The test checks that two clients reuse the same service, another data directory cannot replace it, and a native service restart preserves node identity and session records. On success it verifies registration ownership and idle state before removing its own service and data. On failure it preserves the data so a live daemon keeps its executable and store; inspect <code>service.json</code> and native service state before handling any remaining registration.</p>
 <p>This path passed with the actual product binary on macOS 27.0.1, arm64, without model calls or Keychain authorization. It does not replace OS installation acceptance for the PKG or establish Windows SCM or Linux systemd runtime behavior.</p>
 <h2 id="publish-the-documentation-site"><a class="header" href="#publish-the-documentation-site">Publish the documentation site</a></h2>
-<p><code>.github/workflows/pages.yml</code> builds both books with a fixed mdBook version and puts a language entry page, <code>zh/</code> and <code>en/</code> into one Pages artifact. Set the repository’s GitHub Pages build source to GitHub Actions. Documentation changes on <code>main</code> or a manual dispatch trigger the workflow; deployment uses the <code>github-pages</code> environment. Deployment results and a rendered page check establish actual site availability.</p>
+<p>Documentation is built locally and published from a GitHub Pages branch. Run <code>mdbook build docs/zh</code> and <code>mdbook build docs/en</code>. Place <code>docs/index.html</code> at the publication root, put the two generated books under <code>zh/</code> and <code>en/</code>, and add an empty <code>.nojekyll</code> file at the root. Cargo artifacts, local configuration and credentials are excluded.</p>
+<p>Commit the static files to the separate <code>gh-pages</code> branch. Configure Pages with build type <code>legacy</code>, using <code>/</code> on that branch. Check both languages’ local resources and links before pushing, then inspect the Pages build and read back the public site. A successful branch push alone does not establish a successful deployment.</p>
+<p><code>.github/workflows/pages.yml</code> remains a manual publishing entry for environments with GitHub Actions enabled; switch the Pages source to GitHub Actions before using it. The manual branch deployment does not invoke that workflow.</p>
 
                     </main>
 

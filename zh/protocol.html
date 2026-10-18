@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d5e4f292.js";
+            window.path_to_searchindex_js = "searchindex-1153c5aa.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -192,7 +192,7 @@
 <tr><td><code>PeerService</code></td><td>节点信息、配对与撤销信任</td></tr>
 <tr><td><code>BrowserService</code></td><td>浏览器 Space、Tab、观察、操作与人工接管</td></tr>
 <tr><td><code>BrowserRuntimeService</code></td><td>客户端内嵌 Runtime 的认证双向挂接</td></tr>
-<tr><td><code>ComputerRuntimeService</code></td><td>交互用户原生执行环境的反向消息契约</td></tr>
+<tr><td><code>ComputerRuntimeService</code></td><td>绑定 daemon 会话的认证原生执行环境连接</td></tr>
 <tr><td><code>ControlService</code></td><td>注册、解析、配对与双向转发消息</td></tr>
 </tbody>
 </table>
@@ -222,8 +222,10 @@
 <p>BrowserRuntime 以 crate 嵌入客户端，CEF helper 通过客户端私有模式运行，浏览器执行与 GPUI UI 状态隔离。没有匹配的 CEF SDK 和运行资源时，浏览器能力不能被视为可用。Profile 的持久化与活页面恢复分开说明，避免把磁盘目录存在误认为网页状态已经恢复。</p>
 <h2 id="原生桌面执行边界"><a class="header" href="#原生桌面执行边界">原生桌面执行边界</a></h2>
 <p><code>agent-computer</code> 封装屏幕观察、输入和桌面租约；<code>agent-computer-runtime</code> 在进程内保留准备好的操作，并按 daemon Session、Run 和 <code>owner_epoch</code> 校验调用归属。执行消息只引用原准备记录、动作标识和内容摘要，不能替换输入内容。等待审批后，Runtime 使用原租约和原观察限制重新观察；内容变化、租约失效或取消都会阻止输入。准备记录在刷新或输入前消耗，失败后也不能重放同一动作。</p>
-<p>不同 Runtime 必须共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 消息限制为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。持久审批、执行意图、进程重启后的去重、helper 身份验证与跨进程互斥由宿主负责，进程内记录不能代替这些保证。</p>
-<p>这些组件与反向消息契约不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
+<p>原生宿主由客户端进程嵌入，通过 <code>attach_native</code> 连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 <code>owner_epoch</code>。每个会话只允许一个宿主连接，每次能力检查均在发送前和接收后核对 Run 状态及会话归属。连接成功本身不授予截图或输入权限。</p>
+<p>连接只允许一个执行中的命令，原生调用和消息编解码在阻塞线程执行。重复请求、重叠命令、非法消息或断线会取消连接，不自动重放输入。已经进入操作系统的调用仍需实际结束；取消不会强行终止线程。原生宿主使用用户数据目录中的文件锁，按操作系统图形会话互斥，改变 daemon 节点标识或客户端数据目录不能绕过这把锁。执行线程持有文件锁至调用结束。</p>
+<p>同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 消息限制为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。</p>
+<p>daemon 的连接接口只开放只读能力检查；模型工具不通过这条接口执行原生输入。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
 
                     </main>
 
