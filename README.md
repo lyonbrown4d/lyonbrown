@@ -7,6 +7,17 @@ Lyonbrown is a Rust workspace for a daemon-owned agent runtime, an authenticated
 - [Documentation sources](docs/)
 - [Engineering constraints](AGENTS.md)
 
+Run these development commands from the repository root; no additional task runner is required:
+
+```sh
+cargo dev desktop
+cargo dev tui
+cargo dev daemon
+cargo dev --help
+```
+
+The repository's [Cargo alias](.cargo/config.toml) invokes `apps/agent-dev`. Client commands build the required binaries, start or reuse the same development agentd and connect automatically. See the [development guide](docs/en/src/development.md) for configuration and shutdown options.
+
 Build the documentation with mdBook:
 
 ```sh

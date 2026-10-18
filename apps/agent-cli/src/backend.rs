@@ -49,10 +49,12 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
                   client = None;
                   match connect(&services).await {
                       Ok((connected, sessions)) => {
+                          tracing::info!(operation = "client.connect", outcome = "authenticated", process_id = std::process::id(), session_count = sessions.len(), "Terminal client connected");
                           if agent_browser_runtime::runtime_available() {
                               match agent_browser_runtime::attach(connected.clone(), &profiles).await {
                                   Ok(attachment) => browser = Some(attachment),
                                   Err(error) => {
+                                      tracing::warn!(operation = "browser.attach", outcome = "failed", process_id = std::process::id(), error_category = "runtime_attachment", "Terminal browser attachment failed");
                                       let _ = updates.send(Update::Notice(format!("BrowserRuntime unavailable: {error}"))).await;
                                   }
                               }
@@ -60,15 +62,36 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
                           client = Some(connected);
                           let _ = updates.send(Update::Connected(sessions)).await;
                       }
-                      Err(error) => { let _ = updates.send(Update::Disconnected(error.to_string())).await; }
+                      Err(error) => {
+                          tracing::warn!(operation = "client.connect", outcome = "failed", process_id = std::process::id(), error_category = "connection_or_handshake", "Terminal client connection failed");
+                          let _ = updates.send(Update::Disconnected(error.to_string())).await;
+                      }
                   }
                   continue;
               }
               let Some(client) = client.as_ref() else {
+                  tracing::warn!(operation = "client.request", outcome = "rejected", process_id = std::process::id(), error_category = "disconnected", "Terminal request requires a connection");
                   let _ = updates.send(Update::Notice("Disconnected: Ctrl+R reconnects.".into())).await;
                   continue;
               };
+              let operation = match &action {
+                  Action::Connect => "client.connect",
+                  Action::NewSession => "session.create",
+                  Action::Select(_) => "session.select",
+                  Action::Submit { .. } => "run.submit",
+                  Action::Cancel(_) => "run.cancel",
+                  Action::Approve { .. } => "approval.decide",
+              };
+              let session_id = match &action {
+                  Action::Select(id) | Action::Submit { session: id, .. } => Some(id.clone()),
+                  _ => selected.clone(),
+              };
+              let run_id = match &action {
+                  Action::Cancel(id) => Some(id.clone()),
+                  _ => None,
+              };
               if let Err(error) = execute(client, action, &mut selected, &mut stream, &updates).await {
+                  tracing::warn!(operation, outcome = "failed", process_id = std::process::id(), session_id = session_id.as_deref(), run_id = run_id.as_deref(), error_category = "request_failed", "Terminal request failed; no submission was replayed");
                   let _ = updates.send(Update::Notice(format!("Request failed: {error}. Unknown outcomes are not retried."))).await;
               }
           }
@@ -77,10 +100,12 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
                   let reason = browser.as_ref().and_then(|attachment| attachment.error())
                       .unwrap_or_else(|| "runtime stopped".into());
                   browser = None;
+                  tracing::warn!(operation = "browser.disconnect", outcome = "disconnected", process_id = std::process::id(), session_id = selected.as_deref(), error_category = "runtime_stopped", "Terminal browser runtime disconnected");
                   let _ = updates.send(Update::Notice(format!("BrowserRuntime disconnected: {reason}. Browser actions are not replayed."))).await;
               }
               if let (Some(connected), Some(session)) = (&client, &selected)
                   && let Err(error) = refresh_session(connected, session, &updates).await {
+                      tracing::warn!(operation = "session.refresh", outcome = "disconnected", process_id = std::process::id(), session_id = session.as_str(), error_category = "refresh_failed", "Terminal client disconnected after refresh failed");
                       let _ = updates.send(Update::Disconnected(error.to_string())).await;
                       client = None;
                       browser = None;
@@ -89,6 +114,13 @@ pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Up
           }
       }
     }
+    tracing::info!(
+      operation = "client.disconnect",
+      outcome = "closed",
+      process_id = std::process::id(),
+      session_id = selected.as_deref(),
+      "Terminal client subscriptions closing"
+    );
     if let Some(task) = stream {
       task.abort();
     }
@@ -207,6 +239,7 @@ async fn watch(
 ) -> anyhow::Result<tokio::task::JoinHandle<()>> {
   let mut events = client.watch_run(run, 0).await?;
   let updates = updates.clone();
+  let run_id = run.to_owned();
   Ok(tokio::spawn(async move {
     loop {
       match events.message().await {
@@ -217,6 +250,14 @@ async fn watch(
         }
         Ok(None) => break,
         Err(error) => {
+          tracing::warn!(
+            operation = "run.watch",
+            outcome = "disconnected",
+            process_id = std::process::id(),
+            run_id,
+            status_code = ?error.code(),
+            "Terminal run event stream interrupted"
+          );
           let _ = updates
             .send(Update::Notice(format!(
               "Event stream interrupted: {error}. Task state remains in agentd."

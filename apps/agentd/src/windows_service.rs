@@ -85,54 +85,50 @@ fn service_main(arguments: Vec<OsString>) {
   ));
 }
 
-fn run(handle: &ServiceStatusHandle, stop: CancellationToken) -> Result<()> {
+#[tokio::main]
+async fn run(handle: &ServiceStatusHandle, stop: CancellationToken) -> Result<()> {
   handle.set_service_status(status(ServiceState::StartPending, 0, 1))?;
-  let runtime = tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .build()?;
   // Keep SCM startup checkpoints advancing while persisted jobs are recovered.
   let ready = CancellationToken::new();
   let ready_signal = ready.clone();
-  runtime.block_on(async {
-    let config = agentd::config::Config::load_service()?;
-    ensure!(
-      config.maintenance.is_none() && !config.compatibility_json,
-      "SCM runtime does not accept console maintenance modes"
-    );
-    let shutdown_handle = *handle;
-    let monitor_stop = stop.clone();
-    let shutdown = async {
-      stop.cancelled().await;
-      let _ = shutdown_handle.set_service_status(status(ServiceState::StopPending, 0, 1));
-    };
-    let serve = super::run(config, shutdown, || {
-      handle.set_service_status(status(ServiceState::Running, 0, 0))?;
-      ready_signal.cancel();
-      Ok(())
-    });
-    let pending = async {
-      let mut checkpoint = 1_u32;
-      loop {
-        tokio::time::sleep(Duration::from_secs(5)).await;
-        let state = if monitor_stop.is_cancelled() {
-          ServiceState::StopPending
-        } else if !ready.is_cancelled() {
-          ServiceState::StartPending
-        } else {
-          continue;
-        };
-        checkpoint = checkpoint.saturating_add(1);
-        if let Err(error) = handle.set_service_status(status(state, 0, checkpoint)) {
-          tracing::warn!(error = %error, "SCM progress status update failed");
-        }
+  let config = agentd::config::Config::load_service()?;
+  ensure!(
+    config.maintenance.is_none() && !config.compatibility_json,
+    "SCM runtime does not accept console maintenance modes"
+  );
+  let shutdown_handle = *handle;
+  let monitor_stop = stop.clone();
+  let shutdown = async {
+    stop.cancelled().await;
+    let _ = shutdown_handle.set_service_status(status(ServiceState::StopPending, 0, 1));
+  };
+  let serve = super::run(config, shutdown, || {
+    handle.set_service_status(status(ServiceState::Running, 0, 0))?;
+    ready_signal.cancel();
+    Ok(())
+  });
+  let pending = async {
+    let mut checkpoint = 1_u32;
+    loop {
+      tokio::time::sleep(Duration::from_secs(5)).await;
+      let state = if monitor_stop.is_cancelled() {
+        ServiceState::StopPending
+      } else if !ready.is_cancelled() {
+        ServiceState::StartPending
+      } else {
+        continue;
+      };
+      checkpoint = checkpoint.saturating_add(1);
+      if let Err(error) = handle.set_service_status(status(state, 0, checkpoint)) {
+        tracing::warn!(error = %error, "SCM progress status update failed");
       }
-    };
-    tokio::pin!(serve, pending);
-    tokio::select! {
-      result = &mut serve => result,
-      _ = &mut pending => Err(anyhow::anyhow!("SCM progress monitor stopped unexpectedly")),
     }
-  })
+  };
+  tokio::pin!(serve, pending);
+  tokio::select! {
+    result = &mut serve => result,
+    _ = &mut pending => Err(anyhow::anyhow!("SCM progress monitor stopped unexpectedly")),
+  }
 }
 
 fn status(state: ServiceState, code: u32, checkpoint: u32) -> ServiceStatus {

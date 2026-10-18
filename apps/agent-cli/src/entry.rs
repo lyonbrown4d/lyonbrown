@@ -18,13 +18,11 @@ pub fn run() -> anyhow::Result<std::process::ExitCode> {
   let matches = Config::command().get_matches();
   let explicit_endpoint = matches.value_source("endpoint") != Some(ValueSource::DefaultValue);
   let config = Config::from_arg_matches(&matches)?.resolve(explicit_endpoint)?;
-  let runtime = tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .build()?;
-  runtime.block_on(run_terminal(config))?;
+  run_terminal(config)?;
   Ok(std::process::ExitCode::SUCCESS)
 }
 
+#[tokio::main]
 async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
   let _logs = agent_telemetry::init_with_options(
     &agent_telemetry::LogOptions {

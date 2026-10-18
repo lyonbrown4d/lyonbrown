@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/agentd", "apps/agent-cli", "apps/agent-desktop", "apps/agent-control"]
+members = ["crates/*", "apps/agentd", "apps/agent-cli", "apps/agent-desktop", "apps/agent-control", "apps/agent-dev"]
 default-members = ["apps/agentd", "apps/agent-cli", "apps/agent-control"]
 
 [workspace.package]

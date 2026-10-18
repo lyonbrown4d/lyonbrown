@@ -2,6 +2,41 @@
 
 工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 `Cargo.lock` 管理。Rust 工具链最低版本见根 `Cargo.toml` 的 `rust-version`。工程约束统一维护在根 `AGENTS.md`。
 
+异步入口优先使用 `#[tokio::main]`，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。
+
+## 本地开发启动
+
+仓库的 `.cargo/config.toml` 定义了 `dev` 别名，直接使用 Cargo，无需安装额外任务工具。在仓库根目录执行一条命令，自动构建、启动开发 agentd 并打开客户端：
+
+```sh
+cargo dev desktop
+# 或启动终端界面
+cargo dev tui
+```
+
+可以在不同终端多次执行 `cargo dev tui`，同时打开 Desktop。使用相同数据目录、地址和配置的客户端共用一个开发 agentd；命令自动传入连接地址和认证信息，无需先手动启动 daemon。
+
+默认数据目录为 `.local/dev/agentd`，地址为 `http://127.0.0.1:7547`。开发目录在 `cargo clean` 后保留。命令使用前台开发进程，不注册或替换操作系统服务。首次启动 daemon 的终端保留其监督进程；关闭该终端中的客户端后，daemon 继续运行。在这个终端按 Ctrl+C 停止开发 daemon。后续终端只复用 daemon，退出客户端不会停止 daemon。
+
+启动时会串行检查同一数据目录，避免多个客户端同时创建 daemon。复用前通过认证握手检查节点身份、协议、构建和配置。端口被其他进程占用、凭据不匹配或已有 daemon 与本次构建、配置不一致时，命令报错并保留已有进程。需要使用新构建或配置时，先在原终端停止开发 daemon，再重新执行启动命令。
+
+路径相对于仓库根目录解析，可包含空格。多个客户端应使用相同参数；开发端口必须是非零回环端口，且不能使用产品默认端口 7447：
+
+```sh
+cargo dev desktop --dry-run
+cargo dev tui --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev --help
+```
+
+Cargo 别名使用参数数组调用 `apps/agent-dev`，不依赖平台 Shell。根 `README.md` 列出常用命令，`cargo --list` 也会展示 `dev` 别名。
+
+需要单独运行前台 daemon 时，使用 `cargo dev daemon`。其他开发客户端仍可自动连接并复用它。
+
+默认配置为开发数据目录中的 `config.toml`，dotenv 文件位于配置文件旁边。`--config` 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 `agent-config` 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 `agent-telemetry` 写入日志；默认位于开发数据目录的 `logs` 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 `auth.token`，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。
+
+`--dry-run` 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 `agent-dev`。默认 Desktop/TUI 构建不启用 `native-cef`，浏览器执行能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 [本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
+
 ## 检查命令
 
 在仓库根目录执行：

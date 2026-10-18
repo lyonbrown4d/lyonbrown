@@ -1,0 +1,27 @@
+[package]
+name = "agent-dev"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+agent-config = { path = "../../crates/agent-config" }
+agent-client = { path = "../../crates/agent-client" }
+agent-protocol = { path = "../../crates/agent-protocol" }
+agent-security = { path = "../../crates/agent-security" }
+agent-telemetry = { path = "../../crates/agent-telemetry" }
+tracing.workspace = true
+fs2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+hex.workspace = true
+uuid.workspace = true
+tokio.workspace = true
+tempfile.workspace = true
+process-wrap = { version = "=10.0.1", default-features = false, features = ["tokio1", "process-group", "job-object", "kill-on-drop"] }
+
+[dev-dependencies]
+agent-test-support = { path = "../../crates/agent-test-support" }

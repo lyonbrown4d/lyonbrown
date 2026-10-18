@@ -1,5 +1,5 @@
 use agentd::{Daemon, config::Config};
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 #[cfg(windows)]
 mod windows_service;
@@ -9,10 +9,62 @@ fn main() -> Result<()> {
   if let Some(name) = windows_service::requested_name()? {
     return windows_service::dispatch(&name);
   }
-  tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .build()?
-    .block_on(run(Config::load()?, shutdown_signal(), || Ok(())))
+  run_console()
+}
+
+#[tokio::main]
+async fn run_console() -> Result<()> {
+  // Only the development supervisor opts into this private, credential-free readiness pipe.
+  let ready_nonce = std::env::var("LYONBROWN_DEV_READY_NONCE").ok();
+  if let Some(nonce) = &ready_nonce {
+    anyhow::ensure!(
+      nonce.len() == 32 && nonce.bytes().all(|byte| byte.is_ascii_hexdigit()),
+      "invalid development readiness nonce"
+    );
+  }
+  let parent_closed = tokio_util::sync::CancellationToken::new();
+  if ready_nonce.is_some() {
+    monitor_development_parent(parent_closed.clone())?;
+  }
+  let shutdown = async {
+    tokio::select! {
+      _ = shutdown_signal() => {},
+      _ = parent_closed.cancelled() => {},
+    }
+  };
+  run(Config::load()?, shutdown, move || {
+    if let Some(nonce) = ready_nonce {
+      use std::io::Write;
+      let mut stdout = std::io::stdout().lock();
+      writeln!(stdout, "lyonbrown-dev-ready:{nonce}")?;
+      stdout.flush()?;
+    }
+    Ok(())
+  })
+  .await
+}
+
+fn monitor_development_parent(closed: tokio_util::sync::CancellationToken) -> Result<()> {
+  // A private pipe reaches EOF even if the supervisor dies without running Rust destructors.
+  // Keep this blocking reader outside Tokio so runtime shutdown never waits for stdin.
+  std::thread::Builder::new()
+    .name("development-parent".into())
+    .spawn(move || {
+      use std::io::Read;
+      let mut input = std::io::stdin().lock();
+      let mut byte = [0_u8; 1];
+      loop {
+        match input.read(&mut byte) {
+          Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+          _ => {
+            closed.cancel();
+            break;
+          }
+        }
+      }
+    })
+    .context("monitor development supervisor lifetime")?;
+  Ok(())
 }
 
 async fn run(
@@ -45,6 +97,24 @@ async fn run(
     "agentd",
     &std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
   )?;
+  let result = serve(config, shutdown, ready).await;
+  if let Err(error) = &result {
+    tracing::error!(
+      operation = "daemon.serve",
+      outcome = "failed",
+      error = %error,
+      recovery = "Inspect daemon configuration, store permissions and listener availability",
+      "Daemon startup or serving failed"
+    );
+  }
+  result
+}
+
+async fn serve(
+  config: Config,
+  shutdown: impl std::future::Future<Output = ()>,
+  ready: impl FnOnce() -> Result<()>,
+) -> Result<()> {
   let daemon = Daemon::open(config.clone()).await?;
   if let Some(command) = &config.maintenance {
     agentd::peers::maintain(&daemon, command)?;

@@ -2,6 +2,41 @@
 
 The workspace uses Rust edition 2024. Cargo workspace declarations and `Cargo.lock` manage product dependencies. The root `Cargo.toml` records the minimum Rust version in `rust-version`. Engineering constraints live in the root `AGENTS.md`.
 
+Async entry points prefer `#[tokio::main]`. Clap, Serde and fluxdi macros provide argument parsing, serialization and dependency injection. CEF helper and Windows SCM dispatch run before runtime initialization. GPUI retains its main-thread event loop; explicitly owned or shared runtimes remain part of its composition.
+
+## Run locally during development
+
+The repository's `.cargo/config.toml` defines the `dev` alias. It uses Cargo directly, with no additional task runner to install. Run one command from the repository root to build the required binaries, start a development agentd and open the client:
+
+```sh
+cargo dev desktop
+# Or open the terminal UI:
+cargo dev tui
+```
+
+Run `cargo dev tui` in multiple terminals alongside Desktop. Clients using the same data directory, address and configuration share one development agentd. The command supplies the connection address and credentials automatically; no separate daemon startup is required.
+
+Defaults are `.local/dev/agentd` for persistent development data and `http://127.0.0.1:7547` for the endpoint. `cargo clean` preserves the data. These commands supervise foreground development processes without registering or replacing OS services. The terminal that first starts the daemon keeps its supervisor running after its client closes. Press Ctrl+C there to stop the development daemon. Later terminals reuse the daemon and can exit their clients without stopping it.
+
+Startup checks are serialized for each data directory to prevent concurrent clients from creating multiple daemons. Reuse requires an authenticated handshake and matching node identity, protocol, build and configuration. An endpoint occupied by an unrelated process, invalid credentials or a different live build/configuration produces an error and leaves the existing process running. To use a new build or configuration, stop the development daemon in its original terminal and run the command again.
+
+Relative paths resolve from the repository root and may contain spaces. Use matching options for all clients. Development requires a nonzero loopback port other than the product default 7447:
+
+```sh
+cargo dev desktop --dry-run
+cargo dev tui --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev desktop --data-dir .local/dev/demo --listen 127.0.0.1:7548 --config /absolute/path/dev.toml
+cargo dev --help
+```
+
+The Cargo alias invokes `apps/agent-dev` with an argument array, without a platform shell. The root `README.md` lists common commands; `cargo --list` also displays the `dev` alias.
+
+Use `cargo dev daemon` when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.
+
+The default configuration is `config.toml` inside the development data directory, with `.env` beside it. `--config` selects an existing TOML file. The commands do not create or overwrite configuration or dotenv files. Model, tool and log settings use the shared `agent-config` layering rules. agentd, TUI, Desktop and the development launcher all use shared `agent-telemetry` logging. Files default to the development data directory's `logs` subdirectory, use separate process prefixes and follow the configured rotation and retention settings. The launcher forces the selected development address and data directory, reads that directory's `auth.token` and ignores inherited connection credentials. Tokens pass only through the client child environment, never command arguments or launch output.
+
+`--dry-run` displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile `agent-dev`. Default Desktop/TUI builds do not enable `native-cef`; browser execution reports unavailable. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md) for the full CEF SDK, helper and application bundle layout.
+
 ## Verification commands
 
 Run from the repository root:

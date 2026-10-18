@@ -1,6 +1,7 @@
 //! Authenticated daemon client shared by terminal and native desktop clients.
 mod browser;
 mod computer;
+mod development;
 mod orchestration;
 mod workspace;
 use agent_protocol::v1::{self, client_service_client::ClientServiceClient};
@@ -82,9 +83,10 @@ impl AgentClient {
         endpoint.tls_config(tonic::transport::ClientTlsConfig::new().with_webpki_roots())?;
     }
     let channel = endpoint.connect().await.context("connect to agentd")?;
-    let bearer = format!("Bearer {}", token.trim())
+    let mut bearer: MetadataValue<tonic::metadata::Ascii> = format!("Bearer {}", token.trim())
       .parse()
       .context("invalid daemon token")?;
+    bearer.set_sensitive(true);
     let auth = Authentication(bearer);
     let client = Self {
       orchestration: v1::orchestration_service_client::OrchestrationServiceClient::with_interceptor(

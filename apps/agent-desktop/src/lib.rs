@@ -57,7 +57,8 @@ pub fn run() -> anyhow::Result<std::process::ExitCode> {
   let data_dir = std::env::var_os("LYONBROWN_DATA_DIR")
     .map(std::path::PathBuf::from)
     .map_or_else(agent_config::default_data_dir, Ok)?;
-  let settings = agent_config::load(&data_dir, None)?;
+  let config_path = std::env::var_os("LYONBROWN_CONFIG").map(std::path::PathBuf::from);
+  let settings = agent_config::load(&data_dir, config_path.as_deref())?;
   let _logs = agent_telemetry::init_with_options(
     &agent_telemetry::LogOptions {
       directory: settings.log_directory.clone(),

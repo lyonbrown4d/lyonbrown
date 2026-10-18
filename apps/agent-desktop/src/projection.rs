@@ -11,6 +11,13 @@ impl Desktop {
   ) {
     match update {
       Update::Connected(client, sessions) => {
+        tracing::info!(
+          operation = "client.connect",
+          outcome = "authenticated",
+          process_id = std::process::id(),
+          session_count = sessions.len(),
+          "Desktop client connected"
+        );
         self.tasks.update(cx, |state, _| {
           state.client = None;
           state.attachment = None;
@@ -153,6 +160,17 @@ impl Desktop {
         }
       }
       Update::Error(error) => {
+        // Error text may originate in a tool/provider; persist only safe context.
+        tracing::warn!(
+          operation = "client.connect_or_request",
+          outcome = "failed",
+          process_id = std::process::id(),
+          session_id = self.selected.as_deref(),
+          run_id = self.active_run.as_deref(),
+          client_present = self.client.is_some(),
+          error_category = "connection_or_request_failed",
+          "Desktop operation failed; inspect daemon state before retrying"
+        );
         self.error = Some(error);
         self.busy = false;
         self.status = if self.active_run.is_some() {

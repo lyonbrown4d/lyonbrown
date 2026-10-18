@@ -18,7 +18,7 @@ pub(crate) fn db_error(error: anyhow::Error) -> Status {
 #[tonic::async_trait]
 impl ClientService for Daemon {
   async fn get_node(&self, _: Request<v1::Empty>) -> Result<Response<v1::Node>, Status> {
-    Ok(Response::new(v1::Node {
+    let mut response = Response::new(v1::Node {
       id: self.node_id.clone(),
       name: "Lyonbrown".into(),
       os: std::env::consts::OS.into(),
@@ -40,7 +40,18 @@ impl ClientService for Daemon {
       active_runs: self.active_count().await as u32,
       storage_schema_version: 1,
       draining: self.draining.load(std::sync::atomic::Ordering::Acquire),
-    }))
+    });
+    // This authenticated, non-secret marker distinguishes live development incarnations.
+    if let Ok(nonce) = std::env::var("LYONBROWN_DEV_READY_NONCE")
+      && nonce.len() == 32
+      && nonce.bytes().all(|byte| byte.is_ascii_hexdigit())
+      && let Ok(value) = nonce.parse()
+    {
+      response
+        .metadata_mut()
+        .insert("x-lyonbrown-dev-instance", value);
+    }
+    Ok(response)
   }
   async fn prepare_upgrade(&self, _: Request<v1::Empty>) -> Result<Response<v1::Node>, Status> {
     let _submission = self.submission.lock().await;
