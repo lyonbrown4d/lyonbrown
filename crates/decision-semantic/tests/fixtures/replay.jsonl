@@ -1,0 +1,8 @@
+{"text":"请检查锁竞争","expected":"coding"}
+{"text":"Inspect lock contention","expected":"coding"}
+{"text":"给朋友打个招呼","expected":"chat"}
+{"text":"Greet my friend","expected":"chat"}
+{"text":"混合问候与锁竞争","expected":null}
+{"text":"Mixed greeting and lock contention","expected":null}
+{"text":"未知的第三类任务","expected":null}
+{"text":"An unrelated third task","expected":null}

@@ -20,6 +20,7 @@ struct Candidate {
 pub struct DecisionEngine {
   backend: Option<Arc<dyn DecisionBackend>>,
   policy: DecisionPolicy,
+  reusable: Arc<decision_core::DecisionEngine>,
 }
 impl DecisionEngine {
   pub fn with_available_targets(&self, available: &BTreeSet<String>) -> Self {
@@ -30,6 +31,7 @@ impl DecisionEngine {
     policy.distributed_allowed &= !policy.allowed_targets.is_empty();
     Self {
       backend: self.backend.clone(),
+      reusable: self.reusable.clone(),
       policy,
     }
   }
@@ -42,6 +44,7 @@ impl DecisionEngine {
       .retain(|capability| available.contains(capability));
     Self {
       backend: self.backend.clone(),
+      reusable: self.reusable.clone(),
       policy,
     }
   }
@@ -60,7 +63,22 @@ impl DecisionEngine {
     {
       return Err(DecisionError::InvalidInput);
     }
-    Ok(Self { backend, policy })
+    let reusable = decision_core::DecisionEngine::new(decision_core::Policy::default(), Vec::new())
+      .map_err(|_| DecisionError::InvalidInput)?;
+    Ok(Self {
+      backend,
+      policy,
+      reusable: Arc::new(reusable),
+    })
+  }
+
+  /// Shared embedded routing engine. Agent tools and authority remain in this adapter.
+  pub fn reusable(&self) -> Arc<decision_core::DecisionEngine> {
+    self.reusable.clone()
+  }
+  pub fn with_reusable(mut self, engine: Arc<decision_core::DecisionEngine>) -> Self {
+    self.reusable = engine;
+    self
   }
 
   pub async fn decide(

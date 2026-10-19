@@ -1,5 +1,9 @@
-//! Reusable synthetic model HTTP fixtures. Depend on this crate only in tests.
+//! Reusable synthetic model fixtures for tests and local development.
 mod fixtures;
+mod mock_inference;
 mod server;
 pub use fixtures::*;
-pub use server::{MockModelServer, RecordedRequest, ScriptedReply};
+pub use mock_inference::{
+  MockGeneration, MockInferenceBackend, MockInferenceCounts, MockInferenceStep,
+};
+pub use server::{FiniteReply, MockModelServer, RecordedRequest, ScriptedReply};

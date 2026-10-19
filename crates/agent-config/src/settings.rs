@@ -141,6 +141,7 @@ impl Settings {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct DecisionSettings {
+  pub policy: Option<decision_core::Policy>,
   /// None selects the explicit workspace rule without a classifier request.
   pub model: Option<String>,
   pub provider: Option<String>,
@@ -151,6 +152,7 @@ pub struct DecisionSettings {
 impl Default for DecisionSettings {
   fn default() -> Self {
     Self {
+      policy: None,
       model: None,
       provider: None,
       api_base: None,
@@ -161,6 +163,9 @@ impl Default for DecisionSettings {
 }
 impl DecisionSettings {
   pub fn validate(&self) -> Result<()> {
+    if let Some(policy) = &self.policy {
+      decision_core::PolicySnapshot::new(policy.clone())?;
+    }
     ensure!(
       (1..=60_000).contains(&self.timeout_ms),
       "decision timeout_ms must be between 1 and 60000"

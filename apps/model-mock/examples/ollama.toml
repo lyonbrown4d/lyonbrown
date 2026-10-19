@@ -1,0 +1,58 @@
+# Native Ollama-shaped JSON/NDJSON. No Ollama process, GPU, or weights required.
+listen = "127.0.0.1:11435"
+max_concurrency = 16
+
+[[scenarios]]
+model = "mock-local:latest"
+protocol = "ollama_chat"
+repeat_last = true
+replies = [{ kind = "text", text = "Synthetic local chat response." }]
+
+[[scenarios]]
+model = "mock-local:latest"
+protocol = "ollama_generate"
+repeat_last = true
+replies = [{ kind = "text", text = "Synthetic local completion." }]
+
+# The daemon uses this OpenAI-compatible endpoint through its real adapter.
+[[scenarios]]
+model = "mock-local:latest"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "text", text = "Synthetic local OpenAI-compatible response." }]
+
+[[scenarios]]
+model = "mock-tools:latest"
+protocol = "ollama_chat"
+repeat_last = true
+replies = [{ kind = "tool", name = "fixture_echo", arguments = { text = "synthetic" } }, { kind = "text", text = "Synthetic tool result received." }]
+
+[[scenarios]]
+model = "mock-truncated:latest"
+protocol = "ollama_chat"
+repeat_last = true
+replies = [{ kind = "truncated", text = "Incomplete synthetic output." }]
+
+[[scenarios]]
+model = "mock-missing-terminal:latest"
+protocol = "ollama_chat"
+repeat_last = true
+replies = [{ kind = "missing_terminal", text = "Cancel this incomplete response." }]
+
+[[scenarios]]
+model = "mock-malformed:latest"
+protocol = "ollama_generate"
+repeat_last = true
+replies = [{ kind = "malformed", body = "{not-json}\n" }]
+
+[[scenarios]]
+model = "mock-delay:latest"
+protocol = "ollama_chat"
+repeat_last = true
+replies = [{ kind = "text", text = "Delayed synthetic response.", delay_ms = 5000 }]
+
+[[scenarios]]
+model = "mock-error:latest"
+protocol = "ollama_generate"
+repeat_last = true
+replies = [{ kind = "error", status = 503 }]

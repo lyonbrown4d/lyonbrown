@@ -67,6 +67,9 @@ impl Daemon {
       .store
       .update_run_owned(&run.id, session.owner_epoch, RunStatus::Running, "", "")?;
     self.events.notify_waiters();
+    self
+      .record_model_route(run, session.owner_epoch, &cancel)
+      .await?;
     let browser = self.config.browser_tools && self.browser.has_runtime().await;
     let computer = crate::computer::tools(self.clone(), run, session, cancel.clone()).await;
     let commands = crate::commands::enabled(&self.config);

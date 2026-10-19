@@ -28,6 +28,12 @@ pub struct RecordedRequest {
   pub headers: BTreeMap<String, String>,
   pub body: Value,
 }
+/// A finite synthetic HTTP reply for response-template libraries.
+pub struct FiniteReply {
+  pub status: u16,
+  pub headers: Vec<(String, String)>,
+  pub body: Vec<u8>,
+}
 #[derive(Clone)]
 pub struct ScriptedReply {
   status: u16,
@@ -96,6 +102,43 @@ impl ScriptedReply {
   pub fn header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
     self.headers.push((name.into(), value.into()));
     self
+  }
+  /// Complete a successful Chat Completions stream; truncated fixtures omit this marker.
+  pub fn with_sse_done(mut self) -> Self {
+    self.chunks.push(b"data: [DONE]\n\n".to_vec());
+    self
+  }
+  /// Finite transport representation for mature HTTP mocking libraries.
+  /// Stalled responses have no finite body and must use `into_response`.
+  pub fn finite_body(&self) -> Option<FiniteReply> {
+    (!self.stall).then(|| FiniteReply {
+      status: self.status,
+      headers: self.headers.clone(),
+      body: self.chunks.concat(),
+    })
+  }
+  /// Serve this fixture with Axum while preserving chunk boundaries and stalls.
+  pub fn into_response(self) -> Response {
+    let chunks = stream::iter(
+      self
+        .chunks
+        .into_iter()
+        .map(|bytes| Ok::<_, Infallible>(Bytes::from(bytes))),
+    );
+    let body = if self.stall {
+      Body::from_stream(chunks.chain(stream::pending()))
+    } else {
+      Body::from_stream(chunks)
+    };
+    let mut response = Response::new(body);
+    *response.status_mut() =
+      StatusCode::from_u16(self.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    for (name, value) in self.headers {
+      if let (Ok(name), Ok(value)) = (HeaderName::try_from(name), HeaderValue::try_from(value)) {
+        response.headers_mut().insert(name, value);
+      }
+    }
+    response
   }
 }
 struct ServerState {
@@ -215,24 +258,5 @@ async fn respond(State(state): State<Arc<ServerState>>, request: Request) -> Res
     }
     changed.await;
   };
-  let chunks = stream::iter(
-    reply
-      .chunks
-      .into_iter()
-      .map(|bytes| Ok::<_, Infallible>(Bytes::from(bytes))),
-  );
-  let body = if reply.stall {
-    Body::from_stream(chunks.chain(stream::pending()))
-  } else {
-    Body::from_stream(chunks)
-  };
-  let mut response = Response::new(body);
-  *response.status_mut() =
-    StatusCode::from_u16(reply.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-  for (name, value) in reply.headers {
-    if let (Ok(name), Ok(value)) = (HeaderName::try_from(name), HeaderValue::try_from(value)) {
-      response.headers_mut().insert(name, value);
-    }
-  }
-  response
+  reply.into_response()
 }

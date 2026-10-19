@@ -62,6 +62,7 @@ fn chat_text(text: &str) -> ScriptedReply {
     json!({"choices":[{"delta":{"content":last},"finish_reason":null}]}),
     json!({"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14}}),
   ])
+  .with_sse_done()
 }
 fn chat_tool(call_id: &str, name: &str, arguments: Value) -> ScriptedReply {
   let encoded = arguments.to_string();
@@ -71,6 +72,7 @@ fn chat_tool(call_id: &str, name: &str, arguments: Value) -> ScriptedReply {
     json!({"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":last}}]},"finish_reason":null}]}),
     json!({"choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":7,"completion_tokens":2,"total_tokens":9}}),
   ])
+  .with_sse_done()
 }
 fn responses_text(text: &str) -> ScriptedReply {
   let (first, last) = halves(text);

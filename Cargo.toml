@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/agentd", "apps/agent-cli", "apps/agent-desktop", "apps/agent-control", "apps/agent-dev"]
+members = ["crates/*", "apps/agentd", "apps/agent-cli", "apps/agent-desktop", "apps/agent-control", "apps/agent-dev", "apps/ai-gateway", "apps/model-mock"]
 default-members = ["apps/agentd", "apps/agent-cli", "apps/agent-control"]
 
 [workspace.package]
@@ -10,6 +10,8 @@ license = "Apache-2.0"
 rust-version = "1.99"
 
 [workspace.dependencies]
+rig-core = { version = "=0.44.0", default-features = false }
+rig-reqwest = { version = "=0.44.0", default-features = false, features = ["rustls"] }
 fluxdi = { version = "=2.0.0", default-features = false, features = ["thread-safe", "macros", "async-factory", "lifecycle"] }
 anyhow = "1.0.104"
 async-trait = "0.1.89"
@@ -41,3 +43,26 @@ dotenvy = "0.15.7"
 [profile.release]
 lto = "thin"
 strip = "debuginfo"
+
+[[workspace.metadata.leptos]]
+name = "gateway"
+bin-package = "ai-gateway"
+lib-package = "gateway-web"
+output-name = "gateway_web"
+site-root = ".local/gateway-web/site"
+site-pkg-dir = "ui/pkg"
+site-addr = "127.0.0.1:8099"
+bin-default-features = false
+bin-features = ["ssr"]
+lib-default-features = false
+lib-features = ["hydrate"]
+# Keep ordinary Cargo and cargo-leptos builds on the same component compilation mode.
+disable-erase-components = true
+lib-profile-release = "wasm-release"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

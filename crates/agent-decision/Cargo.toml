@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+decision-core = { path = "../decision-core" }
+model-provider = { path = "../model-provider" }
 agent-runtime = { path = "../agent-runtime" }
 agent-inference = { path = "../agent-inference" }
 async-trait.workspace = true

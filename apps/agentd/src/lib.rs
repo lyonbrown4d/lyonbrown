@@ -11,6 +11,7 @@ mod delegation;
 mod execution;
 mod mcp;
 mod mcp_config;
+mod model_routing;
 mod models;
 mod orchestration;
 pub use orchestration::orchestration_service;

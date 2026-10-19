@@ -1,0 +1,4 @@
+{"id":"zh-coding","text":"检查 Rust 代码中的锁竞争","expected_domain":"coding","expected_tier":"advanced"}
+{"id":"zh-translation","text":"翻译这段文字","expected_domain":"translation","expected_tier":"fast"}
+{"id":"zh-chat","text":"你好","expected_domain":"chat","expected_tier":"fast"}
+{"id":"zh-research","text":"调研这些资料","expected_domain":"research","expected_tier":"advanced"}

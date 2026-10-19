@@ -79,18 +79,25 @@ pub(crate) fn build(
     authorized_tools.insert(Tool::DelegateTask);
     available_capabilities.insert(Capability::Delegation);
   }
-  Ok(DecisionEngine::new(
-    DecisionPolicy {
-      authorized_tools,
-      available_capabilities,
-      allowed_models: [ModelPolicy::General].into(),
-      distributed_allowed: !targets.is_empty(),
-      allowed_targets: targets,
-      minimum_confidence: config.decision.minimum_confidence,
-      classifier_timeout: Duration::from_millis(config.decision.timeout_ms),
-    },
-    backend,
-  )?)
+  let reusable = decision_core::DecisionEngine::new(
+    config.decision.policy.clone().unwrap_or_default(),
+    Vec::new(),
+  )?;
+  Ok(
+    DecisionEngine::new(
+      DecisionPolicy {
+        authorized_tools,
+        available_capabilities,
+        allowed_models: [ModelPolicy::General].into(),
+        distributed_allowed: !targets.is_empty(),
+        allowed_targets: targets,
+        minimum_confidence: config.decision.minimum_confidence,
+        classifier_timeout: Duration::from_millis(config.decision.timeout_ms),
+      },
+      backend,
+    )?
+    .with_reusable(Arc::new(reusable)),
+  )
 }
 
 pub(crate) fn workspace_rule(

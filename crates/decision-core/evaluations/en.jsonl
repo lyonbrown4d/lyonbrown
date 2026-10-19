@@ -1,0 +1,4 @@
+{"id":"en-coding","text":"Review the Rust code","expected_domain":"coding","expected_tier":"advanced"}
+{"id":"en-summary","text":"Summarize these notes","expected_domain":"summary","expected_tier":"fast"}
+{"id":"en-translation","text":"Translate this paragraph","expected_domain":"translation","expected_tier":"fast"}
+{"id":"en-chat","text":"hello","expected_domain":"chat","expected_tier":"fast"}

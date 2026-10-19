@@ -1,0 +1,9 @@
+[package]
+name = "gateway-validation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+garde = { version = "=0.23.0", default-features = false, features = ["derive", "regex"] }
+serde_json.workspace = true

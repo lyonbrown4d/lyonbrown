@@ -1,0 +1,38 @@
+[package]
+name = "ai-gateway"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["ssr"]
+ssr = ["gateway-web/ssr"]
+
+[dependencies]
+gateway-validation = { path = "../../crates/gateway-validation" }
+leptos = { version = "=0.8.22", default-features = false, features = ["ssr", "nonce"] }
+gateway-storage = { path = "../../crates/gateway-storage" }
+gateway-web = { path = "../../crates/gateway-web", default-features = false }
+sha2.workspace = true
+hex.workspace = true
+serde_json.workspace = true
+agent-telemetry = { path = "../../crates/agent-telemetry" }
+anyhow.workspace = true
+async-trait.workspace = true
+axum = "0.8"
+clap.workspace = true
+config = { version = "0.15", default-features = false, features = ["toml"] }
+decision-core = { path = "../../crates/decision-core" }
+directories.workspace = true
+dotenvy.workspace = true
+fluxdi = { workspace = true, features = ["axum"] }
+gateway-core = { path = "../../crates/gateway-core" }
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+model-mock = { path = "../model-mock" }
+diesel.workspace = true
+tempfile.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

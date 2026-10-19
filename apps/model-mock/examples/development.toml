@@ -1,0 +1,87 @@
+# Synthetic fixtures only. Port 0 chooses a free loopback port.
+listen = "127.0.0.1:8100"
+max_concurrency = 32
+
+[[scenarios]]
+model = "mock-chat"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "text", text = "Synthetic model response." }]
+
+[[scenarios]]
+model = "mock-chat"
+protocol = "responses"
+repeat_last = true
+replies = [{ kind = "text", text = "Synthetic model response." }]
+
+[[scenarios]]
+model = "mock-chat"
+protocol = "anthropic"
+repeat_last = true
+replies = [{ kind = "text", text = "Synthetic model response." }]
+
+[[scenarios]]
+model = "mock-decision"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":true,"confidence":0.95}},"confidence":0.95,"reason_codes":["SYNTHETIC"]}' }]
+
+[[scenarios]]
+model = "mock-decision"
+protocol = "responses"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":true,"confidence":0.95}},"confidence":0.95,"reason_codes":["SYNTHETIC"]}' }]
+
+[[scenarios]]
+model = "mock-decision"
+protocol = "anthropic"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":true,"confidence":0.95}},"confidence":0.95,"reason_codes":["SYNTHETIC"]}' }]
+
+[[scenarios]]
+model = "mock-tools"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "tool", name = "fixture_echo", arguments = { text = "synthetic" } }, { kind = "text", text = "Synthetic tool result received." }]
+
+[[scenarios]]
+model = "mock-tools"
+protocol = "responses"
+repeat_last = true
+replies = [{ kind = "tool", name = "fixture_echo", arguments = { text = "synthetic" } }, { kind = "text", text = "Synthetic tool result received." }]
+
+[[scenarios]]
+model = "mock-tools"
+protocol = "anthropic"
+repeat_last = true
+replies = [{ kind = "tool", name = "fixture_echo", arguments = { text = "synthetic" } }, { kind = "text", text = "Synthetic tool result received." }]
+
+[[scenarios]]
+model = "mock-invalid-json"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = "not JSON" }]
+
+[[scenarios]]
+model = "mock-low-confidence"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":true,"confidence":0.1}},"confidence":0.1,"reason_codes":["UNCERTAIN"]}' }]
+
+[[scenarios]]
+model = "mock-error"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "error", status = 503 }]
+
+[[scenarios]]
+model = "mock-delay"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "text", text = "Delayed synthetic response.", delay_ms = 5000 }]
+
+[[scenarios]]
+model = "mock-stall"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "stall" }]

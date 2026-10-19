@@ -1,0 +1,23 @@
+[package]
+name = "decision-semantic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = []
+semantic-local = ["dep:fastembed", "dep:ort"]
+
+[dependencies]
+async-trait.workspace = true
+decision-core = { path = "../decision-core" }
+serde.workspace = true
+tokio.workspace = true
+fastembed = { version = "=7.1.1", default-features = false, features = ["ort-load-dynamic"], optional = true }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "load-dynamic", "api-24"], optional = true }
+sha2.workspace = true
+hex.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true

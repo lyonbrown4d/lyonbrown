@@ -1,0 +1,4 @@
+{"id":"unknown-nonsense","text":"qzx 984 &*","expected_domain":null,"expected_tier":null}
+{"id":"unknown-ambiguous","text":"Translate Rust code","expected_domain":null,"expected_tier":null}
+{"id":"unknown-substring","text":"decode","expected_domain":null,"expected_tier":null}
+{"id":"unknown-empty","text":"","expected_domain":null,"expected_tier":null}

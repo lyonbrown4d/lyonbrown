@@ -1,0 +1,32 @@
+[package]
+name = "gateway-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-security = { path = "../agent-security" }
+anyhow.workspace = true
+async-trait.workspace = true
+async-stream = "0.3.6"
+axum = "0.8"
+bytes = "1.11"
+decision-core = { path = "../decision-core" }
+futures.workspace = true
+rig-core.workspace = true
+rig-reqwest = { workspace = true, features = ["reqwest-middleware-rustls"] }
+reqwest-middleware = "=0.5.2"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+subtle = "2.6"
+tokio.workspace = true
+tracing.workspace = true
+url = "2.5"
+uuid.workspace = true
+utoipa = "6"
+utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+tower.workspace = true

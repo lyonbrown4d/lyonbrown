@@ -10,6 +10,7 @@ local-llama = ["agent-inference/llama"]
 local-mistral = ["agent-inference/mistral"]
 
 [dependencies]
+decision-core = { path = "../../crates/decision-core" }
 sha2.workspace = true
 hex.workspace = true
 url = "2.5"

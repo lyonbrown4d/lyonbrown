@@ -1,2 +1,7 @@
 [alias]
 dev = ["run", "--locked", "-p", "agent-dev", "--"]
+gateway = ["run", "--locked", "-p", "agent-dev", "--bin", "gateway-dev", "--"]
+
+[env]
+# Keep the official Leptos hydration filename consistent for Cargo and cargo-leptos builds.
+LEPTOS_OUTPUT_NAME = { value = "gateway_web", force = true }

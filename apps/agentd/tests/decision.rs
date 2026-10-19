@@ -24,6 +24,18 @@ async fn classifier_then_harness_uses_persisted_effective_plan_for_every_protoco
     assert_eq!(result.status, "completed", "{}", result.error);
     assert_eq!(result.result, "main result");
     let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let shared = events
+      .iter()
+      .position(|event| event.kind == "model_route_decision")
+      .expect("default shared routing");
+    let shared_plan: serde_json::Value =
+      serde_json::from_str(&events[shared].payload_json).unwrap();
+    assert_eq!(shared_plan["status"], "accepted");
+    assert_eq!(
+      shared_plan["output"]["value"]["candidate_model_keys"],
+      json!(["main-fixture"])
+    );
+    assert_eq!(shared_plan["provenance"]["policy_revision"], "rules-v1");
     let plan_index = events
       .iter()
       .position(|event| event.kind == "execution_plan")

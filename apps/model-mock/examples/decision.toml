@@ -1,0 +1,52 @@
+# Fixed predicate judgments for decision-model integration tests.
+listen = "127.0.0.1:8101"
+max_concurrency = 16
+
+[[scenarios]]
+model = "mock-decision"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":true,"confidence":0.95}},"confidence":0.95,"reason_codes":["SYNTHETIC"]}' }]
+
+[[scenarios]]
+model = "mock-low-confidence"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":true,"confidence":0.1}},"confidence":0.1,"reason_codes":["UNCERTAIN"]}' }]
+
+[[scenarios]]
+model = "mock-invalid-json"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = "not JSON" }]
+
+[[scenarios]]
+model = "mock-local-decision:latest"
+protocol = "ollama_chat"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":true,"confidence":0.95}},"confidence":0.95,"reason_codes":["SYNTHETIC"]}' }]
+
+# Agent daemon's advisory routing classifier uses its own legacy JSON contract.
+[[scenarios]]
+model = "mock-agent-decision"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"task_kind":"code","model_policy":"general","allowed_tools":["read_file"],"execution_mode":"local","target_hint":null,"risk_level":"low","confidence":0.95}' }]
+
+[[scenarios]]
+model = "mock-agent-decision"
+protocol = "responses"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"task_kind":"code","model_policy":"general","allowed_tools":["read_file"],"execution_mode":"local","target_hint":null,"risk_level":"low","confidence":0.95}' }]
+
+[[scenarios]]
+model = "mock-agent-decision"
+protocol = "anthropic"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"task_kind":"code","model_policy":"general","allowed_tools":["read_file"],"execution_mode":"local","target_hint":null,"risk_level":"low","confidence":0.95}' }]
+
+[[scenarios]]
+model = "mock-zero-confidence"
+protocol = "chat_completions"
+repeat_last = true
+replies = [{ kind = "decision", text = '{"output":{"operation":"predicate","value":{"value":false,"confidence":0.0}},"confidence":0.0,"reason_codes":["UNCERTAIN"]}' }]
