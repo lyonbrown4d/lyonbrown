@@ -14,6 +14,45 @@ unsafe extern "C" {
 }
 
 pub(super) fn session() -> Result<String, DesktopError> {
+  let before = session_snapshot()?;
+  let locked = console_locked();
+  let identity = before.validate(locked)?;
+  let after = session_snapshot()?;
+  after.validate(console_locked())?;
+  if before != after {
+    return Err(DesktopError::SessionUnavailable);
+  }
+  Ok(identity)
+}
+
+#[derive(Debug, PartialEq)]
+struct SessionSnapshot {
+  on_console: Option<bool>,
+  login_done: Option<bool>,
+  lock_hint: Option<bool>,
+  identity: Option<uuid::Uuid>,
+}
+
+impl SessionSnapshot {
+  fn validate(&self, console_locked: Option<bool>) -> Result<String, DesktopError> {
+    if self.lock_hint == Some(true) || console_locked == Some(true) {
+      return Err(DesktopError::Locked);
+    }
+    if self.on_console != Some(true) || self.login_done != Some(true) {
+      return Err(DesktopError::SessionUnavailable);
+    }
+    if console_locked != Some(false) {
+      return Err(DesktopError::SessionStateUnknown);
+    }
+    let identity = self
+      .identity
+      .filter(|id| !id.is_nil())
+      .ok_or(DesktopError::SessionStateUnknown)?;
+    Ok(format!("macos:{identity}"))
+  }
+}
+
+fn session_snapshot() -> Result<SessionSnapshot, DesktopError> {
   // SAFETY: Apple's Copy API returns NULL or a +1 CFDictionary. The owned
   // dictionary releases that reference; all values retain their proper CF type.
   let raw = unsafe { CGSessionCopyCurrentDictionary() };
@@ -28,19 +67,41 @@ pub(super) fn session() -> Result<String, DesktopError> {
       .and_then(|value| value.downcast::<CFBoolean>())
       .map(bool::from)
   };
-  // This de facto field can veto execution, but is not a documented unlocked
-  // state guarantee and must never authorize control.
-  if boolean("CGSSessionScreenIsLocked") == Some(true) {
-    return Err(DesktopError::Locked);
+  let identity = dictionary
+    .find(CFString::new("CGSSessionUniqueSessionUUID"))
+    .and_then(|value| value.downcast::<CFString>())
+    .and_then(|value| uuid::Uuid::parse_str(&value.to_string()).ok());
+  Ok(SessionSnapshot {
+    on_console: boolean("kCGSSessionOnConsoleKey"),
+    login_done: boolean("kCGSessionLoginDoneKey"),
+    lock_hint: boolean("CGSSessionScreenIsLocked"),
+    identity,
+  })
+}
+
+fn console_locked() -> Option<bool> {
+  use objc2_core_foundation::{CFBoolean, CFString};
+  use objc2_io_kit::{
+    IOObjectRelease, IORegistryEntryCreateCFProperty, IORegistryGetRootEntry, kIOMainPortDefault,
+  };
+  // SAFETY: this framework-owned constant identifies the caller's default IOKit port.
+  let root = IORegistryGetRootEntry(unsafe { kIOMainPortDefault });
+  if root == 0 {
+    return None;
   }
-  if boolean("kCGSSessionOnConsoleKey") != Some(true)
-    || boolean("kCGSessionLoginDoneKey") != Some(true)
-  {
-    return Err(DesktopError::SessionUnavailable);
-  }
-  // Apple's public dictionary proves console/login state, not unlocked state.
-  // This adapter therefore cannot advertise desktop control from this probe.
-  Err(DesktopError::SessionStateUnknown)
+  // IOConsoleLocked is an OS implementation field, not a documented lock-state
+  // contract. The chosen compatibility policy requires an explicit false value;
+  // absent/malformed data never authorizes control. No shell command is spawned.
+  let key = CFString::from_str("IOConsoleLocked");
+  // SAFETY: root is live, key is a retained CFString, NULL selects Apple's default
+  // allocator and zero selects the documented default options. Release root once;
+  // the returned property owns its separate reference through CFRetained.
+  let value = unsafe { IORegistryEntryCreateCFProperty(root, Some(&key), None, 0) };
+  let _ = IOObjectRelease(root);
+  value
+    .as_deref()
+    .and_then(|value| value.downcast_ref::<CFBoolean>())
+    .map(CFBoolean::as_bool)
 }
 
 pub(super) fn capture_permission() -> PermissionState {
@@ -71,3 +132,7 @@ pub(super) fn accessibility(
 ) -> Result<AccessibilityObservation, DesktopError> {
   super::macos_accessibility::observe(windows, limits, control)
 }
+
+#[cfg(test)]
+#[path = "../../tests/support/macos_session.rs"]
+mod tests;

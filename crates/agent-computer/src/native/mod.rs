@@ -1,7 +1,7 @@
 //! xcap capture and Enigo input adapters. Linux currently requires an active,
 //! unlocked X11/logind session; Wayland needs a separate portal grant lifecycle.
-//! macOS capture/input code is present, but the native factory fails closed with
-//! `SessionStateUnknown`: the public session probe cannot establish lock state.
+//! macOS combines caller login-session identity with the OS's IOConsoleLocked
+//! compatibility field; missing or malformed state fails closed.
 mod capture;
 mod input;
 #[cfg(target_os = "linux")]
@@ -10,6 +10,7 @@ mod linux;
 mod macos;
 #[cfg(target_os = "macos")]
 mod macos_accessibility;
+mod session;
 mod targets;
 #[cfg(target_os = "windows")]
 mod windows;
@@ -29,6 +30,7 @@ pub struct NativeDesktopBackend {
   identity: DesktopIdentity,
   captured: Option<NativeCapture>,
   target: Option<targets::TargetBinding>,
+  session_guard: session::SessionGuard,
 }
 
 struct NativeCapture {
@@ -73,6 +75,7 @@ impl NativeDesktopBackend {
     Ok(Self {
       captured: None,
       target: None,
+      session_guard: Default::default(),
       identity: DesktopIdentity {
         node_id,
         user_session: platform::session()?,
@@ -101,10 +104,9 @@ impl NativeDesktopBackend {
   }
 
   fn check_session(&self) -> Result<(), DesktopError> {
-    if platform::session()? != self.identity.user_session {
-      return Err(DesktopError::SessionUnavailable);
-    }
-    Ok(())
+    self
+      .session_guard
+      .check(&self.identity.user_session, platform::session)
   }
 
   fn check_capture(&self) -> Result<(), DesktopError> {
