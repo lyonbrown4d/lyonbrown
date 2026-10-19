@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0811b283.js";
+            window.path_to_searchindex_js = "searchindex-5551712a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -211,7 +211,7 @@ cargo run -p agent-cli --features native-computer -- computer targets
 cargo run -p agent-desktop --features native-computer
 </code></pre>
 <p>Clients connect to or reuse the native daemon service through the shared launcher; the foreground development daemon is described above. The native feature does not change the daemon’s <code>computer_tools = false</code> default or replace OS permissions, interactive session checks or exact action approval. Neither default nor test dependencies implicitly enable native SDKs through Cargo feature unification. See <a href="clients.html#native-computer-attachment">terminal and desktop clients</a> for selection, attachment and detachment.</p>
-<p>Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Harness attachment, observation and approved input require actual runtime acceptance. macOS returns <code>SessionStateUnknown</code> when it cannot confirm unlocked session state; rejection paths and synthetic-host regressions do not establish native-control acceptance. Windows and Linux require runtime evidence from their respective environments too.</p>
+<p>Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Harness attachment, observation and approved input require actual runtime acceptance. macOS follows the <a href="protocol.html#native-desktop-execution-boundary">session identity and lock-field policy</a>, returning <code>SessionStateUnknown</code> when state cannot be established. Read-only permission checks, rejection paths and synthetic-host regressions do not establish native-control acceptance. Real capture, approved input, locking and session switching still require runtime acceptance; actual Windows and Linux runtime acceptance also remains incomplete.</p>
 <h2 id="verification-commands"><a class="header" href="#verification-commands">Verification commands</a></h2>
 <p>Run from the repository root:</p>
 <pre><code class="language-sh">cargo fmt --all -- --check

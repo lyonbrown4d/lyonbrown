@@ -1,0 +1,51 @@
+{
+  "platform": "macOS 27.0.1 arm64",
+  "product_version": "0.1.0",
+  "gpui_kit_version": "0.7.3",
+  "captured_date": "2026-10-19",
+  "executable_kind": "debug desktop-computer-acceptance example; production GPUI, native Computer factory, authenticated isolated daemon; no CEF",
+  "executable_sha256": "c8650b180d1bc670ef40268263fd4d7a8d8a5820d4f98b413adabf755800651a",
+  "base_commit": "055b2f34380741b11be434eeeeb86545d12761d3",
+  "source_snapshot_sha256": {
+    "Cargo.lock": "7fc2cef9ac58d717b3af110ac587e925a5208fa7ca7d4f376580ebbb1716f29a",
+    "crates/agent-computer/Cargo.toml": "6d24338460ad9ca450f23c1921622152283f3b3e8f9bfb3447256cdcb9a0af1d",
+    "crates/agent-computer/src/native/macos.rs": "7e6b6bfd4753dfe60180886967dd50757655e19ed5cbc39a7abff86632075845",
+    "crates/agent-computer/src/native/session.rs": "5ba1bd5fd8af2d88f226ecdc63dd70330823d0b7b7fbd00cea6c74b74d76621d",
+    "crates/agent-computer/src/native/mod.rs": "1de8c2679ed001100e7c0cc15e6986f6711450c43eac6ded905444bc2b230326",
+    "apps/agent-desktop/src/workbench.rs": "a15b09abec19362a1741e004db0b903ec27995630ed05f37c3e8e9ddda6eb477",
+    "apps/agent-desktop/src/panes.rs": "8d640247163689c4523261bfd9b2f3597b3ae4b572b3d2b0464ffa7c556a6155",
+    "apps/agent-desktop/examples/computer_acceptance.rs": "489568451202683a185ac9d11e602c0888bf28fd858875cd35fd646526b8bf2f"
+  },
+  "observations": [
+    "Existing dock ellipsis exposes all six panels and opens Computer",
+    "Target discovery after user-authorized screen recording and Accessibility grants",
+    "Explicit attachment to the acceptance window",
+    "Changing chat preserves the original bound chat and window",
+    "Light and dark appearance retain binding",
+    "Explicit Detach clears bound chat and scope"
+  ],
+  "database_counts": {
+    "sessions": 2,
+    "runs": 0,
+    "approvals": 0,
+    "operations": 0
+  },
+  "scope": "Visible native target discovery, attachment, chat isolation and detach only. No Harness observation, native capture or native input was requested. Not final installer or production CEF keychain acceptance.",
+  "deferred": [
+    "real macOS lock/unlock and user-switch acceptance",
+    "Windows runtime acceptance",
+    "Linux runtime acceptance"
+  ],
+  "images": [
+    {
+      "path": "images/desktop-computer-attached-macos.png",
+      "sha256": "93c312251f707e001b4ef47a302671188fc5c21b736fe70eaf076bd5e6c9ba6e",
+      "bytes": 277318
+    },
+    {
+      "path": "images/desktop-computer-dark-macos.png",
+      "sha256": "b0cb0f55be792a8abed1ba9d5f3bce39d33d807a1bce8d88eb1b13e264cbde76",
+      "bytes": 287809
+    }
+  ]
+}

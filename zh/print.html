@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-18edb68a.js";
+            window.path_to_searchindex_js = "searchindex-2de6e2c2.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -610,7 +610,7 @@ capabilities = ["workspace.read"]
     Worker --&gt; Remote[Worker 本地持久化]
 </code></pre>
 <p>浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。</p>
-<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 <code>computer_observe</code> 与 <code>computer_act</code>；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/TUI 和 Desktop 通过注入的 <code>ComputerHostFactory</code> 显式发现并选择本地窗口或显示器，再将宿主固定到选定 daemon 会话；切换聊天不会转移已有挂接。ComputerRuntime 嵌入客户端进程，不是独立产品进程，也不创建 Agent Loop。客户端的 <code>native-computer</code> feature 默认关闭，入口接线不代表原生控制运行验收完成。macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝操作。权限、租约与执行限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>，工具机制见<a href="#模型计算机工具">模型计算机工具</a>。</p>
+<p>ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 <code>computer_observe</code> 与 <code>computer_act</code>；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/TUI 和 Desktop 通过注入的 <code>ComputerHostFactory</code> 显式发现并选择本地窗口或显示器，再将宿主固定到选定 daemon 会话；切换聊天不会转移已有挂接。ComputerRuntime 嵌入客户端进程，不是独立产品进程，也不创建 Agent Loop。客户端的 <code>native-computer</code> feature 默认关闭，入口接线不代表原生控制运行验收完成。macOS 仅在控制台登录会话、有效会话 UUID 与明确未锁定字段均满足策略时允许继续检查权限；状态未知或锁定时拒绝，已观察到的会话失效不会因解锁自动恢复。权限、租约与执行限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>，工具机制见<a href="#模型计算机工具">模型计算机工具</a>。</p>
 <h2 id="源码依据"><a class="header" href="#源码依据">源码依据</a></h2>
 <ul>
 <li>服务和消息：<code>proto/agent/v1/agent.proto</code>。</li>
@@ -717,7 +717,7 @@ cargo run -p agent-cli --features native-computer -- computer attach --session S
 /computer detach
 </code></pre>
 <p>两个 <code>attach</code> 示例择一使用。必须先运行 <code>/computer targets</code>，再从当前目录选择；挂接使用缓存中的准确目标描述符，不按 ID 临时替换目标。Computer 区显示原绑定会话、范围和连接状态，<code>Alt+PageUp</code> / <code>Alt+PageDown</code> 滚动详情。切换会话不转移已有连接；换目标或会话前先 detach。<code>/computer</code> 前缀即使语法错误也不会提交给模型。重连或断线会撤销宿主并清空目标目录，重新挂接前必须再次发现；动作不会自动重放。</p>
-<p>Desktop 的操作与绑定状态见下方「Computer 面板」。目标目录与权限、固定窗口身份的限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>。入口接线不等于原生控制验收；macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝，不捕获画面或输入。</p>
+<p>Desktop 的操作与绑定状态见下方「Computer 面板」。目标目录与权限、固定窗口身份的限制见<a href="#原生桌面执行边界">原生桌面执行边界</a>。入口接线不等于原生控制验收；macOS 按会话身份与锁字段策略检查，状态未知时以 <code>SessionStateUnknown</code> 拒绝。后端一旦观察到锁屏或会话失效，解锁后仍须显式重新挂接。</p>
 <h2 id="终端任务管理"><a class="header" href="#终端任务管理">终端任务管理</a></h2>
 <pre><code class="language-sh">cargo run -p agent-cli -- task list --session SESSION_ID --page-size 100
 cargo run -p agent-cli -- task get TASK_ID
@@ -729,6 +729,7 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <pre><code class="language-sh">cargo run -p agent-desktop
 </code></pre>
 <p>桌面使用 GPUI 和 <code>gpui-kit</code> 组件，包含会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 <code>TitleBar</code>；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开。</p>
+<p>工作台标签栏的省略号菜单列出 Browser、Files、Editor、Diff、Tasks 和 Computer 六个面板，可直接选择；标签被窄窗口挤出时也可从这里切换。当前组件库的辅助功能树仍不能正确提供这些标签的名称，菜单入口不代表标签的辅助功能问题已解决。</p>
 <h3 id="设置与连接"><a class="header" href="#设置与连接">设置与连接</a></h3>
 <p>标题栏的 Settings 按钮打开独立设置页。Daemon 地址和访问令牌只在设置页编辑；Workspace path 用于当前标签页的新聊天。连接地址、令牌和工作区路径应与 daemon 对应；远程 daemon 的工作区路径指向远端文件系统。Appearance 提供手动选择的 Light 和 Dark 外观。选择 Back to chats 或按 <code>Esc</code> 返回聊天时，保留两侧面板的展开状态和聊天草稿。</p>
 <p>存在活动运行、尚未结束的请求或未保存的文件修改时，Connect 不可用。保存未改动的文件时，也要等待保存请求结束后再重连。未保存修改检查同时覆盖当前 Editor 和其他会话缓存的文件草稿。连接请求尚未完成时，旧 Editor 保持只读，避免向待切换的连接写入。</p>
@@ -798,12 +799,18 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <p><a href="evidence/desktop-diff-capture.json">截图记录</a>包含程序与图片摘要、实际补丁以及已持久化为 <code>completed</code> 的 Run 标识。验收程序使用产品原生视图和本地 fixture，版本为 0.1.0；此图不作为最终安装包验收记录。</p>
 <h2 id="内嵌浏览器与人工接管"><a class="header" href="#内嵌浏览器与人工接管">内嵌浏览器与人工接管</a></h2>
 <p>本节两张浏览器图片来自同一份独立原生验收构建，不属于上述八张图的构建摘要范围。<a href="evidence/desktop-browser-capture.json">浏览器截图记录</a>保存了程序与源码摘要、图片摘要、已完成的 Run，以及已持久化的 Space 打开、接管、归还和关闭结果。</p>
+<p>2026 年 10 月 19 日对安装包内正式 CLI 入口的<a href="evidence/browser-production-probe.json">独立检查</a>未通过：CEF 已启动并返回画面与 AX，但目标页面在等待期间停留于 <code>about:blank</code>。原因尚未定位，该结果不构成生产导航或钥匙串验收。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-browser-macos.png" alt="GPUI 窗口中的真实 Chromium 页面"><span class="img-wrapper"><img src="images/desktop-browser-macos.png" alt="GPUI 窗口中的真实 Chromium 页面"></span></label></p>
 <p>CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium 像素帧传到 Browser 面板。此时界面处于 Agent control，只读展示。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-browser-takeover-macos.png" alt="人工接管后的真实 Chromium 文本与点击结果"><span class="img-wrapper"><img src="images/desktop-browser-takeover-macos.png" alt="人工接管后的真实 Chromium 文本与点击结果"></span></label></p>
 <p>点击 Take control 后，界面进入 Human control。通过原生输入桥输入 <code>Native takeover verified</code>，随后点击页面按钮，页面显示 <code>Click reached real Chromium.</code>。再从 Settings 选择 Dark 并返回聊天，输入和点击结果仍保留，形成上图。随后实际执行了归还控制与 Space 关闭。此组图片使用调试测试钥匙串。</p>
 <p>地址输入框保存导航输入，不能作为重定向后页面来源的可信显示。此组截图覆盖人工浏览器操作；模型自主操作的原生 CEF 验收使用独立合成页面，记录见<a href="#本地工具与浏览器操作">本地工具与浏览器操作</a>。</p>
 <p>另行执行的 GPUI 组件测试通过真实 daemon 和 CEF 检查了像素帧、指针坐标、文字输入、接管释放后的输入拒绝及 Space 关闭。测试使用 GPUI 测试窗口和调试验收程序的测试钥匙串；它验证组件调用与实际 Chromium 行为，不代替上面的原生窗口截图。</p>
+<h2 id="原生-computer-目标与会话绑定"><a class="header" href="#原生-computer-目标与会话绑定">原生 Computer 目标与会话绑定</a></h2>
+<p>本节截图采集于 2026 年 10 月 19 日，使用启用 <code>native-computer</code> 的独立 GPUI 验收程序。用户在 macOS 设置中授予该测试 app 录屏和辅助功能权限后，通过 Computer 面板发现目标，并显式选择验收窗口挂接到已认证的 daemon 会话。</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-computer-attached-macos.png" alt="macOS 浅色主题下挂接到固定会话的验收窗口"><span class="img-wrapper"><img src="images/desktop-computer-attached-macos.png" alt="macOS 浅色主题下挂接到固定会话的验收窗口"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-computer-dark-macos.png" alt="macOS 深色主题下切换聊天后仍保留原绑定会话"><span class="img-wrapper"><img src="images/desktop-computer-dark-macos.png" alt="macOS 深色主题下切换聊天后仍保留原绑定会话"></span></label></p>
+<p>第二张图中，Selected chat 与 Bound chat 不同，原窗口仍绑定原会话。随后实际执行 Detach，界面恢复 detached，绑定会话与范围均清空。<a href="evidence/desktop-computer-capture.json">Computer 截图记录</a>包含程序、相关源码及图片摘要；隔离数据库有两个会话，没有 Run、审批或操作记录。本次仅验证目标发现、挂接、聊天隔离和解除挂接，未请求 Harness 屏幕观察或原生输入。真实锁屏和用户切换尚未验收。</p>
 <h2 id="终端实际运行记录"><a class="header" href="#终端实际运行记录">终端实际运行记录</a></h2>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/tui-pty-approval-macos.png" alt="实际 TUI 进程等待精确文件审批的 PTY 记录"><span class="img-wrapper"><img src="images/tui-pty-approval-macos.png" alt="实际 TUI 进程等待精确文件审批的 PTY 记录"></span></label></p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/tui-pty-completed-macos.png" alt="通过 TUI 批准文件写入后的完成状态"><span class="img-wrapper"><img src="images/tui-pty-completed-macos.png" alt="通过 TUI 批准文件写入后的完成状态"></span></label></p>
@@ -986,7 +993,9 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&
 <p>客户端库可通过 <code>attach_native</code> 将原生宿主嵌入客户端进程并连接 daemon。连接前先核对 daemon 节点及选定会话的归属；握手携带固定的桌面范围，daemon 再次校验身份，并记录会话的 <code>owner_epoch</code>。每个会话只允许一个宿主连接，模型工具固定本次连接代次，每次操作均在发送前和接收后核对 Run 状态及会话归属；重新连接不能替换运行已经选定的宿主。连接成功本身不授予截图或输入权限。</p>
 <p>连接只允许一个待返回命令；同一连接代次的请求串行排队，续租不能抢占已派发命令。等待可取消，超过 35 秒则拒绝，派发前再次校验连接代次。daemon 按请求标识、宿主、连接代次、Session、<code>owner_epoch</code>、私有协议版本和预期响应类型校验返回值，并检查租约、观察范围与图像、窗口、AX 节点边界。非法响应或断线会取消连接，不自动重放输入。原生调用和消息编解码在阻塞线程执行。已经进入操作系统的调用仍需实际结束；取消不会强行终止线程。原生宿主使用用户数据目录中的文件锁，按操作系统图形会话互斥，改变 daemon 节点标识或客户端数据目录不能绕过这把锁。执行线程持有文件锁至调用结束。</p>
 <p>同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 协议版本为 2，包含准确令牌的 <code>RenewLease</code>。续租只延长当前未撤销、未过期的令牌，不能取得新令牌或恢复旧控制权。消息总上限为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。daemon 将能力响应限制为 4 KiB、观察响应限制为 68 MiB、其他响应与请求限制为 16 KiB。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。</p>
-<p>daemon 已通过这条认证连接装配 Harness 的 <code>computer_observe</code> 与 <code>computer_act</code>，启用条件、准确审批和持久回执见<a href="#模型计算机工具">本地工具与浏览器操作</a>。CLI/TUI 与 Desktop 已提供显式目标选择和会话连接入口，见<a href="#原生计算机连接">原生计算机连接</a>；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 <code>SessionStateUnknown</code>，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。</p>
+<p>daemon 已通过这条认证连接装配 Harness 的 <code>computer_observe</code> 与 <code>computer_act</code>，启用条件、准确审批和持久回执见<a href="#模型计算机工具">本地工具与浏览器操作</a>。CLI/TUI 与 Desktop 已提供显式目标选择和会话连接入口，见<a href="#原生计算机连接">原生计算机连接</a>；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 会话检查与限制见下文。Windows 与 Linux 适配同样需要对应平台的权限；两平台的实际运行验收尚未完成。</p>
+<p>macOS 通过 CoreGraphics 读取调用进程的会话，要求位于控制台、登录完成，且 <code>CGSSessionUniqueSessionUUID</code> 能解析为非全零 UUID。检查还通过维护中的 <code>objc2</code> 绑定读取 IORegistry 根节点，要求 <code>IOConsoleLocked</code> 明确为 <code>false</code>；它与 <code>CGSSessionScreenIsLocked</code> 任一为 <code>true</code> 时返回 <code>Locked</code>。<code>IOConsoleLocked</code> 缺失或类型错误、会话 UUID 缺失或无效时返回 <code>SessionStateUnknown</code>。会话检查前后各读取一次快照并校验；快照变化时拒绝。锁字段属于 macOS 的实际实现字段，以上为项目采用的兼容策略，不是 Apple 文档承诺的锁屏状态保证。</p>
+<p>原生后端一旦观察到锁屏、无法读取的会话状态或会话身份变化，就保持撤销状态；解锁后同一后端也不会恢复控制，必须重新显式挂接。会话检查、屏幕捕获和输入仍是分开的操作系统调用，前后校验不构成原子性的捕获与输入保证。实现见 <code>crates/agent-computer/src/native/macos.rs</code>、<code>session.rs</code> 与 <code>mod.rs</code>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="开发与验证"><a class="header" href="#开发与验证">开发与验证</a></h1>
 <p>工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 <code>Cargo.lock</code> 管理。Rust 工具链最低版本见根 <code>Cargo.toml</code> 的 <code>rust-version</code>。工程约束统一维护在根 <code>AGENTS.md</code>。</p>
@@ -1023,7 +1032,7 @@ cargo run -p agent-cli --features native-computer -- computer targets
 cargo run -p agent-desktop --features native-computer
 </code></pre>
 <p>客户端通过共享 launcher 连接或复用原生 daemon 服务；开发前台 daemon 的使用方式见上方。原生 feature 不改变 daemon 的 <code>computer_tools = false</code> 默认值，也不代替系统权限、交互会话检查或准确动作审批。默认依赖和测试依赖均不通过 Cargo feature 合并隐式启用原生 SDK。目标选择、会话挂接和断开操作见<a href="#原生计算机连接">终端与桌面客户端</a>。</p>
-<p>构建通过只说明对应主机上的代码可编译。原生目标发现、GUI 选择、客户端到 Harness 的连接、屏幕观察与获批输入均需实际运行验收。macOS 会话探测无法确认解锁状态时返回 <code>SessionStateUnknown</code>，不得将拒绝路径或合成宿主回归称为原生控制验收；Windows 和 Linux 也需要各自环境中的运行证据。</p>
+<p>构建通过只说明对应主机上的代码可编译。原生目标发现、GUI 选择、客户端到 Harness 的连接、屏幕观察与获批输入均需实际运行验收。macOS 按<a href="#原生桌面执行边界">会话身份与锁字段策略</a>检查，无法确认状态时返回 <code>SessionStateUnknown</code>；不得将只读权限检查、拒绝路径或合成宿主回归称为原生控制验收。真实捕获、获批输入、锁屏与会话切换仍需实际验收；Windows 和 Linux 的实际运行验收也尚未完成。</p>
 <h2 id="检查命令"><a class="header" href="#检查命令">检查命令</a></h2>
 <p>在仓库根目录执行：</p>
 <pre><code class="language-sh">cargo fmt --all -- --check

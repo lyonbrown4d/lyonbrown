@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-18edb68a.js";
+            window.path_to_searchindex_js = "searchindex-2de6e2c2.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -221,7 +221,7 @@ cargo run -p agent-cli --features native-computer -- computer attach --session S
 /computer detach
 </code></pre>
 <p>两个 <code>attach</code> 示例择一使用。必须先运行 <code>/computer targets</code>，再从当前目录选择；挂接使用缓存中的准确目标描述符，不按 ID 临时替换目标。Computer 区显示原绑定会话、范围和连接状态，<code>Alt+PageUp</code> / <code>Alt+PageDown</code> 滚动详情。切换会话不转移已有连接；换目标或会话前先 detach。<code>/computer</code> 前缀即使语法错误也不会提交给模型。重连或断线会撤销宿主并清空目标目录，重新挂接前必须再次发现；动作不会自动重放。</p>
-<p>Desktop 的操作与绑定状态见下方「Computer 面板」。目标目录与权限、固定窗口身份的限制见<a href="protocol.html#原生桌面执行边界">原生桌面执行边界</a>。入口接线不等于原生控制验收；macOS 无法确认会话解锁状态时仍以 <code>SessionStateUnknown</code> 拒绝，不捕获画面或输入。</p>
+<p>Desktop 的操作与绑定状态见下方「Computer 面板」。目标目录与权限、固定窗口身份的限制见<a href="protocol.html#原生桌面执行边界">原生桌面执行边界</a>。入口接线不等于原生控制验收；macOS 按会话身份与锁字段策略检查，状态未知时以 <code>SessionStateUnknown</code> 拒绝。后端一旦观察到锁屏或会话失效，解锁后仍须显式重新挂接。</p>
 <h2 id="终端任务管理"><a class="header" href="#终端任务管理">终端任务管理</a></h2>
 <pre><code class="language-sh">cargo run -p agent-cli -- task list --session SESSION_ID --page-size 100
 cargo run -p agent-cli -- task get TASK_ID
@@ -233,6 +233,7 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <pre><code class="language-sh">cargo run -p agent-desktop
 </code></pre>
 <p>桌面使用 GPUI 和 <code>gpui-kit</code> 组件，包含会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 <code>TitleBar</code>；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开。</p>
+<p>工作台标签栏的省略号菜单列出 Browser、Files、Editor、Diff、Tasks 和 Computer 六个面板，可直接选择；标签被窄窗口挤出时也可从这里切换。当前组件库的辅助功能树仍不能正确提供这些标签的名称，菜单入口不代表标签的辅助功能问题已解决。</p>
 <h3 id="设置与连接"><a class="header" href="#设置与连接">设置与连接</a></h3>
 <p>标题栏的 Settings 按钮打开独立设置页。Daemon 地址和访问令牌只在设置页编辑；Workspace path 用于当前标签页的新聊天。连接地址、令牌和工作区路径应与 daemon 对应；远程 daemon 的工作区路径指向远端文件系统。Appearance 提供手动选择的 Light 和 Dark 外观。选择 Back to chats 或按 <code>Esc</code> 返回聊天时，保留两侧面板的展开状态和聊天草稿。</p>
 <p>存在活动运行、尚未结束的请求或未保存的文件修改时，Connect 不可用。保存未改动的文件时，也要等待保存请求结束后再重连。未保存修改检查同时覆盖当前 Editor 和其他会话缓存的文件草稿。连接请求尚未完成时，旧 Editor 保持只读，避免向待切换的连接写入。</p>

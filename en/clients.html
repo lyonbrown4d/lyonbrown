@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0811b283.js";
+            window.path_to_searchindex_js = "searchindex-5551712a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -221,7 +221,7 @@ cargo run -p agent-cli --features native-computer -- computer attach --session S
 /computer detach
 </code></pre>
 <p>Use one of the two <code>attach</code> forms. Run <code>/computer targets</code> first and choose from that catalog. Attachment uses the exact cached descriptor rather than replacing the target by ID. The Computer area displays the originally bound session, scope and connection state; <code>Alt+PageUp</code> / <code>Alt+PageDown</code> scroll its details. Switching sessions does not transfer the connection; detach before choosing another target or session. Even invalid <code>/computer</code> syntax stays local and is never submitted to the model. Reconnection or disconnect revokes the host and clears the catalog, requiring fresh discovery before attachment; actions are not replayed automatically.</p>
-<p>See “Computer pane” below for Desktop controls and binding state, and <a href="protocol.html#native-desktop-execution-boundary">native desktop execution boundary</a> for discovery, permission and fixed window identity limits. Wired entry points do not establish native-control acceptance. macOS still rejects an indeterminate unlocked session with <code>SessionStateUnknown</code>, without capture or input.</p>
+<p>See “Computer pane” below for Desktop controls and binding state, and <a href="protocol.html#native-desktop-execution-boundary">native desktop execution boundary</a> for discovery, permission and fixed window identity limits. Wired entry points do not establish native-control acceptance. macOS checks session identity and lock fields under the documented project policy, rejecting unknown state with <code>SessionStateUnknown</code>. Once the backend observes a lock or invalid session, unlocking still requires a fresh explicit attachment.</p>
 <h2 id="terminal-task-management"><a class="header" href="#terminal-task-management">Terminal task management</a></h2>
 <pre><code class="language-sh">cargo run -p agent-cli -- task list --session SESSION_ID --page-size 100
 cargo run -p agent-cli -- task get TASK_ID
@@ -233,6 +233,7 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <pre><code class="language-sh">cargo run -p agent-desktop
 </code></pre>
 <p>The desktop uses GPUI and <code>gpui-kit</code> for the session sidebar, multiple chat tabs, conversation input and Browser, Computer, Files, Editor, Diff and Tasks dock panels. The custom title bar reuses the library’s <code>TitleBar</code>; macOS uses native close, minimize and zoom controls. The session sidebar starts open and the right workbench starts closed. Title bar buttons toggle each side independently and remain available to restore either panel when both are hidden.</p>
+<p>The ellipsis menu in the workbench tab bar lists all six panels: Browser, Files, Editor, Diff, Tasks and Computer. Use it to switch panels when a narrow window hides a tab. The component library still does not expose proper tab names in its accessibility tree; the menu does not resolve that tab accessibility limitation.</p>
 <h3 id="settings-and-connection"><a class="header" href="#settings-and-connection">Settings and connection</a></h3>
 <p>The title bar’s Settings button opens a dedicated page. The daemon address and access token are edited only there; Workspace path selects the daemon-side folder for new chats in the current tab. The endpoint, token and workspace must match the daemon. A workspace for a remote daemon refers to that daemon’s filesystem. Appearance offers manual Light and Dark choices. Back to chats and <code>Esc</code> return to the chat while preserving panel visibility and chat drafts.</p>
 <p>Connect is unavailable while a run is active, a request is pending, or file edits are unsaved. Saving unchanged text also blocks reconnection until that save request finishes. The unsaved-edit check covers both the current Editor and cached file drafts for other sessions. While a connection request is pending, the old Editor remains read-only to prevent writes through the connection being replaced.</p>

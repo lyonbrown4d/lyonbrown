@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-18edb68a.js";
+            window.path_to_searchindex_js = "searchindex-2de6e2c2.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -203,12 +203,18 @@
 <p><a href="evidence/desktop-diff-capture.json">截图记录</a>包含程序与图片摘要、实际补丁以及已持久化为 <code>completed</code> 的 Run 标识。验收程序使用产品原生视图和本地 fixture，版本为 0.1.0；此图不作为最终安装包验收记录。</p>
 <h2 id="内嵌浏览器与人工接管"><a class="header" href="#内嵌浏览器与人工接管">内嵌浏览器与人工接管</a></h2>
 <p>本节两张浏览器图片来自同一份独立原生验收构建，不属于上述八张图的构建摘要范围。<a href="evidence/desktop-browser-capture.json">浏览器截图记录</a>保存了程序与源码摘要、图片摘要、已完成的 Run，以及已持久化的 Space 打开、接管、归还和关闭结果。</p>
+<p>2026 年 10 月 19 日对安装包内正式 CLI 入口的<a href="evidence/browser-production-probe.json">独立检查</a>未通过：CEF 已启动并返回画面与 AX，但目标页面在等待期间停留于 <code>about:blank</code>。原因尚未定位，该结果不构成生产导航或钥匙串验收。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-browser-macos.png" alt="GPUI 窗口中的真实 Chromium 页面"><span class="img-wrapper"><img src="images/desktop-browser-macos.png" alt="GPUI 窗口中的真实 Chromium 页面"></span></label></p>
 <p>CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium 像素帧传到 Browser 面板。此时界面处于 Agent control，只读展示。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-browser-takeover-macos.png" alt="人工接管后的真实 Chromium 文本与点击结果"><span class="img-wrapper"><img src="images/desktop-browser-takeover-macos.png" alt="人工接管后的真实 Chromium 文本与点击结果"></span></label></p>
 <p>点击 Take control 后，界面进入 Human control。通过原生输入桥输入 <code>Native takeover verified</code>，随后点击页面按钮，页面显示 <code>Click reached real Chromium.</code>。再从 Settings 选择 Dark 并返回聊天，输入和点击结果仍保留，形成上图。随后实际执行了归还控制与 Space 关闭。此组图片使用调试测试钥匙串。</p>
 <p>地址输入框保存导航输入，不能作为重定向后页面来源的可信显示。此组截图覆盖人工浏览器操作；模型自主操作的原生 CEF 验收使用独立合成页面，记录见<a href="tools.html">本地工具与浏览器操作</a>。</p>
 <p>另行执行的 GPUI 组件测试通过真实 daemon 和 CEF 检查了像素帧、指针坐标、文字输入、接管释放后的输入拒绝及 Space 关闭。测试使用 GPUI 测试窗口和调试验收程序的测试钥匙串；它验证组件调用与实际 Chromium 行为，不代替上面的原生窗口截图。</p>
+<h2 id="原生-computer-目标与会话绑定"><a class="header" href="#原生-computer-目标与会话绑定">原生 Computer 目标与会话绑定</a></h2>
+<p>本节截图采集于 2026 年 10 月 19 日，使用启用 <code>native-computer</code> 的独立 GPUI 验收程序。用户在 macOS 设置中授予该测试 app 录屏和辅助功能权限后，通过 Computer 面板发现目标，并显式选择验收窗口挂接到已认证的 daemon 会话。</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-computer-attached-macos.png" alt="macOS 浅色主题下挂接到固定会话的验收窗口"><span class="img-wrapper"><img src="images/desktop-computer-attached-macos.png" alt="macOS 浅色主题下挂接到固定会话的验收窗口"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-computer-dark-macos.png" alt="macOS 深色主题下切换聊天后仍保留原绑定会话"><span class="img-wrapper"><img src="images/desktop-computer-dark-macos.png" alt="macOS 深色主题下切换聊天后仍保留原绑定会话"></span></label></p>
+<p>第二张图中，Selected chat 与 Bound chat 不同，原窗口仍绑定原会话。随后实际执行 Detach，界面恢复 detached，绑定会话与范围均清空。<a href="evidence/desktop-computer-capture.json">Computer 截图记录</a>包含程序、相关源码及图片摘要；隔离数据库有两个会话，没有 Run、审批或操作记录。本次仅验证目标发现、挂接、聊天隔离和解除挂接，未请求 Harness 屏幕观察或原生输入。真实锁屏和用户切换尚未验收。</p>
 <h2 id="终端实际运行记录"><a class="header" href="#终端实际运行记录">终端实际运行记录</a></h2>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/tui-pty-approval-macos.png" alt="实际 TUI 进程等待精确文件审批的 PTY 记录"><span class="img-wrapper"><img src="images/tui-pty-approval-macos.png" alt="实际 TUI 进程等待精确文件审批的 PTY 记录"></span></label></p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/tui-pty-completed-macos.png" alt="通过 TUI 批准文件写入后的完成状态"><span class="img-wrapper"><img src="images/tui-pty-completed-macos.png" alt="通过 TUI 批准文件写入后的完成状态"></span></label></p>
