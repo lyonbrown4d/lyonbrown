@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2de6e2c2.js";
+            window.path_to_searchindex_js = "searchindex-6faba41f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -203,7 +203,7 @@
 <p><a href="evidence/desktop-diff-capture.json">截图记录</a>包含程序与图片摘要、实际补丁以及已持久化为 <code>completed</code> 的 Run 标识。验收程序使用产品原生视图和本地 fixture，版本为 0.1.0；此图不作为最终安装包验收记录。</p>
 <h2 id="内嵌浏览器与人工接管"><a class="header" href="#内嵌浏览器与人工接管">内嵌浏览器与人工接管</a></h2>
 <p>本节两张浏览器图片来自同一份独立原生验收构建，不属于上述八张图的构建摘要范围。<a href="evidence/desktop-browser-capture.json">浏览器截图记录</a>保存了程序与源码摘要、图片摘要、已完成的 Run，以及已持久化的 Space 打开、接管、归还和关闭结果。</p>
-<p>2026 年 10 月 19 日对安装包内正式 CLI 入口的<a href="evidence/browser-production-probe.json">独立检查</a>未通过：CEF 已启动并返回画面与 AX，但目标页面在等待期间停留于 <code>about:blank</code>。原因尚未定位，该结果不构成生产导航或钥匙串验收。</p>
+<p>2026 年 10 月 19 日对安装包内正式 CLI 入口的<a href="evidence/browser-production-probe.json">独立检查</a>首次未通过：CEF 已启动并返回画面与 AX，但目标页面在等待期间停留于 <code>about:blank</code>。同一程序随后在三个独立的新 Profile 中连续通过完整用例，验证页面 AX 与画面、语义填充和点击、指针聚焦与文字输入，以及 Profile 隔离和重启持久化。复测使用正式入口，<code>fixture_keychain=false</code>，期间未修改产品代码。首次失败原因仍未定位；复测通过不代表该问题已修复，也不构成全新用户环境的钥匙串授权或安装生命周期验收。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-browser-macos.png" alt="GPUI 窗口中的真实 Chromium 页面"><span class="img-wrapper"><img src="images/desktop-browser-macos.png" alt="GPUI 窗口中的真实 Chromium 页面"></span></label></p>
 <p>CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium 像素帧传到 Browser 面板。此时界面处于 Agent control，只读展示。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-browser-takeover-macos.png" alt="人工接管后的真实 Chromium 文本与点击结果"><span class="img-wrapper"><img src="images/desktop-browser-takeover-macos.png" alt="人工接管后的真实 Chromium 文本与点击结果"></span></label></p>

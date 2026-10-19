@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2de6e2c2.js";
+            window.path_to_searchindex_js = "searchindex-6faba41f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-938ced0f.js"></script>
@@ -243,6 +243,10 @@ cargo test -p agent-mcp --features test-fixtures --locked
 <pre><code class="language-sh">LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --features llama --test native_models -- --ignored --nocapture
 LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --features mistral --test native_models -- --ignored --nocapture
 </code></pre>
+<h2 id="隔离的-computer-测试窗口"><a class="header" href="#隔离的-computer-测试窗口">隔离的 Computer 测试窗口</a></h2>
+<pre><code class="language-sh">cargo run --locked -p agent-desktop --example desktop-computer-target
+</code></pre>
+<p>该示例只提供合成按钮和文字输入框，不启动 daemon、模型或 ComputerRuntime，也不请求录屏或辅助功能权限。启动时输出本次 <code>.local/acceptance/computer-target-*</code> 目录，<code>state.json</code> 保存 <code>click_count</code> 和 <code>text</code>，退出后保留。每次运行使用新目录，适合作为原生控制验收的独立目标；操作此窗口不等于已验收 Harness 和审批链路。</p>
 <h2 id="原生服务验收"><a class="header" href="#原生服务验收">原生服务验收</a></h2>
 <p>macOS 的以下测试使用真实 launchd 注册，只能在没有 Lyonbrown 服务注册且 <code>127.0.0.1:7447</code> 空闲的测试账号上执行。先构建产品 daemon，再提供其绝对路径：</p>
 <pre><code class="language-sh">cargo build -p agentd --bin agentd --locked

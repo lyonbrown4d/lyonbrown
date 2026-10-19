@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5551712a.js";
+            window.path_to_searchindex_js = "searchindex-4b770160.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-2d1e3935.js"></script>
@@ -209,7 +209,7 @@
 <p>Selecting Take control enters Human control. Native input entered <code>Native takeover verified</code>, followed by a page button click that displayed <code>Click reached real Chromium.</code>. Selecting Dark in Settings and returning to the chat retained both results, as shown above. Control was then returned to the agent and the Space closed. These images use the debug test keychain.</p>
 <p>The address field retains navigation input; it is not a trusted display of the committed page origin after redirects. These images cover human browser interaction. Separate autonomous native-CEF acceptance uses an isolated synthetic page; see <a href="tools.html">Local tools and browser actions</a>.</p>
 <p>A separate GPUI component test used the real daemon and CEF to verify pixel frames, pointer coordinates, text input, input rejection after releasing takeover, and Space closure. It used GPUI’s test window and the debug acceptance executable’s test keychain. This checks component calls and actual Chromium behavior separately from the native-window screenshots above.</p>
-<p>The <a href="evidence/browser-production-probe.json">separate check</a> of the packaged release CLI entry on October 19, 2026 failed: CEF started and returned frames and AX, but the target page stayed at <code>about:blank</code> during the wait. The cause remains undiagnosed; production navigation and keychain acceptance did not pass.</p>
+<p>The <a href="evidence/browser-production-probe.json">separate check</a> of the packaged release CLI entry on October 19, 2026 initially failed: CEF started and returned frames and AX, but the target page stayed at <code>about:blank</code> during the wait. The same executable then passed the complete case three consecutive times with fresh profiles, checking target-page AX and frames, semantic fill and click, pointer focus and committed text, profile isolation and persistence across restart. These rechecks used the production entry with <code>fixture_keychain=false</code>; no product code changed between runs. The initial failure remains unexplained. Subsequent passes do not establish its resolution, clean-account Keychain authorization or installer lifecycle acceptance.</p>
 <h2 id="native-computer-targets-and-session-binding"><a class="header" href="#native-computer-targets-and-session-binding">Native Computer targets and session binding</a></h2>
 <p>These images were captured on October 19, 2026 using a separate GPUI acceptance executable with <code>native-computer</code> enabled. After the user granted screen recording and Accessibility permissions to this test app in macOS Settings, the Computer pane discovered targets and explicitly attached the acceptance window to an authenticated daemon session.</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-computer-attached-macos.png" alt="Acceptance window attached to a fixed session in the macOS light appearance"><span class="img-wrapper"><img src="images/desktop-computer-attached-macos.png" alt="Acceptance window attached to a fixed session in the macOS light appearance"></span></label></p>
