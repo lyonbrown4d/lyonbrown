@@ -39,6 +39,30 @@ The default configuration is `config.toml` inside the development data directory
 
 `--dry-run` displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile `agent-dev`. Default Desktop/TUI builds enable neither `native-cef` nor `native-computer`; their browser execution and native computer hosting capabilities report unavailable. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md) for the full CEF SDK, helper and application bundle layout.
 
+## Gateway full-stack development
+
+The repository's separate `cargo gateway` alias invokes the `gateway-dev` binary in `apps/agent-dev`. It starts neither agentd nor an OS service. Prepare existing TOML, administrator username/password and an independent API Key as described in [AI Gateway](gateway.md#startup-and-configuration), then run from the repository root:
+
+```sh
+cargo gateway --config /absolute/path/gateway.toml --data-dir /absolute/path/gateway-data
+cargo gateway --help
+cargo gateway --dry-run --config /absolute/path/gateway.toml
+cargo gateway --build-only
+cargo gateway --build-only --release
+```
+
+The launcher checks the current Rust toolchain's `wasm32-unknown-unknown` target and prepares it through rustup if missing. It then checks cargo-leptos in the repository's `.local/tools/bin`, installing it with `cargo install --locked --root <repo>/.local/tools cargo-leptos --version 0.3.11` if absent. Existing tools must match the fixed version; no manual global installation is required. Rust, platform build tools and network access for downloads still need to be available.
+
+Standard cargo-leptos `leptos build --project gateway` builds the application; `--release` selects release settings for both server and WASM. The launcher then runs an incremental Cargo build with matching settings and reads the executable path from `compiler-artifact` JSON, preserving Cargo target-directory and target configuration. Workspace metadata selects `.local/gateway-web/site` as the default site root. Gateway receives absolute `LYONBROWN_GATEWAY_WEB_ROOT` and serves generated JavaScript and WASM under `/ui/pkg/`.
+
+`--build-only` exits after building the server and assets, without starting Gateway. `--dry-run` prints the plan without running tools, reading credentials or creating runtime data; the outer Cargo command may still compile the launcher. Relative `--config` and `--data-dir` paths resolve from the repository root. Runtime data defaults to `.local/gateway-web/data`; `--listen` can select a nonzero loopback port. Ctrl+C in the launch terminal cleans up only the Gateway process owned by that launcher.
+
+Gateway reads `.env` beside its runtime configuration, with process environment taking precedence. Keep runtime configuration and credentials in a separate directory: the launcher does not explicitly pass Gateway credentials to build commands, but official cargo-leptos itself reads workspace or parent-directory `.env`. This is not an absolute guarantee that build tools cannot access runtime credentials. Never put passwords or API Keys in source, build arguments or static assets.
+
+Shared Rust Leptos components build with `ssr` for the server and `hydrate` for browser WASM. Signals manage policy drafts and submission feedback; official `ServerAction` / `ActionForm` handle forms, and tables use the public `leptos-struct-table` `TableRow` rendering interfaces for direct SSR output. Generated JavaScript boots WASM without a separate Node frontend stack. Authentication, CSRF, roles and policy-version checks remain server responsibilities.
+
+Distribution includes both `ai-gateway` and site assets from the standard full-stack build. Absolute `LYONBROWN_GATEWAY_WEB_ROOT` selects a directory containing `ui/pkg`, defaulting to `web` beside the executable. Running only `cargo run -p ai-gateway` does not generate browser assets; missing or empty JS/WASM files fail startup explicitly. Build success does not establish browser hydration, form interaction or cross-platform runtime acceptance. See [runtime evidence](runtime-evidence.md) for its recorded scope.
+
 ## Native computer client builds
 
 CLI and Desktop disable `native-computer` by default. It explicitly forwards to `agent-computer-runtime/native`, which enables `agent-computer/native`. Default `cargo dev desktop` and `cargo dev tui` builds do not enable it automatically; `native-cef` does not enable computer hosting either. The development launcher supports explicit client feature selection:
@@ -122,6 +146,30 @@ cargo run --locked -p agent-desktop --example desktop-computer-target
 ```
 
 This example provides only a synthetic button and text field. It starts no daemon, model or ComputerRuntime and requests no screen-recording or Accessibility permissions. Startup prints a fresh `.local/acceptance/computer-target-*` directory; `state.json` retains `click_count` and `text` after exit. Each run creates a separate target for native-control acceptance. Interacting with this fixture does not establish Harness or approval-path acceptance.
+
+## Reusable decision and Gateway checks
+
+```sh
+cargo test --locked -p decision-core -p decision-model -p decision-semantic
+cargo test --locked -p gateway-core -p gateway-storage -p ai-gateway
+cargo test --locked -p gateway-web --no-default-features --features ssr
+cargo test --locked -p agent-dev --test gateway_commands
+cargo check --locked -p gateway-web --no-default-features --features hydrate --target wasm32-unknown-unknown
+cargo gateway --build-only
+cargo check --locked -p decision-core --no-default-features
+cargo run --locked -p decision-core --no-default-features --example embedded
+cargo check --locked -p decision-semantic --features semantic-local
+```
+
+The WASM check requires the current toolchain's `wasm32-unknown-unknown` target; `cargo gateway` prepares it before building. SSR tests cover server pages, Server Functions and security boundaries. The hydrate check validates the browser build, without replacing real-browser acceptance of events, forms and asset loading.
+
+Real embedding acceptance uses `LYONBROWN_TEST_EMBEDDING_CONFIG` to select an `OfflineEmbeddingConfig` JSON with absolute paths and SHA-256 values for each asset. Only the explicit test below loads those weights; default workspace tests neither download nor load models:
+
+```sh
+LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test --locked -p decision-semantic --features semantic-local --test offline caller_supplied_real_model_replays_bilingual_queries_with_measured_thresholds -- --ignored --exact --nocapture
+```
+
+The test uses disjoint calibration and replay fixtures to check real loading, dimensions, thresholds and Unknown behavior. Its small sample is not a production multilingual accuracy benchmark. See [Reusable decision engine](decision-engine.md) for APIs and [AI Gateway](gateway.md) for startup, keys and Swagger.
 
 ## Native service acceptance
 

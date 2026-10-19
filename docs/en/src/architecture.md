@@ -21,7 +21,7 @@ flowchart TB
     end
     subgraph Agentd[Local agentd / FluxDI composition]
         API[Client / Workspace / Browser / ComputerRuntime / Orchestration services]
-        Decision[Decision Engine / rules and structured classification]
+        Decision[agent-decision / Agent tool and node policy]
         Run[Run lifecycle / concurrency / cancellation / recovery]
         Harness[agent-runtime / sole rpi-harness loop]
         Model[Model registry / metadata and capability limits]
@@ -50,6 +50,19 @@ flowchart TB
         Computer --> OS
     end
     Computer <-->|Authenticated session attachment / observe and approved execution| API
+    SharedDecision[decision-core / reusable rules and backend ports]
+    Decision --> SharedDecision
+    subgraph GatewayService[Independent AI Gateway]
+        GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
+        GatewayUI[Leptos SSR / admin sessions]
+        GatewayStore[Diesel SQLite / policy / audit / credential hashes]
+        GatewayHTTP --> SharedDecision
+        GatewayHTTP --> GatewayStore
+        GatewayUI --> GatewayStore
+        GatewayUI --> SharedDecision
+    end
+    Model -.->|Explicit gateway endpoint| GatewayHTTP
+    GatewayHTTP --> GatewayUpstream[Chat Completions upstream]
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --> Workspace[Workspace / Git / artifacts / notify]
@@ -172,5 +185,7 @@ ComputerRuntime provides an embeddable interactive-user host interface, attached
 - Runtime interfaces: `crates/agent-runtime/src/contracts.rs`.
 - Native host attachment: `apps/agent-cli/src/computer_backend.rs`, `apps/agent-desktop/src/computer.rs`, `crates/agent-computer-runtime/src/client.rs`, `crates/agent-computer-runtime/src/attachment.rs`, `apps/agentd/src/computer/service.rs`, `apps/agentd/src/computer/tools/` and `apps/agentd/src/computer/mutation.rs`.
 - Durable state: `crates/agent-storage/src/schema.sql`.
+- Reusable decisions and Agent integration: `crates/decision-core/`, `crates/decision-semantic/`, `crates/decision-model/` and `apps/agentd/src/model_routing.rs`.
+- Independent gateway and synthetic models: `apps/ai-gateway/`, `crates/gateway-core/`, `crates/gateway-storage/`, `crates/gateway-web/` and `apps/model-mock/`.
 
 A successful worker attempt and a master's acceptance of its result have different meanings. The protocol keeps `attempt_id`, `owner_epoch` and explicit `AcceptResult`; receiving a result does not establish acceptance.

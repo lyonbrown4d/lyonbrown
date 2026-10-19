@@ -39,6 +39,30 @@ Cargo 别名使用参数数组调用 `apps/agent-dev`，不依赖平台 Shell，
 
 `--dry-run` 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 `agent-dev`。默认 Desktop/TUI 构建不启用 `native-cef` 或 `native-computer`，对应的浏览器执行或原生计算机宿主能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 [本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
 
+## Gateway 全栈开发启动
+
+Gateway 使用同一仓库的独立 `cargo gateway` 别名，调用 `apps/agent-dev` 的 `gateway-dev` 程序。它不启动 agentd，也不注册操作系统服务。先按 [AI Gateway](gateway.md#启动与配置)准备已有 TOML、管理员用户名和密码，以及独立 API Key，再从仓库根目录执行：
+
+```sh
+cargo gateway --config /absolute/path/gateway.toml --data-dir /absolute/path/gateway-data
+cargo gateway --help
+cargo gateway --dry-run --config /absolute/path/gateway.toml
+cargo gateway --build-only
+cargo gateway --build-only --release
+```
+
+启动器先检查当前 Rust 工具链的 `wasm32-unknown-unknown` target，缺失时通过 rustup 准备；再检查仓库 `.local/tools/bin` 下的 cargo-leptos，缺失时以 `cargo install --locked --root <repo>/.local/tools cargo-leptos --version 0.3.11` 安装。已有工具必须匹配固定版本，不要求用户手动全局安装。Rust、平台编译工具和下载所需的网络仍需可用。
+
+构建通过标准 cargo-leptos 的 `leptos build --project gateway` 完成；`--release` 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，从 `compiler-artifact` JSON 获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。工作区 metadata 指定默认资源根目录 `.local/gateway-web/site`；Gateway 收到绝对 `LYONBROWN_GATEWAY_WEB_ROOT`，从 `/ui/pkg/` 提供生成的 JavaScript 与 WASM。
+
+`--build-only` 生成服务端和资源后退出，不启动 Gateway。`--dry-run` 只打印方案，不执行工具、读取凭据或创建运行数据；外层 Cargo 仍可能编译启动器。`--config`、`--data-dir` 的相对路径从仓库根目录解析；默认运行数据为 `.local/gateway-web/data`。`--listen` 可选择非零回环端口。在启动终端按 Ctrl+C，只清理该启动器创建的 Gateway 进程。
+
+Gateway 在运行时读取配置文件旁的 `.env`，进程环境优先。推荐将运行配置和凭据放在独立目录：启动器不主动把 Gateway 凭据传给构建命令，但官方 cargo-leptos 自身会读取工作区或父目录 `.env`，不能据此保证构建工具绝对接触不到运行凭据。不要将密码或 API Key 写进源码、构建参数或静态资源。
+
+管理界面共用 Rust Leptos 组件，分别以 `ssr` 和 `hydrate` feature 构建服务端与浏览器 WASM。Signal 管理策略草稿和提交反馈，官方 `ServerAction` / `ActionForm` 处理表单，表格使用 `leptos-struct-table` 公开 `TableRow` 渲染接口直接支持 SSR。生成的 JavaScript 负责引导 WASM；不需要独立的 Node 前端栈。鉴权、CSRF、角色和策略版本校验仍在服务端完成。
+
+分发时同时携带标准全栈构建的 `ai-gateway` 与 site 静态资源。`LYONBROWN_GATEWAY_WEB_ROOT` 指向包含 `ui/pkg` 的绝对目录，默认是可执行文件旁的 `web`。只有 `cargo run -p ai-gateway` 不会生成浏览器资源；缺少或空的 JS / WASM 文件会使启动明确失败。构建成功不等于已验证浏览器 hydrate、表单交互或跨平台运行，运行验收范围见[运行证据](runtime-evidence.md)。
+
 ## 原生计算机客户端构建
 
 CLI 与 Desktop 的 `native-computer` feature 默认关闭，显式转发到 `agent-computer-runtime/native`，再启用 `agent-computer/native`。`cargo dev desktop` 和 `cargo dev tui` 的默认构建不自动启用它；`native-cef` 也不会启用原生计算机能力。开发启动器支持显式启用客户端 feature：
@@ -122,6 +146,30 @@ cargo run --locked -p agent-desktop --example desktop-computer-target
 ```
 
 该示例只提供合成按钮和文字输入框，不启动 daemon、模型或 ComputerRuntime，也不请求录屏或辅助功能权限。启动时输出本次 `.local/acceptance/computer-target-*` 目录，`state.json` 保存 `click_count` 和 `text`，退出后保留。每次运行使用新目录，适合作为原生控制验收的独立目标；操作此窗口不等于已验收 Harness 和审批链路。
+
+## 可复用决策与 Gateway 检查
+
+```sh
+cargo test --locked -p decision-core -p decision-model -p decision-semantic
+cargo test --locked -p gateway-core -p gateway-storage -p ai-gateway
+cargo test --locked -p gateway-web --no-default-features --features ssr
+cargo test --locked -p agent-dev --test gateway_commands
+cargo check --locked -p gateway-web --no-default-features --features hydrate --target wasm32-unknown-unknown
+cargo gateway --build-only
+cargo check --locked -p decision-core --no-default-features
+cargo run --locked -p decision-core --no-default-features --example embedded
+cargo check --locked -p decision-semantic --features semantic-local
+```
+
+WASM 检查需要当前工具链已有 `wasm32-unknown-unknown` target，`cargo gateway` 会在构建前准备它。SSR 测试检查服务端页面、Server Functions 与安全边界；hydrate 检查验证浏览器构建，不能替代真实浏览器中的事件、表单和资源加载验收。
+
+真实 Embedding 验收通过 `LYONBROWN_TEST_EMBEDDING_CONFIG` 显式指定 `OfflineEmbeddingConfig` JSON，其中每个资产都有绝对路径和 SHA-256。只有下面的显式测试会加载这些权重，默认工作区测试不会下载或加载模型：
+
+```sh
+LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test --locked -p decision-semantic --features semantic-local --test offline caller_supplied_real_model_replays_bilingual_queries_with_measured_thresholds -- --ignored --exact --nocapture
+```
+
+该测试使用独立的校准与回放样本，检查真实模型加载、向量维度、阈值和 Unknown 行为；小样本结果不能当作生产多语言准确率。引擎接口见[可复用决策引擎](decision-engine.md)，服务启动、密钥和 Swagger 见 [AI Gateway](gateway.md)。
 
 ## 原生服务验收
 

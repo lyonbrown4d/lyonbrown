@@ -1,6 +1,6 @@
-# Desktop screenshots and acceptance scope
+# Runtime screenshots and acceptance scope
 
-These screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. The workspace locks CEF 154.0.34 (`cef` Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The [native capture record](evidence/desktop-native-capture.json) stores the executable, source and image digests, two Runs persisted as `completed`, and the exact file-write approval persisted as `consumed`. See [the client documentation](clients.md) for Settings, chat tabs and panel toggles.
+Desktop client screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. The workspace locks CEF 154.0.34 (`cef` Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The [native capture record](evidence/desktop-native-capture.json) stores the executable, source and image digests, two Runs persisted as `completed`, and the exact file-write approval persisted as `consumed`. See [the client documentation](clients.md) for Settings, chat tabs and panel toggles.
 
 The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.
 
@@ -99,6 +99,30 @@ The 0.1.0 ARM64 release build completed on macOS 27.0.1. Client builds enable `n
 | DMG | One for Desktop | Read-only mounted app tree matches staging; image detached afterward |
 
 Each client's five Helpers match its main executable digest, and all 232 CEF files match the pinned SDK. Both PKGs are unsigned and the artifacts are not notarized. These records cover generation and package contents; operating-system installation, native service lifecycle, upgrades and rollback require separate runtime acceptance. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md) for build commands.
+
+## AI Gateway administration and model requests
+
+Captured on October 19, 2026 using a 0.1.0 SSR server and WASM hydration debug build on macOS ARM64. The independent `ai-gateway` connects to local `model-mock` through Rig HTTP transport. Leptos components provide the initial SSR page and hydrated interaction. These light-theme images were captured during actual in-app browser operation.
+
+![Super-administrator username/password sign-in](images/gateway-login-macos.jpg)
+
+![Actual Gateway model catalog](images/gateway-models-macos.jpg)
+
+![Policy state after saving through the administration form](images/gateway-policy-macos.jpg)
+
+After signing in with the environment-initialized super-administrator username and password through the actual form, the policy revision was saved as `acceptance-v1`. Shared browser validation rejected invalid JSON, and Reset restored the original policy. Synthetic policy text containing HTML markup survived an SSR reload as text without creating extra page nodes. A subsequent automatic-routing request used the new revision. Logging out revoked the SQLite administration session; visiting the models page again returned to sign-in.
+
+![Actual request records and policy revisions](images/gateway-requests-macos.jpg)
+
+Four synthetic model requests covered explicit-model JSON, automatic-routing JSON, automatic-routing SSE and automatic routing after the policy update. All four SQLite audit records reached Succeeded; the SSE stream included its terminal marker. Additional checks covered API/admin credential separation, unauthenticated rejection and absence of credentials or prompt columns in storage. No paid model was called.
+
+![Swagger UI executing a health check with a 200 response](images/gateway-swagger-macos.jpg)
+
+The administration API-documentation link opened Swagger UI with its embedded specification and assets. An actual Try it out health request returned `200` with `status: live`.
+
+![Narrow-window navigation and independently scrolling request table](images/gateway-mobile-macos.jpg)
+
+The desktop layout was checked at 1280 × 800. The narrow viewport requested 390 × 844; document width after the scrollbar was 380 pixels. The document did not overflow horizontally, and the table scrolled inside its own container. The [runtime record](evidence/gateway-web-macos.json) contains binary, WASM, JavaScript, relevant-source and image hashes plus HTTP and SQLite results. This section does not cover public-network, Windows, Linux or new installer acceptance.
 
 ## Capabilities outside this screenshot set
 

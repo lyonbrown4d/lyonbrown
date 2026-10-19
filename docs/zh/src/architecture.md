@@ -21,7 +21,7 @@ flowchart TB
     end
     subgraph Agentd[本机 agentd / FluxDI 组合根]
         API[Client / Workspace / Browser / ComputerRuntime / Orchestration 服务]
-        Decision[Decision Engine / 规则与结构化分类]
+        Decision[agent-decision / Agent 工具与节点策略]
         Run[Run 生命周期 / 并发限制 / 取消与恢复]
         Harness[agent-runtime / 唯一 rpi-harness Loop]
         Model[模型 Registry / 元数据与能力限制]
@@ -50,6 +50,19 @@ flowchart TB
         Computer --> OS
     end
     Computer <-->|认证会话挂接 / 观察与获批执行| API
+    SharedDecision[decision-core / 通用规则与后端接口]
+    Decision --> SharedDecision
+    subgraph GatewayService[独立 AI Gateway]
+        GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
+        GatewayUI[Leptos SSR / 管理会话]
+        GatewayStore[Diesel SQLite / 策略 / 审计 / 凭据摘要]
+        GatewayHTTP --> SharedDecision
+        GatewayHTTP --> GatewayStore
+        GatewayUI --> GatewayStore
+        GatewayUI --> SharedDecision
+    end
+    Model -.->|显式配置网关端点| GatewayHTTP
+    GatewayHTTP --> GatewayUpstream[Chat Completions upstream]
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --> Workspace[工作区 / Git / Artifact / notify]
@@ -172,5 +185,7 @@ ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon �
 - Runtime 接口：`crates/agent-runtime/src/contracts.rs`。
 - 原生宿主挂接：`apps/agent-cli/src/computer_backend.rs`、`apps/agent-desktop/src/computer.rs`、`crates/agent-computer-runtime/src/client.rs`、`crates/agent-computer-runtime/src/attachment.rs`、`apps/agentd/src/computer/service.rs`、`apps/agentd/src/computer/tools/` 与 `apps/agentd/src/computer/mutation.rs`。
 - 持久状态：`crates/agent-storage/src/schema.sql`。
+- 通用决策与 Agent 接入：`crates/decision-core/`、`crates/decision-semantic/`、`crates/decision-model/` 与 `apps/agentd/src/model_routing.rs`。
+- 独立网关与合成模型：`apps/ai-gateway/`、`crates/gateway-core/`、`crates/gateway-storage/`、`crates/gateway-web/` 和 `apps/model-mock/`。
 
 跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 `attempt_id`、`owner_epoch` 和显式 `AcceptResult`，不能把收到结果当成已经采纳。

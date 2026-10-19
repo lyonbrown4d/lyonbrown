@@ -24,6 +24,9 @@ Lyonbrown 是 Rust monorepo。agentd、CLI/TUI、GPUI Desktop、BrowserRuntime �
 18. 模型接入测试使用本地 mock server，经真实协议适配器验证各个已开放的标准协议，不调用付费模型。重点验证决策模型的结构化输出、置信度、授权约束、保守回退、超时和取消；决策不得扩大工具、模型或节点权限，也不得绕过人工审批。测试必须检查最终执行行为与持久化状态，不能只断言 mock 返回值。
 19. 异步进程入口优先使用 `#[tokio::main]`，参数解析、序列化和依赖注入优先复用成熟库的宏，减少样板代码。CEF helper 与 Windows SCM 分派先于异步运行时初始化；GPUI 保留主线程事件循环。显式运行时仅用于需要持有、共享或定制运行时的边界，不为局部简化引入隐藏控制流的自定义宏。
 20. ComputerRuntime 由交互客户端显式选择本机范围后绑定单一 Session；目标发现不截图、输入或请求系统权限。窗口选择同时绑定窗口 ID 和进程 ID，不因标识复用采用新目标。切换会话不转移控制权，重连和退出撤销原宿主，不重放原生输入。原生 SDK 通过客户端的 `native-computer` 功能显式启用，普通 agentd 构建不启用该功能。
+21. `decision-core` 是默认嵌入 Agent 的可复用决策库，不依赖 Harness、Agent 内部类型、Provider SDK、HTTP 或数据库。语义与结构化推理通过适配层接入；建议不能授予工具、模型或节点权限，实际调度与长期绑定由调用方持有。
+22. AI Gateway 独立于 agentd，优先使用 FluxDI 的 Axum 请求作用域、Diesel SQLite 和 Rust Leptos 全栈 Web UI，不引入独立 Node 前端栈。前端优先使用 `#[component]`、`view!`、Signal 和维护中的组件库，通过 SSR 与 WASM hydration 提供交互，表单复用 ServerAction / ActionForm，授权与持久化保持在服务端。OpenAPI 与 Swagger 优先使用 `utoipa` 生态从代码生成；API Key 与管理会话分离；环境变量初始化唯一超级管理员用户名和密码，密码使用成熟库的 Argon2id 加盐哈希，无默认密码，不以环境变量覆盖已有账户；写操作校验来源、超级管理员身份和 CSRF。 基础输入校验优先复用成熟库的派生宏，并在 Rust 前后端共享规则；权限、CSRF、PolicySnapshot 语义校验和 CAS 仍由服务端执行，不以前端校验代替服务端判定。 Gateway 上游仅复用固定版本 `rig-core` / `rig-reqwest` 0.44.0 的公开 raw HTTP transport 与 SseFramer，保留原始 JSON/SSE；资源限制、严格终态检查、取消和审计由 Gateway 持有，不引入 Rig Agent 或第二套 Agent Loop。Agent 与 model-provider 继续复用现有 rpi-ai 三协议适配，不要求全项目统一为 Rig。
+23. `apps/model-mock` 提供独立、仅回环监听的合成模型服务，优先复用 HTTP Mock 与协议 SDK。远程标准协议、Ollama 协议和本地 `InferenceBackend` Mock 均不得调用付费模型或隐式加载权重；Mock 通过不代表真实推理 SDK、模型质量或性能验收。
 
 ## 验证
 

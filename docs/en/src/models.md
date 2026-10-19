@@ -1,5 +1,7 @@
 # Models and execution decisions
 
+The Agent embeds the reusable core by default, pins the configured main model and persists `model_route_decision` before the Agent-specific tool plan. See [Reusable decision engine](decision-engine.md) for library/backends and [AI Gateway](gateway.md) for independent serving.
+
 Each run receives an execution plan from `agent-decision` before `agent-runtime` opens `rpi-harness`. A classifier returns advice. It executes no tools and cannot grant permissions.
 
 ## How the plan controls execution
@@ -28,7 +30,7 @@ The tool set is the intersection of the classifier's selection, authorized tools
 
 The effective plan is persisted as an `execution_plan` event before opening the Harness. It records tools, capabilities, execution mode, risk, confidence, source and `trace_id`. The daemon filters the actual Harness tools against this plan, restricting both model-visible tools and execution. Approval consumption checks the run, tool, full arguments and expiry; a classification never replaces human approval.
 
-Unavailable classifiers, timeout, invalid output, insufficient confidence or missing required capabilities fall back to a local general model with no tools or target node. Cancellation during classification persists a cancelled run without calling the main model.
+Unavailable classifiers, timeout, invalid output, insufficient confidence or missing required capabilities fall back to local execution with the configured main model and no tools or target node. Cancellation during classification persists a cancelled run without calling the main model.
 
 ## Remote protocols
 

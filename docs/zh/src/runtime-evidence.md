@@ -1,6 +1,6 @@
-# 桌面运行截图与验收范围
+# 运行截图与验收范围
 
-以下截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate `cef` 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。[原生截图记录](evidence/desktop-native-capture.json)保存了对应程序、源文件与图片摘要、两次已持久化为 `completed` 的 Run，以及状态为 `consumed` 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见[客户端文档](clients.md)。
+桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate `cef` 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。[原生截图记录](evidence/desktop-native-capture.json)保存了对应程序、源文件与图片摘要、两次已持久化为 `completed` 的 Run，以及状态为 `consumed` 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见[客户端文档](clients.md)。
 
 浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。
 
@@ -99,6 +99,30 @@ CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium �
 | DMG | Desktop 一份 | 只读挂载后的应用目录与打包目录一致，检查后卸载 |
 
 每个客户端的 5 个 Helper 均与对应主程序的摘要一致，232 个 CEF 文件与固定 SDK 一致。两份 PKG 未签名，产物未经过公证。这些记录覆盖生成与包内容校验；操作系统实际安装、原生服务生命周期、升级和回滚仍需单独运行验收。构建命令见[本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
+
+## AI Gateway 管理台与模型请求
+
+本节采集于 2026 年 10 月 19 日，使用 macOS ARM64 上 0.1.0 的 SSR 服务端与 WASM hydration 调试构建。独立 `ai-gateway` 经 Rig HTTP 传输连接本机 `model-mock`；管理台使用 Leptos 组件，由 SSR 提供首屏，再由 WASM 接管交互。以下是在应用内浏览器实际操作采集的浅色主题截图。
+
+![超级管理员用户名和密码登录入口](images/gateway-login-macos.jpg)
+
+![实际 Gateway 模型目录](images/gateway-models-macos.jpg)
+
+![通过管理表单保存策略后的状态](images/gateway-policy-macos.jpg)
+
+使用环境变量初始化的超级管理员用户名和密码，通过实际登录表单进入管理台后，将策略 revision 保存为 `acceptance-v1`。浏览器端共享校验拒绝无效 JSON，重置按钮恢复原始策略；含 HTML 标记的合成策略文本在 SSR 重载后仍作为文本保留，未生成额外页面节点。随后自动路由请求使用了新版本。退出登录后再次访问模型页会返回登录页，SQLite 中对应管理会话已撤销。
+
+![实际请求记录与策略版本](images/gateway-requests-macos.jpg)
+
+本轮发送四个合成模型请求，覆盖显式模型 JSON、自动路由 JSON、自动路由 SSE，以及策略更新后的自动路由。四条 SQLite 审计记录均为 Succeeded；SSE 包含结束标记。另行检查 API 与管理凭据隔离、未认证访问拒绝，以及数据库不包含凭据或 Prompt 字段。没有调用付费模型。
+
+![Swagger UI 实际执行健康检查并返回 200](images/gateway-swagger-macos.jpg)
+
+从管理台点击 API 文档进入 Swagger UI，加载内嵌规范与资源，实际通过 Try it out 执行健康检查，返回 `200` 和 `status: live`。
+
+![窄窗口中的管理导航与可横向滚动请求表格](images/gateway-mobile-macos.jpg)
+
+桌面布局以 1280 × 800 视口检查；窄窗口请求 390 × 844，扣除滚动条后的正文宽度为 380。正文没有横向溢出，请求表格在自身容器内滚动。[运行记录](evidence/gateway-web-macos.json)包含程序、WASM 与 JavaScript 资源、相关源码及图片摘要，以及 HTTP 和 SQLite 检查结果。本节不覆盖公网、Windows、Linux 或新版安装包验收。
 
 ## 尚未由本组截图覆盖的能力
 

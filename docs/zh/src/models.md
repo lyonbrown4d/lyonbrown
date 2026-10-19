@@ -1,5 +1,7 @@
 # 模型与执行决策
 
+Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 `model_route_decision`，再生成 Agent 专属的工具计划。通用库与可选后端见[可复用决策引擎](decision-engine.md)；独立网关见 [AI Gateway](gateway.md)。
+
 每次运行先由 `agent-decision` 生成执行计划，再由 `agent-runtime` 打开 `rpi-harness`。分类器只返回建议，不执行工具，也不能授予权限。
 
 ## 执行计划如何生效
@@ -15,7 +17,7 @@ flowchart TB
     Select -->|是| Classify[无工具的分类请求]
     Classify --> Validate[JSON 与置信度校验]
     Validate -->|通过| Clamp[按 daemon 权限与能力限制建议]
-    Validate -->|失败或超时| Fallback[本地通用模型 / 无工具]
+    Validate -->|失败或超时| Fallback[本地执行 / 已配置主模型 / 无工具]
     Rule --> Persist[保存 execution_plan 事件]
     Clamp --> Persist
     Fallback --> Persist
@@ -28,7 +30,7 @@ flowchart TB
 
 有效计划先写入持久事件 `execution_plan`，其中包含工具、能力、执行模式、风险、置信度、来源及 `trace_id`，然后才打开 Harness。daemon 按该计划过滤实际工具集合，因此限制同时作用于模型可见工具和实际执行。审批按运行、工具、完整参数和有效期核对；分类器判断不能替代人工批准。
 
-分类器不可用、超时、输出无效、置信度不足或缺少所需能力时，回退为本地通用模型、无工具、无目标节点。分类阶段取消会将运行保存为取消状态，不调用主模型。
+分类器不可用、超时、输出无效、置信度不足或缺少所需能力时，回退为本地执行模式，使用已配置的主模型且不提供工具或目标节点。分类阶段取消会将运行保存为取消状态，不调用主模型。
 
 ## 远程协议
 
