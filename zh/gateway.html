@@ -1,0 +1,312 @@
+<!DOCTYPE HTML>
+<html lang="zh" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>AI Gateway - Lyonbrown 使用与开发文档</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon-de23e50b.svg">
+        <link rel="shortcut icon" href="favicon-8114d1fc.png">
+        <link rel="stylesheet" href="css/variables-8adf115d.css">
+        <link rel="stylesheet" href="css/general-e96d0476.css">
+        <link rel="stylesheet" href="css/chrome-d279d366.css">
+        <link rel="stylesheet" href="css/print-9e4910d8.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="fonts/fonts-9644e21d.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="mdbook-highlight-css" href="highlight-493f70e1.css">
+        <link rel="stylesheet" id="mdbook-tomorrow-night-css" href="tomorrow-night-4c0ae647.css">
+        <link rel="stylesheet" id="mdbook-ayu-highlight-css" href="ayu-highlight-3fdfc3ac.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="theme/vendor/photoswipe-b0eaaae0.css">
+        <link rel="stylesheet" href="theme/diagrams-31123351.css">
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex-de20616c.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc-dab33207.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="mdbook-body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="mdbook-sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("mdbook-sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="mdbook-sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="mdbook-sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="mdbook-page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="mdbook-menu-bar-hover-placeholder"></div>
+                <div id="mdbook-menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="mdbook-sidebar-toggle" class="icon-button" for="mdbook-sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="mdbook-sidebar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M0 96C0 78.3 14.3 64 32 64H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 128 0 113.7 0 96zM0 256c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 416c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z"/></svg></span>
+                        </label>
+                        <button id="mdbook-theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="mdbook-theme-list">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M371.3 367.1c27.3-3.9 51.9-19.4 67.2-42.9L600.2 74.1c12.6-19.5 9.4-45.3-7.6-61.2S549.7-4.4 531.1 9.6L294.4 187.2c-24 18-38.2 46.1-38.4 76.1L371.3 367.1zm-19.6 25.4l-116-104.4C175.9 290.3 128 339.6 128 400c0 3.9 .2 7.8 .6 11.6c1.8 17.5-10.2 36.4-27.8 36.4H96c-17.7 0-32 14.3-32 32s14.3 32 32 32H240c61.9 0 112-50.1 112-112c0-2.5-.1-5-.2-7.5z"/></svg></span>
+                        </button>
+                        <ul id="mdbook-theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="mdbook-theme-ayu">Ayu</button></li>
+                        </ul>
+                        <button id="mdbook-search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="mdbook-searchbar">
+                            <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M416 208c0 45.9-14.9 88.3-40 122.7L502.6 457.4c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0S416 93.1 416 208zM208 352c79.5 0 144-64.5 144-144s-64.5-144-144-144S64 128.5 64 208s64.5 144 144 144z"/></svg></span>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Lyonbrown 使用与开发文档</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <span class=fa-svg id="print-button"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M128 0C92.7 0 64 28.7 64 64v96h64V64H354.7L384 93.3V160h64V93.3c0-17-6.7-33.3-18.7-45.3L400 18.7C388 6.7 371.7 0 354.7 0H128zM384 352v32 64H128V384 368 352H384zm64 32h32c17.7 0 32-14.3 32-32V256c0-35.3-28.7-64-64-64H64c-35.3 0-64 28.7-64 64v96c0 17.7 14.3 32 32 32H64v64c0 35.3 28.7 64 64 64H384c35.3 0 64-28.7 64-64V384zm-16-88c-13.3 0-24-10.7-24-24s10.7-24 24-24s24 10.7 24 24s-10.7 24-24 24z"/></svg></span>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="mdbook-search-wrapper" class="hidden">
+                    <form id="mdbook-searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="mdbook-searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="mdbook-searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <span class=fa-svg id="fa-spin"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M304 48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zm0 416c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM48 304c26.5 0 48-21.5 48-48s-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48zm464-48c0-26.5-21.5-48-48-48s-48 21.5-48 48s21.5 48 48 48s48-21.5 48-48zM142.9 437c18.7-18.7 18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zm0-294.2c18.7-18.7 18.7-49.1 0-67.9S93.7 56.2 75 75s-18.7 49.1 0 67.9s49.1 18.7 67.9 0zM369.1 437c18.7 18.7 49.1 18.7 67.9 0s18.7-49.1 0-67.9s-49.1-18.7-67.9 0s-18.7 49.1 0 67.9z"/></svg></span>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="mdbook-searchresults-outer" class="searchresults-outer hidden">
+                        <div id="mdbook-searchresults-header" class="searchresults-header"></div>
+                        <ul id="mdbook-searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('mdbook-sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('mdbook-sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#mdbook-sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="mdbook-content" class="content">
+                    <main>
+                        <h1 id="ai-gateway"><a class="header" href="#ai-gateway">AI Gateway</a></h1>
+<p><code>ai-gateway</code> 是独立 Rust 服务，默认监听 <code>127.0.0.1:8099</code>。它通过 FluxDI 的类型化模块与 Axum 请求作用域装配共享决策核心、SQLite 存储、模型转发和 Leptos 管理界面，不需要启动 agentd。Agent 使用网关时仍自行管理 Harness、Session、工具和审批。</p>
+<h2 id="启动与配置"><a class="header" href="#启动与配置">启动与配置</a></h2>
+<pre><code class="language-sh">cargo gateway --config /absolute/path/gateway.toml --data-dir /absolute/path/gateway-data
+</code></pre>
+<p>在仓库根目录运行。<code>cargo gateway</code> 调用独立的 <code>gateway-dev</code> 启动器，构建服务端与浏览器资源后启动 Gateway，不启动 agentd。首次使用会通过 rustup 为当前工具链准备官方 <code>wasm32-unknown-unknown</code> target，并将固定版本 cargo-leptos 0.3.11 安装到仓库的 <code>.local/tools</code>；无需手动全局安装。已有工具须通过版本检查。命令选项和构建流程见<a href="development.html#gateway-全栈开发启动">开发与验证</a>。</p>
+<p>配置库按默认值、TOML、相邻 <code>.env</code>、进程环境和 CLI 合并。<code>--listen</code> 最后覆盖地址；监听地址必须是本机非零端口。可用环境变量包括 <code>LYONBROWN_GATEWAY_CONFIG</code>、<code>LYONBROWN_GATEWAY_DATA_DIR</code>、<code>LYONBROWN_GATEWAY_LISTEN</code>、<code>LYONBROWN_GATEWAY_WEB_ROOT</code>、<code>LYONBROWN_GATEWAY_TOKEN</code>、<code>LYONBROWN_GATEWAY_ADMIN_USERNAME</code> 和 <code>LYONBROWN_GATEWAY_ADMIN_PASSWORD</code>。</p>
+<pre><code class="language-toml">listen = "127.0.0.1:8099"
+
+[gateway]
+
+[[gateway.models]]
+id = "local-chat"
+upstream_model = "deployed-model-id"
+api_base = "http://127.0.0.1:8080/v1"
+api_key_env = "LOCAL_MODEL_API_KEY"
+tier = "balanced"
+local_inference = true
+capabilities = ["text", "tools"]
+context_tokens = 4096
+</code></pre>
+<p><code>api_base</code> 须替换为已部署服务。上游凭据通过 <code>api_key_env</code> 指向环境变量或 <code>.env</code>，不写在模型配置中。</p>
+<p>管理台使用用户名和密码登录。首次启动从下列环境变量或相邻 <code>.env</code> 初始化唯一的超级管理员；没有内置账户或默认密码。</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>环境变量</th><th>要求</th></tr>
+</thead>
+<tbody>
+<tr><td><code>LYONBROWN_GATEWAY_ADMIN_USERNAME</code></td><td>1–64 个 ASCII 字符，仅字母、数字、<code>_</code>、<code>.</code>、<code>@</code>、<code>-</code>；区分大小写</td></tr>
+<tr><td><code>LYONBROWN_GATEWAY_ADMIN_PASSWORD</code></td><td>15–128 字节密码，不得与 API Key 相同</td></tr>
+<tr><td><code>LYONBROWN_GATEWAY_TOKEN</code></td><td>独立生成的 32–512 字节可打印随机 API Key，仅用于模型接口 Bearer 鉴权</td></tr>
+</tbody>
+</table>
+</div>
+<p>管理员用户名和密码不能写入 TOML 配置。数据库保存用户名、超级管理员角色和带随机盐的 Argon2id 密码哈希，不保存明文密码。再次启动时相同凭据通过校验；不同凭据使启动失败，不会覆盖原账户或重置密码。API Key 不能用于管理台登录，超级管理员密码也不能用于模型 API。超级管理员可查看模型目录与请求记录，并修改路由策略。</p>
+<p>推荐将 Gateway TOML 和凭据 <code>.env</code> 放在独立的配置目录。启动器不将管理员密码或模型凭据放入构建命令参数，也不主动传给构建子进程；不过 cargo-leptos 自身会读取工作区或父目录的 <code>.env</code>，不能把启动器的环境过滤当作构建工具无法访问凭据的保证。</p>
+<p><code>local_inference = true</code> 是可信部署方对上游实际本地推理的声明，并要求使用字面量回环地址。不能将转发云模型的本地代理标记为本地推理。远程上游必须使用 HTTPS；客户端不能指定任意上游地址。</p>
+<h2 id="构建资源与分发"><a class="header" href="#构建资源与分发">构建资源与分发</a></h2>
+<p>开发启动器按工作区的 <code>gateway</code> cargo-leptos 配置构建，资源默认输出到 <code>.local/gateway-web/site/ui/pkg</code>。<code>--build-only</code> 只构建；<code>--release</code> 选择发布构建。启动器从 Cargo 的构建结果获取服务端程序路径，保留 <code>CARGO_TARGET_DIR</code> 等构建配置，并向 Gateway 传入实际的资源根目录。</p>
+<p>分发时同时提供 <code>ai-gateway</code> 可执行文件和生成的静态资源。<code>LYONBROWN_GATEWAY_WEB_ROOT</code> 必须是绝对路径，指向包含 <code>ui/pkg</code> 的 site 根目录；未指定时使用可执行文件旁的 <code>web</code> 目录。标准构建生成 <code>ui/pkg/gateway_web.js</code> 和 <code>ui/pkg/gateway_web.wasm</code>，管理页面通过 <code>/ui/pkg/</code> 加载它们。仅执行 <code>cargo run -p ai-gateway</code> 不会生成浏览器资源；资源缺失或为空时，Gateway 在数据库初始化前明确报错。应使用标准全栈构建并一起分发同次构建的二进制与资源。</p>
+<h2 id="http-与-swagger"><a class="header" href="#http-与-swagger">HTTP 与 Swagger</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>方法与路径</th><th>用途与访问方式</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET /health/live</code></td><td>进程存活</td></tr>
+<tr><td><code>GET /health/ready</code></td><td>已验证配置与接收状态；不代表上游健康探测</td></tr>
+<tr><td><code>GET /v1/models</code></td><td>配置的公共模型 ID；需要 API Bearer Key</td></tr>
+<tr><td><code>POST /v1/chat/completions</code></td><td>文本与函数工具的 Chat Completions 转发；需要 API Bearer Key</td></tr>
+<tr><td><code>GET /swagger-ui/</code></td><td>官方 Swagger UI，只读文档入口</td></tr>
+<tr><td><code>GET /api-doc/openapi.json</code></td><td><code>utoipa</code> 从代码生成的 OpenAPI</td></tr>
+<tr><td><code>GET /ui/login</code></td><td>管理登录</td></tr>
+</tbody>
+</table>
+</div>
+<p>Swagger 页面与规范在本机地址可直接打开，业务 API 仍需通过 Swagger 的 Authorize 提供 API Key。规范不包含实际模型目录或凭据，Swagger 资源随程序内嵌，不要求访问 CDN。当前入站协议为 Chat Completions；图片、音频、Responses 和 Anthropic 入站请求不在此接口的兼容范围内。</p>
+<p>Gateway 上游传输复用 <a href="https://docs.rs/rig-core/0.44.0/rig_core/">Rig-Core 0.44.0</a> 的公开 raw HTTP 接口与 <code>SseFramer</code>，以及 <a href="https://docs.rs/rig-reqwest/0.44.0/rig_reqwest/">Rig-Reqwest 0.44.0</a> 的 <code>ReqwestMiddlewareClient</code>。Gateway 保留 <code>n</code> 等已开放的请求参数，并按原始字节转发 JSON 和 SSE 响应，包括多候选结果、工具调用片段和 usage。中间件在非 2xx 时立即释放原始响应正文，只向 Rig 提供相同状态的空正文；Gateway 继续负责字节限制、严格 <code>[DONE]</code> 检查、时限、取消和审计。这里不使用 Rig Agent 或 Agent Loop；Agent 与 <code>model-provider</code> 继续复用 rpi-ai 的 Responses、Chat Completions 和 Anthropic 三协议适配。</p>
+<p>指定 <code>model</code> 为公共模型 ID 时按配置直连，不因不存在或能力不足切换模型。<code>model = "router/auto"</code> 时调用 <a href="decision-engine.html">共享决策引擎</a>，选择实际模型后再次核对工具能力、上下文容量、本地范围及服务器约束。请求中的 <code>routing.local_only</code> 和 <code>routing.allowed_tiers</code> 只能进一步收紧服务器限制，转发前移除。</p>
+<p>转发保留 SSE 的工具调用片段、usage 与数据字节；维护中的 SSE 解析库另行检查结束标记。请求大小、响应大小、并发、首字节和总时限均有限制。并发许可持续到审计写入结束且回复正文耗尽、释放或到达总时限；提前收到结束标记不会绕过未读正文的容量限制。断开连接会释放上游响应；中断或缺少结束标记进入未知结果，不自动重试。错误响应不回显上游错误正文、Prompt 或凭据。</p>
+<p>首字节预算从请求接收时开始，包含自动路由；路由超过该预算返回 <code>504 routing_timeout</code>，不发送上游请求。</p>
+<h2 id="sqlite-与管理界面"><a class="header" href="#sqlite-与管理界面">SQLite 与管理界面</a></h2>
+<p>默认数据库位于数据目录的 <code>gateway.sqlite</code>，由 Diesel 管理，启用 WAL、busy timeout 和完整同步。单进程持有数据库所有权锁，启动时将遗留 Pending 请求标记为 Uncertain。模型快照、策略历史、API Key 摘要、超级管理员账户、管理会话和请求元数据保存在该库；没有原始请求或回复正文的存储字段。</p>
+<p>发送上游请求前先保存 Pending 意图，再更新完成或未知状态。Succeeded 表示已收到并验证上游成功终态，不证明调用方已消费回复。数据库写入责任独立于 HTTP 等待期限；请求超时后仍完成已开始的意图或终态写入。实际写库失败留下的 Pending 在重启时恢复为 Uncertain，不能因为 HTTP 连接关闭就认定推理未发生。</p>
+<p>管理页面复用同一套 Rust Leptos 组件：服务端先渲染 HTML，浏览器加载生成的 JavaScript 引导代码与 WASM，再为现有页面接入事件和响应式状态。没有独立的 Node 前端栈。页面包括模型目录、路由策略和分页请求记录，主题跟随系统浅色或深色偏好。</p>
+<p>布局、表单字段、提交状态和提示是共享组件。Leptos Signal 管理策略草稿、修改状态、即时校验和重置；官方 <code>ServerAction</code> / <code>ActionForm</code> 提交登录、保存和退出。表格复用 <code>leptos-struct-table</code> 的公开 <code>TableRow</code> 派生与行渲染接口，表头、语义化表格和分页由页面组件组织，可在 SSR 时直接输出行内容，不依赖浏览器虚拟列表完成首屏。</p>
+<p><code>gateway-validation</code> 使用 <a href="https://docs.rs/garde/0.23.0/garde/">Garde 0.23.0</a> 的派生宏与 regex 规则定义 <code>Credentials</code>、<code>PolicyDraft</code> 基础校验，供 SSR、WASM、应用配置及存储入口共享；授权、CSRF、<code>PolicySnapshot</code> 语义校验与 CAS 仍由服务端执行。</p>
+<p>浏览器校验只提供交互反馈。敏感读取、密码验证、超级管理员角色、会话有效期、Origin 和会话绑定 CSRF 仍在服务端核验。登录会话使用带期限的 HttpOnly / SameSite=Strict Cookie；策略保存与退出同时验证来源和 CSRF。策略更新校验完整文档并比较旧 revision，保存成功后发布到内存；并发编辑冲突要求刷新。模型上游凭据和密码哈希不进入浏览器 DTO。</p>
+<p>模型目录来自部署配置，启动时保存不可变版本快照；管理页面不提供上游凭据编辑。此服务骨架不包含多租户配额账本、实际计费、Provider 账户管理或公网部署。共享日志组件将结构化日志滚动保存在数据目录，指标快照提供请求、拒绝、耗时和结果计数。</p>
+<h2 id="验证"><a class="header" href="#验证">验证</a></h2>
+<p>本地 HTTP 测试使用合成上游，检查实际模型改写、Bearer 校验、能力与本地范围、流式取消和超时、未知结果、SQLite 恢复、管理登录、CSRF、策略版本及生成的 OpenAPI。SSR 测试与 WASM hydrate 编译检查命令见<a href="development.html#可复用决策与-gateway-检查">开发与验证</a>。运行截图与范围见<a href="runtime-evidence.html">运行证据</a>；旧截图不自动证明新的 hydrate 交互已验收。这些测试不调用付费模型，也不代表公网、多租户或三平台运行验收。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="decision-engine.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                            </a>
+
+                            <a rel="next prefetch" href="model-mock.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="decision-engine.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
+                    </a>
+
+                    <a rel="next prefetch" href="model-mock.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
+                    </a>
+            </nav>
+
+        </div>
+
+        <template id=fa-eye><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 576 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M288 32c-80.8 0-145.5 36.8-192.6 80.6C48.6 156 17.3 208 2.5 243.7c-3.3 7.9-3.3 16.7 0 24.6C17.3 304 48.6 356 95.4 399.4C142.5 443.2 207.2 480 288 480s145.5-36.8 192.6-80.6c46.8-43.5 78.1-95.4 93-131.1c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C433.5 68.8 368.8 32 288 32zM432 256c0 79.5-64.5 144-144 144s-144-64.5-144-144s64.5-144 144-144s144 64.5 144 144zM288 192c0 35.3-28.7 64-64 64c-11.5 0-22.3-3-31.6-8.4c-.2 2.8-.4 5.5-.4 8.4c0 53 43 96 96 96s96-43 96-96s-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6z"/></svg></span></template>
+        <template id=fa-eye-slash><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M38.8 5.1C28.4-3.1 13.3-1.2 5.1 9.2S-1.2 34.7 9.2 42.9l592 464c10.4 8.2 25.5 6.3 33.7-4.1s6.3-25.5-4.1-33.7L525.6 386.7c39.6-40.6 66.4-86.1 79.9-118.4c3.3-7.9 3.3-16.7 0-24.6c-14.9-35.7-46.2-87.7-93-131.1C465.5 68.8 400.8 32 320 32c-68.2 0-125 26.3-169.3 60.8L38.8 5.1zM223.1 149.5C248.6 126.2 282.7 112 320 112c79.5 0 144 64.5 144 144c0 24.9-6.3 48.3-17.4 68.7L408 294.5c5.2-11.8 8-24.8 8-38.5c0-53-43-96-96-96c-2.8 0-5.6 .1-8.4 .4c5.3 9.3 8.4 20.1 8.4 31.6c0 10.2-2.4 19.8-6.6 28.3l-90.3-70.8zm223.1 298L373 389.9c-16.4 6.5-34.3 10.1-53 10.1c-79.5 0-144-64.5-144-144c0-6.9 .5-13.6 1.4-20.2L83.1 161.5C60.3 191.2 44 220.8 34.5 243.7c-3.3 7.9-3.3 16.7 0 24.6c14.9 35.7 46.2 87.7 93 131.1C174.5 443.2 239.2 480 320 480c47.8 0 89.9-12.9 126.2-32.5z"/></svg></span></template>
+        <template id=fa-copy><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M502.6 70.63l-61.25-61.25C435.4 3.371 427.2 0 418.7 0H255.1c-35.35 0-64 28.66-64 64l.0195 256C192 355.4 220.7 384 256 384h192c35.2 0 64-28.8 64-64V93.25C512 84.77 508.6 76.63 502.6 70.63zM464 320c0 8.836-7.164 16-16 16H255.1c-8.838 0-16-7.164-16-16L239.1 64.13c0-8.836 7.164-16 16-16h128L384 96c0 17.67 14.33 32 32 32h47.1V320zM272 448c0 8.836-7.164 16-16 16H63.1c-8.838 0-16-7.164-16-16L47.98 192.1c0-8.836 7.164-16 16-16H160V128H63.99c-35.35 0-64 28.65-64 64l.0098 256C.002 483.3 28.66 512 64 512h192c35.2 0 64-28.8 64-64v-32h-47.1L272 448z"/></svg></span></template>
+        <template id=fa-play><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M73 39c-14.8-9.1-33.4-9.4-48.5-.9S0 62.6 0 80V432c0 17.4 9.4 33.4 24.5 41.9s33.7 8.1 48.5-.9L361 297c14.3-8.7 23-24.2 23-41s-8.7-32.2-23-41L73 39z"/></svg></span></template>
+        <template id=fa-clock-rotate-left><span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M75 75L41 41C25.9 25.9 0 36.6 0 57.9V168c0 13.3 10.7 24 24 24H134.1c21.4 0 32.1-25.9 17-41l-30.8-30.8C155 85.5 203 64 256 64c106 0 192 86 192 192s-86 192-192 192c-40.8 0-78.6-12.7-109.7-34.4c-14.5-10.1-34.4-6.6-44.6 7.9s-6.6 34.4 7.9 44.6C151.2 495 201.7 512 256 512c141.4 0 256-114.6 256-256S397.4 0 256 0C185.3 0 121.3 28.7 75 75zm181 53c-13.3 0-24 10.7-24 24V256c0 6.4 2.5 12.5 7 17l72 72c9.4 9.4 24.6 9.4 33.9 0s9.4-24.6 0-33.9l-65-65V152c0-13.3-10.7-24-24-24z"/></svg></span></template>
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr-ef4e11c1.min.js"></script>
+        <script src="mark-09e88c2c.min.js"></script>
+        <script src="searcher-09f2665d.js"></script>
+
+        <script src="clipboard-1626706a.min.js"></script>
+        <script src="highlight-abc7f01d.js"></script>
+        <script src="book-609e4cb8.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="theme/vendor/mermaid-581ed7d7.min.js"></script>
+        <script src="theme/vendor/photoswipe-ba86fd2d.umd.min.js"></script>
+        <script src="theme/diagrams-60aa7026.js"></script>
+
+
+
+    </div>
+    </body>
+</html>

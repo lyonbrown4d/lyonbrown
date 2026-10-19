@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4b770160.js";
+            window.path_to_searchindex_js = "searchindex-d7df9a86.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-2d1e3935.js"></script>
+        <script src="toc-67d94056.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -195,7 +195,7 @@
     end
     subgraph Agentd[Local agentd / FluxDI composition]
         API[Client / Workspace / Browser / ComputerRuntime / Orchestration services]
-        Decision[Decision Engine / rules and structured classification]
+        Decision[agent-decision / Agent tool and node policy]
         Run[Run lifecycle / concurrency / cancellation / recovery]
         Harness[agent-runtime / sole rpi-harness loop]
         Model[Model registry / metadata and capability limits]
@@ -224,6 +224,19 @@
         Computer --&gt; OS
     end
     Computer &lt;--&gt;|Authenticated session attachment / observe and approved execution| API
+    SharedDecision[decision-core / reusable rules and backend ports]
+    Decision --&gt; SharedDecision
+    subgraph GatewayService[Independent AI Gateway]
+        GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
+        GatewayUI[Leptos SSR / admin sessions]
+        GatewayStore[Diesel SQLite / policy / audit / credential hashes]
+        GatewayHTTP --&gt; SharedDecision
+        GatewayHTTP --&gt; GatewayStore
+        GatewayUI --&gt; GatewayStore
+        GatewayUI --&gt; SharedDecision
+    end
+    Model -.-&gt;|Explicit gateway endpoint| GatewayHTTP
+    GatewayHTTP --&gt; GatewayUpstream[Chat Completions upstream]
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --&gt; Workspace[Workspace / Git / artifacts / notify]
@@ -326,6 +339,8 @@
 <li>Runtime interfaces: <code>crates/agent-runtime/src/contracts.rs</code>.</li>
 <li>Native host attachment: <code>apps/agent-cli/src/computer_backend.rs</code>, <code>apps/agent-desktop/src/computer.rs</code>, <code>crates/agent-computer-runtime/src/client.rs</code>, <code>crates/agent-computer-runtime/src/attachment.rs</code>, <code>apps/agentd/src/computer/service.rs</code>, <code>apps/agentd/src/computer/tools/</code> and <code>apps/agentd/src/computer/mutation.rs</code>.</li>
 <li>Durable state: <code>crates/agent-storage/src/schema.sql</code>.</li>
+<li>Reusable decisions and Agent integration: <code>crates/decision-core/</code>, <code>crates/decision-semantic/</code>, <code>crates/decision-model/</code> and <code>apps/agentd/src/model_routing.rs</code>.</li>
+<li>Independent gateway and synthetic models: <code>apps/ai-gateway/</code>, <code>crates/gateway-core/</code>, <code>crates/gateway-storage/</code>, <code>crates/gateway-web/</code> and <code>apps/model-mock/</code>.</li>
 </ul>
 <p>A successful worker attempt and a master’s acceptance of its result have different meanings. The protocol keeps <code>attempt_id</code>, <code>owner_epoch</code> and explicit <code>AcceptResult</code>; receiving a result does not establish acceptance.</p>
 

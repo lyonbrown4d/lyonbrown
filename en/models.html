@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4b770160.js";
+            window.path_to_searchindex_js = "searchindex-d7df9a86.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-2d1e3935.js"></script>
+        <script src="toc-67d94056.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -177,6 +177,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="models-and-execution-decisions"><a class="header" href="#models-and-execution-decisions">Models and execution decisions</a></h1>
+<p>The Agent embeds the reusable core by default, pins the configured main model and persists <code>model_route_decision</code> before the Agent-specific tool plan. See <a href="decision-engine.html">Reusable decision engine</a> for library/backends and <a href="gateway.html">AI Gateway</a> for independent serving.</p>
 <p>Each run receives an execution plan from <code>agent-decision</code> before <code>agent-runtime</code> opens <code>rpi-harness</code>. A classifier returns advice. It executes no tools and cannot grant permissions.</p>
 <h2 id="how-the-plan-controls-execution"><a class="header" href="#how-the-plan-controls-execution">How the plan controls execution</a></h2>
 <p>Without <code>decision.model</code>, the daemon uses an explicit workspace rule: the general model policy, <code>read_file</code> and <code>write_file</code>, with MCP, browser and trusted-command tools selected by configuration and available runtime capabilities. Configured, actively paired delegation targets can enable distributed execution and <code>delegate_task</code>. Workspace path restrictions and per-operation mutation approval still apply. This rule comes from daemon policy; prompt text cannot supply authorization.</p>
@@ -197,7 +198,7 @@
 </code></pre>
 <p>The tool set is the intersection of the classifier’s selection, authorized tools and available capabilities. Model policies, distributed execution and target nodes are independently constrained by allowlists. Delegation targets must appear in both operator configuration and active pairing records. Local plans do not expose delegation. Classifier output cannot widen tool, model or node authority. See <a href="tools.html#delegating-to-paired-nodes">Delegating to paired nodes</a> for configuration and approval scope.</p>
 <p>The effective plan is persisted as an <code>execution_plan</code> event before opening the Harness. It records tools, capabilities, execution mode, risk, confidence, source and <code>trace_id</code>. The daemon filters the actual Harness tools against this plan, restricting both model-visible tools and execution. Approval consumption checks the run, tool, full arguments and expiry; a classification never replaces human approval.</p>
-<p>Unavailable classifiers, timeout, invalid output, insufficient confidence or missing required capabilities fall back to a local general model with no tools or target node. Cancellation during classification persists a cancelled run without calling the main model.</p>
+<p>Unavailable classifiers, timeout, invalid output, insufficient confidence or missing required capabilities fall back to local execution with the configured main model and no tools or target node. Cancellation during classification persists a cancelled run without calling the main model.</p>
 <h2 id="remote-protocols"><a class="header" href="#remote-protocols">Remote protocols</a></h2>
 <div class="table-wrapper">
 <table>
@@ -269,7 +270,7 @@ max_model_bytes = 8589934592
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="mcp.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="decision-engine.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -283,7 +284,7 @@ max_model_bytes = 8589934592
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="mcp.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="decision-engine.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

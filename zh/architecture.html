@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6faba41f.js";
+            window.path_to_searchindex_js = "searchindex-de20616c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-938ced0f.js"></script>
+        <script src="toc-dab33207.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -195,7 +195,7 @@
     end
     subgraph Agentd[本机 agentd / FluxDI 组合根]
         API[Client / Workspace / Browser / ComputerRuntime / Orchestration 服务]
-        Decision[Decision Engine / 规则与结构化分类]
+        Decision[agent-decision / Agent 工具与节点策略]
         Run[Run 生命周期 / 并发限制 / 取消与恢复]
         Harness[agent-runtime / 唯一 rpi-harness Loop]
         Model[模型 Registry / 元数据与能力限制]
@@ -224,6 +224,19 @@
         Computer --&gt; OS
     end
     Computer &lt;--&gt;|认证会话挂接 / 观察与获批执行| API
+    SharedDecision[decision-core / 通用规则与后端接口]
+    Decision --&gt; SharedDecision
+    subgraph GatewayService[独立 AI Gateway]
+        GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
+        GatewayUI[Leptos SSR / 管理会话]
+        GatewayStore[Diesel SQLite / 策略 / 审计 / 凭据摘要]
+        GatewayHTTP --&gt; SharedDecision
+        GatewayHTTP --&gt; GatewayStore
+        GatewayUI --&gt; GatewayStore
+        GatewayUI --&gt; SharedDecision
+    end
+    Model -.-&gt;|显式配置网关端点| GatewayHTTP
+    GatewayHTTP --&gt; GatewayUpstream[Chat Completions upstream]
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --&gt; Workspace[工作区 / Git / Artifact / notify]
@@ -326,6 +339,8 @@
 <li>Runtime 接口：<code>crates/agent-runtime/src/contracts.rs</code>。</li>
 <li>原生宿主挂接：<code>apps/agent-cli/src/computer_backend.rs</code>、<code>apps/agent-desktop/src/computer.rs</code>、<code>crates/agent-computer-runtime/src/client.rs</code>、<code>crates/agent-computer-runtime/src/attachment.rs</code>、<code>apps/agentd/src/computer/service.rs</code>、<code>apps/agentd/src/computer/tools/</code> 与 <code>apps/agentd/src/computer/mutation.rs</code>。</li>
 <li>持久状态：<code>crates/agent-storage/src/schema.sql</code>。</li>
+<li>通用决策与 Agent 接入：<code>crates/decision-core/</code>、<code>crates/decision-semantic/</code>、<code>crates/decision-model/</code> 与 <code>apps/agentd/src/model_routing.rs</code>。</li>
+<li>独立网关与合成模型：<code>apps/ai-gateway/</code>、<code>crates/gateway-core/</code>、<code>crates/gateway-storage/</code>、<code>crates/gateway-web/</code> 和 <code>apps/model-mock/</code>。</li>
 </ul>
 <p>跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 <code>attempt_id</code>、<code>owner_epoch</code> 和显式 <code>AcceptResult</code>，不能把收到结果当成已经采纳。</p>
 

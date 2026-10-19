@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Desktop screenshots and acceptance scope - Lyonbrown User and Developer Guide</title>
+        <title>Runtime screenshots and acceptance scope - Lyonbrown User and Developer Guide</title>
 
 
         <!-- Custom HTML head -->
@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4b770160.js";
+            window.path_to_searchindex_js = "searchindex-d7df9a86.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-2d1e3935.js"></script>
+        <script src="toc-67d94056.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -176,8 +176,8 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="desktop-screenshots-and-acceptance-scope"><a class="header" href="#desktop-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a></h1>
-<p>These screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. The workspace locks CEF 154.0.34 (<code>cef</code> Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The <a href="evidence/desktop-native-capture.json">native capture record</a> stores the executable, source and image digests, two Runs persisted as <code>completed</code>, and the exact file-write approval persisted as <code>consumed</code>. See <a href="clients.html">the client documentation</a> for Settings, chat tabs and panel toggles.</p>
+                        <h1 id="runtime-screenshots-and-acceptance-scope"><a class="header" href="#runtime-screenshots-and-acceptance-scope">Runtime screenshots and acceptance scope</a></h1>
+<p>Desktop client screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. The workspace locks CEF 154.0.34 (<code>cef</code> Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The <a href="evidence/desktop-native-capture.json">native capture record</a> stores the executable, source and image digests, two Runs persisted as <code>completed</code>, and the exact file-write approval persisted as <code>consumed</code>. See <a href="clients.html">the client documentation</a> for Settings, chat tabs and panel toggles.</p>
 <p>The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.</p>
 <h2 id="settings-and-native-window"><a class="header" href="#settings-and-native-window">Settings and native window</a></h2>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-settings-macos.png" alt="Dedicated native Settings page on macOS"><span class="img-wrapper"><img src="images/desktop-settings-macos.png" alt="Dedicated native Settings page on macOS"></span></label></p>
@@ -236,6 +236,18 @@
 </table>
 </div>
 <p>Each client’s five Helpers match its main executable digest, and all 232 CEF files match the pinned SDK. Both PKGs are unsigned and the artifacts are not notarized. These records cover generation and package contents; operating-system installation, native service lifecycle, upgrades and rollback require separate runtime acceptance. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for build commands.</p>
+<h2 id="ai-gateway-administration-and-model-requests"><a class="header" href="#ai-gateway-administration-and-model-requests">AI Gateway administration and model requests</a></h2>
+<p>Captured on October 19, 2026 using a 0.1.0 SSR server and WASM hydration debug build on macOS ARM64. The independent <code>ai-gateway</code> connects to local <code>model-mock</code> through Rig HTTP transport. Leptos components provide the initial SSR page and hydrated interaction. These light-theme images were captured during actual in-app browser operation.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-login-macos.jpg" alt="Super-administrator username/password sign-in"><span class="img-wrapper"><img src="images/gateway-login-macos.jpg" alt="Super-administrator username/password sign-in"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-models-macos.jpg" alt="Actual Gateway model catalog"><span class="img-wrapper"><img src="images/gateway-models-macos.jpg" alt="Actual Gateway model catalog"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-policy-macos.jpg" alt="Policy state after saving through the administration form"><span class="img-wrapper"><img src="images/gateway-policy-macos.jpg" alt="Policy state after saving through the administration form"></span></label></p>
+<p>After signing in with the environment-initialized super-administrator username and password through the actual form, the policy revision was saved as <code>acceptance-v1</code>. Shared browser validation rejected invalid JSON, and Reset restored the original policy. Synthetic policy text containing HTML markup survived an SSR reload as text without creating extra page nodes. A subsequent automatic-routing request used the new revision. Logging out revoked the SQLite administration session; visiting the models page again returned to sign-in.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-requests-macos.jpg" alt="Actual request records and policy revisions"><span class="img-wrapper"><img src="images/gateway-requests-macos.jpg" alt="Actual request records and policy revisions"></span></label></p>
+<p>Four synthetic model requests covered explicit-model JSON, automatic-routing JSON, automatic-routing SSE and automatic routing after the policy update. All four SQLite audit records reached Succeeded; the SSE stream included its terminal marker. Additional checks covered API/admin credential separation, unauthenticated rejection and absence of credentials or prompt columns in storage. No paid model was called.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-swagger-macos.jpg" alt="Swagger UI executing a health check with a 200 response"><span class="img-wrapper"><img src="images/gateway-swagger-macos.jpg" alt="Swagger UI executing a health check with a 200 response"></span></label></p>
+<p>The administration API-documentation link opened Swagger UI with its embedded specification and assets. An actual Try it out health request returned <code>200</code> with <code>status: live</code>.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-mobile-macos.jpg" alt="Narrow-window navigation and independently scrolling request table"><span class="img-wrapper"><img src="images/gateway-mobile-macos.jpg" alt="Narrow-window navigation and independently scrolling request table"></span></label></p>
+<p>The desktop layout was checked at 1280 × 800. The narrow viewport requested 390 × 844; document width after the scrollbar was 380 pixels. The document did not overflow horizontally, and the table scrolled inside its own container. The <a href="evidence/gateway-web-macos.json">runtime record</a> contains binary, WASM, JavaScript, relevant-source and image hashes plus HTTP and SQLite results. This section does not cover public-network, Windows, Linux or new installer acceptance.</p>
 <h2 id="capabilities-outside-this-screenshot-set"><a class="header" href="#capabilities-outside-this-screenshot-set">Capabilities outside this screenshot set</a></h2>
 <p>These images do not show model-driven browser semantic actions or native terminal-window presentation. Synthetic-host protocol regressions and actual autonomous CEF acceptance have separate records. See <a href="tools.html">Local tools and browser actions</a>.</p>
 

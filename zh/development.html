@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6faba41f.js";
+            window.path_to_searchindex_js = "searchindex-de20616c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-938ced0f.js"></script>
+        <script src="toc-dab33207.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -199,6 +199,20 @@ cargo dev --help
 <p>需要单独运行前台 daemon 时，使用 <code>cargo dev daemon</code>。其他开发客户端仍可自动连接并复用它。</p>
 <p>默认配置为开发数据目录中的 <code>config.toml</code>，dotenv 文件位于配置文件旁边。<code>--config</code> 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 <code>agent-config</code> 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 <code>agent-telemetry</code> 写入日志；默认位于开发数据目录的 <code>logs</code> 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 <code>auth.token</code>，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。</p>
 <p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code> 或 <code>native-computer</code>，对应的浏览器执行或原生计算机宿主能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
+<h2 id="gateway-全栈开发启动"><a class="header" href="#gateway-全栈开发启动">Gateway 全栈开发启动</a></h2>
+<p>Gateway 使用同一仓库的独立 <code>cargo gateway</code> 别名，调用 <code>apps/agent-dev</code> 的 <code>gateway-dev</code> 程序。它不启动 agentd，也不注册操作系统服务。先按 <a href="gateway.html#启动与配置">AI Gateway</a>准备已有 TOML、管理员用户名和密码，以及独立 API Key，再从仓库根目录执行：</p>
+<pre><code class="language-sh">cargo gateway --config /absolute/path/gateway.toml --data-dir /absolute/path/gateway-data
+cargo gateway --help
+cargo gateway --dry-run --config /absolute/path/gateway.toml
+cargo gateway --build-only
+cargo gateway --build-only --release
+</code></pre>
+<p>启动器先检查当前 Rust 工具链的 <code>wasm32-unknown-unknown</code> target，缺失时通过 rustup 准备；再检查仓库 <code>.local/tools/bin</code> 下的 cargo-leptos，缺失时以 <code>cargo install --locked --root &lt;repo&gt;/.local/tools cargo-leptos --version 0.3.11</code> 安装。已有工具必须匹配固定版本，不要求用户手动全局安装。Rust、平台编译工具和下载所需的网络仍需可用。</p>
+<p>构建通过标准 cargo-leptos 的 <code>leptos build --project gateway</code> 完成；<code>--release</code> 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，从 <code>compiler-artifact</code> JSON 获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。工作区 metadata 指定默认资源根目录 <code>.local/gateway-web/site</code>；Gateway 收到绝对 <code>LYONBROWN_GATEWAY_WEB_ROOT</code>，从 <code>/ui/pkg/</code> 提供生成的 JavaScript 与 WASM。</p>
+<p><code>--build-only</code> 生成服务端和资源后退出，不启动 Gateway。<code>--dry-run</code> 只打印方案，不执行工具、读取凭据或创建运行数据；外层 Cargo 仍可能编译启动器。<code>--config</code>、<code>--data-dir</code> 的相对路径从仓库根目录解析；默认运行数据为 <code>.local/gateway-web/data</code>。<code>--listen</code> 可选择非零回环端口。在启动终端按 Ctrl+C，只清理该启动器创建的 Gateway 进程。</p>
+<p>Gateway 在运行时读取配置文件旁的 <code>.env</code>，进程环境优先。推荐将运行配置和凭据放在独立目录：启动器不主动把 Gateway 凭据传给构建命令，但官方 cargo-leptos 自身会读取工作区或父目录 <code>.env</code>，不能据此保证构建工具绝对接触不到运行凭据。不要将密码或 API Key 写进源码、构建参数或静态资源。</p>
+<p>管理界面共用 Rust Leptos 组件，分别以 <code>ssr</code> 和 <code>hydrate</code> feature 构建服务端与浏览器 WASM。Signal 管理策略草稿和提交反馈，官方 <code>ServerAction</code> / <code>ActionForm</code> 处理表单，表格使用 <code>leptos-struct-table</code> 公开 <code>TableRow</code> 渲染接口直接支持 SSR。生成的 JavaScript 负责引导 WASM；不需要独立的 Node 前端栈。鉴权、CSRF、角色和策略版本校验仍在服务端完成。</p>
+<p>分发时同时携带标准全栈构建的 <code>ai-gateway</code> 与 site 静态资源。<code>LYONBROWN_GATEWAY_WEB_ROOT</code> 指向包含 <code>ui/pkg</code> 的绝对目录，默认是可执行文件旁的 <code>web</code>。只有 <code>cargo run -p ai-gateway</code> 不会生成浏览器资源；缺少或空的 JS / WASM 文件会使启动明确失败。构建成功不等于已验证浏览器 hydrate、表单交互或跨平台运行，运行验收范围见<a href="runtime-evidence.html">运行证据</a>。</p>
 <h2 id="原生计算机客户端构建"><a class="header" href="#原生计算机客户端构建">原生计算机客户端构建</a></h2>
 <p>CLI 与 Desktop 的 <code>native-computer</code> feature 默认关闭，显式转发到 <code>agent-computer-runtime/native</code>，再启用 <code>agent-computer/native</code>。<code>cargo dev desktop</code> 和 <code>cargo dev tui</code> 的默认构建不自动启用它；<code>native-cef</code> 也不会启用原生计算机能力。开发启动器支持显式启用客户端 feature：</p>
 <pre><code class="language-sh">cargo dev desktop --native-computer
@@ -247,6 +261,22 @@ LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --fe
 <pre><code class="language-sh">cargo run --locked -p agent-desktop --example desktop-computer-target
 </code></pre>
 <p>该示例只提供合成按钮和文字输入框，不启动 daemon、模型或 ComputerRuntime，也不请求录屏或辅助功能权限。启动时输出本次 <code>.local/acceptance/computer-target-*</code> 目录，<code>state.json</code> 保存 <code>click_count</code> 和 <code>text</code>，退出后保留。每次运行使用新目录，适合作为原生控制验收的独立目标；操作此窗口不等于已验收 Harness 和审批链路。</p>
+<h2 id="可复用决策与-gateway-检查"><a class="header" href="#可复用决策与-gateway-检查">可复用决策与 Gateway 检查</a></h2>
+<pre><code class="language-sh">cargo test --locked -p decision-core -p decision-model -p decision-semantic
+cargo test --locked -p gateway-core -p gateway-storage -p ai-gateway
+cargo test --locked -p gateway-web --no-default-features --features ssr
+cargo test --locked -p agent-dev --test gateway_commands
+cargo check --locked -p gateway-web --no-default-features --features hydrate --target wasm32-unknown-unknown
+cargo gateway --build-only
+cargo check --locked -p decision-core --no-default-features
+cargo run --locked -p decision-core --no-default-features --example embedded
+cargo check --locked -p decision-semantic --features semantic-local
+</code></pre>
+<p>WASM 检查需要当前工具链已有 <code>wasm32-unknown-unknown</code> target，<code>cargo gateway</code> 会在构建前准备它。SSR 测试检查服务端页面、Server Functions 与安全边界；hydrate 检查验证浏览器构建，不能替代真实浏览器中的事件、表单和资源加载验收。</p>
+<p>真实 Embedding 验收通过 <code>LYONBROWN_TEST_EMBEDDING_CONFIG</code> 显式指定 <code>OfflineEmbeddingConfig</code> JSON，其中每个资产都有绝对路径和 SHA-256。只有下面的显式测试会加载这些权重，默认工作区测试不会下载或加载模型：</p>
+<pre><code class="language-sh">LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test --locked -p decision-semantic --features semantic-local --test offline caller_supplied_real_model_replays_bilingual_queries_with_measured_thresholds -- --ignored --exact --nocapture
+</code></pre>
+<p>该测试使用独立的校准与回放样本，检查真实模型加载、向量维度、阈值和 Unknown 行为；小样本结果不能当作生产多语言准确率。引擎接口见<a href="decision-engine.html">可复用决策引擎</a>，服务启动、密钥和 Swagger 见 <a href="gateway.html">AI Gateway</a>。</p>
 <h2 id="原生服务验收"><a class="header" href="#原生服务验收">原生服务验收</a></h2>
 <p>macOS 的以下测试使用真实 launchd 注册，只能在没有 Lyonbrown 服务注册且 <code>127.0.0.1:7447</code> 空闲的测试账号上执行。先构建产品 daemon，再提供其绝对路径：</p>
 <pre><code class="language-sh">cargo build -p agentd --bin agentd --locked

@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6faba41f.js";
+            window.path_to_searchindex_js = "searchindex-de20616c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-938ced0f.js"></script>
+        <script src="toc-dab33207.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -177,6 +177,7 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="模型与执行决策"><a class="header" href="#模型与执行决策">模型与执行决策</a></h1>
+<p>Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 <code>model_route_decision</code>，再生成 Agent 专属的工具计划。通用库与可选后端见<a href="decision-engine.html">可复用决策引擎</a>；独立网关见 <a href="gateway.html">AI Gateway</a>。</p>
 <p>每次运行先由 <code>agent-decision</code> 生成执行计划，再由 <code>agent-runtime</code> 打开 <code>rpi-harness</code>。分类器只返回建议，不执行工具，也不能授予权限。</p>
 <h2 id="执行计划如何生效"><a class="header" href="#执行计划如何生效">执行计划如何生效</a></h2>
 <p>未配置 <code>decision.model</code> 时，daemon 使用显式工作区规则：通用模型、允许 <code>read_file</code> 和 <code>write_file</code>，并按配置及运行时能力提供 MCP、浏览器和受信任命令工具。配置且已配对的委派目标可启用分布式执行与 <code>delegate_task</code>。文件路径仍受工作区限制，变更操作仍须逐次审批。规则来自 daemon 配置，不从 prompt 中提取授权。</p>
@@ -187,7 +188,7 @@
     Select --&gt;|是| Classify[无工具的分类请求]
     Classify --&gt; Validate[JSON 与置信度校验]
     Validate --&gt;|通过| Clamp[按 daemon 权限与能力限制建议]
-    Validate --&gt;|失败或超时| Fallback[本地通用模型 / 无工具]
+    Validate --&gt;|失败或超时| Fallback[本地执行 / 已配置主模型 / 无工具]
     Rule --&gt; Persist[保存 execution_plan 事件]
     Clamp --&gt; Persist
     Fallback --&gt; Persist
@@ -197,7 +198,7 @@
 </code></pre>
 <p>工具集合取分类结果、已授权工具和可用能力的交集。模型策略、分布式执行和目标节点也分别受允许列表约束。委派目标必须同时出现在配置和有效配对记录中；本地执行计划不提供委派工具。分类器不能通过输出其他工具、策略或节点扩大权限。委派配置与审批范围见<a href="tools.html#委派给配对节点">本地工具与浏览器操作</a>。</p>
 <p>有效计划先写入持久事件 <code>execution_plan</code>，其中包含工具、能力、执行模式、风险、置信度、来源及 <code>trace_id</code>，然后才打开 Harness。daemon 按该计划过滤实际工具集合，因此限制同时作用于模型可见工具和实际执行。审批按运行、工具、完整参数和有效期核对；分类器判断不能替代人工批准。</p>
-<p>分类器不可用、超时、输出无效、置信度不足或缺少所需能力时，回退为本地通用模型、无工具、无目标节点。分类阶段取消会将运行保存为取消状态，不调用主模型。</p>
+<p>分类器不可用、超时、输出无效、置信度不足或缺少所需能力时，回退为本地执行模式，使用已配置的主模型且不提供工具或目标节点。分类阶段取消会将运行保存为取消状态，不调用主模型。</p>
 <h2 id="远程协议"><a class="header" href="#远程协议">远程协议</a></h2>
 <div class="table-wrapper">
 <table>
@@ -269,7 +270,7 @@ max_model_bytes = 8589934592
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="mcp.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="decision-engine.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -283,7 +284,7 @@ max_model_bytes = 8589934592
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="mcp.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="decision-engine.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

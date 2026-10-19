@@ -38,10 +38,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4b770160.js";
+            window.path_to_searchindex_js = "searchindex-d7df9a86.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-2d1e3935.js"></script>
+        <script src="toc-67d94056.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -263,6 +263,7 @@ cargo dev desktop
 <p>Configuration sources: <code>apps/agentd/src/config.rs</code>, <code>crates/agent-config/src/load.rs</code>, <code>crates/agent-runtime/src/provider.rs</code>, <code>apps/agent-cli/src/config.rs</code>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="models-and-execution-decisions"><a class="header" href="#models-and-execution-decisions">Models and execution decisions</a></h1>
+<p>The Agent embeds the reusable core by default, pins the configured main model and persists <code>model_route_decision</code> before the Agent-specific tool plan. See <a href="#reusable-decision-engine">Reusable decision engine</a> for library/backends and <a href="#ai-gateway">AI Gateway</a> for independent serving.</p>
 <p>Each run receives an execution plan from <code>agent-decision</code> before <code>agent-runtime</code> opens <code>rpi-harness</code>. A classifier returns advice. It executes no tools and cannot grant permissions.</p>
 <h2 id="how-the-plan-controls-execution"><a class="header" href="#how-the-plan-controls-execution">How the plan controls execution</a></h2>
 <p>Without <code>decision.model</code>, the daemon uses an explicit workspace rule: the general model policy, <code>read_file</code> and <code>write_file</code>, with MCP, browser and trusted-command tools selected by configuration and available runtime capabilities. Configured, actively paired delegation targets can enable distributed execution and <code>delegate_task</code>. Workspace path restrictions and per-operation mutation approval still apply. This rule comes from daemon policy; prompt text cannot supply authorization.</p>
@@ -283,7 +284,7 @@ cargo dev desktop
 </code></pre>
 <p>The tool set is the intersection of the classifier’s selection, authorized tools and available capabilities. Model policies, distributed execution and target nodes are independently constrained by allowlists. Delegation targets must appear in both operator configuration and active pairing records. Local plans do not expose delegation. Classifier output cannot widen tool, model or node authority. See <a href="#delegating-to-paired-nodes">Delegating to paired nodes</a> for configuration and approval scope.</p>
 <p>The effective plan is persisted as an <code>execution_plan</code> event before opening the Harness. It records tools, capabilities, execution mode, risk, confidence, source and <code>trace_id</code>. The daemon filters the actual Harness tools against this plan, restricting both model-visible tools and execution. Approval consumption checks the run, tool, full arguments and expiry; a classification never replaces human approval.</p>
-<p>Unavailable classifiers, timeout, invalid output, insufficient confidence or missing required capabilities fall back to a local general model with no tools or target node. Cancellation during classification persists a cancelled run without calling the main model.</p>
+<p>Unavailable classifiers, timeout, invalid output, insufficient confidence or missing required capabilities fall back to local execution with the configured main model and no tools or target node. Cancellation during classification persists a cancelled run without calling the main model.</p>
 <h2 id="remote-protocols"><a class="header" href="#remote-protocols">Remote protocols</a></h2>
 <div class="table-wrapper">
 <table>
@@ -346,6 +347,191 @@ max_model_bytes = 8589934592
 <p>To select a local classifier independently, set <code>decision.provider = "local"</code> and point <code>decision.model</code> to a configured profile ID. <code>LocalClassifier</code> accepts structured output without tool calls and applies the same JSON, confidence, deadline and cancellation checks. Invalid output takes the conservative fallback. A local main model needs no cloud credentials.</p>
 <p>See <a href="#development-and-verification">Development and verification</a> for execution and acceptance commands, and <a href="#connect-mcp-tools">Connect MCP tools</a> for MCP configuration.</p>
 <p>Source references: <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/crates/agent-decision/src/engine.rs">decision validation</a>, <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/apps/agentd/src/decision.rs">daemon composition</a>, <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/apps/agentd/src/execution.rs">execution and persistence</a>, <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/crates/agent-config/src/settings.rs">configuration</a>.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="reusable-decision-engine"><a class="header" href="#reusable-decision-engine">Reusable decision engine</a></h1>
+<p><code>decision-core</code> is an embedded Rust library for advice and constraint validation. It owns no Agent Session, database, provider credentials or HTTP server. The Agent embeds it by default; the independent <a href="#ai-gateway">AI Gateway</a> consumes the same API. Callers retain actual dispatch, permissions and durable state.</p>
+<h2 id="operations-and-results"><a class="header" href="#operations-and-results">Operations and results</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Operation</th><th>Output</th></tr>
+</thead>
+<tbody>
+<tr><td><code>RouteModel</code></td><td>Task domain, complexity, tier, required capabilities and candidate model keys</td></tr>
+<tr><td><code>Classify</code></td><td>A caller-supplied label and scored alternatives</td></tr>
+<tr><td><code>Predicate</code></td><td>Boolean judgment and confidence</td></tr>
+<tr><td><code>Choice</code></td><td>A supplied option and distribution</td></tr>
+<tr><td><code>Score</code></td><td>A value within the supplied scale</td></tr>
+<tr><td><code>RecommendTools</code></td><td>Candidates from the authorized tool descriptions</td></tr>
+<tr><td><code>ContextAdvice</code></td><td>Compaction advice and remaining token capacity</td></tr>
+</tbody>
+</table>
+</div>
+<p>Requests carry an ID, operation, constraints, optional exact policy revision and deadline. Results distinguish <code>Accepted</code>, <code>Unknown</code>, <code>Degraded</code> and <code>Denied</code>; Unknown means neither false, low risk nor permission. Provenance records policy, backend and index versions, reason codes and elapsed time. Confidence and similarity cannot authorize execution.</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>use decision_core::*;
+
+<span class="boring">async fn example() -&gt; Result&lt;(), PolicyError&gt; {
+</span>let engine = DecisionEngine::new(Policy::default(), Vec::new())?;
+let request = DecisionRequest::new("example", Operation::Classify(ClassifyInput {
+  text: "Review Rust code".into(),
+  labels: vec!["coding".into(), "chat".into()],
+}));
+let result = engine.decide(&amp;request, &amp;DecisionCancellation::new()).await;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>Run the standalone example with <code>cargo run --locked -p decision-core --no-default-features --example embedded</code>. The default build loads no weights, performs no networking and has no Agent Runtime dependency.</p>
+<h2 id="ordering-and-constraints"><a class="header" href="#ordering-and-constraints">Ordering and constraints</a></h2>
+<p>The engine validates input, policy revision and caller-authorized model metadata before handling explicit/pinned models, rules, configured backends and constrained fallback. Rules use configured terms and abstain when multiple domains match. Neither user text nor classifier output can add authorized candidates.</p>
+<p>Local-only requirements, model-key/tier restrictions, capabilities, context capacity and per-call estimated cost are checked before returning output. Unknown capacity or pricing cannot satisfy a corresponding limit. Integer micro-USD estimates are routing inputs, not billing. An invalid explicit or pinned model is denied rather than silently replaced.</p>
+<p>Rules can directly calculate context advice and match authorized tool descriptions. Semantic and structured backends provide other judgments; missing backends return Unknown. Failures, low confidence, invalid output and timeouts retain reasons; cancellation stops waiting. Conservative model fallback remains inside eligible caller-owned candidates.</p>
+<p><code>replace_policy</code> validates a complete immutable snapshot before publishing it atomically. Each request uses one snapshot; changed content requires a new revision. Task bindings remain caller-owned and enter through <code>pinned_model</code>.</p>
+<h2 id="semantic-and-structured-backends"><a class="header" href="#semantic-and-structured-backends">Semantic and structured backends</a></h2>
+<p><code>decision-semantic</code> uses a replaceable <code>EmbeddingProvider</code>, versioned examples and hard negatives. It validates dimensions and finite values and applies score and margin thresholds rather than forcing a winner. Hosts can supply embeddings without a native runtime. The optional <code>semantic-local</code> feature provides a <code>fastembed</code> adapter.</p>
+<p>The local adapter accepts explicit files with SHA-256 checks: ONNX model, tokenizer assets and ONNX Runtime library. Deployment prepares and licenses these assets; loading never contacts a model hub. ONNX Runtime is process-global; the host must use consistent runtime-library configuration and share its first initialized environment. Loading and inference run on blocking workers, with concurrency permits retained until actual computation ends even after the caller cancels. Model, preprocessing, corpus and threshold versions contribute to index provenance.</p>
+<p><code>decision-model</code> adapts remote models or an existing local <code>InferenceBackend</code> to typed judgments. Shared <code>model-provider</code> adapters make one bounded request without a Harness, tools or automatic retries. Output must match the operation, supplied labels/options and numeric bounds. Local-only requests exclude remote classifiers. This uses existing model integration without requiring an additional Candle judgment model.</p>
+<h2 id="agent-and-gateway-integration"><a class="header" href="#agent-and-gateway-integration">Agent and Gateway integration</a></h2>
+<p><code>agent-decision</code> retains Agent-specific tool, node and approval policy. Each Run calls the shared core by default, pins the configured main model and persists <code>model_route_decision</code> before the effective tool plan and Harness startup. The record audits that Run’s explicit main-model binding. Advice cannot bypass workspace limits, paired-worker scope or human approval.</p>
+<p>Gateway <code>router/auto</code> passes its configured model catalog to the same core, selects a physical model and rechecks constraints. Neither consumer owns the other’s Session or requires the other service to run.</p>
+<h2 id="validation-scope"><a class="header" href="#validation-scope">Validation scope</a></h2>
+<p>Core tests cover rules, typed output, hard constraints, cancellation, backend failure, policy replacement and fixed Chinese/English replay fixtures. Deterministic semantic tests inject synthetic vectors; they validate routing behavior, not real multilingual model accuracy. Real local-model tests require explicit prepared assets; see <a href="#development-and-verification">Development and validation</a>.</p>
+<p>On October 19, 2026, macOS arm64 acceptance used explicit, pinned multilingual MiniLM ONNX and ONNX Runtime assets: four known Chinese/English inputs classified correctly and two unknown inputs were rejected. Calibration and replay fixtures are disjoint. This is small-fixture adapter acceptance rather than a language-quality or performance benchmark. The <a href="evidence/decision-semantic-offline.json">acceptance record</a> lists versions, thresholds and scope.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="ai-gateway"><a class="header" href="#ai-gateway">AI Gateway</a></h1>
+<p><code>ai-gateway</code> is an independent Rust service, listening on <code>127.0.0.1:8099</code> by default. Typed FluxDI modules and Axum request scopes assemble the decision core, SQLite persistence, forwarding and Leptos administration UI. It needs no agentd. An Agent using the gateway still owns its Harness, Session, tools and approvals.</p>
+<h2 id="startup-and-configuration"><a class="header" href="#startup-and-configuration">Startup and configuration</a></h2>
+<pre><code class="language-sh">cargo gateway --config /absolute/path/gateway.toml --data-dir /absolute/path/gateway-data
+</code></pre>
+<p>Run from the repository root. <code>cargo gateway</code> invokes the independent <code>gateway-dev</code> launcher, builds the server and browser assets, then starts Gateway without agentd. First use prepares the official <code>wasm32-unknown-unknown</code> target for the current toolchain through rustup and installs fixed cargo-leptos 0.3.11 under the repository’s <code>.local/tools</code>; no manual global installation is required. Existing tools must pass version verification. See <a href="#gateway-full-stack-development">Development and verification</a> for options and build flow.</p>
+<p>Configuration layers defaults, TOML, adjacent <code>.env</code>, process environment and CLI. <code>--listen</code> overrides the address last; only nonzero loopback listeners are accepted. Environment names include <code>LYONBROWN_GATEWAY_CONFIG</code>, <code>LYONBROWN_GATEWAY_DATA_DIR</code>, <code>LYONBROWN_GATEWAY_LISTEN</code>, <code>LYONBROWN_GATEWAY_WEB_ROOT</code>, <code>LYONBROWN_GATEWAY_TOKEN</code>, <code>LYONBROWN_GATEWAY_ADMIN_USERNAME</code> and <code>LYONBROWN_GATEWAY_ADMIN_PASSWORD</code>.</p>
+<pre><code class="language-toml">listen = "127.0.0.1:8099"
+
+[gateway]
+
+[[gateway.models]]
+id = "local-chat"
+upstream_model = "deployed-model-id"
+api_base = "http://127.0.0.1:8080/v1"
+api_key_env = "LOCAL_MODEL_API_KEY"
+tier = "balanced"
+local_inference = true
+capabilities = ["text", "tools"]
+context_tokens = 4096
+</code></pre>
+<p>Replace the endpoint with a deployed service. <code>api_key_env</code> selects an environment or dotenv credential instead of putting it in the model configuration.</p>
+<p>The administration UI uses username/password sign-in. First startup initializes the single super administrator from environment variables or adjacent <code>.env</code>. There is no built-in account or default password.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Variable</th><th>Requirement</th></tr>
+</thead>
+<tbody>
+<tr><td><code>LYONBROWN_GATEWAY_ADMIN_USERNAME</code></td><td>1–64 ASCII characters: letters, digits, <code>_</code>, <code>.</code>, <code>@</code> or <code>-</code>; case-sensitive</td></tr>
+<tr><td><code>LYONBROWN_GATEWAY_ADMIN_PASSWORD</code></td><td>15–128 password bytes; distinct from the API Key</td></tr>
+<tr><td><code>LYONBROWN_GATEWAY_TOKEN</code></td><td>Independently generated 32–512 printable random bytes; Bearer authentication for model APIs only</td></tr>
+</tbody>
+</table>
+</div>
+<p>Administrator credentials cannot be placed in TOML. SQLite stores the username, super-administrator role and salted Argon2id password hash. It stores no plaintext password. Subsequent startup validates the same credentials; different credentials fail startup without overwriting the account or resetting its password. API Keys cannot sign in to the UI, and the administrator password cannot authenticate model API requests. The super administrator has access to the model catalog, routing policies and request records.</p>
+<p>Keep Gateway TOML and its credential <code>.env</code> in a separate configuration directory. The launcher does not put administrator passwords or model credentials in build arguments or explicitly forward them to build children. However, cargo-leptos itself reads workspace or parent-directory <code>.env</code> files; environment filtering does not guarantee that build tools cannot access credentials.</p>
+<p><code>local_inference = true</code> is a trusted operator assertion about actual local inference and requires a literal loopback address. A loopback proxy to cloud inference must not be declared local. Remote upstreams require HTTPS; clients cannot choose arbitrary upstream URLs.</p>
+<h2 id="build-assets-and-distribution"><a class="header" href="#build-assets-and-distribution">Build assets and distribution</a></h2>
+<p>The launcher uses the workspace’s <code>gateway</code> cargo-leptos project. Assets default to <code>.local/gateway-web/site/ui/pkg</code>. <code>--build-only</code> builds without starting a server; <code>--release</code> selects release builds. The launcher reads the server executable from Cargo’s build results, preserves settings such as <code>CARGO_TARGET_DIR</code> and passes the actual site root to Gateway.</p>
+<p>Distribute the <code>ai-gateway</code> executable together with its generated static assets. <code>LYONBROWN_GATEWAY_WEB_ROOT</code> must be an absolute site-root path containing <code>ui/pkg</code>; it defaults to a <code>web</code> directory beside the executable. Standard builds generate <code>ui/pkg/gateway_web.js</code> and <code>ui/pkg/gateway_web.wasm</code>, served under <code>/ui/pkg/</code>. Running only <code>cargo run -p ai-gateway</code> does not generate browser assets. Missing or empty assets produce an explicit error before database bootstrap. Use the standard full-stack build and distribute the binary and assets from the same build together.</p>
+<h2 id="http-and-swagger"><a class="header" href="#http-and-swagger">HTTP and Swagger</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method and path</th><th>Purpose and access</th></tr>
+</thead>
+<tbody>
+<tr><td><code>GET /health/live</code></td><td>Process liveness</td></tr>
+<tr><td><code>GET /health/ready</code></td><td>Validated configuration and admission state; not an upstream health probe</td></tr>
+<tr><td><code>GET /v1/models</code></td><td>Public configured model IDs; API Bearer key required</td></tr>
+<tr><td><code>POST /v1/chat/completions</code></td><td>Text/function-tool Chat Completions forwarding; API Bearer key required</td></tr>
+<tr><td><code>GET /swagger-ui/</code></td><td>Official read-only Swagger UI</td></tr>
+<tr><td><code>GET /api-doc/openapi.json</code></td><td>Code-generated <code>utoipa</code> OpenAPI</td></tr>
+<tr><td><code>GET /ui/login</code></td><td>Administration login</td></tr>
+</tbody>
+</table>
+</div>
+<p>Swagger and the specification are accessible on the local listener. Business operations still require an API key through Authorize. The schema contains no live model catalog or credentials, and UI assets are embedded without CDN requests. The inbound protocol is Chat Completions; images, audio, Responses and Anthropic inbound requests are outside this endpoint’s compatibility scope.</p>
+<p>Gateway upstream transport reuses the public raw HTTP interfaces and <code>SseFramer</code> from <a href="https://docs.rs/rig-core/0.44.0/rig_core/">Rig-Core 0.44.0</a>, with <a href="https://docs.rs/rig-reqwest/0.44.0/rig_reqwest/">Rig-Reqwest 0.44.0</a>’s <code>ReqwestMiddlewareClient</code>. Gateway retains supported request fields such as <code>n</code> and forwards JSON and SSE response bytes unchanged, including multiple choices, tool-call fragments and usage. Middleware immediately drops non-2xx response bodies and exposes only the same status with an empty body to Rig. Gateway retains byte limits, strict <code>[DONE]</code> checks, deadlines, cancellation and auditing. It uses no Rig Agent or Agent Loop; Agent and <code>model-provider</code> continue using rpi-ai’s Responses, Chat Completions and Anthropic protocol adapters.</p>
+<p>An explicit public model ID routes directly after validation; unknown or incapable models are not silently substituted. <code>router/auto</code> uses the <a href="#reusable-decision-engine">shared decision engine</a>, followed by capability, context and locality revalidation. Request <code>routing.local_only</code> and <code>routing.allowed_tiers</code> can only narrow server policy and are removed before forwarding.</p>
+<p>SSE tool fragments, usage and data bytes are retained while a maintained SSE parser checks terminal completion. Body/response sizes, concurrency, first-byte and total deadlines are bounded. Admission remains held until audit persistence finishes and the body is drained, dropped or reaches its total deadline; an early terminal marker cannot bypass capacity held by an unread body. Disconnect drops the upstream response; interrupted or unterminated streams remain uncertain without automatic retry. Errors never echo upstream bodies, prompts or credentials.</p>
+<p>The first-byte budget starts when the request is accepted and includes automatic routing. Routing expiry returns <code>504 routing_timeout</code> without dispatching an upstream request.</p>
+<h2 id="sqlite-and-administration"><a class="header" href="#sqlite-and-administration">SQLite and administration</a></h2>
+<p>Diesel manages <code>gateway.sqlite</code> in the data directory with WAL, busy timeout and full synchronous writes. A single owner holds a database lock; startup reconciles abandoned Pending requests to Uncertain. Tables retain model snapshots, policy history, hashed API keys, admin sessions and request metadata, with no prompt or completion body fields.</p>
+<p>A Pending intent is persisted before upstream dispatch. Succeeded means the upstream success terminal was received and validated, rather than proving client consumption. Database write ownership is independent of HTTP deadlines, so started intent and terminal writes still finish after the caller times out. Actual database failures can leave Pending for startup reconciliation to Uncertain; closing HTTP does not prove inference never happened.</p>
+<p>The UI shares one Rust Leptos component tree. The server renders HTML first; generated JavaScript boots the browser WASM, which attaches events and reactive state to the existing page. There is no separate Node frontend stack. Pages cover model catalog, routing policy and paginated request metadata, following system light/dark preferences.</p>
+<p>Shared components provide layout, form fields, submission state and notices. Leptos Signals manage policy drafts, dirty state, immediate validation and reset; official <code>ServerAction</code> / <code>ActionForm</code> handle login, save and logout. Tables reuse the public <code>leptos-struct-table</code> <code>TableRow</code> derive and row-rendering interfaces. Page components own headings, semantic table markup and pagination, so SSR emits row content directly without requiring browser virtualization for the initial page.</p>
+<p><code>gateway-validation</code> uses <a href="https://docs.rs/garde/0.23.0/garde/">Garde 0.23.0</a> derive macros and regex rules for basic <code>Credentials</code> and <code>PolicyDraft</code> validation shared by SSR, WASM, application configuration and storage entry points; authorization, CSRF, <code>PolicySnapshot</code> semantics and CAS remain server responsibilities.</p>
+<p>Browser validation provides interaction feedback. Sensitive reads, password verification, the super-administrator role, session expiry, Origin and session-bound CSRF remain server checks. Expiring HttpOnly / SameSite=Strict cookies identify admin sessions. Policy writes and logout verify origin and CSRF. Policy publication validates the whole document and compares the previous revision; concurrent edits return a conflict. Upstream credentials and password hashes are absent from browser DTOs.</p>
+<p>Deployment configuration owns the model catalog, recorded as immutable snapshots at startup. The UI does not edit upstream credentials. This skeleton includes no multi-tenant quota ledger, billing, provider-account management or public deployment. Shared rolling structured logs persist in the data directory; observation snapshots expose request, rejection, latency and outcome counters.</p>
+<h2 id="validation"><a class="header" href="#validation">Validation</a></h2>
+<p>Local HTTP tests use synthetic upstreams to check actual model rewriting, Bearer checks, locality/capabilities, streaming cancellation/deadlines, uncertain outcomes, SQLite recovery, login, CSRF, policy versions and generated OpenAPI. SSR tests and WASM hydrate compilation commands are in <a href="#reusable-decision-and-gateway-checks">Development and verification</a>. See <a href="#runtime-screenshots-and-acceptance-scope">runtime evidence</a> for screenshots and scope; earlier screenshots do not automatically establish acceptance of the new hydrated interactions. Tests use no paid models and do not establish public-network, multi-tenant or three-platform runtime acceptance.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="synthetic-model-service"><a class="header" href="#synthetic-model-service">Synthetic model service</a></h1>
+<p><code>apps/model-mock</code> is a development/test application using Wiremock, Axum and existing protocol fixtures. It listens only on loopback, forwards to no real provider, starts no Ollama/llama.cpp/mistral.rs runtime and loads no weights. Shared <code>MockInferenceBackend</code> supports the in-process local inference boundary.</p>
+<h2 id="startup-and-integration"><a class="header" href="#startup-and-integration">Startup and integration</a></h2>
+<pre><code class="language-sh">cargo run --locked -p model-mock -- --scenario apps/model-mock/examples/development.toml --listen 127.0.0.1:8100
+</code></pre>
+<p>Additional scenario files are <code>apps/model-mock/examples/decision.toml</code> and <code>apps/model-mock/examples/ollama.toml</code>. Use <code>--data-dir /absolute/path/mock-data</code> for logs. Configuration supports TOML/JSON, adjacent <code>.env</code>, process environment and CLI through a maintained configuration library; environment names use <code>LYONBROWN_MODEL_MOCK_</code>.</p>
+<p>Agent development configuration can use the OpenAI-compatible endpoint:</p>
+<pre><code class="language-toml">provider = "openai-completions"
+model = "mock-chat"
+api_base = "http://127.0.0.1:8100/v1"
+browser_tools = false
+computer_tools = false
+</code></pre>
+<p>Set a synthetic <code>OPENAI_API_KEY=synthetic-model-mock-key</code> in adjacent <code>.env</code>, then run <code>cargo dev tui --config /absolute/path/config.toml</code> or <code>cargo dev desktop --config /absolute/path/config.toml</code>. Mocking the model does not relax workspace, tool or approval controls.</p>
+<h2 id="protocols-and-scenarios"><a class="header" href="#protocols-and-scenarios">Protocols and scenarios</a></h2>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Endpoint</th><th>Response</th></tr>
+</thead>
+<tbody>
+<tr><td><code>/v1/chat/completions</code></td><td>Chat Completions JSON / SSE with function-tool results</td></tr>
+<tr><td><code>/v1/responses</code></td><td>Responses JSON / named SSE</td></tr>
+<tr><td><code>/v1/messages</code></td><td>Anthropic Messages JSON / named SSE</td></tr>
+<tr><td><code>/v1/models</code></td><td>Synthetic model catalog</td></tr>
+<tr><td><code>/api/chat</code></td><td>Native Ollama JSON / NDJSON with tool calls and terminal done metadata</td></tr>
+<tr><td><code>/api/generate</code></td><td>Native Ollama generation JSON / NDJSON</td></tr>
+<tr><td><code>/api/tags</code>, <code>/api/show</code>, <code>/api/version</code></td><td>Synthetic local-model and service metadata</td></tr>
+<tr><td><code>/health</code></td><td>Health and request counts without request bodies or credentials</td></tr>
+</tbody>
+</table>
+</div>
+<p>Scripts match model and protocol, consume replies in order and can repeat the final reply. Cases cover text, decision JSON, tools, error statuses, delay, stalled streams, malformed/truncated output and missing terminal completion. Request size, concurrency, script length and delays are bounded.</p>
+<p><code>mock-chat</code> serves ordinary integration; <code>mock-tools</code> exercises tool round trips. Decision scenarios distinguish reusable typed judgments from Agent-specific tool plans containing task kind, tools, execution mode and confidence. Low confidence and malformed JSON test Unknown/fallback/tool-free behavior and never authorize actions.</p>
+<p><code>ollama.toml</code> provides these ready-to-run scenarios. Omitting <code>stream</code> keeps Ollama’s streaming default.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Model ID</th><th>Native endpoint and behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>mock-local:latest</code></td><td>Chat / Generate JSON and NDJSON, plus OpenAI-compatible Chat Completions</td></tr>
+<tr><td><code>mock-tools:latest</code></td><td>Chat emits a function name and typed arguments, then text</td></tr>
+<tr><td><code>mock-delay:latest</code></td><td>Chat delays the first response for timeout and cancellation</td></tr>
+<tr><td><code>mock-truncated:latest</code></td><td>Chat closes after <code>done = false</code>, without terminal metadata</td></tr>
+<tr><td><code>mock-missing-terminal:latest</code></td><td>Chat emits partial output then waits, exercising cancellation and capacity release</td></tr>
+<tr><td><code>mock-malformed:latest</code></td><td>Generate returns malformed JSON</td></tr>
+<tr><td><code>mock-error:latest</code></td><td>Generate returns a synthetic service error</td></tr>
+<tr><td>Unconfigured model ID</td><td>Returns 404 without substituting another model</td></tr>
+</tbody>
+</table>
+</div>
+<p>Native Ollama shapes and streaming are tested through <code>ollama-rs</code>. Agent HTTP integration uses the OpenAI-compatible <code>/v1</code> endpoint with <code>provider = "openai-completions"</code>.</p>
+<h2 id="in-process-local-inference-mock"><a class="header" href="#in-process-local-inference-mock">In-process local inference mock</a></h2>
+<p><code>agent-test-support::MockInferenceBackend</code> implements the actual <code>InferenceBackend</code> port and registers in <code>ModelRegistry</code> for Agent or <code>decision-model</code> consumers. Scripts support text/thinking/tool chunks, delay, errors, finish reasons, cancellation and backpressure. Counters distinguish requests, completions, cancellations and failures. No HTTP process is required.</p>
+<p>Local integration tests traverse Registry, Harness and real SQLite, asserting final Run state, effective tools and route events. Remote cases traverse actual protocol adapters. Mock results validate integration, protocols and state rather than model quality, inference performance, context limits or native SDK correctness.</p>
+<pre><code class="language-sh">cargo test --locked -p model-mock -p agent-test-support
+cargo test --locked -p agentd --test local_mock
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="connect-mcp-tools"><a class="header" href="#connect-mcp-tools">Connect MCP tools</a></h1>
 <p><code>agentd</code> uses <code>rmcp</code> to connect to explicitly configured MCP servers over stdio or Streamable HTTP. The daemon owns connections and cached tool catalogs. Clients present approvals and results; model input cannot add servers or alter transports.</p>
@@ -446,7 +632,7 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 <p>The same debug environment also passed <code>apps/agentd/tests/native_browser_human_input.rs</code>: paired human mouse input produced one page effect, persisted an <code>uncertain</code> receipt and matching Outbox, and recovered without replay or model execution. <code>crates/agent-browser-runtime/tests/cef_runtime.rs</code> verifies successful same-revision pointer input and committed text.</p>
 <pre><code class="language-sh">cargo test -p agentd --test browser_tools --test command_tools --locked
 </code></pre>
-<p>See <a href="#desktop-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a> for native runtime evidence. Tool implementation is in <code>apps/agentd/src/browser/agent_tools/</code>; BrowserRuntime lifecycle contracts are described in <a href="#protocol-and-platform-capabilities">Protocol and platform capabilities</a>.</p>
+<p>See <a href="#runtime-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a> for native runtime evidence. Tool implementation is in <code>apps/agentd/src/browser/agent_tools/</code>; BrowserRuntime lifecycle contracts are described in <a href="#protocol-and-platform-capabilities">Protocol and platform capabilities</a>.</p>
 <h2 id="model-computer-tools"><a class="header" href="#model-computer-tools">Model computer tools</a></h2>
 <p><code>computer_observe</code> and <code>computer_act</code> are disabled by default. Trusted daemon configuration enables them with top-level <code>computer_tools = true</code>, or <code>LYONBROWN_COMPUTER_TOOLS</code>. <code>computer_lease_secs</code> defaults to <code>300</code> seconds and accepts <code>10..=300</code>; its environment variable is <code>LYONBROWN_COMPUTER_LEASE_SECS</code>. Both use shared configuration layering. These switches do not create a native attachment. CLI/TUI and Desktop require explicit target selection and session attachment; see <a href="#native-computer-attachment">terminal and desktop clients</a>.</p>
 <p>Before advertising computer capability to the decision model, the daemon requires an authenticated host with a fixed desktop scope bound to the same owned Session and <code>owner_epoch</code>, plus a capability reply whose <code>can_control()</code> is true. Attachment, model selection or configuration alone cannot bypass screen and input permission checks. The sole Harness executes these tools without a separate Agent Loop.</p>
@@ -487,7 +673,7 @@ capabilities = ["workspace.read"]
     end
     subgraph Agentd[Local agentd / FluxDI composition]
         API[Client / Workspace / Browser / ComputerRuntime / Orchestration services]
-        Decision[Decision Engine / rules and structured classification]
+        Decision[agent-decision / Agent tool and node policy]
         Run[Run lifecycle / concurrency / cancellation / recovery]
         Harness[agent-runtime / sole rpi-harness loop]
         Model[Model registry / metadata and capability limits]
@@ -516,6 +702,19 @@ capabilities = ["workspace.read"]
         Computer --&gt; OS
     end
     Computer &lt;--&gt;|Authenticated session attachment / observe and approved execution| API
+    SharedDecision[decision-core / reusable rules and backend ports]
+    Decision --&gt; SharedDecision
+    subgraph GatewayService[Independent AI Gateway]
+        GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
+        GatewayUI[Leptos SSR / admin sessions]
+        GatewayStore[Diesel SQLite / policy / audit / credential hashes]
+        GatewayHTTP --&gt; SharedDecision
+        GatewayHTTP --&gt; GatewayStore
+        GatewayUI --&gt; GatewayStore
+        GatewayUI --&gt; SharedDecision
+    end
+    Model -.-&gt;|Explicit gateway endpoint| GatewayHTTP
+    GatewayHTTP --&gt; GatewayUpstream[Chat Completions upstream]
     Model --&gt; Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --&gt; Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --&gt; Workspace[Workspace / Git / artifacts / notify]
@@ -618,6 +817,8 @@ capabilities = ["workspace.read"]
 <li>Runtime interfaces: <code>crates/agent-runtime/src/contracts.rs</code>.</li>
 <li>Native host attachment: <code>apps/agent-cli/src/computer_backend.rs</code>, <code>apps/agent-desktop/src/computer.rs</code>, <code>crates/agent-computer-runtime/src/client.rs</code>, <code>crates/agent-computer-runtime/src/attachment.rs</code>, <code>apps/agentd/src/computer/service.rs</code>, <code>apps/agentd/src/computer/tools/</code> and <code>apps/agentd/src/computer/mutation.rs</code>.</li>
 <li>Durable state: <code>crates/agent-storage/src/schema.sql</code>.</li>
+<li>Reusable decisions and Agent integration: <code>crates/decision-core/</code>, <code>crates/decision-semantic/</code>, <code>crates/decision-model/</code> and <code>apps/agentd/src/model_routing.rs</code>.</li>
+<li>Independent gateway and synthetic models: <code>apps/ai-gateway/</code>, <code>crates/gateway-core/</code>, <code>crates/gateway-storage/</code>, <code>crates/gateway-web/</code> and <code>apps/model-mock/</code>.</li>
 </ul>
 <p>A successful worker attempt and a master’s acceptance of its result have different meanings. The protocol keeps <code>attempt_id</code>, <code>owner_epoch</code> and explicit <code>AcceptResult</code>; receiving a result does not establish acceptance.</p>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -770,10 +971,10 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 </div>
 <p>Native window startup depends on the target platform’s graphical environment and dependencies. Compilation does not replace runtime checks for window creation, input, theme switching and connection to a real daemon, or establish acceptance on Windows, macOS and Linux.</p>
 <p>Entry points: <code>apps/agent-cli/src/main.rs</code>, <code>apps/agent-desktop/src/main.rs</code>. Desktop interaction is defined in <code>apps/agent-desktop/src/lib.rs</code>, <code>chrome.rs</code>, <code>settings.rs</code>, <code>tabs.rs</code>, <code>tabs/</code> and <code>workbench/drafts.rs</code>.</p>
-<p>See <a href="#desktop-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a> for actual windows, light/dark switching, approval, file reading and their verification limits.</p>
+<p>See <a href="#runtime-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a> for actual windows, light/dark switching, approval, file reading and their verification limits.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="desktop-screenshots-and-acceptance-scope"><a class="header" href="#desktop-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a></h1>
-<p>These screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. The workspace locks CEF 154.0.34 (<code>cef</code> Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The <a href="evidence/desktop-native-capture.json">native capture record</a> stores the executable, source and image digests, two Runs persisted as <code>completed</code>, and the exact file-write approval persisted as <code>consumed</code>. See <a href="#terminal-and-desktop-clients">the client documentation</a> for Settings, chat tabs and panel toggles.</p>
+<h1 id="runtime-screenshots-and-acceptance-scope"><a class="header" href="#runtime-screenshots-and-acceptance-scope">Runtime screenshots and acceptance scope</a></h1>
+<p>Desktop client screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. The workspace locks CEF 154.0.34 (<code>cef</code> Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The <a href="evidence/desktop-native-capture.json">native capture record</a> stores the executable, source and image digests, two Runs persisted as <code>completed</code>, and the exact file-write approval persisted as <code>consumed</code>. See <a href="#terminal-and-desktop-clients">the client documentation</a> for Settings, chat tabs and panel toggles.</p>
 <p>The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.</p>
 <h2 id="settings-and-native-window"><a class="header" href="#settings-and-native-window">Settings and native window</a></h2>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-settings-macos.png" alt="Dedicated native Settings page on macOS"><span class="img-wrapper"><img src="images/desktop-settings-macos.png" alt="Dedicated native Settings page on macOS"></span></label></p>
@@ -832,6 +1033,18 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 </table>
 </div>
 <p>Each client’s five Helpers match its main executable digest, and all 232 CEF files match the pinned SDK. Both PKGs are unsigned and the artifacts are not notarized. These records cover generation and package contents; operating-system installation, native service lifecycle, upgrades and rollback require separate runtime acceptance. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for build commands.</p>
+<h2 id="ai-gateway-administration-and-model-requests"><a class="header" href="#ai-gateway-administration-and-model-requests">AI Gateway administration and model requests</a></h2>
+<p>Captured on October 19, 2026 using a 0.1.0 SSR server and WASM hydration debug build on macOS ARM64. The independent <code>ai-gateway</code> connects to local <code>model-mock</code> through Rig HTTP transport. Leptos components provide the initial SSR page and hydrated interaction. These light-theme images were captured during actual in-app browser operation.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-login-macos.jpg" alt="Super-administrator username/password sign-in"><span class="img-wrapper"><img src="images/gateway-login-macos.jpg" alt="Super-administrator username/password sign-in"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-models-macos.jpg" alt="Actual Gateway model catalog"><span class="img-wrapper"><img src="images/gateway-models-macos.jpg" alt="Actual Gateway model catalog"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-policy-macos.jpg" alt="Policy state after saving through the administration form"><span class="img-wrapper"><img src="images/gateway-policy-macos.jpg" alt="Policy state after saving through the administration form"></span></label></p>
+<p>After signing in with the environment-initialized super-administrator username and password through the actual form, the policy revision was saved as <code>acceptance-v1</code>. Shared browser validation rejected invalid JSON, and Reset restored the original policy. Synthetic policy text containing HTML markup survived an SSR reload as text without creating extra page nodes. A subsequent automatic-routing request used the new revision. Logging out revoked the SQLite administration session; visiting the models page again returned to sign-in.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-requests-macos.jpg" alt="Actual request records and policy revisions"><span class="img-wrapper"><img src="images/gateway-requests-macos.jpg" alt="Actual request records and policy revisions"></span></label></p>
+<p>Four synthetic model requests covered explicit-model JSON, automatic-routing JSON, automatic-routing SSE and automatic routing after the policy update. All four SQLite audit records reached Succeeded; the SSE stream included its terminal marker. Additional checks covered API/admin credential separation, unauthenticated rejection and absence of credentials or prompt columns in storage. No paid model was called.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-swagger-macos.jpg" alt="Swagger UI executing a health check with a 200 response"><span class="img-wrapper"><img src="images/gateway-swagger-macos.jpg" alt="Swagger UI executing a health check with a 200 response"></span></label></p>
+<p>The administration API-documentation link opened Swagger UI with its embedded specification and assets. An actual Try it out health request returned <code>200</code> with <code>status: live</code>.</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-mobile-macos.jpg" alt="Narrow-window navigation and independently scrolling request table"><span class="img-wrapper"><img src="images/gateway-mobile-macos.jpg" alt="Narrow-window navigation and independently scrolling request table"></span></label></p>
+<p>The desktop layout was checked at 1280 × 800. The narrow viewport requested 390 × 844; document width after the scrollbar was 380 pixels. The document did not overflow horizontally, and the table scrolled inside its own container. The <a href="evidence/gateway-web-macos.json">runtime record</a> contains binary, WASM, JavaScript, relevant-source and image hashes plus HTTP and SQLite results. This section does not cover public-network, Windows, Linux or new installer acceptance.</p>
 <h2 id="capabilities-outside-this-screenshot-set"><a class="header" href="#capabilities-outside-this-screenshot-set">Capabilities outside this screenshot set</a></h2>
 <p>These images do not show model-driven browser semantic actions or native terminal-window presentation. Synthetic-host protocol regressions and actual autonomous CEF acceptance have separate records. See <a href="#local-tools-and-browser-actions">Local tools and browser actions</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -940,7 +1153,7 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&
 </ul>
 <h2 id="sources-and-verification-scope"><a class="header" href="#sources-and-verification-scope">Sources and verification scope</a></h2>
 <p>This page was checked against the current workspace’s <code>apps/agentd/src/peers/</code>, <code>apps/agent-cli/src/task_command.rs</code>, <code>apps/agent-control/src/</code>, <code>crates/agent-config/src/{peer,relay}.rs</code> and <code>crates/agent-distributed/src/</code>. <code>apps/agent-control/tests/relay_tasks.rs</code> defines local real mTLS / Noise relay tests covering the Worker Harness, isolated workspaces, result acceptance and reconciliation of the same attempt after disconnection. Standard model protocols use a local mock server without paid model calls.</p>
-<p>Test definitions and documentation builds do not establish public deployment, cross-device networking or acceptance on all three platforms. See <a href="#desktop-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a> for the scope of runtime evidence. Commands and configuration here were checked against source; they are not a deployment execution record.</p>
+<p>Test definitions and documentation builds do not establish public deployment, cross-device networking or acceptance on all three platforms. See <a href="#runtime-screenshots-and-acceptance-scope">Desktop screenshots and acceptance scope</a> for the scope of runtime evidence. Commands and configuration here were checked against source; they are not a deployment execution record.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="protocol-and-platform-capabilities"><a class="header" href="#protocol-and-platform-capabilities">Protocol and platform capabilities</a></h1>
 <p>The public contract is <code>proto/agent/v1/agent.proto</code>, using package <code>agent.v1</code>. Prost and Tonic generate Rust types, which <code>agent-protocol</code> exposes to servers and clients. Versioned messages contain no concrete model-library, Harness or UI types.</p>
@@ -1020,6 +1233,20 @@ cargo dev --help
 <p>Use <code>cargo dev daemon</code> when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.</p>
 <p>The default configuration is <code>config.toml</code> inside the development data directory, with <code>.env</code> beside it. <code>--config</code> selects an existing TOML file. The commands do not create or overwrite configuration or dotenv files. Model, tool and log settings use the shared <code>agent-config</code> layering rules. agentd, TUI, Desktop and the development launcher all use shared <code>agent-telemetry</code> logging. Files default to the development data directory’s <code>logs</code> subdirectory, use separate process prefixes and follow the configured rotation and retention settings. The launcher forces the selected development address and data directory, reads that directory’s <code>auth.token</code> and ignores inherited connection credentials. Tokens pass only through the client child environment, never command arguments or launch output.</p>
 <p><code>--dry-run</code> displays the launch plan without creating directories, reading tokens or starting product processes; the outer Cargo command may compile <code>agent-dev</code>. Default Desktop/TUI builds enable neither <code>native-cef</code> nor <code>native-computer</code>; their browser execution and native computer hosting capabilities report unavailable. See the <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">local distribution guide</a> for the full CEF SDK, helper and application bundle layout.</p>
+<h2 id="gateway-full-stack-development"><a class="header" href="#gateway-full-stack-development">Gateway full-stack development</a></h2>
+<p>The repository’s separate <code>cargo gateway</code> alias invokes the <code>gateway-dev</code> binary in <code>apps/agent-dev</code>. It starts neither agentd nor an OS service. Prepare existing TOML, administrator username/password and an independent API Key as described in <a href="#startup-and-configuration">AI Gateway</a>, then run from the repository root:</p>
+<pre><code class="language-sh">cargo gateway --config /absolute/path/gateway.toml --data-dir /absolute/path/gateway-data
+cargo gateway --help
+cargo gateway --dry-run --config /absolute/path/gateway.toml
+cargo gateway --build-only
+cargo gateway --build-only --release
+</code></pre>
+<p>The launcher checks the current Rust toolchain’s <code>wasm32-unknown-unknown</code> target and prepares it through rustup if missing. It then checks cargo-leptos in the repository’s <code>.local/tools/bin</code>, installing it with <code>cargo install --locked --root &lt;repo&gt;/.local/tools cargo-leptos --version 0.3.11</code> if absent. Existing tools must match the fixed version; no manual global installation is required. Rust, platform build tools and network access for downloads still need to be available.</p>
+<p>Standard cargo-leptos <code>leptos build --project gateway</code> builds the application; <code>--release</code> selects release settings for both server and WASM. The launcher then runs an incremental Cargo build with matching settings and reads the executable path from <code>compiler-artifact</code> JSON, preserving Cargo target-directory and target configuration. Workspace metadata selects <code>.local/gateway-web/site</code> as the default site root. Gateway receives absolute <code>LYONBROWN_GATEWAY_WEB_ROOT</code> and serves generated JavaScript and WASM under <code>/ui/pkg/</code>.</p>
+<p><code>--build-only</code> exits after building the server and assets, without starting Gateway. <code>--dry-run</code> prints the plan without running tools, reading credentials or creating runtime data; the outer Cargo command may still compile the launcher. Relative <code>--config</code> and <code>--data-dir</code> paths resolve from the repository root. Runtime data defaults to <code>.local/gateway-web/data</code>; <code>--listen</code> can select a nonzero loopback port. Ctrl+C in the launch terminal cleans up only the Gateway process owned by that launcher.</p>
+<p>Gateway reads <code>.env</code> beside its runtime configuration, with process environment taking precedence. Keep runtime configuration and credentials in a separate directory: the launcher does not explicitly pass Gateway credentials to build commands, but official cargo-leptos itself reads workspace or parent-directory <code>.env</code>. This is not an absolute guarantee that build tools cannot access runtime credentials. Never put passwords or API Keys in source, build arguments or static assets.</p>
+<p>Shared Rust Leptos components build with <code>ssr</code> for the server and <code>hydrate</code> for browser WASM. Signals manage policy drafts and submission feedback; official <code>ServerAction</code> / <code>ActionForm</code> handle forms, and tables use the public <code>leptos-struct-table</code> <code>TableRow</code> rendering interfaces for direct SSR output. Generated JavaScript boots WASM without a separate Node frontend stack. Authentication, CSRF, roles and policy-version checks remain server responsibilities.</p>
+<p>Distribution includes both <code>ai-gateway</code> and site assets from the standard full-stack build. Absolute <code>LYONBROWN_GATEWAY_WEB_ROOT</code> selects a directory containing <code>ui/pkg</code>, defaulting to <code>web</code> beside the executable. Running only <code>cargo run -p ai-gateway</code> does not generate browser assets; missing or empty JS/WASM files fail startup explicitly. Build success does not establish browser hydration, form interaction or cross-platform runtime acceptance. See <a href="#runtime-screenshots-and-acceptance-scope">runtime evidence</a> for its recorded scope.</p>
 <h2 id="native-computer-client-builds"><a class="header" href="#native-computer-client-builds">Native computer client builds</a></h2>
 <p>CLI and Desktop disable <code>native-computer</code> by default. It explicitly forwards to <code>agent-computer-runtime/native</code>, which enables <code>agent-computer/native</code>. Default <code>cargo dev desktop</code> and <code>cargo dev tui</code> builds do not enable it automatically; <code>native-cef</code> does not enable computer hosting either. The development launcher supports explicit client feature selection:</p>
 <pre><code class="language-sh">cargo dev desktop --native-computer
@@ -1068,6 +1295,22 @@ LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --fe
 <pre><code class="language-sh">cargo run --locked -p agent-desktop --example desktop-computer-target
 </code></pre>
 <p>This example provides only a synthetic button and text field. It starts no daemon, model or ComputerRuntime and requests no screen-recording or Accessibility permissions. Startup prints a fresh <code>.local/acceptance/computer-target-*</code> directory; <code>state.json</code> retains <code>click_count</code> and <code>text</code> after exit. Each run creates a separate target for native-control acceptance. Interacting with this fixture does not establish Harness or approval-path acceptance.</p>
+<h2 id="reusable-decision-and-gateway-checks"><a class="header" href="#reusable-decision-and-gateway-checks">Reusable decision and Gateway checks</a></h2>
+<pre><code class="language-sh">cargo test --locked -p decision-core -p decision-model -p decision-semantic
+cargo test --locked -p gateway-core -p gateway-storage -p ai-gateway
+cargo test --locked -p gateway-web --no-default-features --features ssr
+cargo test --locked -p agent-dev --test gateway_commands
+cargo check --locked -p gateway-web --no-default-features --features hydrate --target wasm32-unknown-unknown
+cargo gateway --build-only
+cargo check --locked -p decision-core --no-default-features
+cargo run --locked -p decision-core --no-default-features --example embedded
+cargo check --locked -p decision-semantic --features semantic-local
+</code></pre>
+<p>The WASM check requires the current toolchain’s <code>wasm32-unknown-unknown</code> target; <code>cargo gateway</code> prepares it before building. SSR tests cover server pages, Server Functions and security boundaries. The hydrate check validates the browser build, without replacing real-browser acceptance of events, forms and asset loading.</p>
+<p>Real embedding acceptance uses <code>LYONBROWN_TEST_EMBEDDING_CONFIG</code> to select an <code>OfflineEmbeddingConfig</code> JSON with absolute paths and SHA-256 values for each asset. Only the explicit test below loads those weights; default workspace tests neither download nor load models:</p>
+<pre><code class="language-sh">LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test --locked -p decision-semantic --features semantic-local --test offline caller_supplied_real_model_replays_bilingual_queries_with_measured_thresholds -- --ignored --exact --nocapture
+</code></pre>
+<p>The test uses disjoint calibration and replay fixtures to check real loading, dimensions, thresholds and Unknown behavior. Its small sample is not a production multilingual accuracy benchmark. See <a href="#reusable-decision-engine">Reusable decision engine</a> for APIs and <a href="#ai-gateway">AI Gateway</a> for startup, keys and Swagger.</p>
 <h2 id="native-service-acceptance"><a class="header" href="#native-service-acceptance">Native service acceptance</a></h2>
 <p>The following macOS test registers a real launchd service. Use a test account with no Lyonbrown service registration and an unused <code>127.0.0.1:7447</code>. Build the product daemon, then provide its absolute path:</p>
 <pre><code class="language-sh">cargo build -p agentd --bin agentd --locked

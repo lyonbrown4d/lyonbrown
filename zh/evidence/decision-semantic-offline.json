@@ -1,0 +1,25 @@
+{
+  "platform": "macOS 27.0.1 arm64",
+  "version": "0.1.0",
+  "date": "2026-10-19",
+  "backend": "fastembed 7.1.1 / ONNX Runtime 1.31.0",
+  "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "model_revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+  "license": "Apache-2.0",
+  "dimensions": 384,
+  "runtime_download_during_test": false,
+  "assets_verified_sha256": true,
+  "test": "caller_supplied_real_model_replays_bilingual_queries_with_measured_thresholds",
+  "result": "passed",
+  "calibration_examples": 4,
+  "calibration_negatives": 2,
+  "held_out_replay": 6,
+  "known_zh_en": 4,
+  "unknown_rejections": 2,
+  "thresholds": {
+    "minimum_score": 0.292491,
+    "minimum_margin": 0.138485
+  },
+  "log_sha256": "9d47cfb456d370d41e0b260b0b83c147601d079d169940a3ad2c3429e55e091f",
+  "scope": "Offline adapter acceptance with disjoint small fixtures; not a language-quality, performance or cross-platform benchmark."
+}

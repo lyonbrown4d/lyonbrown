@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>桌面运行截图与验收范围 - Lyonbrown 使用与开发文档</title>
+        <title>运行截图与验收范围 - Lyonbrown 使用与开发文档</title>
 
 
         <!-- Custom HTML head -->
@@ -37,10 +37,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6faba41f.js";
+            window.path_to_searchindex_js = "searchindex-de20616c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-938ced0f.js"></script>
+        <script src="toc-dab33207.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -176,8 +176,8 @@
 
                 <div id="mdbook-content" class="content">
                     <main>
-                        <h1 id="桌面运行截图与验收范围"><a class="header" href="#桌面运行截图与验收范围">桌面运行截图与验收范围</a></h1>
-<p>以下截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate <code>cef</code> 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。<a href="evidence/desktop-native-capture.json">原生截图记录</a>保存了对应程序、源文件与图片摘要、两次已持久化为 <code>completed</code> 的 Run，以及状态为 <code>consumed</code> 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见<a href="clients.html">客户端文档</a>。</p>
+                        <h1 id="运行截图与验收范围"><a class="header" href="#运行截图与验收范围">运行截图与验收范围</a></h1>
+<p>桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate <code>cef</code> 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。<a href="evidence/desktop-native-capture.json">原生截图记录</a>保存了对应程序、源文件与图片摘要、两次已持久化为 <code>completed</code> 的 Run，以及状态为 <code>consumed</code> 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见<a href="clients.html">客户端文档</a>。</p>
 <p>浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。</p>
 <h2 id="设置与原生窗口"><a class="header" href="#设置与原生窗口">设置与原生窗口</a></h2>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-settings-macos.png" alt="macOS 上的独立 Settings 页面"><span class="img-wrapper"><img src="images/desktop-settings-macos.png" alt="macOS 上的独立 Settings 页面"></span></label></p>
@@ -236,6 +236,18 @@
 </table>
 </div>
 <p>每个客户端的 5 个 Helper 均与对应主程序的摘要一致，232 个 CEF 文件与固定 SDK 一致。两份 PKG 未签名，产物未经过公证。这些记录覆盖生成与包内容校验；操作系统实际安装、原生服务生命周期、升级和回滚仍需单独运行验收。构建命令见<a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
+<h2 id="ai-gateway-管理台与模型请求"><a class="header" href="#ai-gateway-管理台与模型请求">AI Gateway 管理台与模型请求</a></h2>
+<p>本节采集于 2026 年 10 月 19 日，使用 macOS ARM64 上 0.1.0 的 SSR 服务端与 WASM hydration 调试构建。独立 <code>ai-gateway</code> 经 Rig HTTP 传输连接本机 <code>model-mock</code>；管理台使用 Leptos 组件，由 SSR 提供首屏，再由 WASM 接管交互。以下是在应用内浏览器实际操作采集的浅色主题截图。</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-login-macos.jpg" alt="超级管理员用户名和密码登录入口"><span class="img-wrapper"><img src="images/gateway-login-macos.jpg" alt="超级管理员用户名和密码登录入口"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-models-macos.jpg" alt="实际 Gateway 模型目录"><span class="img-wrapper"><img src="images/gateway-models-macos.jpg" alt="实际 Gateway 模型目录"></span></label></p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-policy-macos.jpg" alt="通过管理表单保存策略后的状态"><span class="img-wrapper"><img src="images/gateway-policy-macos.jpg" alt="通过管理表单保存策略后的状态"></span></label></p>
+<p>使用环境变量初始化的超级管理员用户名和密码，通过实际登录表单进入管理台后，将策略 revision 保存为 <code>acceptance-v1</code>。浏览器端共享校验拒绝无效 JSON，重置按钮恢复原始策略；含 HTML 标记的合成策略文本在 SSR 重载后仍作为文本保留，未生成额外页面节点。随后自动路由请求使用了新版本。退出登录后再次访问模型页会返回登录页，SQLite 中对应管理会话已撤销。</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-requests-macos.jpg" alt="实际请求记录与策略版本"><span class="img-wrapper"><img src="images/gateway-requests-macos.jpg" alt="实际请求记录与策略版本"></span></label></p>
+<p>本轮发送四个合成模型请求，覆盖显式模型 JSON、自动路由 JSON、自动路由 SSE，以及策略更新后的自动路由。四条 SQLite 审计记录均为 Succeeded；SSE 包含结束标记。另行检查 API 与管理凭据隔离、未认证访问拒绝，以及数据库不包含凭据或 Prompt 字段。没有调用付费模型。</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-swagger-macos.jpg" alt="Swagger UI 实际执行健康检查并返回 200"><span class="img-wrapper"><img src="images/gateway-swagger-macos.jpg" alt="Swagger UI 实际执行健康检查并返回 200"></span></label></p>
+<p>从管理台点击 API 文档进入 Swagger UI，加载内嵌规范与资源，实际通过 Try it out 执行健康检查，返回 <code>200</code> 和 <code>status: live</code>。</p>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-mobile-macos.jpg" alt="窄窗口中的管理导航与可横向滚动请求表格"><span class="img-wrapper"><img src="images/gateway-mobile-macos.jpg" alt="窄窗口中的管理导航与可横向滚动请求表格"></span></label></p>
+<p>桌面布局以 1280 × 800 视口检查；窄窗口请求 390 × 844，扣除滚动条后的正文宽度为 380。正文没有横向溢出，请求表格在自身容器内滚动。<a href="evidence/gateway-web-macos.json">运行记录</a>包含程序、WASM 与 JavaScript 资源、相关源码及图片摘要，以及 HTTP 和 SQLite 检查结果。本节不覆盖公网、Windows、Linux 或新版安装包验收。</p>
 <h2 id="尚未由本组截图覆盖的能力"><a class="header" href="#尚未由本组截图覆盖的能力">尚未由本组截图覆盖的能力</a></h2>
 <p>本组截图未展示模型浏览器语义操作或原生终端窗口呈现。模型工具的合成 host 协议回归与真实 CEF 自主操作验收分别保留，见<a href="tools.html">本地工具与浏览器操作</a>。</p>
 
