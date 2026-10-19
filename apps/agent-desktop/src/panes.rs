@@ -89,7 +89,11 @@ impl Desktop {
               div()
                 .text_xs()
                 .text_color(cx.theme().muted_foreground)
-                .child("Connect to load your chats."),
+                .child(if self.client.is_some() {
+                  "No chats yet. Start a new chat."
+                } else {
+                  "Connect to load your chats."
+                }),
             )
           }),
       )
@@ -121,7 +125,11 @@ impl Desktop {
             ).when(self.conversation.is_empty(), |this| this.child(div().flex().flex_col().items_center().justify_center().h_full().gap_3()
                 .child(div().text_2xl().font_weight(FontWeight::MEDIUM).child("What shall we build?"))
                 .child(div().text_sm().text_center().text_color(cx.theme().muted_foreground)
-                    .child("Connect to your daemon, then start a chat.\nYour sessions and jobs stay with agentd.")))))
+                    .child(if self.client.is_some() {
+                      "Describe a task to start working in your workspace."
+                    } else {
+                      "Connect to your daemon, then start a chat.\nYour sessions and jobs stay with agentd."
+                    })))))
             .when_some(self.error.clone(), |this, error| this.child(div().mx_5().p_3().rounded_md().border_1().border_color(cx.theme().danger)
                 .text_sm().child(error)))
             .children(self.approvals.iter().enumerate().map(|(index, approval)| {

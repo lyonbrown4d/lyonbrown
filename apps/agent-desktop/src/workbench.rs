@@ -10,7 +10,8 @@ mod watch;
 
 use gpui_kit::component::{
   ActiveTheme,
-  dock::{BasePanel, DockArea, DockLayout, DockSkin, Panel, PanelEvent, panel_handle},
+  dock::{BasePanel, DockArea, DockLayout, DockSkin, Panel, PanelEvent, PanelId, panel_handle},
+  menu::{PopupMenu, PopupMenuItem},
 };
 use gpui_kit::*;
 pub use state::Workbench;
@@ -31,17 +32,27 @@ struct WorkbenchPanel {
   focus: FocusHandle,
   state: Entity<Workbench>,
   kind: Kind,
+  dock: WeakEntity<DockArea>,
+  panels: Arc<[(&'static str, PanelId)]>,
   _subscription: Subscription,
 }
 
 impl WorkbenchPanel {
-  fn new(title: &'static str, kind: Kind, state: Entity<Workbench>, cx: &mut App) -> Entity<Self> {
+  fn new(
+    title: &'static str,
+    kind: Kind,
+    state: Entity<Workbench>,
+    dock: WeakEntity<DockArea>,
+    cx: &mut App,
+  ) -> Entity<Self> {
     cx.new(|cx| Self {
       title,
       focus: cx.focus_handle(),
       _subscription: cx.observe(&state, |_, _, cx| cx.notify()),
       state,
       kind,
+      dock,
+      panels: Arc::default(),
     })
   }
 }
@@ -60,6 +71,23 @@ impl BasePanel for WorkbenchPanel {
   }
 }
 impl Panel for WorkbenchPanel {
+  fn tab_name(&self, _: &App) -> Option<SharedString> {
+    Some(self.title.into())
+  }
+
+  fn dropdown_menu(&mut self, menu: PopupMenu, _: &mut Window, _: &mut Context<Self>) -> PopupMenu {
+    self.panels.iter().fold(menu, |menu, &(title, id)| {
+      let dock = self.dock.clone();
+      menu.item(
+        PopupMenuItem::new(title)
+          .checked(title == self.title)
+          .on_click(move |_, window, cx| {
+            let _ = dock.update(cx, |dock, cx| dock.select_panel(id, window, cx));
+          }),
+      )
+    })
+  }
+
   fn title(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
     div()
       .id(self.title)
@@ -103,10 +131,18 @@ pub fn build(
     ("Tasks", Kind::Tasks),
     ("Computer", Kind::Computer),
   ];
+  let panels: Vec<_> = panels
+    .into_iter()
+    .map(|(title, kind)| WorkbenchPanel::new(title, kind, state.clone(), area.downgrade(), cx))
+    .collect();
+  let navigation: Arc<[_]> = panels
+    .iter()
+    .map(|panel| (panel.read(cx).title, PanelId::from(panel.entity_id())))
+    .collect();
   let layout = panels
     .into_iter()
-    .fold(DockLayout::tabs(), |layout, (title, kind)| {
-      let panel = WorkbenchPanel::new(title, kind, state.clone(), cx);
+    .fold(DockLayout::tabs(), |layout, panel| {
+      panel.update(cx, |panel, _| panel.panels = navigation.clone());
       layout.panel_view(panel_handle(panel), cx)
     });
   area.update(cx, |area, cx| area.set_center(layout, window, cx));

@@ -5,6 +5,67 @@ use gpui_kit::{
 use support::Harness;
 
 #[gpui_kit::test]
+async fn workbench_menu_reaches_clipped_panels_and_preserves_chat(cx: &mut TestAppContext) {
+  let harness = Harness::new(cx, Vec::new());
+  harness.connect(cx);
+  harness
+    .wait(cx, |state| state.status.starts_with("Connected"))
+    .await;
+  harness.click("new-session", cx);
+  let session = harness
+    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .await
+    .selected_session;
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.press(&support::shortcut("l"), cx);
+    window.input("Keep this draft while choosing a workbench panel", cx);
+  })
+  .expect("enter chat draft");
+  harness.show_workbench(cx);
+  cx.simulate_window_resize(harness.window.into(), size(px(960.), px(640.)));
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.render_frame(cx);
+    let mut bar = window.within("tab-bar");
+    let tabs = bar.within("tabs");
+    assert!(!tabs.find(5usize).visible(), "Computer starts offscreen");
+    window.click("menu", cx);
+    for (index, label) in ["Browser", "Files", "Editor", "Diff", "Tasks", "Computer"]
+      .into_iter()
+      .enumerate()
+    {
+      let item = window.within("popup-menu").find(index);
+      assert_eq!(item.label(), Some(label));
+      assert!(item.visible());
+    }
+    window.within("popup-menu").click(5usize, cx);
+    assert!(window.find("computer-panel").visible());
+  })
+  .expect("select hidden panel from the dock menu without scrolling");
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    // The newly active panel offers the same navigation back to Browser.
+    window.click("menu", cx);
+    window.within("popup-menu").click(0usize, cx);
+    assert!(window.try_find("computer-panel").is_none());
+    assert_eq!(
+      window
+        .within("tab-bar")
+        .within("tabs")
+        .find(0usize)
+        .selected(),
+      Some(true)
+    );
+  })
+  .expect("navigate back from the newly active panel");
+  let state = harness.snapshot(cx);
+  assert_eq!(state.selected_session, session);
+  assert_eq!(
+    state.draft,
+    "Keep this draft while choosing a workbench panel"
+  );
+  assert!(!state.busy);
+}
+
+#[gpui_kit::test]
 async fn settings_are_separate_and_both_panels_can_be_restored(cx: &mut TestAppContext) {
   let harness = Harness::new(cx, Vec::new());
   let initial = harness.snapshot(cx);
