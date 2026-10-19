@@ -10,6 +10,8 @@ use uuid::Uuid;
 
 mod receive;
 mod request;
+#[cfg(test)]
+mod tests;
 mod validation;
 
 #[derive(Clone)]
@@ -45,6 +47,9 @@ impl ComputerRouter {
     stop: CancellationToken,
   ) -> Result<Uuid, Status> {
     let mut hosts = self.hosts.lock().await;
+    // Response-stream drop cancels before its reader finishes cleanup. Release
+    // those disconnected generations before checking replacement or capacity.
+    hosts.retain(|_, host| !host.stop.is_cancelled());
     if hosts.len() >= 8
       || hosts.contains_key(&info.daemon_session_id)
       || hosts.values().any(|host| host.info.host_id == info.host_id)
