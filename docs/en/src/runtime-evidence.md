@@ -64,7 +64,7 @@ The address field retains navigation input; it is not a trusted display of the c
 
 A separate GPUI component test used the real daemon and CEF to verify pixel frames, pointer coordinates, text input, input rejection after releasing takeover, and Space closure. It used GPUI's test window and the debug acceptance executable's test keychain. This checks component calls and actual Chromium behavior separately from the native-window screenshots above.
 
-The [separate check](evidence/browser-production-probe.json) of the packaged release CLI entry on October 19, 2026 failed: CEF started and returned frames and AX, but the target page stayed at `about:blank` during the wait. The cause remains undiagnosed; production navigation and keychain acceptance did not pass.
+The [separate check](evidence/browser-production-probe.json) of the packaged release CLI entry on October 19, 2026 initially failed: CEF started and returned frames and AX, but the target page stayed at `about:blank` during the wait. The same executable then passed the complete case three consecutive times with fresh profiles, checking target-page AX and frames, semantic fill and click, pointer focus and committed text, profile isolation and persistence across restart. These rechecks used the production entry with `fixture_keychain=false`; no product code changed between runs. The initial failure remains unexplained. Subsequent passes do not establish its resolution, clean-account Keychain authorization or installer lifecycle acceptance.
 
 ## Native Computer targets and session binding
 

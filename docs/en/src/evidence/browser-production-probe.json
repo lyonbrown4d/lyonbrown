@@ -5,11 +5,39 @@
   "entry": "packaged release CLI --browser-runtime; fixture_keychain=false",
   "client_sha256": "232e47711b92ba65669bb2adea8fd41dbb0920ddd5419282bf610f6898be728e",
   "test": "chromium_profiles_frames_semantic_actions_staleness_and_takeover",
-  "result": "failed",
-  "observed": [
-    "Runtime startup and root ownership exclusion succeeded",
-    "Native CEF renderer ready and 1280x720 frame received",
-    "CDP accessibility stayed at about:blank during the 20-second page wait"
+  "result": "initial_failure_followed_by_three_passing_rechecks",
+  "scope": "Isolated synthetic local pages on macOS only. No product code changed between runs. The initial about:blank failure remains unexplained; three subsequent passes do not establish its resolution, installer lifecycle or clean-account Keychain authorization.",
+  "initial_run": {
+    "result": "failed",
+    "duration_seconds": 24.27,
+    "observed": [
+      "Runtime startup and root ownership exclusion succeeded",
+      "Native CEF renderer ready and 1280x720 frame received",
+      "CDP accessibility stayed at about:blank during the 20-second page wait"
+    ]
+  },
+  "rechecks": [
+    {
+      "result": "passed",
+      "duration_seconds": 4.96,
+      "fresh_profile": true
+    },
+    {
+      "result": "passed",
+      "duration_seconds": 4.63,
+      "fresh_profile": true
+    },
+    {
+      "result": "passed",
+      "duration_seconds": 5.92,
+      "fresh_profile": true
+    }
   ],
-  "scope": "One isolated local fixture run. Production navigation and keychain acceptance did not pass. Cause remains undiagnosed; no readiness or keychain workaround applied."
+  "verified_in_rechecks": [
+    "Same packaged release CLI, production entry and fixture_keychain=false",
+    "Root ownership exclusion; actual target-page AX and frames",
+    "Semantic fill, semantic click and repaint",
+    "Pointer focus and committed text",
+    "Profile isolation and persistence across runtime restart"
+  ]
 }

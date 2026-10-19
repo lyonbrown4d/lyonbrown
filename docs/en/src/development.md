@@ -115,6 +115,14 @@ LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --fe
 LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --features mistral --test native_models -- --ignored --nocapture
 ```
 
+## Isolated Computer target window
+
+```sh
+cargo run --locked -p agent-desktop --example desktop-computer-target
+```
+
+This example provides only a synthetic button and text field. It starts no daemon, model or ComputerRuntime and requests no screen-recording or Accessibility permissions. Startup prints a fresh `.local/acceptance/computer-target-*` directory; `state.json` retains `click_count` and `text` after exit. Each run creates a separate target for native-control acceptance. Interacting with this fixture does not establish Harness or approval-path acceptance.
+
 ## Native service acceptance
 
 The following macOS test registers a real launchd service. Use a test account with no Lyonbrown service registration and an unused `127.0.0.1:7447`. Build the product daemon, then provide its absolute path:

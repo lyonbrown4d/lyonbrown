@@ -52,7 +52,7 @@ Settings 独立页面显示连接地址、已掩码的访问令牌、工作区�
 
 本节两张浏览器图片来自同一份独立原生验收构建，不属于上述八张图的构建摘要范围。[浏览器截图记录](evidence/desktop-browser-capture.json)保存了程序与源码摘要、图片摘要、已完成的 Run，以及已持久化的 Space 打开、接管、归还和关闭结果。
 
-2026 年 10 月 19 日对安装包内正式 CLI 入口的[独立检查](evidence/browser-production-probe.json)未通过：CEF 已启动并返回画面与 AX，但目标页面在等待期间停留于 `about:blank`。原因尚未定位，该结果不构成生产导航或钥匙串验收。
+2026 年 10 月 19 日对安装包内正式 CLI 入口的[独立检查](evidence/browser-production-probe.json)首次未通过：CEF 已启动并返回画面与 AX，但目标页面在等待期间停留于 `about:blank`。同一程序随后在三个独立的新 Profile 中连续通过完整用例，验证页面 AX 与画面、语义填充和点击、指针聚焦与文字输入，以及 Profile 隔离和重启持久化。复测使用正式入口，`fixture_keychain=false`，期间未修改产品代码。首次失败原因仍未定位；复测通过不代表该问题已修复，也不构成全新用户环境的钥匙串授权或安装生命周期验收。
 
 ![GPUI 窗口中的真实 Chromium 页面](images/desktop-browser-macos.png)
 

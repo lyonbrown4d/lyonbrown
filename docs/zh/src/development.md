@@ -115,6 +115,14 @@ LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --fe
 LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --features mistral --test native_models -- --ignored --nocapture
 ```
 
+## 隔离的 Computer 测试窗口
+
+```sh
+cargo run --locked -p agent-desktop --example desktop-computer-target
+```
+
+该示例只提供合成按钮和文字输入框，不启动 daemon、模型或 ComputerRuntime，也不请求录屏或辅助功能权限。启动时输出本次 `.local/acceptance/computer-target-*` 目录，`state.json` 保存 `click_count` 和 `text`，退出后保留。每次运行使用新目录，适合作为原生控制验收的独立目标；操作此窗口不等于已验收 Harness 和审批链路。
+
 ## 原生服务验收
 
 macOS 的以下测试使用真实 launchd 注册，只能在没有 Lyonbrown 服务注册且 `127.0.0.1:7447` 空闲的测试账号上执行。先构建产品 daemon，再提供其绝对路径：

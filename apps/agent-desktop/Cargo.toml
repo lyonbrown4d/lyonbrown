@@ -17,6 +17,10 @@ name = "desktop-computer-acceptance"
 path = "examples/computer_acceptance.rs"
 required-features = ["native-computer"]
 
+[[example]]
+name = "desktop-computer-target"
+path = "examples/computer_target.rs"
+
 [dependencies]
 gpui-kit = { version = "0.7.3", features = ["tree-sitter-rust", "tree-sitter-markdown", "tree-sitter-toml"] }
 image = { version = "0.25", default-features = false }
