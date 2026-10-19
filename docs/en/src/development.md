@@ -59,7 +59,7 @@ cargo run -p agent-desktop --features native-computer
 
 Clients connect to or reuse the native daemon service through the shared launcher; the foreground development daemon is described above. The native feature does not change the daemon's `computer_tools = false` default or replace OS permissions, interactive session checks or exact action approval. Neither default nor test dependencies implicitly enable native SDKs through Cargo feature unification. See [terminal and desktop clients](clients.md#native-computer-attachment) for selection, attachment and detachment.
 
-Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Harness attachment, observation and approved input require actual runtime acceptance. macOS returns `SessionStateUnknown` when it cannot confirm unlocked session state; rejection paths and synthetic-host regressions do not establish native-control acceptance. Windows and Linux require runtime evidence from their respective environments too.
+Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Harness attachment, observation and approved input require actual runtime acceptance. macOS follows the [session identity and lock-field policy](protocol.md#native-desktop-execution-boundary), returning `SessionStateUnknown` when state cannot be established. Read-only permission checks, rejection paths and synthetic-host regressions do not establish native-control acceptance. Real capture, approved input, locking and session switching still require runtime acceptance; actual Windows and Linux runtime acceptance also remains incomplete.
 
 ## Verification commands
 

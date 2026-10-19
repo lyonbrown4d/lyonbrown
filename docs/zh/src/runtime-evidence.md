@@ -52,6 +52,8 @@ Settings 独立页面显示连接地址、已掩码的访问令牌、工作区�
 
 本节两张浏览器图片来自同一份独立原生验收构建，不属于上述八张图的构建摘要范围。[浏览器截图记录](evidence/desktop-browser-capture.json)保存了程序与源码摘要、图片摘要、已完成的 Run，以及已持久化的 Space 打开、接管、归还和关闭结果。
 
+2026 年 10 月 19 日对安装包内正式 CLI 入口的[独立检查](evidence/browser-production-probe.json)未通过：CEF 已启动并返回画面与 AX，但目标页面在等待期间停留于 `about:blank`。原因尚未定位，该结果不构成生产导航或钥匙串验收。
+
 ![GPUI 窗口中的真实 Chromium 页面](images/desktop-browser-macos.png)
 
 CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium 像素帧传到 Browser 面板。此时界面处于 Agent control，只读展示。
@@ -63,6 +65,16 @@ CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium �
 地址输入框保存导航输入，不能作为重定向后页面来源的可信显示。此组截图覆盖人工浏览器操作；模型自主操作的原生 CEF 验收使用独立合成页面，记录见[本地工具与浏览器操作](tools.md)。
 
 另行执行的 GPUI 组件测试通过真实 daemon 和 CEF 检查了像素帧、指针坐标、文字输入、接管释放后的输入拒绝及 Space 关闭。测试使用 GPUI 测试窗口和调试验收程序的测试钥匙串；它验证组件调用与实际 Chromium 行为，不代替上面的原生窗口截图。
+
+## 原生 Computer 目标与会话绑定
+
+本节截图采集于 2026 年 10 月 19 日，使用启用 `native-computer` 的独立 GPUI 验收程序。用户在 macOS 设置中授予该测试 app 录屏和辅助功能权限后，通过 Computer 面板发现目标，并显式选择验收窗口挂接到已认证的 daemon 会话。
+
+![macOS 浅色主题下挂接到固定会话的验收窗口](images/desktop-computer-attached-macos.png)
+
+![macOS 深色主题下切换聊天后仍保留原绑定会话](images/desktop-computer-dark-macos.png)
+
+第二张图中，Selected chat 与 Bound chat 不同，原窗口仍绑定原会话。随后实际执行 Detach，界面恢复 detached，绑定会话与范围均清空。[Computer 截图记录](evidence/desktop-computer-capture.json)包含程序、相关源码及图片摘要；隔离数据库有两个会话，没有 Run、审批或操作记录。本次仅验证目标发现、挂接、聊天隔离和解除挂接，未请求 Harness 屏幕观察或原生输入。真实锁屏和用户切换尚未验收。
 
 ## 终端实际运行记录
 

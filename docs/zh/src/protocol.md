@@ -55,4 +55,8 @@ CLI 与 Desktop 以默认关闭的 `native-computer` feature 转发启用 `agent
 
 同进程的原生 Runtime 共享桌面租约注册表。按令牌撤销时，注册表在同一锁内校验并取消准确令牌，过期控制者不能撤销替代租约。私有 postcard 协议版本为 2，包含准确令牌的 `RenewLease`。续租只延长当前未撤销、未过期的令牌，不能取得新令牌或恢复旧控制权。消息总上限为 68 MiB，以容纳最多 64 MiB 的 RGBA 图像和元数据；超长帧前缀在分配载荷前拒绝。daemon 将能力响应限制为 4 KiB、观察响应限制为 68 MiB、其他响应与请求限制为 16 KiB。持久审批、执行意图和进程重启后的去重仍由 daemon 管理，进程内记录不能代替持久记录。
 
-daemon 已通过这条认证连接装配 Harness 的 `computer_observe` 与 `computer_act`，启用条件、准确审批和持久回执见[本地工具与浏览器操作](tools.md#模型计算机工具)。CLI/TUI 与 Desktop 已提供显式目标选择和会话连接入口，见[原生计算机连接](clients.md#原生计算机连接)；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 原生工厂在无法通过公开会话探测确认解锁状态时返回 `SessionStateUnknown`，不启动屏幕捕获或输入。Windows 与 Linux 适配同样需要对应平台的权限和实际运行验收。
+daemon 已通过这条认证连接装配 Harness 的 `computer_observe` 与 `computer_act`，启用条件、准确审批和持久回执见[本地工具与浏览器操作](tools.md#模型计算机工具)。CLI/TUI 与 Desktop 已提供显式目标选择和会话连接入口，见[原生计算机连接](clients.md#原生计算机连接)；配置开关本身不能建立原生宿主。这些组件不构成客户端到 Harness 的原生控制验收。macOS 会话检查与限制见下文。Windows 与 Linux 适配同样需要对应平台的权限；两平台的实际运行验收尚未完成。
+
+macOS 通过 CoreGraphics 读取调用进程的会话，要求位于控制台、登录完成，且 `CGSSessionUniqueSessionUUID` 能解析为非全零 UUID。检查还通过维护中的 `objc2` 绑定读取 IORegistry 根节点，要求 `IOConsoleLocked` 明确为 `false`；它与 `CGSSessionScreenIsLocked` 任一为 `true` 时返回 `Locked`。`IOConsoleLocked` 缺失或类型错误、会话 UUID 缺失或无效时返回 `SessionStateUnknown`。会话检查前后各读取一次快照并校验；快照变化时拒绝。锁字段属于 macOS 的实际实现字段，以上为项目采用的兼容策略，不是 Apple 文档承诺的锁屏状态保证。
+
+原生后端一旦观察到锁屏、无法读取的会话状态或会话身份变化，就保持撤销状态；解锁后同一后端也不会恢复控制，必须重新显式挂接。会话检查、屏幕捕获和输入仍是分开的操作系统调用，前后校验不构成原子性的捕获与输入保证。实现见 `crates/agent-computer/src/native/macos.rs`、`session.rs` 与 `mod.rs`。

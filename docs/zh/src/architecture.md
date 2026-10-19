@@ -163,7 +163,7 @@ flowchart LR
 
 浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。
 
-ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 `computer_observe` 与 `computer_act`；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/TUI 和 Desktop 通过注入的 `ComputerHostFactory` 显式发现并选择本地窗口或显示器，再将宿主固定到选定 daemon 会话；切换聊天不会转移已有挂接。ComputerRuntime 嵌入客户端进程，不是独立产品进程，也不创建 Agent Loop。客户端的 `native-computer` feature 默认关闭，入口接线不代表原生控制运行验收完成。macOS 无法确认会话解锁状态时仍以 `SessionStateUnknown` 拒绝操作。权限、租约与执行限制见[原生桌面执行边界](protocol.md#原生桌面执行边界)，工具机制见[模型计算机工具](tools.md#模型计算机工具)。
+ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 `computer_observe` 与 `computer_act`；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/TUI 和 Desktop 通过注入的 `ComputerHostFactory` 显式发现并选择本地窗口或显示器，再将宿主固定到选定 daemon 会话；切换聊天不会转移已有挂接。ComputerRuntime 嵌入客户端进程，不是独立产品进程，也不创建 Agent Loop。客户端的 `native-computer` feature 默认关闭，入口接线不代表原生控制运行验收完成。macOS 仅在控制台登录会话、有效会话 UUID 与明确未锁定字段均满足策略时允许继续检查权限；状态未知或锁定时拒绝，已观察到的会话失效不会因解锁自动恢复。权限、租约与执行限制见[原生桌面执行边界](protocol.md#原生桌面执行边界)，工具机制见[模型计算机工具](tools.md#模型计算机工具)。
 
 ## 源码依据
 

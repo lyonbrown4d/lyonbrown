@@ -64,6 +64,18 @@ The address field retains navigation input; it is not a trusted display of the c
 
 A separate GPUI component test used the real daemon and CEF to verify pixel frames, pointer coordinates, text input, input rejection after releasing takeover, and Space closure. It used GPUI's test window and the debug acceptance executable's test keychain. This checks component calls and actual Chromium behavior separately from the native-window screenshots above.
 
+The [separate check](evidence/browser-production-probe.json) of the packaged release CLI entry on October 19, 2026 failed: CEF started and returned frames and AX, but the target page stayed at `about:blank` during the wait. The cause remains undiagnosed; production navigation and keychain acceptance did not pass.
+
+## Native Computer targets and session binding
+
+These images were captured on October 19, 2026 using a separate GPUI acceptance executable with `native-computer` enabled. After the user granted screen recording and Accessibility permissions to this test app in macOS Settings, the Computer pane discovered targets and explicitly attached the acceptance window to an authenticated daemon session.
+
+![Acceptance window attached to a fixed session in the macOS light appearance](images/desktop-computer-attached-macos.png)
+
+![Original binding retained after changing chats in the macOS dark appearance](images/desktop-computer-dark-macos.png)
+
+In the second image, Selected chat differs from Bound chat; the original window remains bound to the original session. An actual Detach then restored detached status and cleared the bound session and scope. The [Computer capture record](evidence/desktop-computer-capture.json) includes executable, relevant source and image digests. The isolated database contains two sessions and no Runs, approvals or operations. This verifies target discovery, attachment, chat isolation and detachment only. No Harness screen observation or native input was requested. Actual lock/unlock and user switching remain unverified.
+
 ## Actual terminal run records
 
 ![Actual TUI process awaiting exact file approval, recorded through a PTY](images/tui-pty-approval-macos.png)
