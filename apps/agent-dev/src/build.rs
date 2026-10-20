@@ -1,12 +1,10 @@
 use crate::{Connection, Plan};
 use anyhow::{Context, Result, ensure};
-use serde::Deserialize;
 use std::{
   collections::BTreeMap,
   path::{Path, PathBuf},
   process::{Command, Stdio},
 };
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 /// Typed product selection keeps client-only features out of daemon builds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,41 +77,11 @@ pub async fn build_binary(root: &Path, package: &str) -> Result<PathBuf> {
   run_build(build_command(root, package, false), package).await
 }
 async fn run_build(command: Command, package: &str) -> Result<PathBuf> {
-  let mut command = tokio::process::Command::from(command);
-  command.kill_on_drop(true);
-  let mut child = command.spawn().context("start product build")?;
-  let stdout = child.stdout.take().context("read Cargo build output")?;
-  let mut lines = BufReader::new(stdout).lines();
-  let mut executable = None;
-  while let Some(line) = lines.next_line().await? {
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line)
-      && value["reason"] == "compiler-message"
-      && let Some(rendered) = value["message"]["rendered"].as_str()
-    {
-      eprint!("{rendered}");
-    }
-    if let Ok(message) = serde_json::from_str::<Artifact>(&line)
-      && message.reason == "compiler-artifact"
-      && message.target.as_ref().is_some_and(|target| {
-        target.name == package && target.kind.iter().any(|kind| kind == "bin")
-      })
-    {
-      executable = message.executable;
-    }
-  }
+  let mut child = crate::process::spawn_command(command).context("start product build")?;
+  let stdout = child.stdout().take().context("read Cargo build output")?;
+  let executable = crate::cargo::executable(stdout, package).await;
   ensure!(child.wait().await?.success(), "{package} build failed");
-  executable.context("Cargo did not report the product executable")
-}
-#[derive(Deserialize)]
-struct Artifact {
-  reason: String,
-  target: Option<ArtifactTarget>,
-  executable: Option<PathBuf>,
-}
-#[derive(Deserialize)]
-struct ArtifactTarget {
-  name: String,
-  kind: Vec<String>,
+  executable
 }
 
 pub fn client_command(
@@ -149,3 +117,7 @@ pub(crate) fn product_command(
   command.envs(plan.environment(ambient));
   command
 }
+
+#[cfg(test)]
+#[path = "../tests/internal/build_process.rs"]
+mod tests;

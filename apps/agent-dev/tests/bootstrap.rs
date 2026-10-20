@@ -1,7 +1,7 @@
 //! Process-level failure tests. Successful real-product startup is covered by runtime acceptance.
 #![cfg(unix)]
 use agent_dev::{DevelopmentDaemon, Options, Plan, Target};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::{
   collections::BTreeMap, fs, net::TcpListener, os::unix::fs::PermissionsExt, time::Duration,
 };
@@ -83,8 +83,11 @@ async fn timeout_kills_and_reaps_the_owned_process_group() -> Result<()> {
   let error = result.err().expect("owned readiness must time out");
   assert!(error.to_string().contains("readiness timed out"));
   let pid = fs::read_to_string(root.path().join("descendant.pid"))
-    .map_err(|error| anyhow::anyhow!("read started fixture descendant marker: {error}"))?;
-  wait_dead(pid.trim()).await?;
+    .context("read timed-out daemon fixture descendant marker")?
+    .trim()
+    .parse::<u32>()
+    .context("parse timed-out daemon fixture descendant PID")?;
+  wait_dead(pid).await?;
   assert!(!plan.data_dir.join("dev-instance.json").exists());
   Ok(())
 }
@@ -93,7 +96,8 @@ async fn cancellation_drops_only_the_owned_process_group() -> Result<()> {
   let root = tempfile::tempdir()?;
   let (plan, binary) = fixture(root.path(), "sleep 60 &\necho $! > descendant.pid\nwait")?;
   let root_path = root.path().to_owned();
-  let task = tokio::spawn(async move {
+  let mut tasks = tokio::task::JoinSet::new();
+  tasks.spawn(async move {
     DevelopmentDaemon::start(
       &root_path,
       &plan,
@@ -104,33 +108,57 @@ async fn cancellation_drops_only_the_owned_process_group() -> Result<()> {
     .await
   });
   let marker = root.path().join("descendant.pid");
-  tokio::time::timeout(Duration::from_secs(2), async {
-    while !marker.exists() {
-      tokio::time::sleep(Duration::from_millis(10)).await;
-    }
-  })
-  .await?;
-  task.abort();
-  assert!(task.await.is_err());
-  let pid = fs::read_to_string(marker)?;
-  wait_dead(pid.trim()).await?;
-  Ok(())
-}
-
-async fn wait_dead(pid: &str) -> Result<()> {
-  tokio::time::timeout(Duration::from_secs(2), async {
+  // Match the timeout fixture's OS startup budget; cancellation begins only
+  // after the shell has published a complete descendant PID.
+  let pid = tokio::time::timeout(Duration::from_secs(5), async {
     loop {
-      let status = std::process::Command::new("kill")
-        .args(["-0", pid])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
-      if status.is_ok_and(|status| !status.success()) {
-        break;
+      match fs::read_to_string(&marker) {
+        Ok(contents) if contents.ends_with('\n') => {
+          break contents
+            .trim()
+            .parse::<u32>()
+            .context("parse cancellation fixture descendant PID");
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => break Err(error).context("read cancellation fixture descendant marker"),
       }
       tokio::time::sleep(Duration::from_millis(10)).await;
     }
   })
-  .await?;
+  .await
+  .context("owned daemon fixture did not publish its descendant PID before cancellation")??;
+  tasks.abort_all();
+  let error = tasks
+    .join_next()
+    .await
+    .context("missing cancellation fixture bootstrap task")?
+    .err()
+    .context("daemon bootstrap completed before cancellation")?;
+  assert!(error.is_cancelled(), "bootstrap task must be cancelled");
+  wait_dead(pid).await?;
+  Ok(())
+}
+
+async fn wait_dead(pid: u32) -> Result<()> {
+  let pid = pid.to_string();
+  tokio::time::timeout(Duration::from_secs(2), async {
+    loop {
+      let status = std::process::Command::new("kill")
+        .args(["-0", &pid])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .context("inspect terminated daemon fixture descendant")?;
+      if !status.success() {
+        break Ok::<(), anyhow::Error>(());
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await
+  .with_context(|| {
+    format!("daemon fixture descendant {pid} still exists after process-group cleanup")
+  })??;
   Ok(())
 }

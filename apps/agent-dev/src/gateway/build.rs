@@ -17,9 +17,9 @@ pub(super) async fn build(
   let mut metadata = toolchain.cargo_command(&plan.root, ambient)?;
   metadata.args(["metadata", "--locked", "--no-deps", "--format-version=1"]);
   let output = process::output(metadata).await?;
-  let metadata: Value =
+  let metadata: cargo_metadata::Metadata =
     serde_json::from_slice(&output.stdout).context("read Cargo workspace metadata")?;
-  let project = metadata["metadata"]["leptos"]
+  let project = metadata.workspace_metadata["leptos"]
     .as_array()
     .and_then(|projects| projects.iter().find(|project| project["name"] == "gateway"))
     .context("workspace gateway cargo-leptos project is missing")?;

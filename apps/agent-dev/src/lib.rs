@@ -1,6 +1,7 @@
 //! Foreground development supervisor, isolated from the native user service.
 mod bootstrap;
 mod build;
+mod cargo;
 pub mod gateway;
 mod instance;
 mod process;

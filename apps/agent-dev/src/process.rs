@@ -1,11 +1,103 @@
 use crate::{Plan, build::product_command};
 use anyhow::{Context, Result, ensure};
 use process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop};
-use std::{collections::BTreeMap, path::Path, process::Stdio, time::Duration};
+use std::{
+  collections::BTreeMap,
+  future::Future,
+  io,
+  path::Path,
+  pin::Pin,
+  process::{Command, ExitStatus, Stdio},
+  time::Duration,
+};
 use tokio::{
   io::AsyncReadExt,
   process::{ChildStdin, ChildStdout},
 };
+
+/// Own the complete process tree for development build and tool commands.
+pub(crate) fn spawn_command(command: Command) -> Result<Box<dyn ChildWrapper>> {
+  ensure!(
+    cfg!(any(unix, windows)),
+    "development process supervision is unavailable on this platform"
+  );
+  let mut wrapped = CommandWrap::from(tokio::process::Command::from(command));
+  wrapped.wrap(KillOnDrop);
+  #[cfg(unix)]
+  wrapped.wrap(process_wrap::tokio::ProcessGroup::leader());
+  #[cfg(windows)]
+  wrapped.wrap(process_wrap::tokio::JobObject);
+  let inner = wrapped.spawn().context("start owned development process")?;
+  Ok(Box::new(CommandChild {
+    inner: Some(inner),
+    completed: false,
+  }))
+}
+
+/// Tokio's kill-on-drop only kills the native child on Unix. Call the outer
+/// wrapper so cancellation also terminates the owned process group.
+#[derive(Debug)]
+struct CommandChild {
+  inner: Option<Box<dyn ChildWrapper>>,
+  completed: bool,
+}
+impl CommandChild {
+  fn complete(&mut self) {
+    if !self.completed
+      && let Some(inner) = self.inner.as_mut()
+    {
+      // A leader can exit while descendants still own its output pipes.
+      let _ = inner.start_kill();
+    }
+    self.completed = true;
+  }
+}
+impl ChildWrapper for CommandChild {
+  fn inner(&self) -> &dyn ChildWrapper {
+    match &self.inner {
+      Some(inner) => inner.as_ref(),
+      None => self,
+    }
+  }
+  fn inner_mut(&mut self) -> &mut dyn ChildWrapper {
+    match self {
+      Self {
+        inner: Some(inner), ..
+      } => inner.as_mut(),
+      terminal => terminal,
+    }
+  }
+  fn into_inner(mut self: Box<Self>) -> Box<dyn ChildWrapper> {
+    self.completed = true;
+    match self.inner.take() {
+      Some(inner) => inner,
+      None => self,
+    }
+  }
+  fn wait(&mut self) -> Pin<Box<dyn Future<Output = io::Result<ExitStatus>> + Send + '_>> {
+    Box::pin(async {
+      let status = self.inner_mut().wait().await?;
+      self.complete();
+      Ok(status)
+    })
+  }
+  fn try_wait(&mut self) -> io::Result<Option<ExitStatus>> {
+    let status = self.inner_mut().try_wait()?;
+    if status.is_some() {
+      self.complete();
+    }
+    Ok(status)
+  }
+  #[cfg(windows)]
+  fn process_handle(&self) -> Option<std::os::windows::io::BorrowedHandle<'_>> {
+    self.inner().process_handle()
+  }
+}
+impl Drop for CommandChild {
+  fn drop(&mut self) {
+    self.complete();
+  }
+}
 
 pub(crate) struct OwnedProcess {
   child: Box<dyn ChildWrapper>,

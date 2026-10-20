@@ -134,3 +134,41 @@ fn daemon_rejects_native_computer_before_preparation_or_building() -> Result<()>
   assert!(!root.path().join(".local").exists());
   Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+fn cargo_diagnostics_remain_visible_when_the_build_fails() -> Result<()> {
+  use std::os::unix::fs::PermissionsExt;
+  let root = tempfile::tempdir()?;
+  let diagnostic = serde_json::json!({
+    "reason": "compiler-message",
+    "package_id": "path+file:///fixture#0.1.0",
+    "target": { "name": "agentd", "kind": ["bin"], "src_path": "/fixture/main.rs" },
+    "message": {
+      "message": "fixture compiler error", "code": null, "level": "error",
+      "spans": [], "children": [], "rendered": "fixture rendered compiler diagnostic\n"
+    }
+  });
+  let messages = root.path().join("diagnostic.jsonl");
+  std::fs::write(&messages, diagnostic.to_string())?;
+  let cargo = root.path().join("cargo-fixture");
+  std::fs::write(
+    &cargo,
+    "#!/bin/sh\ncat \"$FIXTURE_MESSAGES\"\nprintf '\\n'\nexit 7\n",
+  )?;
+  std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o700))?;
+  let output = Command::new(env!("CARGO_BIN_EXE_agent-dev"))
+    .args(["daemon", "--data-dir"])
+    .arg(root.path().join("data"))
+    .env("CARGO", cargo)
+    .env("FIXTURE_MESSAGES", messages)
+    .output()?;
+  assert!(!output.status.success());
+  let stderr = String::from_utf8(output.stderr)?;
+  assert!(
+    stderr.contains("fixture rendered compiler diagnostic"),
+    "{stderr}"
+  );
+  assert!(stderr.contains("agentd build failed"), "{stderr}");
+  Ok(())
+}

@@ -1,22 +1,10 @@
+use crate::process::spawn_command as spawn;
 use anyhow::{Context, Result, ensure};
-use process_wrap::tokio::{ChildWrapper, CommandWrap, KillOnDrop};
 use std::{
   process::{Command, Output, Stdio},
   time::Duration,
 };
-use tokio::io::{AsyncBufReadExt, BufReader};
 
-fn spawn(command: Command) -> Result<Box<dyn ChildWrapper>> {
-  let mut wrapped = CommandWrap::from(tokio::process::Command::from(command));
-  wrapped.wrap(KillOnDrop);
-  #[cfg(unix)]
-  wrapped.wrap(process_wrap::tokio::ProcessGroup::leader());
-  #[cfg(windows)]
-  wrapped.wrap(process_wrap::tokio::JobObject);
-  wrapped
-    .spawn()
-    .context("start owned Gateway development process")
-}
 pub(super) async fn output(mut command: Command) -> Result<Output> {
   command.stdout(Stdio::piped()).stderr(Stdio::piped());
   let child = spawn(command)?;
@@ -47,32 +35,13 @@ pub(super) async fn executable(mut command: Command) -> Result<std::path::PathBu
     .stdout()
     .take()
     .context("capture Cargo artifact messages")?;
-  let read = async {
-    let mut lines = BufReader::new(stdout).lines();
-    let mut executable = None;
-    while let Some(line) = lines.next_line().await? {
-      let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else {
-        continue;
-      };
-      if value["reason"] == "compiler-message"
-        && let Some(rendered) = value["message"]["rendered"].as_str()
-      {
-        eprint!("{rendered}");
-      } else if value["reason"] == "compiler-artifact"
-        && value["target"]["name"] == "ai-gateway"
-        && let Some(path) = value["executable"].as_str()
-      {
-        executable = Some(std::path::PathBuf::from(path));
-      }
-    }
-    executable.context("Cargo did not report the ai-gateway executable")
-  };
+  let read = crate::cargo::executable(stdout, "ai-gateway");
   let executable = tokio::select! {
     _ = tokio::signal::ctrl_c() => { Box::into_pin(child.kill()).await?; anyhow::bail!("Gateway build cancelled"); },
-    result = read => result?,
+    result = read => result,
   };
   ensure!(child.wait().await?.success(), "Gateway server build failed");
-  Ok(executable)
+  executable
 }
 pub(super) async fn serve(command: Command) -> Result<()> {
   let mut child = spawn(command)?;
