@@ -1,0 +1,225 @@
+{
+  "platform": "macOS arm64",
+  "version": "0.1.0",
+  "captured_at": "2026-10-19T15:56:25.671083+00:00",
+  "upgrade": {
+    "legacy_versions": [
+      1,
+      2
+    ],
+    "diesel_versions": [
+      "0001",
+      "0002"
+    ],
+    "preserved_audits": 4,
+    "total_audits": 7,
+    "unique_super_admin_preserved": true,
+    "legacy_ledger_retired": true
+  },
+  "http": {
+    "requests": [
+      {
+        "phase": "initial",
+        "requested_model": "local-mock-chat",
+        "stream": false,
+        "http_status": 200,
+        "request_id": "01a154dc-1a98-77e1-b020-a7af1e5ba2bd"
+      },
+      {
+        "phase": "initial",
+        "requested_model": "router/auto",
+        "stream": false,
+        "http_status": 200,
+        "request_id": "01a154dc-1d58-70ae-a73c-c8be0b0cf9fd"
+      },
+      {
+        "phase": "initial",
+        "requested_model": "router/auto",
+        "stream": true,
+        "http_status": 200,
+        "request_id": "01a154dc-1f9c-76f2-b230-bbaef997f862"
+      }
+    ],
+    "health": true,
+    "api_admin_credentials_separated": true,
+    "invalid_admin_logins_rejected": true,
+    "openapi_generated": true,
+    "persisted_audits": [
+      {
+        "request_id": "01a15336-e8e5-716c-b571-4d9de9932a61",
+        "model": "local-mock-chat",
+        "status_code": 1,
+        "policy_revision": "rules-v1"
+      },
+      {
+        "request_id": "01a15336-e901-714f-8e04-7468cbee088c",
+        "model": "local-mock-chat",
+        "status_code": 1,
+        "policy_revision": "rules-v1"
+      },
+      {
+        "request_id": "01a15336-e909-75ab-ac3b-c75bf4b6d569",
+        "model": "local-mock-chat",
+        "status_code": 1,
+        "policy_revision": "rules-v1"
+      },
+      {
+        "request_id": "01a15337-cea6-728f-b828-061a987a21cd",
+        "model": "local-mock-chat",
+        "status_code": 1,
+        "policy_revision": "acceptance-v1"
+      },
+      {
+        "request_id": "01a154dc-1a98-77e1-b020-a7af1e5ba2bd",
+        "model": "local-mock-chat",
+        "status_code": 1,
+        "policy_revision": "acceptance-v1"
+      },
+      {
+        "request_id": "01a154dc-1d58-70ae-a73c-c8be0b0cf9fd",
+        "model": "local-mock-chat",
+        "status_code": 1,
+        "policy_revision": "acceptance-v1"
+      },
+      {
+        "request_id": "01a154dc-1f9c-76f2-b230-bbaef997f862",
+        "model": "local-mock-chat",
+        "status_code": 1,
+        "policy_revision": "acceptance-v1"
+      }
+    ],
+    "no_prompt_columns": true,
+    "credentials_absent_from_database": true
+  },
+  "browser": {
+    "POST /v1/models": 405,
+    "GET /v1/chat/completions": 405,
+    "POST /health/live": 405,
+    "DELETE /health/ready": 405,
+    "openapi_metadata_preserved": true,
+    "logged_out_sessions": 0,
+    "no_audits_from_wrong_methods": true,
+    "wasm_shared_validation": true,
+    "browser_login_requests_logout": true,
+    "browser_warnings": 0
+  },
+  "binaries": {
+    "ai-gateway": "9040b56732be5058048477d2c360246d9284b14683e5fb5c24ab75a7a6fc6f6d",
+    "model-mock": "6f39cb327fcd6bb74dfb45c776e99458a7e475385d27fa71a60d1ab2b232fc06"
+  },
+  "source_sha256": {
+    "apps/ai-gateway/Cargo.toml": "6322026d53b51c3027ffb7fe5ad1e307a2ab53678e887ce73f1d47cb699fbbe2",
+    "apps/ai-gateway/src/config.rs": "27cce0532da6b7c24b02c0ae7108772a7523f859ad90d27b5b19b50a1d9ea78f",
+    "apps/ai-gateway/src/lib.rs": "ce32964982e1aa99c3d1cd7381ad319ce39d48971094e2e301e9075a614e8e12",
+    "apps/ai-gateway/src/composition.rs": "f0b80bb312080ca0c9e43606656eb672879afc0f5029b21b954e5bb05aacf5a1",
+    "apps/ai-gateway/src/main.rs": "51fe7236c91cb9698467b845f6943fffc031c0c0a2539f8b06d576ea2e8a62d9",
+    "apps/model-mock/Cargo.toml": "ebcb19b2f81bb12d2cf1ccb4c7ffc2195088904e8fd4ea3ca73dacf6589b3110",
+    "apps/model-mock/src/finite.rs": "19f914dee64529f06783fd59cafddcfdfb25431f8d5952f8c44afc60636938bf",
+    "apps/model-mock/src/config.rs": "7ca1c4b798336c8cc2e491458eb433d8dc3577a4016a65d6eefd0c0bec4748b1",
+    "apps/model-mock/src/lib.rs": "8f5466d207e27e18d79f96d60e3bc41c45ae1da556de87dc36f9413b2d0cca8d",
+    "apps/model-mock/src/server.rs": "8cabe8bf5e0295d4130702f4bd1fd590ce4daa8817e80fa5e5b993b849474e22",
+    "apps/model-mock/src/ollama.rs": "1d462ba14b6413198594dadcdedc92f814a9351d46202e7ebcb2429a2ca1b678",
+    "apps/model-mock/src/main.rs": "70d9fd5c3b9ecb827568878655b6d5e7e78324936fbf3c8c3ec22ba31e2e47e2",
+    "apps/model-mock/src/scenario.rs": "cad01ffdf4a61b0ce4a3407a40529694799ee253f5abfe6ee1e28ae135694f85",
+    "crates/gateway-core/Cargo.toml": "1da91248401de6f0e9542639db3a827c2d80c008fd75bbb7cbce4a45fdbca409",
+    "crates/gateway-core/src/access.rs": "741c859a3fde578ffec02f545330c17e0c6d5a4d8b2c2b7b43ed9b7f98061fae",
+    "crates/gateway-core/src/request.rs": "8e0333e32cea0ad938abb754b5f8418746639c24bdb673c3766e87fe47440c47",
+    "crates/gateway-core/src/sse.rs": "f06cd76c82946d0d0bdeda19d4d7ab093be669c2f4431138b4b72348c9e236fa",
+    "crates/gateway-core/src/openapi.rs": "a17f82392047505431182e012f559bca5a0e28ecc3dcbb0ed5859fd444dfa5fe",
+    "crates/gateway-core/src/error.rs": "509f358f8fece0cfeedade67b68304cfea398ad637fbd1a80ef5e5ae28e51ce6",
+    "crates/gateway-core/src/audit.rs": "cdc10c5e6cfc21bc1b2e5ddd013da2b9aadcba582c8b76d50b378e1e0735a05c",
+    "crates/gateway-core/src/config.rs": "2dfe6bc5644aab0a8b8b53982690809756ee79c405630b4d122e060b6cead7c6",
+    "crates/gateway-core/src/transport.rs": "8f307e2a74139dc69f8be5cb5b5d6e8e1ea985d8c72d471f692a781749d1478e",
+    "crates/gateway-core/src/lib.rs": "5579bbf050914e40d3f41cc37d1540bc6183f19ea54d246996f17cee0c9fa84c",
+    "crates/gateway-core/src/request_validation.rs": "38deacc72716b5e7c018d0ba2a603c086607424dcb359a6f97026b21ec3e40f4",
+    "crates/gateway-core/src/signals.rs": "e176841e7c3afbba0117fc75815cd8044231f4d2501e932feb8ff876a2bff475",
+    "crates/gateway-core/src/http.rs": "188779bbce8019dc4552b614e948567738f9c9f728faf9ac76afc4333743eeef",
+    "crates/gateway-core/src/routing.rs": "36a5806300433434c2af26080c0cb9c2862a7bbdceac45400319e4e3cfe656eb",
+    "crates/gateway-core/src/upstream.rs": "3a405a566976f0fbc1e50e89b57fb4d41c12b94f3f8be0adc43f1b14ce50d00a",
+    "crates/gateway-core/src/transport/audit.rs": "4386bba58594c48f765d60ddfb3abd53cb07120b7db7d4204b2fd3a09b713f02",
+    "crates/gateway-core/src/transport/streaming.rs": "5284ca535d37bb0cf0a7e9129379d003a453e0d89431b8e7b689eeb0666424ad",
+    "crates/gateway-storage/Cargo.toml": "78713d9a12486546ae749f2e66160894c16a09682a864eafeb89f1959040bcf7",
+    "crates/gateway-storage/build.rs": "cdb10972fbe2acf47ee2338c240db909b898b9e660dd839f5c421c68e72a1077",
+    "crates/gateway-storage/src/access.rs": "814c49404f66b5a8f32f3164dfaa2b56690a2c95ee2040973eb79e99e5c0d5bf",
+    "crates/gateway-storage/src/policy.rs": "c6c37e2fd2a92bf65b741794c475b824b494b9eca6d0c5a08441dd018d9f4a2d",
+    "crates/gateway-storage/src/error.rs": "07b05f2906dcfe0bcbf8b01d873a15b221805045c8b17777ac15858cc733e86c",
+    "crates/gateway-storage/src/audit.rs": "1110e8a866525c752f2dc04ce0758711d49609bc961eacdb1cce75a5f5139a16",
+    "crates/gateway-storage/src/lib.rs": "53b24f1ab26244f048d200efe0f8d0b868014a1f8b35fbb06969fb088694f1bb",
+    "crates/gateway-storage/src/auth.rs": "d6627dfceb09822087005cbb2a4942ca226524a9a977fd74f0f60247f587c9b8",
+    "crates/gateway-storage/src/catalog.rs": "82514f4b47c61cc8ab54d18d98f8ad0104781aac4bec3d839b969ccdcf31110f",
+    "crates/gateway-storage/src/sessions.rs": "fb913f0ac084d90e2b4bb5239cd45766913fef3491bbf39acc1848b16200a3c4",
+    "crates/gateway-storage/src/files.rs": "203eb0f47720617cb272be67317a0686bad48e056e5e318cb880586cee8cf289",
+    "crates/gateway-storage/src/schema.rs": "8368e6b4448be64f022e49e1bf224b1b907840303bf921c5ff77661bb98cecf9",
+    "crates/gateway-storage/src/password.rs": "f763c441a288eea4c65179c554e2e0f70621d05b829090254431cdae2ebcad42",
+    "crates/gateway-storage/src/migrations.rs": "4c83118fddb3cb2c226295abc7e7e07a8bbefc4c80378b23b6b645af8b3f58b0",
+    "crates/gateway-storage/migrations/0002_super_admin/up.sql": "5f72485c834e58ee91f1dffb76ec85f3f2ea8d689cd8c0145a48e24f061f0a3f",
+    "crates/gateway-storage/migrations/0002_super_admin/down.sql": "5184ff0751d51530820a9ab0877ccc920c68d6ac7d0edc545974121f5e83fd9f",
+    "crates/gateway-storage/migrations/0001_initial/up.sql": "3bdbf410e37abc8f20c0598d06f29fbc9474fe032044fde5ef489e149593ce84",
+    "crates/gateway-storage/migrations/0001_initial/down.sql": "45233c352de4f12e3ee3579b4d998ccf1b80e13447e06b2a8cce4e2a24e7c23c",
+    "crates/gateway-web/Cargo.toml": "5ad2e1bce01481c762cff09cf8d920b9ca26aa44659076452e130893c18b47e7",
+    "crates/gateway-web/src/lib.rs": "162145233070284e2ed045dee0cf80656fb1c7d18752786efc3654d3c5b45f35",
+    "crates/gateway-web/src/style.css": "5dfd89f0374ca8c53fb9dd5a35835c9dcd336f020e9be2ea1f3280b7f4ee2d10",
+    "crates/gateway-web/src/dto.rs": "7123ef64727d2e883f033b160cb73436fb311185e8d6ca5689131b951065e455",
+    "crates/gateway-web/src/app.rs": "1c0629ff91ec872a3ac0e2357cf6ea6212ae95e0edd448ff2aad9a93d811e760",
+    "crates/gateway-web/src/api.rs": "591d71ae88a2bd57b2a582e89d5336c6b2c81ae034f915c67c2b94cef6bbef0f",
+    "crates/gateway-web/src/server/actions.rs": "b24340030ad93d269a1f539862b4d1990914c8ab07fc0c1e76f7537793cfbdac",
+    "crates/gateway-web/src/server/policy.rs": "6ec7999eb7d55eb1d3c6ad430357aa5dd485c105ffeef48fdb02349295e9c7bc",
+    "crates/gateway-web/src/server/render.rs": "28795a0c851c70bb0709a6acc0019444ce4088992dbd7ec84b7a01aacbf14589",
+    "crates/gateway-web/src/server/auth.rs": "07cfff4a7d5034ff7693c2dfeaacdac7bfc4a642d8f8d6b86a10c26448de9ef3",
+    "crates/gateway-web/src/server/mod.rs": "8271be840bd323ca3b80e126bd42514aeccce07b704b3c3b95670c17c9655cf6",
+    "crates/gateway-web/src/server/middleware.rs": "c5a3437fc5195018141f50c2bd3dbffc0aa743ec3c3f323d9a6ae2dc7712f608",
+    "crates/gateway-web/src/server/data.rs": "87e1aeb424a8fb81381e24e0012cc21bc4786f4390b2f59a43db9d22e8fe063d",
+    "crates/gateway-web/src/server/errors.rs": "e2bd1a6043d2c22915b0e3f9f3fbbaf15b4e02d4e1fc87bb53ceb1de50f5c3a7",
+    "crates/gateway-web/src/components/policy.rs": "0c1f21cab2873835150dd3bb9ae681e097bc2661c30883dc1abb4f25acdea6b1",
+    "crates/gateway-web/src/components/layout.rs": "84ab4972607263d50a7f201ccc5e7bed5c778dbd6789ce2d5852decc2903825c",
+    "crates/gateway-web/src/components/models.rs": "991fa3bc9236590749a080abf9b1ea7546db088434bcab7c22d813dfc77bc57c",
+    "crates/gateway-web/src/components/mod.rs": "f48654a74433e1d9761e68f3684eefcabb363e254b6048820c73b28aea69131e",
+    "crates/gateway-web/src/components/login.rs": "92fb14383f74c45b728af3497559c33c96660682cca731980031f8860539c8be",
+    "crates/gateway-web/src/components/requests.rs": "418cdf772390fa13f6b89d802ead63d49f5abe2563d984c363cfd39d9eccc26a",
+    "crates/gateway-web/src/components/tables.rs": "4905ca4dbc0d704cdc42d4fdfdef62da3da8f35ade950afd0884a5757e5925f2",
+    "crates/gateway-web/src/components/common.rs": "e805711ac5f3ffc960bcd99717b2796048fddfaf8bfca14219668d681f62f632",
+    "crates/gateway-web/src/components/tables/domains.rs": "41fb8cbc030d1d51e298f223e154d1f4e30c27aa14f5b618cc8ebdf45623302c",
+    "crates/gateway-web/src/components/tables/models.rs": "2a6fe5231317eee8a820d106b84989b65b4c875f1edea1f217d3d9ee3fb69798",
+    "crates/gateway-web/src/components/tables/requests.rs": "64491ef922e26ce842d12cc202a4fb498479dd517adea6ca5d94d2e6e24e0c5a",
+    "crates/gateway-validation/Cargo.toml": "1a815a1ac6bfce3d005077211f2b0c8be78e09a8b2b72bbb289b518497bc212a",
+    "crates/gateway-validation/src/policy.rs": "a14045dd04776ffe33a81782caa9f81c3cf027d3f8cfa24ba62e92f055c48d3c",
+    "crates/gateway-validation/src/credentials.rs": "01dba4e038975bd15e55694356791054ac60380f6bf7d2f13f6452b3639709e3",
+    "crates/gateway-validation/src/lib.rs": "06246ed5799bfaaec7e0a8bba10b0eba16c2e60d1aaa3102b9ecf48a6db4258a",
+    "crates/decision-core/Cargo.toml": "0974a845bb3caa1e71a4748f21d2452e1b3cda8348ce3724ee2bd21c00dd267d",
+    "crates/decision-core/src/rules.rs": "3c316cde69c62d91aec5fb7edec6a848d873de644e48dc33b4fc323afce9275d",
+    "crates/decision-core/src/policy.rs": "a8d73aa152e8e0798d8ee0ea8ae3add46d392fc22affe658d2ba234671e05583",
+    "crates/decision-core/src/backend.rs": "b3ab4939c75d8ef471eec6c62d11890b19a76016d9613c13e9e00d4172d9ab27",
+    "crates/decision-core/src/lib.rs": "ae8d55859892927e4f344fdfeb11a1502554a2c62057f7c3d7bbc4af65922002",
+    "crates/decision-core/src/validation.rs": "ed123d6b0709c4bcef8972468ff48fb86ccc35af111a1a50276fb038977f748b",
+    "crates/decision-core/src/contract.rs": "5236678150cedc939538643c8a310a1a2fea3a1b80431660054ffbc6e657700d",
+    "crates/decision-core/src/engine.rs": "004ae3ccd17bdfc2a0209ba4f8327b31c682c0d016360e6bbecb3441bcbc328c",
+    "crates/agent-telemetry/Cargo.toml": "5f5322ab425dc5f509902c25deb5ab2b91d3573497403205856219c5a8a810d4",
+    "crates/agent-telemetry/src/lib.rs": "b95ba8b814a0a051ad19a8520e2f5d8c64fc6cf4f47196fd09b88ec9e5810d4b",
+    "Cargo.toml": "a2639439d41911b4b875f6c034c1193ff7b357e5fabeea111ea279ad73cd53c7",
+    "Cargo.lock": "1455151613da8306bf2221d4fd99890369ce77e8049b68a7c304404a99466a1e",
+    ".cargo/config.toml": "aad57e78dea5623330d7f65e9c16997ea3fa65cad8443fd191826776d575ac7c"
+  },
+  "limitations": [
+    "Synthetic loopback model only; no paid model or weight loading.",
+    "No Windows, Linux, public-network or installer acceptance."
+  ],
+  "assets_sha256": {
+    "ui/pkg/gateway_web.css": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "ui/pkg/gateway_web.wasm": "725a60ac7c61f52c6a392dee153e67033427fe2b7c7861fe45874d5c4b055077",
+    "ui/pkg/gateway_web_bg.wasm.d.ts": "ee1c2ffa40726778ac489d65ea9fd28c13bf4a0de12f24a913f4866361d91c27",
+    "ui/pkg/gateway_web.js": "c50d0ce8bac10d33bec5483b128e462005c7b951d5c2414eda079d4be63c40d0",
+    "ui/pkg/gateway_web.d.ts": "9557772f3990d434bdd0ff456a20b9f2d9feba40d38fe74550169168d36f250e"
+  },
+  "screenshot": {
+    "file": "images/gateway-library-reuse-macos.png",
+    "sha256": "37031dcdd10c494b2d6793d8c5c337381c1343ded85d41fd4e51a080403f4582"
+  },
+  "post_capture_review": [
+    {
+      "path": "crates/gateway-web/src/server/middleware.rs",
+      "captured_sha256": "c5a3437fc5195018141f50c2bd3dbffc0aa743ec3c3f323d9a6ae2dc7712f608",
+      "reviewed_sha256": "39071ee9d71a0e9354593ee17929b4f2b676fb7a61a54af7caeaee59b50832ca",
+      "change": "Clippy collapsible_if: combine the login mutation and rejected-quota conditions into an equivalent Rust 2024 let chain. Screenshot and binary hashes retain the captured build; no runtime behavior change."
+    }
+  ]
+}

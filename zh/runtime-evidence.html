@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-de20616c.js";
+            window.path_to_searchindex_js = "searchindex-d97f41ab.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-dab33207.js"></script>
@@ -179,6 +179,10 @@
                         <h1 id="运行截图与验收范围"><a class="header" href="#运行截图与验收范围">运行截图与验收范围</a></h1>
 <p>桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate <code>cef</code> 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。<a href="evidence/desktop-native-capture.json">原生截图记录</a>保存了对应程序、源文件与图片摘要、两次已持久化为 <code>completed</code> 的 Run，以及状态为 <code>consumed</code> 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见<a href="clients.html">客户端文档</a>。</p>
 <p>浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。</p>
+<h2 id="产品窗口异步回复与聊天草稿"><a class="header" href="#产品窗口异步回复与聊天草稿">产品窗口异步回复与聊天草稿</a></h2>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-completion-macos.png" alt="macOS 产品 Desktop 窗口显示实际合成模型回复"><span class="img-wrapper"><img src="images/desktop-completion-macos.png" alt="macOS 产品 Desktop 窗口显示实际合成模型回复"></span></label></p>
+<p>本节使用 macOS arm64 上版本 0.1.0 的产品 <code>agent-desktop</code>、真实 agentd 和独立回环 <code>model-mock</code>，与前述原生验收程序分别记录。Desktop 在多线程运行时经认证连接 daemon，提交合成 Prompt 后收到 <code>Synthetic model response.</code>。切换多个聊天标签页后，原对话仍可恢复，另一标签页保留未提交的 <code>Independent unsent draft</code>。SQLite 核对结果为 1 条 <code>completed</code> Run、20 条事件和 20 条 Outbox 记录。<a href="evidence/desktop-completion-macos.json">运行记录</a>保存了三份程序、124 份源码与构建文件及截图的 SHA-256 摘要。</p>
+<p>此次操作覆盖产品窗口中的异步回复投递与标签页草稿隔离。客户端使用默认 feature，未启用原生 CEF 或 Computer SDK；合成回环模型不证明真实模型质量、性能、浏览器或计算机控制能力，也不代表 Windows、Linux、公网或安装包验收。</p>
 <h2 id="设置与原生窗口"><a class="header" href="#设置与原生窗口">设置与原生窗口</a></h2>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-settings-macos.png" alt="macOS 上的独立 Settings 页面"><span class="img-wrapper"><img src="images/desktop-settings-macos.png" alt="macOS 上的独立 Settings 页面"></span></label></p>
 <p>Settings 独立页面显示连接地址、已掩码的访问令牌、工作区和明暗外观选项。对话主窗口标题栏未显示地址或令牌。此次原生操作还观察到 macOS 系统窗口控制按钮，并实际执行了原生缩放动作；记录见<a href="evidence/desktop-native-capture.json">原生截图记录</a>。</p>
@@ -248,6 +252,11 @@
 <p>从管理台点击 API 文档进入 Swagger UI，加载内嵌规范与资源，实际通过 Try it out 执行健康检查，返回 <code>200</code> 和 <code>status: live</code>。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-mobile-macos.jpg" alt="窄窗口中的管理导航与可横向滚动请求表格"><span class="img-wrapper"><img src="images/gateway-mobile-macos.jpg" alt="窄窗口中的管理导航与可横向滚动请求表格"></span></label></p>
 <p>桌面布局以 1280 × 800 视口检查；窄窗口请求 390 × 844，扣除滚动条后的正文宽度为 380。正文没有横向溢出，请求表格在自身容器内滚动。<a href="evidence/gateway-web-macos.json">运行记录</a>包含程序、WASM 与 JavaScript 资源、相关源码及图片摘要，以及 HTTP 和 SQLite 检查结果。本节不覆盖公网、Windows、Linux 或新版安装包验收。</p>
+<h2 id="gateway-既有数据库与管理交互"><a class="header" href="#gateway-既有数据库与管理交互">Gateway 既有数据库与管理交互</a></h2>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-library-reuse-macos.png" alt="macOS 上展示七条实际审计记录的 Gateway 请求页"><span class="img-wrapper"><img src="images/gateway-library-reuse-macos.png" alt="macOS 上展示七条实际审计记录的 Gateway 请求页"></span></label></p>
+<p>本节使用 macOS arm64 上版本 0.1.0 的 Gateway SSR/WASM 产品构建和独立回环 <code>model-mock</code>。启动时读取旧 SQLite 副本，将旧版本记录 <code>[1, 2]</code> 转为 Diesel 的 <code>["0001", "0002"]</code> 并退役旧账本，保留唯一超级管理员和 4 条既有成功审计。随后 3 个 JSON/SSE 请求均成功，页面及数据库共显示 7 条成功记录。</p>
+<p>浏览器实际检查了 WASM 对过短密码的本地拒绝、原账户登录、请求页展示与退出；退出后访问保护页面回到登录页，数据库管理会话数为 0，浏览器控制台未见警告或错误。<code>POST /v1/models</code>、<code>GET /v1/chat/completions</code>、<code>POST /health/live</code> 和 <code>DELETE /health/ready</code> 均返回 405，未增加审计记录；OpenAPI 的标题和版本保持一致。</p>
+<p><a href="evidence/gateway-library-reuse-macos.json">运行记录</a>保存上述结果，以及两份程序、90 份源码与构建文件、浏览器资源和截图的 SHA-256 摘要。本节仅覆盖合成回环模型，不涉及付费模型或权重加载，也不代表 Windows、Linux、公网或安装包验收。</p>
 <h2 id="尚未由本组截图覆盖的能力"><a class="header" href="#尚未由本组截图覆盖的能力">尚未由本组截图覆盖的能力</a></h2>
 <p>本组截图未展示模型浏览器语义操作或原生终端窗口呈现。模型工具的合成 host 协议回归与真实 CEF 自主操作验收分别保留，见<a href="tools.html">本地工具与浏览器操作</a>。</p>
 

@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-de20616c.js";
+            window.path_to_searchindex_js = "searchindex-d97f41ab.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-dab33207.js"></script>
@@ -195,6 +195,8 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 <tr><td><code>Ctrl+N</code></td><td>以当前工作目录创建会话</td></tr>
 <tr><td><code>Tab</code></td><td>切换到下一个会话并加载运行记录</td></tr>
 <tr><td><code>Enter</code></td><td>向已选会话提交输入</td></tr>
+<tr><td><code>Shift+Enter</code> / <code>Alt+Enter</code></td><td>在输入区换行</td></tr>
+<tr><td>方向键、<code>Home</code> / <code>End</code>、<code>Delete</code></td><td>移动光标或编辑光标处文本</td></tr>
 <tr><td><code>Ctrl+R</code></td><td>重新连接 daemon</td></tr>
 <tr><td><code>Ctrl+X</code></td><td>请求取消当前运行</td></tr>
 <tr><td><code>Ctrl+Y</code> / <code>Ctrl+E</code></td><td>批准 / 拒绝首个待处理审批</td></tr>
@@ -203,6 +205,7 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 </tbody>
 </table>
 </div>
+<p>输入区复用 <code>ratatui-textarea</code> 0.9.3，支持光标编辑、多行文本、换行显示和粘贴。应用快捷键优先于编辑器的同名映射，例如 <code>Ctrl+X</code> 仍请求取消运行，<code>Ctrl+Y</code> 仍处理审批。提交等待期间不重复发送；失败保留草稿，服务端接受后清空对应草稿及其撤销历史。</p>
 <p>审批区展示工具和参数。审批决定由 daemon 校验并保存，界面按服务端结果更新。任务记录每两秒刷新一次，新提交的运行同时订阅事件流。客户端退出时恢复终端状态，不向 daemon 发送取消请求。</p>
 <p><code>--theme auto</code> 根据 <code>COLORFGBG</code> 选择文字配色，并保留终端背景。无法检测时使用深色终端配色；可显式指定 <code>--theme light</code> 或 <code>--theme dark</code>。</p>
 <h2 id="原生计算机连接"><a class="header" href="#原生计算机连接">原生计算机连接</a></h2>
@@ -233,6 +236,7 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <pre><code class="language-sh">cargo run -p agent-desktop
 </code></pre>
 <p>桌面使用 GPUI 和 <code>gpui-kit</code> 组件，包含会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 <code>TitleBar</code>；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开。</p>
+<p>后台结果通过 <code>async-channel</code> 2.5.0 的有界队列投递，队列满时生产者异步等待；GPUI 在主线程应用结果，并丢弃过期会话或代次的回复。Browser 帧刷新保留独立的 160 毫秒定时器，Computer 宿主存活检查保留独立的 80 毫秒定时器。窗口关闭时清理本地订阅与宿主，daemon 作业保留自身生命周期。</p>
 <p>工作台标签栏的省略号菜单列出 Browser、Files、Editor、Diff、Tasks 和 Computer 六个面板，可直接选择；标签被窄窗口挤出时也可从这里切换。当前组件库的辅助功能树仍不能正确提供这些标签的名称，菜单入口不代表标签的辅助功能问题已解决。</p>
 <h3 id="设置与连接"><a class="header" href="#设置与连接">设置与连接</a></h3>
 <p>标题栏的 Settings 按钮打开独立设置页。Daemon 地址和访问令牌只在设置页编辑；Workspace path 用于当前标签页的新聊天。连接地址、令牌和工作区路径应与 daemon 对应；远程 daemon 的工作区路径指向远端文件系统。Appearance 提供手动选择的 Light 和 Dark 外观。选择 Back to chats 或按 <code>Esc</code> 返回聊天时，保留两侧面板的展开状态和聊天草稿。</p>

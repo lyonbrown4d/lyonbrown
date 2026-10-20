@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-de20616c.js";
+            window.path_to_searchindex_js = "searchindex-d97f41ab.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-dab33207.js"></script>
@@ -178,7 +178,7 @@
                     <main>
                         <h1 id="开发与验证"><a class="header" href="#开发与验证">开发与验证</a></h1>
 <p>工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 <code>Cargo.lock</code> 管理。Rust 工具链最低版本见根 <code>Cargo.toml</code> 的 <code>rust-version</code>。工程约束统一维护在根 <code>AGENTS.md</code>。</p>
-<p>异步入口优先使用 <code>#[tokio::main]</code>，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。</p>
+<p>异步入口优先使用 <code>#[tokio::main]</code>，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。<code>RunStatus</code> 和 <code>Tool</code> 通过固定版本 <code>strum</code> 0.28.0 的派生宏生成 snake_case 静态字符串转换；错误类型复用现有 <code>thiserror</code> 派生。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。</p>
 <h2 id="本地开发启动"><a class="header" href="#本地开发启动">本地开发启动</a></h2>
 <p>仓库的 <code>.cargo/config.toml</code> 定义了 <code>dev</code> 别名，直接使用 Cargo，无需安装额外任务工具。在仓库根目录执行一条命令，自动构建、启动开发 agentd 并打开客户端：</p>
 <pre><code class="language-sh">cargo dev desktop
@@ -196,6 +196,7 @@ cargo dev --help
 </code></pre>
 <p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell，也无需安装额外的任务运行器。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
 <p><code>cargo dev tui</code> 等价于 <code>cargo run --locked -p agent-dev -- tui</code>。首次执行时，Cargo 按 <code>Cargo.lock</code> 下载并编译 Rust 依赖，无需通过 <code>cargo install</code> 安装开发启动器、<code>just</code> 或 <code>cargo-make</code>。GPUI 和可选原生 SDK 所需的平台构建依赖仍需准备，见<a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
+<p>产品和 Gateway 构建共用 <code>cargo_metadata</code> 0.23.1 的类型化 Cargo 消息解析：只采纳名称匹配的二进制目标，转发编译器诊断，读完输出后再检查进程退出状态。构建子进程复用 <code>process-wrap</code> 的 Unix 进程组或 Windows JobObject；取消构建时清理该构建拥有的进程树，交互客户端仍保留前台终端输入方式。</p>
 <p>需要单独运行前台 daemon 时，使用 <code>cargo dev daemon</code>。其他开发客户端仍可自动连接并复用它。</p>
 <p>默认配置为开发数据目录中的 <code>config.toml</code>，dotenv 文件位于配置文件旁边。<code>--config</code> 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 <code>agent-config</code> 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 <code>agent-telemetry</code> 写入日志；默认位于开发数据目录的 <code>logs</code> 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 <code>auth.token</code>，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。</p>
 <p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code> 或 <code>native-computer</code>，对应的浏览器执行或原生计算机宿主能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
@@ -208,7 +209,7 @@ cargo gateway --build-only
 cargo gateway --build-only --release
 </code></pre>
 <p>启动器先检查当前 Rust 工具链的 <code>wasm32-unknown-unknown</code> target，缺失时通过 rustup 准备；再检查仓库 <code>.local/tools/bin</code> 下的 cargo-leptos，缺失时以 <code>cargo install --locked --root &lt;repo&gt;/.local/tools cargo-leptos --version 0.3.11</code> 安装。已有工具必须匹配固定版本，不要求用户手动全局安装。Rust、平台编译工具和下载所需的网络仍需可用。</p>
-<p>构建通过标准 cargo-leptos 的 <code>leptos build --project gateway</code> 完成；<code>--release</code> 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，从 <code>compiler-artifact</code> JSON 获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。工作区 metadata 指定默认资源根目录 <code>.local/gateway-web/site</code>；Gateway 收到绝对 <code>LYONBROWN_GATEWAY_WEB_ROOT</code>，从 <code>/ui/pkg/</code> 提供生成的 JavaScript 与 WASM。</p>
+<p>构建通过标准 cargo-leptos 的 <code>leptos build --project gateway</code> 完成；<code>--release</code> 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，通过上述类型化 <code>compiler-artifact</code> 消息获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。启动器通过 <code>cargo_metadata::Metadata</code> 读取工作区 metadata，校验 Gateway 项目字段及资源目录范围。工作区配置的默认资源根目录为 <code>.local/gateway-web/site</code>。Gateway 收到绝对 <code>LYONBROWN_GATEWAY_WEB_ROOT</code>，从 <code>/ui/pkg/</code> 提供生成的 JavaScript 与 WASM。</p>
 <p><code>--build-only</code> 生成服务端和资源后退出，不启动 Gateway。<code>--dry-run</code> 只打印方案，不执行工具、读取凭据或创建运行数据；外层 Cargo 仍可能编译启动器。<code>--config</code>、<code>--data-dir</code> 的相对路径从仓库根目录解析；默认运行数据为 <code>.local/gateway-web/data</code>。<code>--listen</code> 可选择非零回环端口。在启动终端按 Ctrl+C，只清理该启动器创建的 Gateway 进程。</p>
 <p>Gateway 在运行时读取配置文件旁的 <code>.env</code>，进程环境优先。推荐将运行配置和凭据放在独立目录：启动器不主动把 Gateway 凭据传给构建命令，但官方 cargo-leptos 自身会读取工作区或父目录 <code>.env</code>，不能据此保证构建工具绝对接触不到运行凭据。不要将密码或 API Key 写进源码、构建参数或静态资源。</p>
 <p>管理界面共用 Rust Leptos 组件，分别以 <code>ssr</code> 和 <code>hydrate</code> feature 构建服务端与浏览器 WASM。Signal 管理策略草稿和提交反馈，官方 <code>ServerAction</code> / <code>ActionForm</code> 处理表单，表格使用 <code>leptos-struct-table</code> 公开 <code>TableRow</code> 渲染接口直接支持 SSR。生成的 JavaScript 负责引导 WASM；不需要独立的 Node 前端栈。鉴权、CSRF、角色和策略版本校验仍在服务端完成。</p>

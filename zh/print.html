@@ -38,7 +38,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-de20616c.js";
+            window.path_to_searchindex_js = "searchindex-d97f41ab.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-dab33207.js"></script>
@@ -435,12 +435,14 @@ context_tokens = 4096
 </table>
 </div>
 <p>管理员用户名和密码不能写入 TOML 配置。数据库保存用户名、超级管理员角色和带随机盐的 Argon2id 密码哈希，不保存明文密码。再次启动时相同凭据通过校验；不同凭据使启动失败，不会覆盖原账户或重置密码。API Key 不能用于管理台登录，超级管理员密码也不能用于模型 API。超级管理员可查看模型目录与请求记录，并修改路由策略。</p>
+<p>Gateway 的上游凭据、API 认证密钥、管理会话及新签发的 API token 使用 <code>secrecy</code> 0.10.3 的秘密容器保存；密码工作线程也使用该容器。读取秘密需要显式访问，<code>Debug</code> 隐去内容，容器释放时清零其持有的内存。这不保证配置解析、环境变量、HTTP 处理或临时 <code>String</code> 中的所有副本都已清零。</p>
 <p>推荐将 Gateway TOML 和凭据 <code>.env</code> 放在独立的配置目录。启动器不将管理员密码或模型凭据放入构建命令参数，也不主动传给构建子进程；不过 cargo-leptos 自身会读取工作区或父目录的 <code>.env</code>，不能把启动器的环境过滤当作构建工具无法访问凭据的保证。</p>
 <p><code>local_inference = true</code> 是可信部署方对上游实际本地推理的声明，并要求使用字面量回环地址。不能将转发云模型的本地代理标记为本地推理。远程上游必须使用 HTTPS；客户端不能指定任意上游地址。</p>
 <h2 id="构建资源与分发"><a class="header" href="#构建资源与分发">构建资源与分发</a></h2>
 <p>开发启动器按工作区的 <code>gateway</code> cargo-leptos 配置构建，资源默认输出到 <code>.local/gateway-web/site/ui/pkg</code>。<code>--build-only</code> 只构建；<code>--release</code> 选择发布构建。启动器从 Cargo 的构建结果获取服务端程序路径，保留 <code>CARGO_TARGET_DIR</code> 等构建配置，并向 Gateway 传入实际的资源根目录。</p>
 <p>分发时同时提供 <code>ai-gateway</code> 可执行文件和生成的静态资源。<code>LYONBROWN_GATEWAY_WEB_ROOT</code> 必须是绝对路径，指向包含 <code>ui/pkg</code> 的 site 根目录；未指定时使用可执行文件旁的 <code>web</code> 目录。标准构建生成 <code>ui/pkg/gateway_web.js</code> 和 <code>ui/pkg/gateway_web.wasm</code>，管理页面通过 <code>/ui/pkg/</code> 加载它们。仅执行 <code>cargo run -p ai-gateway</code> 不会生成浏览器资源；资源缺失或为空时，Gateway 在数据库初始化前明确报错。应使用标准全栈构建并一起分发同次构建的二进制与资源。</p>
 <h2 id="http-与-swagger"><a class="header" href="#http-与-swagger">HTTP 与 Swagger</a></h2>
+<p>Gateway 使用 <code>utoipa-axum</code> 0.3.0 的 <code>routes!</code> 和 <code>OpenApiRouter</code>，从同一组处理函数注册 Axum 路由并生成 OpenAPI。模型接口与公开健康检查分别组装；Bearer 鉴权中间件仍仅施加于受保护的模型接口。</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -464,11 +466,14 @@ context_tokens = 4096
 <p>首字节预算从请求接收时开始，包含自动路由；路由超过该预算返回 <code>504 routing_timeout</code>，不发送上游请求。</p>
 <h2 id="sqlite-与管理界面"><a class="header" href="#sqlite-与管理界面">SQLite 与管理界面</a></h2>
 <p>默认数据库位于数据目录的 <code>gateway.sqlite</code>，由 Diesel 管理，启用 WAL、busy timeout 和完整同步。单进程持有数据库所有权锁，启动时将遗留 Pending 请求标记为 Uncertain。模型快照、策略历史、API Key 摘要、超级管理员账户、管理会话和请求元数据保存在该库；没有原始请求或回复正文的存储字段。</p>
+<p>数据库脚本通过 <code>diesel_migrations</code> 2.3.2 的 <code>embed_migrations!</code> 内嵌，由 Diesel 迁移记录表管理。启动时在同一 SQLite 立即事务中衔接旧 <code>gateway_migrations</code> 的版本 1 或版本 1、2 记录、执行待运行脚本并恢复 Pending 请求；已执行脚本不重复运行。未知版本、不连续记录、两套记录不一致或没有记录的既有业务表使启动失败，事务回滚。</p>
 <p>发送上游请求前先保存 Pending 意图，再更新完成或未知状态。Succeeded 表示已收到并验证上游成功终态，不证明调用方已消费回复。数据库写入责任独立于 HTTP 等待期限；请求超时后仍完成已开始的意图或终态写入。实际写库失败留下的 Pending 在重启时恢复为 Uncertain，不能因为 HTTP 连接关闭就认定推理未发生。</p>
 <p>管理页面复用同一套 Rust Leptos 组件：服务端先渲染 HTML，浏览器加载生成的 JavaScript 引导代码与 WASM，再为现有页面接入事件和响应式状态。没有独立的 Node 前端栈。页面包括模型目录、路由策略和分页请求记录，主题跟随系统浅色或深色偏好。</p>
 <p>布局、表单字段、提交状态和提示是共享组件。Leptos Signal 管理策略草稿、修改状态、即时校验和重置；官方 <code>ServerAction</code> / <code>ActionForm</code> 提交登录、保存和退出。表格复用 <code>leptos-struct-table</code> 的公开 <code>TableRow</code> 派生与行渲染接口，表头、语义化表格和分页由页面组件组织，可在 SSR 时直接输出行内容，不依赖浏览器虚拟列表完成首屏。</p>
 <p><code>gateway-validation</code> 使用 <a href="https://docs.rs/garde/0.23.0/garde/">Garde 0.23.0</a> 的派生宏与 regex 规则定义 <code>Credentials</code>、<code>PolicyDraft</code> 基础校验，供 SSR、WASM、应用配置及存储入口共享；授权、CSRF、<code>PolicySnapshot</code> 语义校验与 CAS 仍由服务端执行。</p>
 <p>浏览器校验只提供交互反馈。敏感读取、密码验证、超级管理员角色、会话有效期、Origin 和会话绑定 CSRF 仍在服务端核验。登录会话使用带期限的 HttpOnly / SameSite=Strict Cookie；策略保存与退出同时验证来源和 CSRF。策略更新校验完整文档并比较旧 revision，保存成功后发布到内存；并发编辑冲突要求刷新。模型上游凭据和密码哈希不进入浏览器 DTO。</p>
+<p>Cookie 的解析与构造复用 <code>cookie</code> 0.18.2。服务端检查所有 Cookie 请求头，拒绝重复的会话或 CSRF Cookie，以及格式无效的值；库解析不代替 Origin、角色、有效期和 CSRF 校验。</p>
+<p>登录尝试由 <code>governor</code> 0.10.4 的直接 GCRA 限流器按当前进程共用一份额度：速率为每分钟 10 次，可突发 10 次，每 6 秒恢复一次机会，不按固定 60 秒窗口重置。它不根据客户端 IP 或转发头划分额度。额度不足时，响应携带向上取整为秒且至少为 1 的动态 <code>Retry-After</code>；增强表单收到 429，原生 HTML 表单重定向回登录页。</p>
 <p>模型目录来自部署配置，启动时保存不可变版本快照；管理页面不提供上游凭据编辑。此服务骨架不包含多租户配额账本、实际计费、Provider 账户管理或公网部署。共享日志组件将结构化日志滚动保存在数据目录，指标快照提供请求、拒绝、耗时和结果计数。</p>
 <h2 id="验证"><a class="header" href="#验证">验证</a></h2>
 <p>本地 HTTP 测试使用合成上游，检查实际模型改写、Bearer 校验、能力与本地范围、流式取消和超时、未知结果、SQLite 恢复、管理登录、CSRF、策略版本及生成的 OpenAPI。SSR 测试与 WASM hydrate 编译检查命令见<a href="#可复用决策与-gateway-检查">开发与验证</a>。运行截图与范围见<a href="#运行截图与验收范围">运行证据</a>；旧截图不自动证明新的 hydrate 交互已验收。这些测试不调用付费模型，也不代表公网、多租户或三平台运行验收。</p>
@@ -892,6 +897,8 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 <tr><td><code>Ctrl+N</code></td><td>以当前工作目录创建会话</td></tr>
 <tr><td><code>Tab</code></td><td>切换到下一个会话并加载运行记录</td></tr>
 <tr><td><code>Enter</code></td><td>向已选会话提交输入</td></tr>
+<tr><td><code>Shift+Enter</code> / <code>Alt+Enter</code></td><td>在输入区换行</td></tr>
+<tr><td>方向键、<code>Home</code> / <code>End</code>、<code>Delete</code></td><td>移动光标或编辑光标处文本</td></tr>
 <tr><td><code>Ctrl+R</code></td><td>重新连接 daemon</td></tr>
 <tr><td><code>Ctrl+X</code></td><td>请求取消当前运行</td></tr>
 <tr><td><code>Ctrl+Y</code> / <code>Ctrl+E</code></td><td>批准 / 拒绝首个待处理审批</td></tr>
@@ -900,6 +907,7 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 </tbody>
 </table>
 </div>
+<p>输入区复用 <code>ratatui-textarea</code> 0.9.3，支持光标编辑、多行文本、换行显示和粘贴。应用快捷键优先于编辑器的同名映射，例如 <code>Ctrl+X</code> 仍请求取消运行，<code>Ctrl+Y</code> 仍处理审批。提交等待期间不重复发送；失败保留草稿，服务端接受后清空对应草稿及其撤销历史。</p>
 <p>审批区展示工具和参数。审批决定由 daemon 校验并保存，界面按服务端结果更新。任务记录每两秒刷新一次，新提交的运行同时订阅事件流。客户端退出时恢复终端状态，不向 daemon 发送取消请求。</p>
 <p><code>--theme auto</code> 根据 <code>COLORFGBG</code> 选择文字配色，并保留终端背景。无法检测时使用深色终端配色；可显式指定 <code>--theme light</code> 或 <code>--theme dark</code>。</p>
 <h2 id="原生计算机连接"><a class="header" href="#原生计算机连接">原生计算机连接</a></h2>
@@ -930,6 +938,7 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <pre><code class="language-sh">cargo run -p agent-desktop
 </code></pre>
 <p>桌面使用 GPUI 和 <code>gpui-kit</code> 组件，包含会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 <code>TitleBar</code>；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开。</p>
+<p>后台结果通过 <code>async-channel</code> 2.5.0 的有界队列投递，队列满时生产者异步等待；GPUI 在主线程应用结果，并丢弃过期会话或代次的回复。Browser 帧刷新保留独立的 160 毫秒定时器，Computer 宿主存活检查保留独立的 80 毫秒定时器。窗口关闭时清理本地订阅与宿主，daemon 作业保留自身生命周期。</p>
 <p>工作台标签栏的省略号菜单列出 Browser、Files、Editor、Diff、Tasks 和 Computer 六个面板，可直接选择；标签被窄窗口挤出时也可从这里切换。当前组件库的辅助功能树仍不能正确提供这些标签的名称，菜单入口不代表标签的辅助功能问题已解决。</p>
 <h3 id="设置与连接"><a class="header" href="#设置与连接">设置与连接</a></h3>
 <p>标题栏的 Settings 按钮打开独立设置页。Daemon 地址和访问令牌只在设置页编辑；Workspace path 用于当前标签页的新聊天。连接地址、令牌和工作区路径应与 daemon 对应；远程 daemon 的工作区路径指向远端文件系统。Appearance 提供手动选择的 Light 和 Dark 外观。选择 Back to chats 或按 <code>Esc</code> 返回聊天时，保留两侧面板的展开状态和聊天草稿。</p>
@@ -976,6 +985,10 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <h1 id="运行截图与验收范围"><a class="header" href="#运行截图与验收范围">运行截图与验收范围</a></h1>
 <p>桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate <code>cef</code> 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。<a href="evidence/desktop-native-capture.json">原生截图记录</a>保存了对应程序、源文件与图片摘要、两次已持久化为 <code>completed</code> 的 Run，以及状态为 <code>consumed</code> 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见<a href="#终端与桌面客户端">客户端文档</a>。</p>
 <p>浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。</p>
+<h2 id="产品窗口异步回复与聊天草稿"><a class="header" href="#产品窗口异步回复与聊天草稿">产品窗口异步回复与聊天草稿</a></h2>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-completion-macos.png" alt="macOS 产品 Desktop 窗口显示实际合成模型回复"><span class="img-wrapper"><img src="images/desktop-completion-macos.png" alt="macOS 产品 Desktop 窗口显示实际合成模型回复"></span></label></p>
+<p>本节使用 macOS arm64 上版本 0.1.0 的产品 <code>agent-desktop</code>、真实 agentd 和独立回环 <code>model-mock</code>，与前述原生验收程序分别记录。Desktop 在多线程运行时经认证连接 daemon，提交合成 Prompt 后收到 <code>Synthetic model response.</code>。切换多个聊天标签页后，原对话仍可恢复，另一标签页保留未提交的 <code>Independent unsent draft</code>。SQLite 核对结果为 1 条 <code>completed</code> Run、20 条事件和 20 条 Outbox 记录。<a href="evidence/desktop-completion-macos.json">运行记录</a>保存了三份程序、124 份源码与构建文件及截图的 SHA-256 摘要。</p>
+<p>此次操作覆盖产品窗口中的异步回复投递与标签页草稿隔离。客户端使用默认 feature，未启用原生 CEF 或 Computer SDK；合成回环模型不证明真实模型质量、性能、浏览器或计算机控制能力，也不代表 Windows、Linux、公网或安装包验收。</p>
 <h2 id="设置与原生窗口"><a class="header" href="#设置与原生窗口">设置与原生窗口</a></h2>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/desktop-settings-macos.png" alt="macOS 上的独立 Settings 页面"><span class="img-wrapper"><img src="images/desktop-settings-macos.png" alt="macOS 上的独立 Settings 页面"></span></label></p>
 <p>Settings 独立页面显示连接地址、已掩码的访问令牌、工作区和明暗外观选项。对话主窗口标题栏未显示地址或令牌。此次原生操作还观察到 macOS 系统窗口控制按钮，并实际执行了原生缩放动作；记录见<a href="evidence/desktop-native-capture.json">原生截图记录</a>。</p>
@@ -1045,6 +1058,11 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <p>从管理台点击 API 文档进入 Swagger UI，加载内嵌规范与资源，实际通过 Try it out 执行健康检查，返回 <code>200</code> 和 <code>status: live</code>。</p>
 <p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-mobile-macos.jpg" alt="窄窗口中的管理导航与可横向滚动请求表格"><span class="img-wrapper"><img src="images/gateway-mobile-macos.jpg" alt="窄窗口中的管理导航与可横向滚动请求表格"></span></label></p>
 <p>桌面布局以 1280 × 800 视口检查；窄窗口请求 390 × 844，扣除滚动条后的正文宽度为 380。正文没有横向溢出，请求表格在自身容器内滚动。<a href="evidence/gateway-web-macos.json">运行记录</a>包含程序、WASM 与 JavaScript 资源、相关源码及图片摘要，以及 HTTP 和 SQLite 检查结果。本节不覆盖公网、Windows、Linux 或新版安装包验收。</p>
+<h2 id="gateway-既有数据库与管理交互"><a class="header" href="#gateway-既有数据库与管理交互">Gateway 既有数据库与管理交互</a></h2>
+<p><label class="checkbox-label"><input class="checkbox-img" type="checkbox"><img src="images/gateway-library-reuse-macos.png" alt="macOS 上展示七条实际审计记录的 Gateway 请求页"><span class="img-wrapper"><img src="images/gateway-library-reuse-macos.png" alt="macOS 上展示七条实际审计记录的 Gateway 请求页"></span></label></p>
+<p>本节使用 macOS arm64 上版本 0.1.0 的 Gateway SSR/WASM 产品构建和独立回环 <code>model-mock</code>。启动时读取旧 SQLite 副本，将旧版本记录 <code>[1, 2]</code> 转为 Diesel 的 <code>["0001", "0002"]</code> 并退役旧账本，保留唯一超级管理员和 4 条既有成功审计。随后 3 个 JSON/SSE 请求均成功，页面及数据库共显示 7 条成功记录。</p>
+<p>浏览器实际检查了 WASM 对过短密码的本地拒绝、原账户登录、请求页展示与退出；退出后访问保护页面回到登录页，数据库管理会话数为 0，浏览器控制台未见警告或错误。<code>POST /v1/models</code>、<code>GET /v1/chat/completions</code>、<code>POST /health/live</code> 和 <code>DELETE /health/ready</code> 均返回 405，未增加审计记录；OpenAPI 的标题和版本保持一致。</p>
+<p><a href="evidence/gateway-library-reuse-macos.json">运行记录</a>保存上述结果，以及两份程序、90 份源码与构建文件、浏览器资源和截图的 SHA-256 摘要。本节仅覆盖合成回环模型，不涉及付费模型或权重加载，也不代表 Windows、Linux、公网或安装包验收。</p>
 <h2 id="尚未由本组截图覆盖的能力"><a class="header" href="#尚未由本组截图覆盖的能力">尚未由本组截图覆盖的能力</a></h2>
 <p>本组截图未展示模型浏览器语义操作或原生终端窗口呈现。模型工具的合成 host 协议回归与真实 CEF 自主操作验收分别保留，见<a href="#本地工具与浏览器操作">本地工具与浏览器操作</a>。</p>
 <div style="break-before: page; page-break-before: always;"></div>
@@ -1212,7 +1230,7 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '&lt;task-uuid&
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="开发与验证"><a class="header" href="#开发与验证">开发与验证</a></h1>
 <p>工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 <code>Cargo.lock</code> 管理。Rust 工具链最低版本见根 <code>Cargo.toml</code> 的 <code>rust-version</code>。工程约束统一维护在根 <code>AGENTS.md</code>。</p>
-<p>异步入口优先使用 <code>#[tokio::main]</code>，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。</p>
+<p>异步入口优先使用 <code>#[tokio::main]</code>，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。<code>RunStatus</code> 和 <code>Tool</code> 通过固定版本 <code>strum</code> 0.28.0 的派生宏生成 snake_case 静态字符串转换；错误类型复用现有 <code>thiserror</code> 派生。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。</p>
 <h2 id="本地开发启动"><a class="header" href="#本地开发启动">本地开发启动</a></h2>
 <p>仓库的 <code>.cargo/config.toml</code> 定义了 <code>dev</code> 别名，直接使用 Cargo，无需安装额外任务工具。在仓库根目录执行一条命令，自动构建、启动开发 agentd 并打开客户端：</p>
 <pre><code class="language-sh">cargo dev desktop
@@ -1230,6 +1248,7 @@ cargo dev --help
 </code></pre>
 <p>Cargo 别名使用参数数组调用 <code>apps/agent-dev</code>，不依赖平台 Shell，也无需安装额外的任务运行器。根 <code>README.md</code> 列出常用命令，<code>cargo --list</code> 也会展示 <code>dev</code> 别名。</p>
 <p><code>cargo dev tui</code> 等价于 <code>cargo run --locked -p agent-dev -- tui</code>。首次执行时，Cargo 按 <code>Cargo.lock</code> 下载并编译 Rust 依赖，无需通过 <code>cargo install</code> 安装开发启动器、<code>just</code> 或 <code>cargo-make</code>。GPUI 和可选原生 SDK 所需的平台构建依赖仍需准备，见<a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
+<p>产品和 Gateway 构建共用 <code>cargo_metadata</code> 0.23.1 的类型化 Cargo 消息解析：只采纳名称匹配的二进制目标，转发编译器诊断，读完输出后再检查进程退出状态。构建子进程复用 <code>process-wrap</code> 的 Unix 进程组或 Windows JobObject；取消构建时清理该构建拥有的进程树，交互客户端仍保留前台终端输入方式。</p>
 <p>需要单独运行前台 daemon 时，使用 <code>cargo dev daemon</code>。其他开发客户端仍可自动连接并复用它。</p>
 <p>默认配置为开发数据目录中的 <code>config.toml</code>，dotenv 文件位于配置文件旁边。<code>--config</code> 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 <code>agent-config</code> 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 <code>agent-telemetry</code> 写入日志；默认位于开发数据目录的 <code>logs</code> 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 <code>auth.token</code>，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。</p>
 <p><code>--dry-run</code> 展示启动方案，不创建目录、不读取 token、不启动产品进程；外层 Cargo 仍可能编译 <code>agent-dev</code>。默认 Desktop/TUI 构建不启用 <code>native-cef</code> 或 <code>native-computer</code>，对应的浏览器执行或原生计算机宿主能力会报告不可用。完整 CEF SDK、helper 和应用包布局见 <a href="https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md">本地分发说明</a>。</p>
@@ -1242,7 +1261,7 @@ cargo gateway --build-only
 cargo gateway --build-only --release
 </code></pre>
 <p>启动器先检查当前 Rust 工具链的 <code>wasm32-unknown-unknown</code> target，缺失时通过 rustup 准备；再检查仓库 <code>.local/tools/bin</code> 下的 cargo-leptos，缺失时以 <code>cargo install --locked --root &lt;repo&gt;/.local/tools cargo-leptos --version 0.3.11</code> 安装。已有工具必须匹配固定版本，不要求用户手动全局安装。Rust、平台编译工具和下载所需的网络仍需可用。</p>
-<p>构建通过标准 cargo-leptos 的 <code>leptos build --project gateway</code> 完成；<code>--release</code> 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，从 <code>compiler-artifact</code> JSON 获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。工作区 metadata 指定默认资源根目录 <code>.local/gateway-web/site</code>；Gateway 收到绝对 <code>LYONBROWN_GATEWAY_WEB_ROOT</code>，从 <code>/ui/pkg/</code> 提供生成的 JavaScript 与 WASM。</p>
+<p>构建通过标准 cargo-leptos 的 <code>leptos build --project gateway</code> 完成；<code>--release</code> 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，通过上述类型化 <code>compiler-artifact</code> 消息获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。启动器通过 <code>cargo_metadata::Metadata</code> 读取工作区 metadata，校验 Gateway 项目字段及资源目录范围。工作区配置的默认资源根目录为 <code>.local/gateway-web/site</code>。Gateway 收到绝对 <code>LYONBROWN_GATEWAY_WEB_ROOT</code>，从 <code>/ui/pkg/</code> 提供生成的 JavaScript 与 WASM。</p>
 <p><code>--build-only</code> 生成服务端和资源后退出，不启动 Gateway。<code>--dry-run</code> 只打印方案，不执行工具、读取凭据或创建运行数据；外层 Cargo 仍可能编译启动器。<code>--config</code>、<code>--data-dir</code> 的相对路径从仓库根目录解析；默认运行数据为 <code>.local/gateway-web/data</code>。<code>--listen</code> 可选择非零回环端口。在启动终端按 Ctrl+C，只清理该启动器创建的 Gateway 进程。</p>
 <p>Gateway 在运行时读取配置文件旁的 <code>.env</code>，进程环境优先。推荐将运行配置和凭据放在独立目录：启动器不主动把 Gateway 凭据传给构建命令，但官方 cargo-leptos 自身会读取工作区或父目录 <code>.env</code>，不能据此保证构建工具绝对接触不到运行凭据。不要将密码或 API Key 写进源码、构建参数或静态资源。</p>
 <p>管理界面共用 Rust Leptos 组件，分别以 <code>ssr</code> 和 <code>hydrate</code> feature 构建服务端与浏览器 WASM。Signal 管理策略草稿和提交反馈，官方 <code>ServerAction</code> / <code>ActionForm</code> 处理表单，表格使用 <code>leptos-struct-table</code> 公开 <code>TableRow</code> 渲染接口直接支持 SSR。生成的 JavaScript 负责引导 WASM；不需要独立的 Node 前端栈。鉴权、CSRF、角色和策略版本校验仍在服务端完成。</p>

@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d7df9a86.js";
+            window.path_to_searchindex_js = "searchindex-04278665.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-67d94056.js"></script>
@@ -195,6 +195,8 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 <tr><td><code>Ctrl+N</code></td><td>Create a session using the current working directory</td></tr>
 <tr><td><code>Tab</code></td><td>Select the next session and load its runs</td></tr>
 <tr><td><code>Enter</code></td><td>Submit input to the selected session</td></tr>
+<tr><td><code>Shift+Enter</code> / <code>Alt+Enter</code></td><td>Insert a newline in the composer</td></tr>
+<tr><td>Arrow keys, <code>Home</code> / <code>End</code>, <code>Delete</code></td><td>Move the cursor or edit text at the cursor</td></tr>
 <tr><td><code>Ctrl+R</code></td><td>Reconnect to the daemon</td></tr>
 <tr><td><code>Ctrl+X</code></td><td>Request cancellation of the active run</td></tr>
 <tr><td><code>Ctrl+Y</code> / <code>Ctrl+E</code></td><td>Approve / deny the first pending approval</td></tr>
@@ -203,6 +205,7 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 </tbody>
 </table>
 </div>
+<p>The composer uses <code>ratatui-textarea</code> 0.9.3 for cursor editing, multiline text, wrapping and paste. Application shortcuts take precedence over matching editor bindings: <code>Ctrl+X</code> still requests run cancellation and <code>Ctrl+Y</code> still handles approval. Pending submissions are not sent again; failure preserves the draft, and service acceptance clears the matching draft and its undo history.</p>
 <p>The approval panel displays the tool and arguments. The daemon validates and saves decisions before the UI updates them. Durable runs refresh every two seconds; newly submitted runs also subscribe to an event stream. Exiting restores the terminal and sends no cancellation request.</p>
 <p><code>--theme auto</code> uses <code>COLORFGBG</code> to choose text colors while preserving the terminal background. Without a hint it uses a dark-terminal palette; select <code>--theme light</code> or <code>--theme dark</code> explicitly when needed.</p>
 <h2 id="native-computer-attachment"><a class="header" href="#native-computer-attachment">Native computer attachment</a></h2>
@@ -233,6 +236,7 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 <pre><code class="language-sh">cargo run -p agent-desktop
 </code></pre>
 <p>The desktop uses GPUI and <code>gpui-kit</code> for the session sidebar, multiple chat tabs, conversation input and Browser, Computer, Files, Editor, Diff and Tasks dock panels. The custom title bar reuses the library’s <code>TitleBar</code>; macOS uses native close, minimize and zoom controls. The session sidebar starts open and the right workbench starts closed. Title bar buttons toggle each side independently and remain available to restore either panel when both are hidden.</p>
+<p>Background results use bounded <code>async-channel</code> 2.5.0 queues; producers await capacity when a queue is full. GPUI applies results on its main thread and discards replies for obsolete tabs or generations. Browser frames retain an independent 160 ms refresh timer, and Computer hosts retain an independent 80 ms health timer. Closing a window cleans up local subscriptions and hosts; daemon jobs retain their independent lifetime.</p>
 <p>The ellipsis menu in the workbench tab bar lists all six panels: Browser, Files, Editor, Diff, Tasks and Computer. Use it to switch panels when a narrow window hides a tab. The component library still does not expose proper tab names in its accessibility tree; the menu does not resolve that tab accessibility limitation.</p>
 <h3 id="settings-and-connection"><a class="header" href="#settings-and-connection">Settings and connection</a></h3>
 <p>The title bar’s Settings button opens a dedicated page. The daemon address and access token are edited only there; Workspace path selects the daemon-side folder for new chats in the current tab. The endpoint, token and workspace must match the daemon. A workspace for a remote daemon refers to that daemon’s filesystem. Appearance offers manual Light and Dark choices. Back to chats and <code>Esc</code> return to the chat while preserving panel visibility and chat drafts.</p>

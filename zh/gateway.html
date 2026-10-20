@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-de20616c.js";
+            window.path_to_searchindex_js = "searchindex-d97f41ab.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-dab33207.js"></script>
@@ -212,12 +212,14 @@ context_tokens = 4096
 </table>
 </div>
 <p>管理员用户名和密码不能写入 TOML 配置。数据库保存用户名、超级管理员角色和带随机盐的 Argon2id 密码哈希，不保存明文密码。再次启动时相同凭据通过校验；不同凭据使启动失败，不会覆盖原账户或重置密码。API Key 不能用于管理台登录，超级管理员密码也不能用于模型 API。超级管理员可查看模型目录与请求记录，并修改路由策略。</p>
+<p>Gateway 的上游凭据、API 认证密钥、管理会话及新签发的 API token 使用 <code>secrecy</code> 0.10.3 的秘密容器保存；密码工作线程也使用该容器。读取秘密需要显式访问，<code>Debug</code> 隐去内容，容器释放时清零其持有的内存。这不保证配置解析、环境变量、HTTP 处理或临时 <code>String</code> 中的所有副本都已清零。</p>
 <p>推荐将 Gateway TOML 和凭据 <code>.env</code> 放在独立的配置目录。启动器不将管理员密码或模型凭据放入构建命令参数，也不主动传给构建子进程；不过 cargo-leptos 自身会读取工作区或父目录的 <code>.env</code>，不能把启动器的环境过滤当作构建工具无法访问凭据的保证。</p>
 <p><code>local_inference = true</code> 是可信部署方对上游实际本地推理的声明，并要求使用字面量回环地址。不能将转发云模型的本地代理标记为本地推理。远程上游必须使用 HTTPS；客户端不能指定任意上游地址。</p>
 <h2 id="构建资源与分发"><a class="header" href="#构建资源与分发">构建资源与分发</a></h2>
 <p>开发启动器按工作区的 <code>gateway</code> cargo-leptos 配置构建，资源默认输出到 <code>.local/gateway-web/site/ui/pkg</code>。<code>--build-only</code> 只构建；<code>--release</code> 选择发布构建。启动器从 Cargo 的构建结果获取服务端程序路径，保留 <code>CARGO_TARGET_DIR</code> 等构建配置，并向 Gateway 传入实际的资源根目录。</p>
 <p>分发时同时提供 <code>ai-gateway</code> 可执行文件和生成的静态资源。<code>LYONBROWN_GATEWAY_WEB_ROOT</code> 必须是绝对路径，指向包含 <code>ui/pkg</code> 的 site 根目录；未指定时使用可执行文件旁的 <code>web</code> 目录。标准构建生成 <code>ui/pkg/gateway_web.js</code> 和 <code>ui/pkg/gateway_web.wasm</code>，管理页面通过 <code>/ui/pkg/</code> 加载它们。仅执行 <code>cargo run -p ai-gateway</code> 不会生成浏览器资源；资源缺失或为空时，Gateway 在数据库初始化前明确报错。应使用标准全栈构建并一起分发同次构建的二进制与资源。</p>
 <h2 id="http-与-swagger"><a class="header" href="#http-与-swagger">HTTP 与 Swagger</a></h2>
+<p>Gateway 使用 <code>utoipa-axum</code> 0.3.0 的 <code>routes!</code> 和 <code>OpenApiRouter</code>，从同一组处理函数注册 Axum 路由并生成 OpenAPI。模型接口与公开健康检查分别组装；Bearer 鉴权中间件仍仅施加于受保护的模型接口。</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -241,11 +243,14 @@ context_tokens = 4096
 <p>首字节预算从请求接收时开始，包含自动路由；路由超过该预算返回 <code>504 routing_timeout</code>，不发送上游请求。</p>
 <h2 id="sqlite-与管理界面"><a class="header" href="#sqlite-与管理界面">SQLite 与管理界面</a></h2>
 <p>默认数据库位于数据目录的 <code>gateway.sqlite</code>，由 Diesel 管理，启用 WAL、busy timeout 和完整同步。单进程持有数据库所有权锁，启动时将遗留 Pending 请求标记为 Uncertain。模型快照、策略历史、API Key 摘要、超级管理员账户、管理会话和请求元数据保存在该库；没有原始请求或回复正文的存储字段。</p>
+<p>数据库脚本通过 <code>diesel_migrations</code> 2.3.2 的 <code>embed_migrations!</code> 内嵌，由 Diesel 迁移记录表管理。启动时在同一 SQLite 立即事务中衔接旧 <code>gateway_migrations</code> 的版本 1 或版本 1、2 记录、执行待运行脚本并恢复 Pending 请求；已执行脚本不重复运行。未知版本、不连续记录、两套记录不一致或没有记录的既有业务表使启动失败，事务回滚。</p>
 <p>发送上游请求前先保存 Pending 意图，再更新完成或未知状态。Succeeded 表示已收到并验证上游成功终态，不证明调用方已消费回复。数据库写入责任独立于 HTTP 等待期限；请求超时后仍完成已开始的意图或终态写入。实际写库失败留下的 Pending 在重启时恢复为 Uncertain，不能因为 HTTP 连接关闭就认定推理未发生。</p>
 <p>管理页面复用同一套 Rust Leptos 组件：服务端先渲染 HTML，浏览器加载生成的 JavaScript 引导代码与 WASM，再为现有页面接入事件和响应式状态。没有独立的 Node 前端栈。页面包括模型目录、路由策略和分页请求记录，主题跟随系统浅色或深色偏好。</p>
 <p>布局、表单字段、提交状态和提示是共享组件。Leptos Signal 管理策略草稿、修改状态、即时校验和重置；官方 <code>ServerAction</code> / <code>ActionForm</code> 提交登录、保存和退出。表格复用 <code>leptos-struct-table</code> 的公开 <code>TableRow</code> 派生与行渲染接口，表头、语义化表格和分页由页面组件组织，可在 SSR 时直接输出行内容，不依赖浏览器虚拟列表完成首屏。</p>
 <p><code>gateway-validation</code> 使用 <a href="https://docs.rs/garde/0.23.0/garde/">Garde 0.23.0</a> 的派生宏与 regex 规则定义 <code>Credentials</code>、<code>PolicyDraft</code> 基础校验，供 SSR、WASM、应用配置及存储入口共享；授权、CSRF、<code>PolicySnapshot</code> 语义校验与 CAS 仍由服务端执行。</p>
 <p>浏览器校验只提供交互反馈。敏感读取、密码验证、超级管理员角色、会话有效期、Origin 和会话绑定 CSRF 仍在服务端核验。登录会话使用带期限的 HttpOnly / SameSite=Strict Cookie；策略保存与退出同时验证来源和 CSRF。策略更新校验完整文档并比较旧 revision，保存成功后发布到内存；并发编辑冲突要求刷新。模型上游凭据和密码哈希不进入浏览器 DTO。</p>
+<p>Cookie 的解析与构造复用 <code>cookie</code> 0.18.2。服务端检查所有 Cookie 请求头，拒绝重复的会话或 CSRF Cookie，以及格式无效的值；库解析不代替 Origin、角色、有效期和 CSRF 校验。</p>
+<p>登录尝试由 <code>governor</code> 0.10.4 的直接 GCRA 限流器按当前进程共用一份额度：速率为每分钟 10 次，可突发 10 次，每 6 秒恢复一次机会，不按固定 60 秒窗口重置。它不根据客户端 IP 或转发头划分额度。额度不足时，响应携带向上取整为秒且至少为 1 的动态 <code>Retry-After</code>；增强表单收到 429，原生 HTML 表单重定向回登录页。</p>
 <p>模型目录来自部署配置，启动时保存不可变版本快照；管理页面不提供上游凭据编辑。此服务骨架不包含多租户配额账本、实际计费、Provider 账户管理或公网部署。共享日志组件将结构化日志滚动保存在数据目录，指标快照提供请求、拒绝、耗时和结果计数。</p>
 <h2 id="验证"><a class="header" href="#验证">验证</a></h2>
 <p>本地 HTTP 测试使用合成上游，检查实际模型改写、Bearer 校验、能力与本地范围、流式取消和超时、未知结果、SQLite 恢复、管理登录、CSRF、策略版本及生成的 OpenAPI。SSR 测试与 WASM hydrate 编译检查命令见<a href="development.html#可复用决策与-gateway-检查">开发与验证</a>。运行截图与范围见<a href="runtime-evidence.html">运行证据</a>；旧截图不自动证明新的 hydrate 交互已验收。这些测试不调用付费模型，也不代表公网、多租户或三平台运行验收。</p>
