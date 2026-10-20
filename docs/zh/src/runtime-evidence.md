@@ -4,6 +4,14 @@
 
 浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。
 
+## 产品窗口异步回复与聊天草稿
+
+![macOS 产品 Desktop 窗口显示实际合成模型回复](images/desktop-completion-macos.png)
+
+本节使用 macOS arm64 上版本 0.1.0 的产品 `agent-desktop`、真实 agentd 和独立回环 `model-mock`，与前述原生验收程序分别记录。Desktop 在多线程运行时经认证连接 daemon，提交合成 Prompt 后收到 `Synthetic model response.`。切换多个聊天标签页后，原对话仍可恢复，另一标签页保留未提交的 `Independent unsent draft`。SQLite 核对结果为 1 条 `completed` Run、20 条事件和 20 条 Outbox 记录。[运行记录](evidence/desktop-completion-macos.json)保存了三份程序、124 份源码与构建文件及截图的 SHA-256 摘要。
+
+此次操作覆盖产品窗口中的异步回复投递与标签页草稿隔离。客户端使用默认 feature，未启用原生 CEF 或 Computer SDK；合成回环模型不证明真实模型质量、性能、浏览器或计算机控制能力，也不代表 Windows、Linux、公网或安装包验收。
+
 ## 设置与原生窗口
 
 ![macOS 上的独立 Settings 页面](images/desktop-settings-macos.png)
@@ -123,6 +131,16 @@ CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium �
 ![窄窗口中的管理导航与可横向滚动请求表格](images/gateway-mobile-macos.jpg)
 
 桌面布局以 1280 × 800 视口检查；窄窗口请求 390 × 844，扣除滚动条后的正文宽度为 380。正文没有横向溢出，请求表格在自身容器内滚动。[运行记录](evidence/gateway-web-macos.json)包含程序、WASM 与 JavaScript 资源、相关源码及图片摘要，以及 HTTP 和 SQLite 检查结果。本节不覆盖公网、Windows、Linux 或新版安装包验收。
+
+## Gateway 既有数据库与管理交互
+
+![macOS 上展示七条实际审计记录的 Gateway 请求页](images/gateway-library-reuse-macos.png)
+
+本节使用 macOS arm64 上版本 0.1.0 的 Gateway SSR/WASM 产品构建和独立回环 `model-mock`。启动时读取旧 SQLite 副本，将旧版本记录 `[1, 2]` 转为 Diesel 的 `["0001", "0002"]` 并退役旧账本，保留唯一超级管理员和 4 条既有成功审计。随后 3 个 JSON/SSE 请求均成功，页面及数据库共显示 7 条成功记录。
+
+浏览器实际检查了 WASM 对过短密码的本地拒绝、原账户登录、请求页展示与退出；退出后访问保护页面回到登录页，数据库管理会话数为 0，浏览器控制台未见警告或错误。`POST /v1/models`、`GET /v1/chat/completions`、`POST /health/live` 和 `DELETE /health/ready` 均返回 405，未增加审计记录；OpenAPI 的标题和版本保持一致。
+
+[运行记录](evidence/gateway-library-reuse-macos.json)保存上述结果，以及两份程序、90 份源码与构建文件、浏览器资源和截图的 SHA-256 摘要。本节仅覆盖合成回环模型，不涉及付费模型或权重加载，也不代表 Windows、Linux、公网或安装包验收。
 
 ## 尚未由本组截图覆盖的能力
 

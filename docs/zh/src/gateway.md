@@ -40,6 +40,8 @@ context_tokens = 4096
 
 管理员用户名和密码不能写入 TOML 配置。数据库保存用户名、超级管理员角色和带随机盐的 Argon2id 密码哈希，不保存明文密码。再次启动时相同凭据通过校验；不同凭据使启动失败，不会覆盖原账户或重置密码。API Key 不能用于管理台登录，超级管理员密码也不能用于模型 API。超级管理员可查看模型目录与请求记录，并修改路由策略。
 
+Gateway 的上游凭据、API 认证密钥、管理会话及新签发的 API token 使用 `secrecy` 0.10.3 的秘密容器保存；密码工作线程也使用该容器。读取秘密需要显式访问，`Debug` 隐去内容，容器释放时清零其持有的内存。这不保证配置解析、环境变量、HTTP 处理或临时 `String` 中的所有副本都已清零。
+
 推荐将 Gateway TOML 和凭据 `.env` 放在独立的配置目录。启动器不将管理员密码或模型凭据放入构建命令参数，也不主动传给构建子进程；不过 cargo-leptos 自身会读取工作区或父目录的 `.env`，不能把启动器的环境过滤当作构建工具无法访问凭据的保证。
 
 `local_inference = true` 是可信部署方对上游实际本地推理的声明，并要求使用字面量回环地址。不能将转发云模型的本地代理标记为本地推理。远程上游必须使用 HTTPS；客户端不能指定任意上游地址。
@@ -51,6 +53,8 @@ context_tokens = 4096
 分发时同时提供 `ai-gateway` 可执行文件和生成的静态资源。`LYONBROWN_GATEWAY_WEB_ROOT` 必须是绝对路径，指向包含 `ui/pkg` 的 site 根目录；未指定时使用可执行文件旁的 `web` 目录。标准构建生成 `ui/pkg/gateway_web.js` 和 `ui/pkg/gateway_web.wasm`，管理页面通过 `/ui/pkg/` 加载它们。仅执行 `cargo run -p ai-gateway` 不会生成浏览器资源；资源缺失或为空时，Gateway 在数据库初始化前明确报错。应使用标准全栈构建并一起分发同次构建的二进制与资源。
 
 ## HTTP 与 Swagger
+
+Gateway 使用 `utoipa-axum` 0.3.0 的 `routes!` 和 `OpenApiRouter`，从同一组处理函数注册 Axum 路由并生成 OpenAPI。模型接口与公开健康检查分别组装；Bearer 鉴权中间件仍仅施加于受保护的模型接口。
 
 | 方法与路径 | 用途与访问方式 |
 | --- | --- |
@@ -76,6 +80,8 @@ Gateway 上游传输复用 [Rig-Core 0.44.0](https://docs.rs/rig-core/0.44.0/rig
 
 默认数据库位于数据目录的 `gateway.sqlite`，由 Diesel 管理，启用 WAL、busy timeout 和完整同步。单进程持有数据库所有权锁，启动时将遗留 Pending 请求标记为 Uncertain。模型快照、策略历史、API Key 摘要、超级管理员账户、管理会话和请求元数据保存在该库；没有原始请求或回复正文的存储字段。
 
+数据库脚本通过 `diesel_migrations` 2.3.2 的 `embed_migrations!` 内嵌，由 Diesel 迁移记录表管理。启动时在同一 SQLite 立即事务中衔接旧 `gateway_migrations` 的版本 1 或版本 1、2 记录、执行待运行脚本并恢复 Pending 请求；已执行脚本不重复运行。未知版本、不连续记录、两套记录不一致或没有记录的既有业务表使启动失败，事务回滚。
+
 发送上游请求前先保存 Pending 意图，再更新完成或未知状态。Succeeded 表示已收到并验证上游成功终态，不证明调用方已消费回复。数据库写入责任独立于 HTTP 等待期限；请求超时后仍完成已开始的意图或终态写入。实际写库失败留下的 Pending 在重启时恢复为 Uncertain，不能因为 HTTP 连接关闭就认定推理未发生。
 
 管理页面复用同一套 Rust Leptos 组件：服务端先渲染 HTML，浏览器加载生成的 JavaScript 引导代码与 WASM，再为现有页面接入事件和响应式状态。没有独立的 Node 前端栈。页面包括模型目录、路由策略和分页请求记录，主题跟随系统浅色或深色偏好。
@@ -85,6 +91,10 @@ Gateway 上游传输复用 [Rig-Core 0.44.0](https://docs.rs/rig-core/0.44.0/rig
 `gateway-validation` 使用 [Garde 0.23.0](https://docs.rs/garde/0.23.0/garde/) 的派生宏与 regex 规则定义 `Credentials`、`PolicyDraft` 基础校验，供 SSR、WASM、应用配置及存储入口共享；授权、CSRF、`PolicySnapshot` 语义校验与 CAS 仍由服务端执行。
 
 浏览器校验只提供交互反馈。敏感读取、密码验证、超级管理员角色、会话有效期、Origin 和会话绑定 CSRF 仍在服务端核验。登录会话使用带期限的 HttpOnly / SameSite=Strict Cookie；策略保存与退出同时验证来源和 CSRF。策略更新校验完整文档并比较旧 revision，保存成功后发布到内存；并发编辑冲突要求刷新。模型上游凭据和密码哈希不进入浏览器 DTO。
+
+Cookie 的解析与构造复用 `cookie` 0.18.2。服务端检查所有 Cookie 请求头，拒绝重复的会话或 CSRF Cookie，以及格式无效的值；库解析不代替 Origin、角色、有效期和 CSRF 校验。
+
+登录尝试由 `governor` 0.10.4 的直接 GCRA 限流器按当前进程共用一份额度：速率为每分钟 10 次，可突发 10 次，每 6 秒恢复一次机会，不按固定 60 秒窗口重置。它不根据客户端 IP 或转发头划分额度。额度不足时，响应携带向上取整为秒且至少为 1 的动态 `Retry-After`；增强表单收到 429，原生 HTML 表单重定向回登录页。
 
 模型目录来自部署配置，启动时保存不可变版本快照；管理页面不提供上游凭据编辑。此服务骨架不包含多租户配额账本、实际计费、Provider 账户管理或公网部署。共享日志组件将结构化日志滚动保存在数据目录，指标快照提供请求、拒绝、耗时和结果计数。
 

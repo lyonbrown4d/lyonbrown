@@ -4,6 +4,14 @@ Desktop client screenshots show the local native GPUI Desktop window on macOS 27
 
 The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.
 
+## Product-window asynchronous replies and chat drafts
+
+![Product Desktop window displaying an actual synthetic model reply on macOS](images/desktop-completion-macos.png)
+
+This section records version 0.1.0 product `agent-desktop`, a real agentd and independent loopback `model-mock` on macOS arm64, separately from the native acceptance example above. Desktop authenticated to the daemon with its multithreaded runtime, submitted a synthetic prompt and received `Synthetic model response.`. Switching among chat tabs restored the original conversation while another tab retained `Independent unsent draft` without submitting it. SQLite inspection found 1 Run persisted as `completed`, 20 events and 20 Outbox records. The [runtime record](evidence/desktop-completion-macos.json) contains SHA-256 digests for all three executables, 124 source and build files, and the screenshot.
+
+These operations cover asynchronous reply delivery and tab-draft isolation in the product window. The client used default features without native CEF or Computer SDK support. The synthetic loopback model does not establish real-model quality, performance, browser or computer-control capability, or Windows, Linux, public-network or installer acceptance.
+
 ## Settings and native window
 
 ![Dedicated native Settings page on macOS](images/desktop-settings-macos.png)
@@ -123,6 +131,16 @@ The administration API-documentation link opened Swagger UI with its embedded sp
 ![Narrow-window navigation and independently scrolling request table](images/gateway-mobile-macos.jpg)
 
 The desktop layout was checked at 1280 × 800. The narrow viewport requested 390 × 844; document width after the scrollbar was 380 pixels. The document did not overflow horizontally, and the table scrolled inside its own container. The [runtime record](evidence/gateway-web-macos.json) contains binary, WASM, JavaScript, relevant-source and image hashes plus HTTP and SQLite results. This section does not cover public-network, Windows, Linux or new installer acceptance.
+
+## Gateway existing database and administration interaction
+
+![Gateway request page showing seven actual audit records on macOS](images/gateway-library-reuse-macos.png)
+
+This section uses the version 0.1.0 Gateway SSR/WASM product build and independent loopback `model-mock` on macOS arm64. Startup read a copy of the existing SQLite database, converted legacy versions `[1, 2]` to Diesel versions `["0001", "0002"]` and retired the old ledger, preserving the single super administrator and 4 successful audit records. Three subsequent JSON/SSE requests succeeded, bringing the page and database to 7 successful records.
+
+Actual browser checks covered local WASM rejection of a short password, login with the original account, the request page and logout. After logout, a protected page redirected to login, the database held 0 admin sessions, and the browser console showed no warnings or errors. `POST /v1/models`, `GET /v1/chat/completions`, `POST /health/live` and `DELETE /health/ready` each returned 405 without adding audit records. OpenAPI title and version metadata were preserved.
+
+The [runtime record](evidence/gateway-library-reuse-macos.json) stores these results and SHA-256 digests for two executables, 90 source and build files, browser assets and the screenshot. This section covers only a synthetic loopback model, without paid-model calls or weight loading; it does not establish Windows, Linux, public-network or installer acceptance.
 
 ## Capabilities outside this screenshot set
 

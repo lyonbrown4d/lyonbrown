@@ -2,7 +2,7 @@
 
 工作区使用 Rust 2024 edition，产品依赖由 Cargo workspace 与 `Cargo.lock` 管理。Rust 工具链最低版本见根 `Cargo.toml` 的 `rust-version`。工程约束统一维护在根 `AGENTS.md`。
 
-异步入口优先使用 `#[tokio::main]`，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。
+异步入口优先使用 `#[tokio::main]`，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。`RunStatus` 和 `Tool` 通过固定版本 `strum` 0.28.0 的派生宏生成 snake_case 静态字符串转换；错误类型复用现有 `thiserror` 派生。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。
 
 ## 本地开发启动
 
@@ -33,6 +33,8 @@ Cargo 别名使用参数数组调用 `apps/agent-dev`，不依赖平台 Shell，
 
 `cargo dev tui` 等价于 `cargo run --locked -p agent-dev -- tui`。首次执行时，Cargo 按 `Cargo.lock` 下载并编译 Rust 依赖，无需通过 `cargo install` 安装开发启动器、`just` 或 `cargo-make`。GPUI 和可选原生 SDK 所需的平台构建依赖仍需准备，见[本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
 
+产品和 Gateway 构建共用 `cargo_metadata` 0.23.1 的类型化 Cargo 消息解析：只采纳名称匹配的二进制目标，转发编译器诊断，读完输出后再检查进程退出状态。构建子进程复用 `process-wrap` 的 Unix 进程组或 Windows JobObject；取消构建时清理该构建拥有的进程树，交互客户端仍保留前台终端输入方式。
+
 需要单独运行前台 daemon 时，使用 `cargo dev daemon`。其他开发客户端仍可自动连接并复用它。
 
 默认配置为开发数据目录中的 `config.toml`，dotenv 文件位于配置文件旁边。`--config` 选择已有 TOML 文件；命令不创建或覆盖配置和 dotenv。模型、工具和日志使用共享 `agent-config` 的分层规则。agentd、TUI、Desktop 和开发启动器都通过共享 `agent-telemetry` 写入日志；默认位于开发数据目录的 `logs` 子目录，按进程前缀区分，并沿用配置中的滚动保留规则。启动命令强制使用所选开发地址和数据目录，并从该目录读取 `auth.token`，忽略继承的连接凭据。token 仅通过客户端子进程环境传递，不写入命令参数或启动输出。
@@ -53,7 +55,7 @@ cargo gateway --build-only --release
 
 启动器先检查当前 Rust 工具链的 `wasm32-unknown-unknown` target，缺失时通过 rustup 准备；再检查仓库 `.local/tools/bin` 下的 cargo-leptos，缺失时以 `cargo install --locked --root <repo>/.local/tools cargo-leptos --version 0.3.11` 安装。已有工具必须匹配固定版本，不要求用户手动全局安装。Rust、平台编译工具和下载所需的网络仍需可用。
 
-构建通过标准 cargo-leptos 的 `leptos build --project gateway` 完成；`--release` 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，从 `compiler-artifact` JSON 获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。工作区 metadata 指定默认资源根目录 `.local/gateway-web/site`；Gateway 收到绝对 `LYONBROWN_GATEWAY_WEB_ROOT`，从 `/ui/pkg/` 提供生成的 JavaScript 与 WASM。
+构建通过标准 cargo-leptos 的 `leptos build --project gateway` 完成；`--release` 同时选择服务端和 WASM 的发布配置。启动器再用对应配置运行增量 Cargo 构建，通过上述类型化 `compiler-artifact` 消息获取可执行文件路径，保留 Cargo 的 target 目录和目标配置。启动器通过 `cargo_metadata::Metadata` 读取工作区 metadata，校验 Gateway 项目字段及资源目录范围。工作区配置的默认资源根目录为 `.local/gateway-web/site`。Gateway 收到绝对 `LYONBROWN_GATEWAY_WEB_ROOT`，从 `/ui/pkg/` 提供生成的 JavaScript 与 WASM。
 
 `--build-only` 生成服务端和资源后退出，不启动 Gateway。`--dry-run` 只打印方案，不执行工具、读取凭据或创建运行数据；外层 Cargo 仍可能编译启动器。`--config`、`--data-dir` 的相对路径从仓库根目录解析；默认运行数据为 `.local/gateway-web/data`。`--listen` 可选择非零回环端口。在启动终端按 Ctrl+C，只清理该启动器创建的 Gateway 进程。
 

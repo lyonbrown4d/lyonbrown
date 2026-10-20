@@ -22,11 +22,15 @@ The workbench contains sessions, conversation, tasks, approvals and a composer. 
 | `Ctrl+N` | Create a session using the current working directory |
 | `Tab` | Select the next session and load its runs |
 | `Enter` | Submit input to the selected session |
+| `Shift+Enter` / `Alt+Enter` | Insert a newline in the composer |
+| Arrow keys, `Home` / `End`, `Delete` | Move the cursor or edit text at the cursor |
 | `Ctrl+R` | Reconnect to the daemon |
 | `Ctrl+X` | Request cancellation of the active run |
 | `Ctrl+Y` / `Ctrl+E` | Approve / deny the first pending approval |
 | `PageUp` / `PageDown` | Scroll the conversation |
 | `Ctrl+C` / `Ctrl+D` | Exit the client |
+
+The composer uses `ratatui-textarea` 0.9.3 for cursor editing, multiline text, wrapping and paste. Application shortcuts take precedence over matching editor bindings: `Ctrl+X` still requests run cancellation and `Ctrl+Y` still handles approval. Pending submissions are not sent again; failure preserves the draft, and service acceptance clears the matching draft and its undo history.
 
 The approval panel displays the tool and arguments. The daemon validates and saves decisions before the UI updates them. Durable runs refresh every two seconds; newly submitted runs also subscribe to an event stream. Exiting restores the terminal and sends no cancellation request.
 
@@ -79,6 +83,8 @@ cargo run -p agent-desktop
 ```
 
 The desktop uses GPUI and `gpui-kit` for the session sidebar, multiple chat tabs, conversation input and Browser, Computer, Files, Editor, Diff and Tasks dock panels. The custom title bar reuses the library's `TitleBar`; macOS uses native close, minimize and zoom controls. The session sidebar starts open and the right workbench starts closed. Title bar buttons toggle each side independently and remain available to restore either panel when both are hidden.
+
+Background results use bounded `async-channel` 2.5.0 queues; producers await capacity when a queue is full. GPUI applies results on its main thread and discards replies for obsolete tabs or generations. Browser frames retain an independent 160 ms refresh timer, and Computer hosts retain an independent 80 ms health timer. Closing a window cleans up local subscriptions and hosts; daemon jobs retain their independent lifetime.
 
 The ellipsis menu in the workbench tab bar lists all six panels: Browser, Files, Editor, Diff, Tasks and Computer. Use it to switch panels when a narrow window hides a tab. The component library still does not expose proper tab names in its accessibility tree; the menu does not resolve that tab accessibility limitation.
 

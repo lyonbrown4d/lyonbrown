@@ -2,7 +2,7 @@
 
 The workspace uses Rust edition 2024. Cargo workspace declarations and `Cargo.lock` manage product dependencies. The root `Cargo.toml` records the minimum Rust version in `rust-version`. Engineering constraints live in the root `AGENTS.md`.
 
-Async entry points prefer `#[tokio::main]`. Clap, Serde and fluxdi macros provide argument parsing, serialization and dependency injection. CEF helper and Windows SCM dispatch run before runtime initialization. GPUI retains its main-thread event loop; explicitly owned or shared runtimes remain part of its composition.
+Async entry points prefer `#[tokio::main]`. Clap, Serde and fluxdi macros provide argument parsing, serialization and dependency injection. `RunStatus` and `Tool` use derives from fixed `strum` 0.28.0 for snake_case static-string conversion; error types reuse existing `thiserror` derives. CEF helper and Windows SCM dispatch run before runtime initialization. GPUI retains its main-thread event loop; explicitly owned or shared runtimes remain part of its composition.
 
 ## Run locally during development
 
@@ -33,6 +33,8 @@ The Cargo alias invokes `apps/agent-dev` with an argument array, without a platf
 
 `cargo dev tui` expands to `cargo run --locked -p agent-dev -- tui`. On first use, Cargo downloads and compiles Rust dependencies from `Cargo.lock`; no `cargo install` step is needed for the launcher, `just` or `cargo-make`. Platform build dependencies for GPUI and optional native SDKs still need to be available; see the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md).
 
+Product and Gateway builds share typed Cargo message decoding from `cargo_metadata` 0.23.1. Only binary targets with the requested name supply executable paths; compiler diagnostics are forwarded, output is drained, and the process exit status is then checked. Build children use `process-wrap` Unix process groups or Windows JobObjects so cancellation cleans up the owned build tree. Interactive clients retain foreground terminal input.
+
 Use `cargo dev daemon` when a separate foreground daemon is useful. Other development clients automatically connect to and reuse it.
 
 The default configuration is `config.toml` inside the development data directory, with `.env` beside it. `--config` selects an existing TOML file. The commands do not create or overwrite configuration or dotenv files. Model, tool and log settings use the shared `agent-config` layering rules. agentd, TUI, Desktop and the development launcher all use shared `agent-telemetry` logging. Files default to the development data directory's `logs` subdirectory, use separate process prefixes and follow the configured rotation and retention settings. The launcher forces the selected development address and data directory, reads that directory's `auth.token` and ignores inherited connection credentials. Tokens pass only through the client child environment, never command arguments or launch output.
@@ -53,7 +55,7 @@ cargo gateway --build-only --release
 
 The launcher checks the current Rust toolchain's `wasm32-unknown-unknown` target and prepares it through rustup if missing. It then checks cargo-leptos in the repository's `.local/tools/bin`, installing it with `cargo install --locked --root <repo>/.local/tools cargo-leptos --version 0.3.11` if absent. Existing tools must match the fixed version; no manual global installation is required. Rust, platform build tools and network access for downloads still need to be available.
 
-Standard cargo-leptos `leptos build --project gateway` builds the application; `--release` selects release settings for both server and WASM. The launcher then runs an incremental Cargo build with matching settings and reads the executable path from `compiler-artifact` JSON, preserving Cargo target-directory and target configuration. Workspace metadata selects `.local/gateway-web/site` as the default site root. Gateway receives absolute `LYONBROWN_GATEWAY_WEB_ROOT` and serves generated JavaScript and WASM under `/ui/pkg/`.
+Standard cargo-leptos `leptos build --project gateway` builds the application; `--release` selects release settings for both server and WASM. The launcher then runs an incremental Cargo build with matching settings and reads the executable path from the typed `compiler-artifact` messages described above, preserving Cargo target-directory and target configuration. The launcher reads workspace metadata through `cargo_metadata::Metadata` and validates Gateway project fields and site-directory scope. The workspace configuration selects `.local/gateway-web/site` as the default site root. Gateway receives absolute `LYONBROWN_GATEWAY_WEB_ROOT` and serves generated JavaScript and WASM under `/ui/pkg/`.
 
 `--build-only` exits after building the server and assets, without starting Gateway. `--dry-run` prints the plan without running tools, reading credentials or creating runtime data; the outer Cargo command may still compile the launcher. Relative `--config` and `--data-dir` paths resolve from the repository root. Runtime data defaults to `.local/gateway-web/data`; `--listen` can select a nonzero loopback port. Ctrl+C in the launch terminal cleans up only the Gateway process owned by that launcher.
 

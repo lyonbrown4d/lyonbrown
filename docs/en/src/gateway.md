@@ -40,6 +40,8 @@ The administration UI uses username/password sign-in. First startup initializes 
 
 Administrator credentials cannot be placed in TOML. SQLite stores the username, super-administrator role and salted Argon2id password hash. It stores no plaintext password. Subsequent startup validates the same credentials; different credentials fail startup without overwriting the account or resetting its password. API Keys cannot sign in to the UI, and the administrator password cannot authenticate model API requests. The super administrator has access to the model catalog, routing policies and request records.
 
+Gateway stores upstream credentials, API authentication keys, admin-session secrets and newly issued API tokens in `secrecy` 0.10.3 secret containers; password workers also use these containers. Access is explicit, `Debug` redacts their contents, and dropping a container zeroizes its owned memory. This does not guarantee erasure of every copy created by configuration parsing, environment variables, HTTP handling or temporary `String` values.
+
 Keep Gateway TOML and its credential `.env` in a separate configuration directory. The launcher does not put administrator passwords or model credentials in build arguments or explicitly forward them to build children. However, cargo-leptos itself reads workspace or parent-directory `.env` files; environment filtering does not guarantee that build tools cannot access credentials.
 
 `local_inference = true` is a trusted operator assertion about actual local inference and requires a literal loopback address. A loopback proxy to cloud inference must not be declared local. Remote upstreams require HTTPS; clients cannot choose arbitrary upstream URLs.
@@ -51,6 +53,8 @@ The launcher uses the workspace's `gateway` cargo-leptos project. Assets default
 Distribute the `ai-gateway` executable together with its generated static assets. `LYONBROWN_GATEWAY_WEB_ROOT` must be an absolute site-root path containing `ui/pkg`; it defaults to a `web` directory beside the executable. Standard builds generate `ui/pkg/gateway_web.js` and `ui/pkg/gateway_web.wasm`, served under `/ui/pkg/`. Running only `cargo run -p ai-gateway` does not generate browser assets. Missing or empty assets produce an explicit error before database bootstrap. Use the standard full-stack build and distribute the binary and assets from the same build together.
 
 ## HTTP and Swagger
+
+Gateway uses `utoipa-axum` 0.3.0 `routes!` and `OpenApiRouter` to register Axum routes and generate OpenAPI from the same handlers. Model endpoints and public health checks are assembled separately; Bearer authentication middleware applies only to the protected model endpoints.
 
 | Method and path | Purpose and access |
 | --- | --- |
@@ -76,6 +80,8 @@ The first-byte budget starts when the request is accepted and includes automatic
 
 Diesel manages `gateway.sqlite` in the data directory with WAL, busy timeout and full synchronous writes. A single owner holds a database lock; startup reconciles abandoned Pending requests to Uncertain. Tables retain model snapshots, policy history, hashed API keys, admin sessions and request metadata, with no prompt or completion body fields.
 
+Database scripts are embedded with `diesel_migrations` 2.3.2 `embed_migrations!` and tracked by Diesel’s migration ledger. One SQLite immediate transaction bridges legacy `gateway_migrations` histories containing version 1 or versions 1 and 2, applies pending scripts and reconciles Pending requests. Already applied scripts are not replayed. Unknown versions, gaps, conflicting ledgers or existing application tables without a ledger fail startup and roll back the transaction.
+
 A Pending intent is persisted before upstream dispatch. Succeeded means the upstream success terminal was received and validated, rather than proving client consumption. Database write ownership is independent of HTTP deadlines, so started intent and terminal writes still finish after the caller times out. Actual database failures can leave Pending for startup reconciliation to Uncertain; closing HTTP does not prove inference never happened.
 
 The UI shares one Rust Leptos component tree. The server renders HTML first; generated JavaScript boots the browser WASM, which attaches events and reactive state to the existing page. There is no separate Node frontend stack. Pages cover model catalog, routing policy and paginated request metadata, following system light/dark preferences.
@@ -85,6 +91,10 @@ Shared components provide layout, form fields, submission state and notices. Lep
 `gateway-validation` uses [Garde 0.23.0](https://docs.rs/garde/0.23.0/garde/) derive macros and regex rules for basic `Credentials` and `PolicyDraft` validation shared by SSR, WASM, application configuration and storage entry points; authorization, CSRF, `PolicySnapshot` semantics and CAS remain server responsibilities.
 
 Browser validation provides interaction feedback. Sensitive reads, password verification, the super-administrator role, session expiry, Origin and session-bound CSRF remain server checks. Expiring HttpOnly / SameSite=Strict cookies identify admin sessions. Policy writes and logout verify origin and CSRF. Policy publication validates the whole document and compares the previous revision; concurrent edits return a conflict. Upstream credentials and password hashes are absent from browser DTOs.
+
+Cookie parsing and construction use `cookie` 0.18.2. The server examines all Cookie headers and rejects duplicate session or CSRF cookies and invalid values. Library parsing does not replace Origin, role, expiry or CSRF checks.
+
+Login attempts share one process-local direct GCRA limiter from `governor` 0.10.4: 10 attempts per minute, burst capacity 10, with one opportunity replenished every 6 seconds rather than a fixed 60-second reset window. Client IPs and forwarded headers do not select separate quotas. Rejection includes a dynamic `Retry-After`, rounded up to seconds with a minimum of 1; enhanced forms receive 429, while native HTML forms redirect to the login page.
 
 Deployment configuration owns the model catalog, recorded as immutable snapshots at startup. The UI does not edit upstream credentials. This skeleton includes no multi-tenant quota ledger, billing, provider-account management or public deployment. Shared rolling structured logs persist in the data directory; observation snapshots expose request, rejection, latency and outcome counters.
 
