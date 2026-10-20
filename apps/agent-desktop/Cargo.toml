@@ -25,6 +25,7 @@ path = "examples/computer_target.rs"
 gpui-kit = { version = "0.7.3", features = ["tree-sitter-rust", "tree-sitter-markdown", "tree-sitter-toml"] }
 image = { version = "0.25", default-features = false }
 anyhow.workspace = true
+async-channel.workspace = true
 tokio.workspace = true
 tonic.workspace = true
 uuid.workspace = true

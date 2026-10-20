@@ -11,7 +11,7 @@ crate-type = ["cdylib", "rlib"]
 default = ["ssr"]
 ssr = [
   "dep:axum", "dep:decision-core", "dep:gateway-core", "dep:gateway-storage",
-  "dep:leptos_axum", "dep:tokio", "dep:tower-http",
+  "dep:leptos_axum", "dep:tokio", "dep:tower-http", "dep:cookie", "dep:governor", "dep:nonzero_ext",
   "leptos/ssr", "leptos/nonce", "leptos_meta/ssr", "leptos_router/ssr", "leptos-use/ssr",
 ]
 hydrate = ["leptos/hydrate", "dep:wasm-bindgen", "dep:console_error_panic_hook"]
@@ -19,6 +19,9 @@ hydrate = ["leptos/hydrate", "dep:wasm-bindgen", "dep:console_error_panic_hook"]
 [dependencies]
 gateway-validation = { path = "../gateway-validation" }
 axum = { version = "0.8.9", features = ["form"], optional = true }
+cookie = { workspace = true, optional = true }
+governor = { workspace = true, optional = true }
+nonzero_ext = { workspace = true, optional = true }
 decision-core = { path = "../decision-core", optional = true }
 gateway-core = { path = "../gateway-core", optional = true }
 gateway-storage = { path = "../gateway-storage", optional = true }

@@ -11,6 +11,7 @@ directories.workspace = true
 futures.workspace = true
 tokio.workspace = true
 ratatui = "0.30.2"
+ratatui-textarea.workspace = true
 crossterm = { version = "0.29", features = ["event-stream"] }
 agent-client = { path = "../../crates/agent-client" }
 agent-protocol = { path = "../../crates/agent-protocol" }

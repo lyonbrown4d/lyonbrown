@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+diesel_migrations.workspace = true
+secrecy.workspace = true
 gateway-validation = { path = "../gateway-validation" }
 argon2 = "=0.5.3"
 async-trait.workspace = true

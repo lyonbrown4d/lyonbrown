@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+cargo_metadata.workspace = true
 agent-config = { path = "../../crates/agent-config" }
 agent-client = { path = "../../crates/agent-client" }
 agent-protocol = { path = "../../crates/agent-protocol" }

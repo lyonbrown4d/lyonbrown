@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+secrecy.workspace = true
 decision-core = { path = "../decision-core" }
 anyhow.workspace = true
 config = { version = "0.15", default-features = false, features = ["toml"] }

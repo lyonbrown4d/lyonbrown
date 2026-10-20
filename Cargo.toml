@@ -10,6 +10,16 @@ license = "Apache-2.0"
 rust-version = "1.99"
 
 [workspace.dependencies]
+async-channel = "=2.5.0"
+cargo_metadata = "=0.23.1"
+cookie = "=0.18.2"
+diesel_migrations = "=2.3.2"
+governor = { version = "=0.10.4", default-features = false, features = ["std"] }
+nonzero_ext = "=0.3.0"
+ratatui-textarea = { version = "=0.9.3", default-features = false, features = ["crossterm"] }
+secrecy = { version = "=0.10.3", features = ["serde"] }
+strum = { version = "=0.28.0", features = ["derive"] }
+utoipa-axum = "=0.3.0"
 rig-core = { version = "=0.44.0", default-features = false }
 rig-reqwest = { version = "=0.44.0", default-features = false, features = ["rustls"] }
 fluxdi = { version = "=2.0.0", default-features = false, features = ["thread-safe", "macros", "async-factory", "lifecycle"] }

@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+thiserror.workspace = true
+secrecy.workspace = true
 agent-security = { path = "../agent-security" }
 anyhow.workspace = true
 async-trait.workspace = true
@@ -25,6 +27,7 @@ tracing.workspace = true
 url = "2.5"
 uuid.workspace = true
 utoipa = "6"
+utoipa-axum.workspace = true
 utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
 
 [dev-dependencies]
