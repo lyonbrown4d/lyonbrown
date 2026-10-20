@@ -23,6 +23,13 @@ fn engine(server: &MockModelServer, protocol: StandardProtocol) -> DecisionEngin
   )
   .unwrap()
 }
+// Protocol fixtures verify adapter behavior, not the constructor's 100 ms latency budget.
+fn functional_request(id: &str, operation: Operation) -> DecisionRequest {
+  let mut request = DecisionRequest::new(id, operation);
+  request.deadline_ms = Policy::default().max_deadline_ms;
+  request
+}
+
 #[tokio::test]
 async fn every_protocol_returns_typed_judgments_and_rejects_bad_options_without_tools() {
   for protocol in StandardProtocol::ALL {
@@ -58,12 +65,20 @@ async fn every_protocol_returns_typed_judgments_and_rejects_bad_options_without_
         .unwrap();
       let result = engine(&server, protocol)
         .decide(
-          &DecisionRequest::new("typed", operation),
+          &functional_request("typed", operation),
           &DecisionCancellation::new(),
         )
         .await;
-      assert_eq!(result.status, DecisionStatus::Accepted, "{result:?}");
-      assert_eq!(serde_json::to_value(result.output).unwrap(), output);
+      assert_eq!(
+        result.status,
+        DecisionStatus::Accepted,
+        "{protocol:?}: {result:?}"
+      );
+      assert_eq!(
+        serde_json::to_value(&result.output).unwrap(),
+        output,
+        "{protocol:?}: {result:?}"
+      );
       let requests = server.requests().await;
       assert_eq!(requests.len(), 1);
       assert!(
@@ -79,7 +94,7 @@ async fn every_protocol_returns_typed_judgments_and_rejects_bad_options_without_
       .unwrap();
     let result = engine(&server, protocol)
       .decide(
-        &DecisionRequest::new(
+        &functional_request(
           "bad",
           Operation::Choice(ChoiceInput {
             context: "data".into(),
@@ -89,8 +104,24 @@ async fn every_protocol_returns_typed_judgments_and_rejects_bad_options_without_
         &DecisionCancellation::new(),
       )
       .await;
-    assert_eq!(result.output, DecisionOutput::Unknown);
-    assert_ne!(result.status, DecisionStatus::Accepted);
+    assert_eq!(
+      result.output,
+      DecisionOutput::Unknown,
+      "{protocol:?}: {result:?}"
+    );
+    assert_ne!(
+      result.status,
+      DecisionStatus::Accepted,
+      "{protocol:?}: {result:?}"
+    );
+    assert!(
+      result
+        .provenance
+        .reason_codes
+        .iter()
+        .any(|code| code == "INVALID_BACKEND_OUTPUT"),
+      "{protocol:?}: {result:?}"
+    );
   }
 }
 #[tokio::test]
@@ -103,7 +134,7 @@ async fn typed_model_failure_and_cancellation_cannot_produce_a_judgment() {
     )])
     .await
     .unwrap();
-    let request = DecisionRequest::new(
+    let request = functional_request(
       "no-tools",
       Operation::Predicate(PredicateInput {
         context: "data".into(),
@@ -113,7 +144,19 @@ async fn typed_model_failure_and_cancellation_cannot_produce_a_judgment() {
     let result = engine(&server, protocol)
       .decide(&request, &DecisionCancellation::new())
       .await;
-    assert_eq!(result.output, DecisionOutput::Unknown);
+    assert_eq!(
+      result.output,
+      DecisionOutput::Unknown,
+      "{protocol:?}: {result:?}"
+    );
+    assert!(
+      result
+        .provenance
+        .reason_codes
+        .iter()
+        .any(|code| code == "BACKEND_UNAVAILABLE"),
+      "{protocol:?}: {result:?}"
+    );
     let stalled = MockModelServer::start(vec![ScriptedReply::stall()])
       .await
       .unwrap();
@@ -122,12 +165,36 @@ async fn typed_model_failure_and_cancellation_cannot_produce_a_judgment() {
     let result = engine(&stalled, protocol)
       .decide(&request, &DecisionCancellation::new())
       .await;
-    assert_eq!(result.output, DecisionOutput::Unknown);
+    assert_eq!(
+      result.output,
+      DecisionOutput::Unknown,
+      "{protocol:?}: {result:?}"
+    );
+    assert!(
+      result
+        .provenance
+        .reason_codes
+        .iter()
+        .any(|code| code == "BACKEND_TIMEOUT"),
+      "{protocol:?}: {result:?}"
+    );
     let cancellation = DecisionCancellation::new();
     cancellation.cancel();
     let result = engine(&stalled, protocol)
       .decide(&request, &cancellation)
       .await;
-    assert_eq!(result.output, DecisionOutput::Unknown);
+    assert_eq!(
+      result.output,
+      DecisionOutput::Unknown,
+      "{protocol:?}: {result:?}"
+    );
+    assert!(
+      result
+        .provenance
+        .reason_codes
+        .iter()
+        .any(|code| code == "CANCELLED"),
+      "{protocol:?}: {result:?}"
+    );
   }
 }

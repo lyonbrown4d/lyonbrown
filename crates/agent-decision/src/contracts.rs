@@ -4,7 +4,8 @@ use std::{collections::BTreeSet, time::Duration};
 use tokio_util::sync::CancellationToken;
 
 macro_rules! choices {
-  ($name:ident { $($variant:ident),+ $(,)? }) => {
+  ($(#[$attribute:meta])* $name:ident { $($variant:ident),+ $(,)? }) => {
+    $(#[$attribute])*
     #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
     #[serde(rename_all = "snake_case")]
     pub enum $name { $($variant),+ }
@@ -36,17 +37,21 @@ choices!(Capability {
   Mcp,
   Delegation
 });
-choices!(Tool {
-  ReadFile,
-  WriteFile,
-  ExecuteCommand,
-  BrowserObserve,
-  BrowserAct,
-  ComputerObserve,
-  ComputerAct,
-  McpCall,
-  DelegateTask
-});
+choices!(
+  #[derive(strum::IntoStaticStr)]
+  #[strum(serialize_all = "snake_case")]
+  Tool {
+    ReadFile,
+    WriteFile,
+    ExecuteCommand,
+    BrowserObserve,
+    BrowserAct,
+    ComputerObserve,
+    ComputerAct,
+    McpCall,
+    DelegateTask
+  }
+);
 
 impl Tool {
   pub fn capability(self) -> Capability {
@@ -72,17 +77,7 @@ impl Tool {
     )
   }
   pub fn name(self) -> &'static str {
-    match self {
-      Self::ReadFile => "read_file",
-      Self::WriteFile => "write_file",
-      Self::ExecuteCommand => "execute_command",
-      Self::BrowserObserve => "browser_observe",
-      Self::BrowserAct => "browser_act",
-      Self::ComputerObserve => "computer_observe",
-      Self::ComputerAct => "computer_act",
-      Self::McpCall => "mcp_call",
-      Self::DelegateTask => "delegate_task",
-    }
+    self.into()
   }
 }
 

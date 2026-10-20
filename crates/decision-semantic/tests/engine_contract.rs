@@ -69,15 +69,17 @@ async fn embedded_engine_consumes_semantics_and_enforces_authorized_model_filter
       ..Default::default()
     }),
   );
+  // This contract includes a blocking embedding worker; host scheduling is not under test.
+  request.deadline_ms = Policy::default().max_deadline_ms;
   request.constraints.local_only = true;
   request
     .constraints
     .required_capabilities
     .insert("tools".into());
   let result = engine.decide(&request, &DecisionCancellation::new()).await;
-  assert_eq!(result.status, DecisionStatus::Accepted);
-  let DecisionOutput::RouteModel(advice) = result.output else {
-    panic!("route advice expected")
+  assert_eq!(result.status, DecisionStatus::Accepted, "{result:?}");
+  let DecisionOutput::RouteModel(advice) = &result.output else {
+    panic!("route advice expected: {result:?}")
   };
   assert_eq!(advice.task_domain, "coding");
   assert_eq!(advice.candidate_model_keys, vec!["local"]);

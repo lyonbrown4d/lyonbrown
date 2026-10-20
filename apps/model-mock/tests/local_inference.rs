@@ -29,24 +29,29 @@ async fn local_registry_and_typed_decision_use_real_inference_boundary_without_w
   registry.register(backend.clone(), 1).await.unwrap();
   let managed = registry.backend("synthetic-local").await.unwrap();
   assert_eq!(managed.info().backend, "synthetic/model-mock");
+  let policy = Policy::default();
+  let decision_budget_ms = policy.max_deadline_ms;
   let engine = DecisionEngine::new(
-    Policy::default(),
+    policy,
     vec![Arc::new(ModelDecisionBackend::local(managed.clone()))],
   )
   .unwrap();
-  let request = DecisionRequest::new(
+  let mut request = DecisionRequest::new(
     "local",
     Operation::Predicate(PredicateInput {
       context: "synthetic".into(),
       question: "valid?".into(),
     }),
   );
+  // Verify the registry/adapter contract within the existing policy budget,
+  // rather than making the request's 100 ms default a host-latency assertion.
+  request.deadline_ms = decision_budget_ms;
+  let decision = engine.decide(&request, &DecisionCancellation::new()).await;
   assert_eq!(
-    engine
-      .decide(&request, &DecisionCancellation::new())
-      .await
-      .status,
-    DecisionStatus::Accepted
+    decision.status,
+    DecisionStatus::Accepted,
+    "decision: {decision:?}; inference: {:?}",
+    backend.counts()
   );
   assert!(
     tokio::time::timeout(

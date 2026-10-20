@@ -12,8 +12,11 @@ pub fn now_ms() -> i64 {
     .unwrap_or(0)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(
+  Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize, strum::IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum RunStatus {
   Accepted,
   Running,
@@ -26,16 +29,7 @@ pub enum RunStatus {
 }
 impl RunStatus {
   pub fn as_str(self) -> &'static str {
-    match self {
-      Self::Accepted => "accepted",
-      Self::Running => "running",
-      Self::AwaitingApproval => "awaiting_approval",
-      Self::CancelRequested => "cancel_requested",
-      Self::Completed => "completed",
-      Self::Failed => "failed",
-      Self::Cancelled => "cancelled",
-      Self::Uncertain => "uncertain",
-    }
+    self.into()
   }
   pub fn terminal(self) -> bool {
     matches!(

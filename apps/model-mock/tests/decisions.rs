@@ -6,13 +6,16 @@ use serde_json::json;
 use std::sync::Arc;
 
 fn request() -> DecisionRequest {
-  DecisionRequest::new(
+  let mut request = DecisionRequest::new(
     "synthetic",
     Operation::Predicate(PredicateInput {
       context: "synthetic facts".into(),
       question: "condition?".into(),
     }),
-  )
+  );
+  // These fixtures check protocol behavior, not the constructor's 100 ms latency budget.
+  request.deadline_ms = Policy::default().max_deadline_ms;
+  request
 }
 fn decision(confidence: f64) -> Reply {
   Reply::Decision { text:json!({"output":{"operation":"predicate","value":{"value":true,"confidence":confidence}},"confidence":confidence,"reason_codes":["SYNTHETIC"]}).to_string(), delay_ms:0 }
@@ -53,42 +56,93 @@ async fn structured_judgments_accept_only_valid_confident_advice_across_protocol
     let first = engine
       .decide(&request(), &DecisionCancellation::new())
       .await;
-    assert_eq!(first.status, DecisionStatus::Accepted);
-    for _ in 0..5 {
+    assert_eq!(
+      first.status,
+      DecisionStatus::Accepted,
+      "{protocol:?}: {first:?}"
+    );
+    for expected_reason in [
+      "LOW_CONFIDENCE",
+      "BACKEND_UNAVAILABLE",
+      "BACKEND_UNAVAILABLE",
+      "BACKEND_UNAVAILABLE",
+      "BACKEND_UNAVAILABLE",
+    ] {
       let failed = engine
         .decide(&request(), &DecisionCancellation::new())
         .await;
-      assert_ne!(failed.status, DecisionStatus::Accepted);
-      assert_eq!(failed.output, DecisionOutput::Unknown);
+      assert_ne!(
+        failed.status,
+        DecisionStatus::Accepted,
+        "{protocol:?}: {failed:?}"
+      );
+      assert_eq!(
+        failed.output,
+        DecisionOutput::Unknown,
+        "{protocol:?}: {failed:?}"
+      );
+      assert!(
+        failed
+          .provenance
+          .reason_codes
+          .iter()
+          .any(|code| code == expected_reason),
+        "{protocol:?}: expected {expected_reason}; {failed:?}"
+      );
     }
-    let choice = DecisionRequest::new(
+    let mut choice = DecisionRequest::new(
       "bounded-choice",
       Operation::Choice(ChoiceInput {
         context: "synthetic".into(),
         options: vec!["authorized".into()],
       }),
     );
+    choice.deadline_ms = Policy::default().max_deadline_ms;
+    let rejected = engine.decide(&choice, &DecisionCancellation::new()).await;
     assert_eq!(
-      engine
-        .decide(&choice, &DecisionCancellation::new())
-        .await
-        .output,
-      DecisionOutput::Unknown
+      rejected.output,
+      DecisionOutput::Unknown,
+      "{protocol:?}: {rejected:?}"
+    );
+    assert!(
+      rejected
+        .provenance
+        .reason_codes
+        .iter()
+        .any(|code| code == "INVALID_BACKEND_OUTPUT"),
+      "{protocol:?}: {rejected:?}"
     );
     let mut timeout = request();
     timeout.deadline_ms = 30;
+    let timed_out = engine.decide(&timeout, &DecisionCancellation::new()).await;
     assert_eq!(
-      engine
-        .decide(&timeout, &DecisionCancellation::new())
-        .await
-        .output,
-      DecisionOutput::Unknown
+      timed_out.output,
+      DecisionOutput::Unknown,
+      "{protocol:?}: {timed_out:?}"
+    );
+    assert!(
+      timed_out
+        .provenance
+        .reason_codes
+        .iter()
+        .any(|code| code == "BACKEND_TIMEOUT"),
+      "{protocol:?}: {timed_out:?}"
     );
     let cancel = DecisionCancellation::new();
     cancel.cancel();
+    let cancelled = engine.decide(&request(), &cancel).await;
     assert_eq!(
-      engine.decide(&request(), &cancel).await.output,
-      DecisionOutput::Unknown
+      cancelled.output,
+      DecisionOutput::Unknown,
+      "{protocol:?}: {cancelled:?}"
+    );
+    assert!(
+      cancelled
+        .provenance
+        .reason_codes
+        .iter()
+        .any(|code| code == "CANCELLED"),
+      "{protocol:?}: {cancelled:?}"
     );
   }
 }
