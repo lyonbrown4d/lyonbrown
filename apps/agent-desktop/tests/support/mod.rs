@@ -16,6 +16,7 @@ use tokio_util::sync::CancellationToken;
 
 pub struct Harness {
   pub runtime: Arc<tokio::runtime::Runtime>,
+  pub client_runtime: Arc<tokio::runtime::Runtime>,
   pub model: MockModelServer,
   pub daemon: agentd::Daemon,
   pub client: agent_client::AgentClient,
@@ -57,6 +58,15 @@ impl Harness {
         .enable_all()
         .build()
         .expect("fixture executor"),
+    );
+    // GPUI's deterministic TestDispatcher accepts wakes only from this test
+    // thread. Drive client tasks here while the real daemon/model keep their
+    // multithreaded runtime (the Harness stream adapter uses block_in_place).
+    let client_runtime = Arc::new(
+      tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("fixture client executor"),
     );
     let directory = tempfile::tempdir().expect("private desktop fixture");
     let workspace = directory.path().join("workspace");
@@ -168,7 +178,7 @@ impl Harness {
         |window, cx| {
           cx.new(|cx| {
             Desktop::new(
-              runtime.clone(),
+              client_runtime.clone(),
               connector,
               browser,
               computer,
@@ -192,6 +202,7 @@ impl Harness {
     .expect("workspace input");
     Self {
       runtime,
+      client_runtime,
       model,
       daemon,
       client,
@@ -240,8 +251,11 @@ impl Harness {
         Instant::now() < deadline,
         "desktop condition timed out: {snapshot:?}"
       );
-      // Tokio's real loopback sockets run on OS workers; also advance GPUI's test executor.
-      std::thread::sleep(Duration::from_millis(10));
+      // The real server runs on OS workers. Poll the client runtime on this
+      // thread so channel wakes enter GPUI through its supported test boundary.
+      self.client_runtime.block_on(async {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+      });
       cx.executor().timer(Duration::from_millis(100)).await;
     }
   }

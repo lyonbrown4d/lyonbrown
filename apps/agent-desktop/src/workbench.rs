@@ -1,6 +1,7 @@
 mod browser;
 mod drafts;
 pub(crate) mod files;
+mod frames;
 mod ime;
 mod input;
 mod replies;

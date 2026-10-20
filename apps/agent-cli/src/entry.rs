@@ -1,15 +1,15 @@
 use crate::{
   backend::{self, Action},
   config::{Config, ResolvedConfig},
+  input::{self, send},
   model::{App, Connection},
   terminal,
   theme::Theme,
   update, view,
 };
 use clap::{CommandFactory, FromArgMatches, parser::ValueSource};
-use crossterm::event::{Event, EventStream, KeyCode, KeyEventKind, KeyModifiers};
+use crossterm::event::EventStream;
 use futures::StreamExt;
-use tokio::sync::mpsc;
 
 pub fn run() -> anyhow::Result<std::process::ExitCode> {
   if let Some(code) = agent_browser_runtime::dispatch_entry()? {
@@ -67,64 +67,11 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
             }
         }
         event = events.next() => match event {
-            Some(Ok(Event::Key(key))) if key.kind == KeyEventKind::Press => {
-                if key.modifiers.contains(KeyModifiers::CONTROL) {
-                    match key.code {
-                        KeyCode::Char('c') | KeyCode::Char('d') => break,
-                        KeyCode::Char('n') => send(&actions, Action::NewSession)?,
-                        KeyCode::Char('r') => {
-                            app.connection = Connection::Connecting;
-                            send(&actions, Action::Connect)?;
-                        }
-                        KeyCode::Char('x') => {
-                            if let Some(id) = &app.active_run { send(&actions, Action::Cancel(id.clone()))?; }
-                        }
-                        KeyCode::Char('y') | KeyCode::Char('e') => {
-                            if let Some(id) = app.approvals.first() {
-                                send(&actions, Action::Approve { id: id.id.clone(), approved: key.code == KeyCode::Char('y') })?;
-                            }
-                        }
-                        _ => {}
-                    }
-                } else {
-                    match key.code {
-                        KeyCode::Char(character) => app.input.push(character),
-                        KeyCode::Backspace => { app.input.pop(); }
-                        KeyCode::Enter if key.modifiers.contains(KeyModifiers::ALT) || key.modifiers.contains(KeyModifiers::SHIFT) => app.input.push('\n'),
-                        KeyCode::Enter => {
-                            if let Some(command) = crate::computer::parse_local(&app.input) {
-                                match command {
-                                    Ok(command) => {
-                                        send(&actions, Action::Computer { session: app.selected_session().map(|session| session.id.clone()), command })?;
-                                        app.input.clear();
-                                    }
-                                    Err(error) => app.computer_detail = error.to_string(),
-                                }
-                            } else if app.connection != Connection::Connected {
-                                app.notice = "Disconnected: Ctrl+R reconnects. Your draft is preserved.".into();
-                            } else if let Some(session) = app.selected_session() {
-                                if !app.submitting && !app.input.trim().is_empty() {
-                                    send(&actions, Action::Submit { session: session.id.clone(), prompt: app.input.clone() })?;
-                                    app.submitting = true;
-                                }
-                            } else { app.notice = "Ctrl+N creates a session before sending.".into(); }
-                        }
-                        KeyCode::Tab => {
-                            app.next_session();
-                            if let Some(session) = app.selected_session() { send(&actions, Action::Select(session.id.clone()))?; }
-                        }
-                        KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => app.computer_scroll = app.computer_scroll.saturating_add(3),
-                        KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => app.computer_scroll = app.computer_scroll.saturating_sub(3),
-                        KeyCode::PageDown => app.scroll = app.scroll.saturating_add(5),
-                        KeyCode::PageUp => app.scroll = app.scroll.saturating_sub(5),
-                        _ => {}
-                    }
-                }
+            Some(Ok(event)) => {
+                if input::handle(&mut app, event, &actions)? { break; }
             }
-            Some(Ok(Event::Paste(text))) => app.input.push_str(&text),
             Some(Err(error)) => return Err(error.into()),
             None => break,
-            _ => {}
         }
     }
   }
@@ -133,10 +80,4 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
     let _ = closed.await;
   }
   Ok(())
-}
-
-fn send(actions: &mpsc::Sender<Action>, action: Action) -> anyhow::Result<()> {
-  actions
-    .try_send(action)
-    .map_err(|_| anyhow::anyhow!("Client request queue unavailable; reconnect before retrying"))
 }

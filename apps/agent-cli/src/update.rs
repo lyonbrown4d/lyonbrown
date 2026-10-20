@@ -118,7 +118,7 @@ pub fn apply(app: &mut App, update: Update) {
     }
     Update::Submitted(prompt) => {
       app.submitting = false;
-      if app.input == prompt {
+      if app.input.text() == prompt {
         app.input.clear();
       }
     }

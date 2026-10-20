@@ -2,6 +2,7 @@
 extern crate self as agent_desktop;
 
 mod chrome;
+mod completion;
 mod composition;
 mod computer;
 mod connection;
@@ -14,6 +15,14 @@ mod settings;
 mod shell;
 mod tabs;
 mod workbench;
+
+#[cfg(test)]
+#[path = "../tests/support/mod.rs"]
+mod test_support;
+
+#[cfg(test)]
+#[path = "../tests/internal/completion_delivery.rs"]
+mod completion_delivery;
 
 #[cfg(test)]
 #[path = "../tests/internal/frame_generation.rs"]

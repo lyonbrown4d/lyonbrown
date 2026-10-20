@@ -21,7 +21,12 @@ async fn real_terminal_auth_history_multiline_resize_reconnect_and_cleanup() {
   let session = node.client.list_sessions().await.unwrap().pop().unwrap();
   let pasted = "你好 🦀\nsecond input line";
   let prompt = format!("{pasted}\nkeyboard newline");
-  terminal.paste(pasted);
+  terminal.paste("你好错 🦀");
+  // Real terminal Home/Right/Delete events edit within Unicode text.
+  terminal.send("\x1b[H\x1b[C\x1b[C\x1b[3~");
+  terminal.screen("你好 🦀").await;
+  terminal.send("\x1b[F");
+  terminal.paste("\nsecond input line");
   terminal.screen("second input line").await;
   terminal.send("\x1b\r"); // Alt+Enter inserts a newline instead of submitting.
   terminal.paste("keyboard newline");

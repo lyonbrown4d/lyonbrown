@@ -42,9 +42,11 @@ impl Desktop {
         anyhow::Ok(Update::Connected(Box::new(client), sessions))
       }
       .await;
-      let _ = sender.send(ScopedUpdate::Connection(
-        result.unwrap_or_else(|error| Update::Error(public_error(error))),
-      ));
+      let _ = sender
+        .send(ScopedUpdate::Connection(
+          result.unwrap_or_else(|error| Update::Error(public_error(error))),
+        ))
+        .await;
     });
     cx.notify();
   }
@@ -66,8 +68,8 @@ impl Desktop {
         .await
         .map(|session| Update::Session(session, false))
         .unwrap_or_else(|error| Update::Error(public_error(error)));
-      let _ = sender.send(update);
-      sender.finish_request();
+      let _ = sender.send(update).await;
+      sender.finish_request().await;
     });
     cx.notify();
   }
@@ -102,7 +104,7 @@ impl Desktop {
         .await
         .map(Update::Runs)
         .unwrap_or_else(|error| Update::Error(public_error(error)));
-      let _ = sender.send(update);
+      let _ = sender.send(update).await;
     });
     cx.notify();
   }
@@ -133,29 +135,33 @@ impl Desktop {
             let title = prompt.chars().take(48).collect::<String>();
             let session = client.create_session(&title, &workspace).await?;
             let id = session.id.clone();
-            let _ = sender.send(Update::Session(session, true));
+            let _ = sender.send(Update::Session(session, true)).await;
             id
           }
         };
         let run = client.start_run(&session_id, &prompt, &key).await?;
         let id = run.id.clone();
-        let _ = sender.send(Update::Started(run));
+        let _ = sender.send(Update::Started(run)).await;
         let watcher = sender.clone();
-        sender.attach_watch(tokio::spawn(async move {
-          if let Err(error) = watch(client, id, watcher.clone(), 0).await {
-            let _ = watcher.send(Update::Error(public_error(error)));
-          }
-        }));
+        sender
+          .attach_watch(tokio::spawn(async move {
+            if let Err(error) = watch(client, id, watcher.clone(), 0).await {
+              let _ = watcher.send(Update::Error(public_error(error))).await;
+            }
+          }))
+          .await;
         anyhow::Ok(())
       }
       .await;
       if let Err(error) = result {
-        let _ = sender.send(Update::Error(format!(
-          "{} No request was replayed; inspect the run before retrying.",
-          public_error(error)
-        )));
+        let _ = sender
+          .send(Update::Error(format!(
+            "{} No request was replayed; inspect the run before retrying.",
+            public_error(error)
+          )))
+          .await;
       }
-      sender.finish_request();
+      sender.finish_request().await;
     });
     cx.notify();
   }
@@ -171,7 +177,7 @@ impl Desktop {
         .await
         .map(Update::Run)
         .unwrap_or_else(|error| Update::Error(public_error(error)));
-      let _ = sender.send(update);
+      let _ = sender.send(update).await;
     });
     cx.notify();
   }
@@ -190,8 +196,10 @@ impl Desktop {
       let result = async {
         let run = client.get_run(&id).await?;
         let completed = terminal(&run.status);
-        let _ = sender.send(Update::Run(run));
-        let _ = sender.send(Update::Approvals(client.list_approvals(&id).await?));
+        let _ = sender.send(Update::Run(run)).await;
+        let _ = sender
+          .send(Update::Approvals(client.list_approvals(&id).await?))
+          .await;
         if !completed {
           watch(client, id, sender.clone(), cursor).await?;
         }
@@ -199,7 +207,7 @@ impl Desktop {
       }
       .await;
       if let Err(error) = result {
-        let _ = sender.send(Update::Error(public_error(error)));
+        let _ = sender.send(Update::Error(public_error(error))).await;
       }
     }));
     cx.notify();
@@ -216,13 +224,15 @@ impl Desktop {
       let result = async {
         client.approve(&id, approved).await?;
         if let Some(run) = run {
-          let _ = sender.send(Update::Approvals(client.list_approvals(&run).await?));
+          let _ = sender
+            .send(Update::Approvals(client.list_approvals(&run).await?))
+            .await;
         }
         anyhow::Ok(())
       }
       .await;
       if let Err(error) = result {
-        let _ = sender.send(Update::Error(public_error(error)));
+        let _ = sender.send(Update::Error(public_error(error))).await;
       }
     });
     cx.notify();
@@ -249,16 +259,18 @@ async fn watch(
       event.kind.as_str(),
       "run_completed" | "run_failed" | "run_cancelled" | "run_uncertain"
     );
-    let _ = sender.send(Update::Event(event));
+    let _ = sender.send(Update::Event(event)).await;
     if approval_required {
-      let _ = sender.send(Update::Approvals(client.list_approvals(&id).await?));
+      let _ = sender
+        .send(Update::Approvals(client.list_approvals(&id).await?))
+        .await;
     }
     if completed {
-      let _ = sender.send(Update::Run(client.get_run(&id).await?));
+      let _ = sender.send(Update::Run(client.get_run(&id).await?)).await;
       return Ok(());
     }
   }
   let run = client.get_run(&id).await?;
-  let _ = sender.send(Update::Run(run));
+  let _ = sender.send(Update::Run(run)).await;
   Ok(())
 }

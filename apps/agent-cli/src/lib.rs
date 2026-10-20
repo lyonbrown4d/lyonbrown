@@ -1,9 +1,11 @@
 pub mod backend;
 mod bootstrap;
+pub mod composer;
 pub mod computer;
 mod computer_backend;
 mod computer_command;
 pub mod config;
+pub mod input;
 pub mod model;
 mod session_backend;
 pub mod theme;

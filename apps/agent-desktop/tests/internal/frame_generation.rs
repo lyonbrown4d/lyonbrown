@@ -6,7 +6,7 @@ use agent_protocol::v1::{BrowserFrame, BrowserSpace, BrowserTab};
 use gpui_kit::{
   AppContext as _, Context, Entity, IntoElement, Render, TestAppContext, Window, div, px, size,
 };
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 struct EmptyWindow;
 
@@ -33,13 +33,10 @@ fn deliver(view: &Entity<Workbench>, reply: Reply, cx: &mut TestAppContext) {
     let state = view.read(cx);
     state
       .sender
-      .send((state.generation, reply))
+      .try_send((state.generation, reply))
       .expect("deliver completion");
   });
-  // Advance the existing workbench receiver deterministically, without network
-  // timing, native CEF, or an additional production test interface.
-  cx.run_until_parked();
-  cx.executor().advance_clock(Duration::from_millis(80));
+  // Completions wake GPUI directly; no timer advancement or native CEF is needed.
   cx.run_until_parked();
 }
 
@@ -72,6 +69,35 @@ fn takeover_discards_every_obsolete_frame_completion(cx: &mut TestAppContext) {
       })
     })
     .expect("workbench fixture");
+  let previous = cx.update(|cx| view.read(cx).generation);
+  cx.update_window(window.into(), |_, window, cx| {
+    view.update(cx, |state, cx| {
+      state.bind(None, Some("new-session".into()), Vec::new(), window, cx);
+      state.pending_save = true;
+      state
+        .sender
+        .try_send((previous, Reply::SaveError("obsolete save".into())))
+        .expect("obsolete completion");
+    });
+  })
+  .expect("change presentation generation");
+  cx.run_until_parked();
+  cx.update(|cx| {
+    let state = view.read(cx);
+    assert!(
+      state.pending_save,
+      "old completion cannot finish a new save"
+    );
+    assert!(state.error.is_none());
+  });
+  deliver(&view, Reply::SaveError("current save".into()), cx);
+  cx.update(|cx| {
+    view.update(cx, |state, _| {
+      assert!(!state.pending_save);
+      assert_eq!(state.error.as_deref(), Some("current save"));
+      state.error = None;
+    });
+  });
   cx.update(|cx| {
     view.update(cx, |state, _| {
       state.tab = Some(BrowserTab {
@@ -140,4 +166,11 @@ fn takeover_discards_every_obsolete_frame_completion(cx: &mut TestAppContext) {
     assert!(state.browser_error.is_none());
     assert_eq!(state.inputs_sent, 0);
   });
+  let sender = cx.update(|cx| view.read(cx).sender.clone());
+  cx.update(|_| drop(view));
+  cx.run_until_parked();
+  assert!(
+    sender.is_closed(),
+    "weak completion/frame tasks cannot retain a released workbench"
+  );
 }

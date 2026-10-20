@@ -95,7 +95,7 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
     .await;
   let first = harness.snapshot(cx).tabs[0].id;
   harness.input_prompt(cx, "Write tab-a.txt after approval.");
-  // Switch before the poll delivers Session/Started acknowledgements.
+  // Switch while the Tokio request is delivering Session/Started acknowledgements.
   harness.click("new-chat-tab", cx);
   let second = harness.snapshot(cx).tabs[1].id;
   let background = harness

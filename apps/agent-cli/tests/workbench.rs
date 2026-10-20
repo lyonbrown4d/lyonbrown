@@ -18,19 +18,19 @@ fn disconnect_and_failed_submission_preserve_draft() {
     &mut app,
     agent_cli::backend::Update::Disconnected("Connection lost".into()),
   );
-  assert_eq!(app.input, "A draft 🦀");
+  assert_eq!(app.input.text(), "A draft 🦀");
   assert!(matches!(app.connection, Connection::Disconnected(_)));
   agent_cli::update::apply(
     &mut app,
     agent_cli::backend::Update::Notice("Request failed".into()),
   );
   assert!(!app.submitting);
-  assert_eq!(app.input, "A draft 🦀");
+  assert_eq!(app.input.text(), "A draft 🦀");
   agent_cli::update::apply(
     &mut app,
     agent_cli::backend::Update::Submitted("Older draft".into()),
   );
-  assert_eq!(app.input, "A draft 🦀");
+  assert_eq!(app.input.text(), "A draft 🦀");
   agent_cli::update::apply(
     &mut app,
     agent_cli::backend::Update::Submitted("A draft 🦀".into()),

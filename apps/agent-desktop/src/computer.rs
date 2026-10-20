@@ -7,10 +7,7 @@ use agent_client::AgentClient;
 use agent_computer_runtime::{DesktopScope, DesktopTarget, RuntimeAttachment};
 use gpui_kit::component::select::SelectState;
 use gpui_kit::*;
-use std::{
-  sync::{Arc, mpsc},
-  time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 pub(crate) enum Reply {
   Targets(Vec<DesktopTarget>),
@@ -25,7 +22,7 @@ pub(crate) struct ComputerPane {
   client: Option<AgentClient>,
   session: Option<String>,
   pub(crate) generation: u64,
-  pub(crate) sender: mpsc::Sender<(u64, Reply)>,
+  pub(crate) sender: async_channel::Sender<(u64, Reply)>,
   targets: Vec<DesktopTarget>,
   select: Entity<SelectState<Vec<String>>>,
   attachment: Option<RuntimeAttachment>,
@@ -37,7 +34,8 @@ pub(crate) struct ComputerPane {
   detach_warning: bool,
   operation: Option<tokio::task::JoinHandle<()>>,
   _selection: Subscription,
-  _poll: Task<()>,
+  _completion: Task<()>,
+  _host_health: Task<()>,
 }
 
 impl ComputerPane {
@@ -50,17 +48,35 @@ impl ComputerPane {
     let select =
       cx.new(|cx| SelectState::new(Vec::<String>::new(), None, window, cx).searchable(true));
     let selection = cx.observe(&select, |_, _, cx| cx.notify());
-    let (sender, receiver) = mpsc::channel();
-    let poll = cx.spawn_in(window, async move |view, cx| {
-      loop {
-        cx.background_executor().timer(Duration::from_millis(80)).await;
-        if view.update_in(cx, |view, window, cx| {
-          for (generation, reply) in receiver.try_iter() {
+    // Only explicit operations produce replies; keep their queue small and bounded.
+    let (sender, receiver) = crate::completion::channel(8);
+    let completion = cx.spawn_in(window, async move |view, cx| {
+      let mut remaining = 32;
+      while let Ok((generation, reply)) = receiver.recv().await {
+        if view
+          .update_in(cx, |view, window, cx| {
             if generation == view.generation {
               view.apply(reply, window, cx);
             }
-            // An obsolete Attached reply is dropped here, cancelling its host.
-          }
+            // Dropping an obsolete Attached reply revokes its host.
+          })
+          .is_err()
+        {
+          break;
+        }
+        remaining -= 1;
+        if remaining == 0 {
+          remaining = 32;
+          // Yield through GPUI's scheduler so a stream burst cannot monopolize input/rendering.
+          cx.foreground_executor().spawn(async {}).await;
+        }
+      }
+    });
+    // Host failure has no operation reply; retain its independent health check.
+    let host_health = cx.spawn_in(window, async move |view, cx| {
+      loop {
+        cx.background_executor().timer(Duration::from_millis(80)).await;
+        if view.update_in(cx, |view, _, cx| {
           let failure = view.attachment.as_ref().is_some_and(|host| host.is_finished());
           if failure && view.error.is_none() {
             view.error = Some("Computer runtime disconnected. Detach before explicitly attaching again; actions were not replayed.".into());
@@ -89,7 +105,8 @@ impl ComputerPane {
       detach_warning: false,
       operation: None,
       _selection: selection,
-      _poll: poll,
+      _completion: completion,
+      _host_health: host_health,
     }
   }
 
@@ -102,7 +119,7 @@ impl ComputerPane {
     let generation = self.generation;
     let sender = self.sender.clone();
     self.operation = Some(self.runtime.spawn(async move {
-      let _ = sender.send((generation, future.await));
+      let _ = sender.send((generation, future.await)).await;
     }));
   }
 

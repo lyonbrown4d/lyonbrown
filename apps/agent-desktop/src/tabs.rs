@@ -1,11 +1,13 @@
+mod delivery;
 mod state;
 mod view;
 
 use crate::{connection::Update, shell::Desktop};
+use delivery::PendingWatch;
+pub(super) use delivery::TabSender;
 use gpui_kit::*;
 use state::ChatState;
 pub(super) use state::Navigation;
-use std::sync::mpsc;
 
 pub(super) const COMPUTER_WAIT_MESSAGE: &str =
   "Wait for the computer operation to finish before changing chats or the connection.";
@@ -16,46 +18,10 @@ pub(super) const BROWSER_WAIT_MESSAGE: &str =
   "Wait for the browser operation to finish before changing chats or the connection.";
 
 pub(super) enum ScopedUpdate {
-  Tab {
-    id: u64,
-    update: Update,
-  },
-  Watch {
-    id: u64,
-    task: tokio::task::JoinHandle<()>,
-  },
+  Tab { id: u64, update: Update },
+  Watch { id: u64, task: PendingWatch },
   Connection(Update),
   RequestFinished,
-}
-
-#[derive(Clone)]
-pub(super) struct TabSender {
-  id: u64,
-  sender: mpsc::Sender<ScopedUpdate>,
-}
-
-impl TabSender {
-  pub fn send(&self, update: Update) -> bool {
-    self
-      .sender
-      .send(ScopedUpdate::Tab {
-        id: self.id,
-        update,
-      })
-      .is_ok()
-  }
-
-  pub fn finish_request(&self) {
-    let _ = self.sender.send(ScopedUpdate::RequestFinished);
-  }
-
-  pub fn attach_watch(&self, task: tokio::task::JoinHandle<()>) {
-    if let Err(mpsc::SendError(ScopedUpdate::Watch { task, .. })) =
-      self.sender.send(ScopedUpdate::Watch { id: self.id, task })
-    {
-      task.abort();
-    }
-  }
 }
 
 /// A logical chat's presentation identity; sessions and runs remain daemon-owned.
@@ -107,6 +73,9 @@ impl Desktop {
         return;
       }
       ScopedUpdate::Watch { id, task } => {
+        let Some(task) = task.into_inner() else {
+          return;
+        };
         let slot = if id == self.navigation.active {
           Some(&mut self.watch_task)
         } else {

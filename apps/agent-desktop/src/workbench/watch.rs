@@ -16,6 +16,7 @@ impl Workbench {
         while let Some(event) = events.message().await? {
           if sender
             .send((generation, Reply::Changed(event.paths)))
+            .await
             .is_err()
           {
             break;
@@ -25,12 +26,14 @@ impl Workbench {
       }
       .await;
       if let Err(error) = result {
-        let _ = sender.send((
-          generation,
-          Reply::WatchError(format!(
-            "Workspace watch disconnected: {error}. Refresh files to inspect current state."
-          )),
-        ));
+        let _ = sender
+          .send((
+            generation,
+            Reply::WatchError(format!(
+              "Workspace watch disconnected: {error}. Refresh files to inspect current state."
+            )),
+          ))
+          .await;
       }
     }));
   }

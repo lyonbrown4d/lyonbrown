@@ -146,12 +146,7 @@ pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
     .block(panel("Computer · Alt+PgUp/PgDn", theme)),
     side[2],
   );
-  frame.render_widget(
-    Paragraph::new(format!("{}▏", app.input))
-      .wrap(Wrap { trim: false })
-      .block(panel("Message · Enter send · Alt+Enter newline", theme)),
-    rows[2],
-  );
+  composer(frame, app, rows[2], theme);
   frame.render_widget(
     Paragraph::new(app.notice.as_str())
       .style(Style::default().fg(theme.muted))
@@ -197,14 +192,26 @@ fn compact(frame: &mut Frame, app: &App, theme: Theme) {
         .map(|line| Line::from(line.to_owned())),
     );
   }
-  lines.push(Line::from(format!("{}▏", app.input)));
   lines.push(Line::from(app.notice.clone()));
+  let rows = Layout::vertical([
+    Constraint::Min(1),
+    Constraint::Length(frame.area().height.min(3)),
+  ])
+  .split(frame.area());
   frame.render_widget(
     Paragraph::new(lines)
       .style(Style::default().fg(theme.text))
       .wrap(Wrap { trim: false }),
-    frame.area(),
+    rows[0],
   );
+  composer(frame, app, rows[1], theme);
+}
+
+fn composer(frame: &mut Frame, app: &App, area: ratatui::layout::Rect, theme: Theme) {
+  let block = panel("Message · Enter send · Alt/Shift+Enter newline", theme);
+  let inner = block.inner(area);
+  frame.render_widget(block, area);
+  app.input.render(frame, inner);
 }
 
 fn panel(title: &str, theme: Theme) -> Block<'_> {

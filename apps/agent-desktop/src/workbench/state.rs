@@ -8,7 +8,7 @@ use gpui_kit::component::{
 };
 use gpui_kit::*;
 use std::{
-  sync::{Arc, mpsc},
+  sync::Arc,
   time::{Duration, Instant},
 };
 
@@ -41,7 +41,7 @@ pub struct Workbench {
   pub(crate) runtime: Arc<tokio::runtime::Runtime>,
   pub(crate) browser: fluxdi::Shared<crate::composition::BrowserPort>,
   pub(crate) attachment: Option<agent_browser_runtime::RuntimeAttachment>,
-  pub(crate) sender: mpsc::Sender<(u64, Reply)>,
+  pub(crate) sender: async_channel::Sender<(u64, Reply)>,
   pub(crate) generation: u64,
   pub(crate) client: Option<AgentClient>,
   pub(crate) session: Option<String>,
@@ -77,9 +77,10 @@ pub struct Workbench {
   pub(crate) inputs_sent: u64,
   pub(crate) last_pointer: Option<(i32, i32)>,
   pub(crate) watch: Option<tokio::task::JoinHandle<()>>,
-  last_frame: Instant,
+  pub(super) last_frame: Instant,
   _editor_subscription: Subscription,
-  _poll: Task<()>,
+  _completion: Task<()>,
+  _frame_refresh: Task<()>,
 }
 
 impl Workbench {
@@ -90,25 +91,43 @@ impl Workbench {
     window: &mut Window,
     cx: &mut Context<Self>,
   ) -> Self {
-    let (sender, receiver) = mpsc::channel();
+    // File/watch completions backpressure Tokio rather than accumulating without a limit.
+    let (sender, receiver) = crate::completion::channel(64);
     let editor = cx.new(|cx| {
       EditorState::new(window, cx)
         .line_number(true)
         .placeholder("Open a workspace file")
     });
     let editor_subscription = cx.observe(&editor, |_, _, cx| cx.notify());
-    let poll = cx.spawn_in(window, async move |view, cx| {
-      loop {
-        cx.background_executor()
-          .timer(Duration::from_millis(80))
-          .await;
+    let completion = cx.spawn_in(window, async move |view, cx| {
+      let mut remaining = 32;
+      while let Ok((generation, reply)) = receiver.recv().await {
         if view
           .update_in(cx, |view, window, cx| {
-            for (generation, reply) in receiver.try_iter() {
-              if generation == view.generation {
-                view.apply(reply, window, cx);
-              }
+            if generation == view.generation {
+              view.apply(reply, window, cx);
             }
+          })
+          .is_err()
+        {
+          break;
+        }
+        remaining -= 1;
+        if remaining == 0 {
+          remaining = 32;
+          // Yield through GPUI's scheduler so a stream burst cannot monopolize input/rendering.
+          cx.foreground_executor().spawn(async {}).await;
+        }
+      }
+    });
+    // Frame production has its own cadence, independent of completion delivery.
+    let frame_refresh = cx.spawn_in(window, async move |view, cx| {
+      loop {
+        cx.background_executor()
+          .timer(Duration::from_millis(160))
+          .await;
+        if view
+          .update_in(cx, |view, _, cx| {
             if view.last_frame.elapsed() >= Duration::from_millis(160) {
               view.fetch_frame(cx);
             }
@@ -167,7 +186,8 @@ impl Workbench {
       watch: None,
       last_frame: Instant::now(),
       _editor_subscription: editor_subscription,
-      _poll: poll,
+      _completion: completion,
+      _frame_refresh: frame_refresh,
     }
   }
 
@@ -243,49 +263,7 @@ impl Workbench {
       let reply = future
         .await
         .unwrap_or_else(|error| Reply::Error(error.to_string()));
-      let _ = sender.send((generation, reply));
+      let _ = sender.send((generation, reply)).await;
     });
-  }
-
-  pub(crate) fn fetch_frame(&mut self, cx: &mut Context<Self>) {
-    self.last_frame = Instant::now();
-    self.resize_browser(cx);
-    if let Some(error) = self
-      .attachment
-      .as_ref()
-      .and_then(|attachment| attachment.error())
-    {
-      self.browser_error = Some(format!(
-        "Browser runtime disconnected: {error}. Restart runtime to open a new page; prior actions will not be replayed."
-      ));
-      return;
-    }
-    if self.frame_pending || self.browser_error.is_some() {
-      return;
-    }
-    let (Some(client), Some(tab)) = (self.client.clone(), self.tab.clone()) else {
-      return;
-    };
-    self.frame_pending = true;
-    let generation = self.frame_generation;
-    let refresh_input = self.input_frame_pending;
-    let sequence = if refresh_input {
-      0
-    } else {
-      self.frame.as_ref().map_or(0, |(frame, _)| frame.sequence)
-    };
-    self.request(async move {
-      Ok(match client.browser_frame(&tab.id, sequence).await {
-        Ok(frame) => Reply::Frame(generation, frame, refresh_input),
-        Err(error) if crate::connection::frame_not_ready(&error) => Reply::NoFrame(generation),
-        Err(error) => Reply::FrameError(generation, error.to_string()),
-      })
-    });
-  }
-
-  pub(crate) fn invalidate_frames(&mut self) {
-    self.frame_generation = self.frame_generation.saturating_add(1);
-    self.frame = None;
-    self.frame_pending = false;
   }
 }

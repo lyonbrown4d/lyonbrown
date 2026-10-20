@@ -1,5 +1,4 @@
-#[path = "../support/mod.rs"]
-mod support;
+use crate::test_support as support;
 
 use crate::{
   ComputerPort,
@@ -9,7 +8,7 @@ use agent_computer::{Bounds, DesktopTarget, TargetScope};
 use gpui_kit::{
   AppContext as _, Context, Entity, IntoElement, Render, TestAppContext, Window, div, px, size,
 };
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 struct EmptyWindow;
 impl Render for EmptyWindow {
@@ -37,11 +36,9 @@ fn deliver(view: &Entity<ComputerPane>, generation: u64, reply: Reply, cx: &mut 
     view
       .read(cx)
       .sender
-      .send((generation, reply))
+      .try_send((generation, reply))
       .expect("completion")
   });
-  cx.run_until_parked();
-  cx.executor().advance_clock(Duration::from_millis(80));
   cx.run_until_parked();
 }
 
@@ -110,6 +107,13 @@ fn scope_catalog_and_errors_from_old_session_connection_or_operation_cannot_upda
     })
     .expect("clear previous operation state");
   }
+  let sender = cx.update(|cx| view.read(cx).sender.clone());
+  cx.update(|_| drop(view));
+  cx.run_until_parked();
+  assert!(
+    sender.is_closed(),
+    "weak completion/health tasks cannot retain a released pane"
+  );
 }
 
 #[gpui_kit::test]

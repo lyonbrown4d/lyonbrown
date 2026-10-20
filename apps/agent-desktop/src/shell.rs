@@ -8,10 +8,7 @@ use gpui_kit::component::{
   resizable::{h_resizable, resizable_panel},
 };
 use gpui_kit::{TestSupportExt as _, prelude::FluentBuilder as _, *};
-use std::{
-  sync::{Arc, mpsc},
-  time::Duration,
-};
+use std::sync::Arc;
 
 actions!(
   desktop,
@@ -31,7 +28,7 @@ actions!(
 pub struct Desktop {
   pub(super) connector: fluxdi::Shared<crate::composition::ClientPort>,
   pub(super) runtime: Arc<tokio::runtime::Runtime>,
-  pub(super) sender: mpsc::Sender<crate::tabs::ScopedUpdate>,
+  pub(super) sender: async_channel::Sender<crate::tabs::ScopedUpdate>,
   pub(super) client: Option<AgentClient>,
   pub(super) sessions: Vec<Session>,
   pub(super) selected: Option<String>,
@@ -54,7 +51,8 @@ pub struct Desktop {
   pub(super) show_settings: bool,
   pub(super) navigation: crate::tabs::Navigation,
   pub(super) watch_task: Option<tokio::task::JoinHandle<()>>,
-  _poll: Task<()>,
+  _completion: Task<()>,
+  _pending_work: [Subscription; 2],
 }
 
 impl Drop for Desktop {
@@ -78,43 +76,35 @@ impl Desktop {
   ) -> Self {
     let settings = &configuration.settings;
     let data_dir = &configuration.data_dir;
-    let (sender, receiver) = mpsc::channel();
+    // Bound queued presentation events; async producers wait without blocking either executor.
+    let (sender, receiver) = crate::completion::channel(256);
     let (dock, tasks) = workbench::build(runtime.clone(), browser, computer, window, cx);
     let composer = cx.new(|cx| {
       TextareaState::new(window, cx).placeholder("Ask Lyonbrown to work on your project…")
     });
     composer.read(cx).focus_handle(cx).focus(window, cx);
-    let poll = cx.spawn_in(window, async move |view, cx| {
-      loop {
-        cx.background_executor()
-          .timer(Duration::from_millis(80))
-          .await;
+    let completion = cx.spawn_in(window, async move |view, cx| {
+      let mut remaining = 32;
+      while let Ok(update) = receiver.recv().await {
         if view
-          .update_in(cx, |view, window, cx| {
-            for update in receiver.try_iter() {
-              view.apply_scoped(update, window, cx);
-            }
-            let wait_finished = match view.error.as_deref() {
-              Some(crate::tabs::SAVE_WAIT_MESSAGE) => !view.tasks.read(cx).pending_save,
-              Some(crate::tabs::BROWSER_WAIT_MESSAGE) => {
-                !view.tasks.read(cx).pending_browser_operation
-              }
-              Some(crate::tabs::COMPUTER_WAIT_MESSAGE) => {
-                !view.tasks.read(cx).computer.read(cx).pending
-              }
-              _ => false,
-            };
-            if wait_finished {
-              view.error = None;
-              cx.notify();
-            }
-          })
+          .update_in(cx, |view, window, cx| view.apply_scoped(update, window, cx))
           .is_err()
         {
           break;
         }
+        remaining -= 1;
+        if remaining == 0 {
+          remaining = 32;
+          // Yield through GPUI's scheduler so a stream burst cannot monopolize input/rendering.
+          cx.foreground_executor().spawn(async {}).await;
+        }
       }
     });
+    let computer = tasks.read(cx).computer.clone();
+    let pending_work = [
+      cx.observe(&tasks, |view, _, cx| view.clear_finished_wait(cx)),
+      cx.observe(&computer, |view, _, cx| view.clear_finished_wait(cx)),
+    ];
     Self {
       runtime,
       connector,
@@ -162,7 +152,22 @@ impl Desktop {
       show_settings: false,
       navigation: crate::tabs::Navigation::default(),
       watch_task: None,
-      _poll: poll,
+      _completion: completion,
+      _pending_work: pending_work,
+    }
+  }
+
+  fn clear_finished_wait(&mut self, cx: &mut Context<Self>) {
+    let tasks = self.tasks.read(cx);
+    let finished = match self.error.as_deref() {
+      Some(crate::tabs::SAVE_WAIT_MESSAGE) => !tasks.pending_save,
+      Some(crate::tabs::BROWSER_WAIT_MESSAGE) => !tasks.pending_browser_operation,
+      Some(crate::tabs::COMPUTER_WAIT_MESSAGE) => !tasks.computer.read(cx).pending,
+      _ => false,
+    };
+    if finished {
+      self.error = None;
+      cx.notify();
     }
   }
 }
