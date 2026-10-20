@@ -6,21 +6,29 @@ use axum::{
   http::{HeaderValue, StatusCode, header},
   middleware::{self, Next},
   response::{IntoResponse, Response},
-  routing::{get, post},
 };
 use tokio::time::{Instant, timeout};
+use utoipa_axum::{router::OpenApiRouter, routes};
+
+pub(crate) fn protected_routes() -> OpenApiRouter<Gateway> {
+  OpenApiRouter::default()
+    .routes(routes!(models))
+    .routes(routes!(completions))
+}
+
+pub(crate) fn public_routes() -> OpenApiRouter<Gateway> {
+  OpenApiRouter::default()
+    .routes(routes!(live))
+    .routes(routes!(ready))
+}
 
 pub(crate) fn router(gateway: Gateway) -> Router {
-  let protected = Router::new()
-    .route("/v1/models", get(models))
-    .route("/v1/chat/completions", post(completions))
-    .route_layer(middleware::from_fn_with_state(
-      gateway.clone(),
-      authenticate,
-    ));
-  protected
-    .route("/health/live", get(live))
-    .route("/health/ready", get(ready))
+  let protected = protected_routes().route_layer(middleware::from_fn_with_state(
+    gateway.clone(),
+    authenticate,
+  ));
+  let (router, _) = protected.merge(public_routes()).split_for_parts();
+  router
     .with_state(gateway.clone())
     .merge(Gateway::documentation_router())
     .layer(middleware::from_fn_with_state(gateway, request_id))

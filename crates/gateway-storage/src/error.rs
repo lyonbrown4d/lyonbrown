@@ -7,6 +7,8 @@ pub enum StorageError {
   Connection(#[from] diesel::ConnectionError),
   #[error("gateway database operation failed")]
   Database(#[from] diesel::result::Error),
+  #[error("gateway database migration failed")]
+  Migration(#[source] Box<dyn std::error::Error + Send + Sync>),
   #[error("invalid storage input: {0}")]
   InvalidInput(&'static str),
   #[error("gateway storage state conflict")]

@@ -20,14 +20,9 @@ pub struct AuditRecord {
   pub elapsed_ms: u64,
   pub policy_revision: String,
 }
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("audit persistence unavailable")]
 pub struct AuditError;
-impl std::fmt::Display for AuditError {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_str("audit persistence unavailable")
-  }
-}
-impl std::error::Error for AuditError {}
 #[async_trait]
 pub trait AuditSink: Send + Sync {
   async fn record(&self, record: AuditRecord) -> Result<(), AuditError>;

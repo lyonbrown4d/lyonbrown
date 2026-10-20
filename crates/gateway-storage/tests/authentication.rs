@@ -92,6 +92,7 @@ async fn admin_authentication_session_expiry_and_csrf_are_bound() {
       .expect("expired CSRF")
   );
   assert!(!format!("{one:?}").contains(one.token()));
+  assert!(!format!("{one:?}").contains(one.csrf_token()));
   store.revoke_session(two.token()).await.expect("revoke");
   assert!(
     !store

@@ -1,5 +1,6 @@
 use super::{WebState, errors::WebError};
 use axum::http::{HeaderMap, header, request::Parts};
+use cookie::{Cookie, SameSite};
 use gateway_storage::AdminRole;
 use leptos::prelude::*;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -32,15 +33,14 @@ fn cookies(headers: &HeaderMap) -> Result<(String, String), WebError> {
   let mut csrf = None;
   for value in headers.get_all(header::COOKIE) {
     let value = value.to_str().map_err(|_| WebError::unauthorized())?;
-    for pair in value.split(';') {
-      let Some((name, value)) = pair.trim().split_once('=') else {
-        continue;
-      };
-      let target = match name {
+    for parsed in Cookie::split_parse(value) {
+      let parsed = parsed.map_err(|_| WebError::unauthorized())?;
+      let target = match parsed.name() {
         SESSION => &mut token,
         CSRF => &mut csrf,
         _ => continue,
       };
+      let value = parsed.value();
       if target.is_some() || value.len() != 64 || !value.bytes().all(|v| v.is_ascii_hexdigit()) {
         return Err(WebError::unauthorized());
       }
@@ -82,8 +82,12 @@ pub(crate) async fn verify_post(
   }
 }
 pub(crate) fn cookie(name: &str, value: &str, max_age: u32, secure: bool) -> String {
-  format!(
-    "{name}={value}; Path=/; HttpOnly; SameSite=Strict; Max-Age={max_age}{}",
-    if secure { "; Secure" } else { "" }
-  )
+  Cookie::build((name, value))
+    .path("/")
+    .http_only(true)
+    .same_site(SameSite::Strict)
+    .max_age(cookie::time::Duration::seconds(i64::from(max_age)))
+    .secure(secure)
+    .build()
+    .to_string()
 }

@@ -7,6 +7,7 @@ use crate::{
 use async_trait::async_trait;
 use diesel::prelude::*;
 use gateway_core::{AccessControl, AccessError};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
 #[derive(Clone, Debug, Serialize)]
@@ -17,21 +18,14 @@ pub struct AccessTokenMetadata {
   pub expires_at: u64,
   pub revoked: bool,
 }
+#[derive(Debug)]
 pub struct IssuedAccessToken {
-  token: String,
+  token: SecretString,
   pub metadata: AccessTokenMetadata,
 }
 impl IssuedAccessToken {
   pub fn token(&self) -> &str {
-    &self.token
-  }
-}
-impl std::fmt::Debug for IssuedAccessToken {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("IssuedAccessToken")
-      .field("token", &"[REDACTED]")
-      .field("metadata", &self.metadata)
-      .finish()
+    self.token.expose_secret()
   }
 }
 impl GatewayStorage {
@@ -70,7 +64,7 @@ impl GatewayStorage {
       return Err(StorageError::InvalidInput("API key label or lifetime"));
     }
     let issued = IssuedAccessToken {
-      token: random_token()?,
+      token: random_token()?.into(),
       metadata: AccessTokenMetadata {
         id: random_token()?,
         label: label.into(),

@@ -3,14 +3,9 @@ use async_trait::async_trait;
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("access verification unavailable")]
 pub struct AccessError;
-impl std::fmt::Display for AccessError {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.write_str("access verification unavailable")
-  }
-}
-impl std::error::Error for AccessError {}
 
 /// Implementations verify the server-owned credential store; request data cannot grant scope.
 #[async_trait]

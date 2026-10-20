@@ -2,25 +2,21 @@ use std::{collections::BTreeSet, fmt};
 
 use anyhow::{Result, ensure};
 use decision_core::{Constraints, ModelTier};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
 /// Credentials deliberately have no serialization implementation.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(transparent)]
-pub struct Secret(String);
+pub struct Secret(SecretString);
 impl Secret {
   pub fn new(value: impl Into<String>) -> Self {
-    Self(value.into())
+    Self(value.into().into())
   }
   /// Explicit access for trusted composition and credential transport.
   pub fn expose_secret(&self) -> &str {
-    &self.0
-  }
-}
-impl fmt::Debug for Secret {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.write_str("[REDACTED]")
+    self.0.expose_secret()
   }
 }
 

@@ -1,4 +1,6 @@
 diesel::table! { gateway_migrations (version) { version -> Integer, } }
+diesel::table! { __diesel_schema_migrations (version) { version -> Text, run_on -> Timestamp, } }
+diesel::table! { sqlite_schema (name) { name -> Text, #[sql_name = "type"] kind -> Text, } }
 diesel::table! { gateway_audits (sequence) { sequence -> BigInt, request_id -> Text, model -> Text, status -> SmallInt, elapsed_ms -> BigInt, policy_revision -> Text, } }
 diesel::table! { gateway_model_snapshots (sequence) { sequence -> BigInt, revision -> Text, document -> Text, } }
 diesel::table! { gateway_policy_revisions (revision) { revision -> Text, document -> Text, } }

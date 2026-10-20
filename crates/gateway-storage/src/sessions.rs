@@ -5,6 +5,7 @@ use crate::{
 };
 use diesel::prelude::*;
 use gateway_validation::Credentials;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -18,27 +19,19 @@ pub struct AdminIdentity {
   pub role: AdminRole,
 }
 /// The raw credentials are returned once and never implement serialization.
+#[derive(Debug)]
 pub struct AdminSession {
-  token: String,
-  csrf: String,
+  token: SecretString,
+  csrf: SecretString,
   pub expires_at: u64,
   pub identity: AdminIdentity,
 }
-impl std::fmt::Debug for AdminSession {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct("AdminSession")
-      .field("credentials", &"[REDACTED]")
-      .field("identity", &self.identity)
-      .field("expires_at", &self.expires_at)
-      .finish()
-  }
-}
 impl AdminSession {
   pub fn token(&self) -> &str {
-    &self.token
+    self.token.expose_secret()
   }
   pub fn csrf_token(&self) -> &str {
-    &self.csrf
+    self.csrf.expose_secret()
   }
 }
 impl GatewayStorage {
@@ -81,8 +74,8 @@ impl GatewayStorage {
       .filter(|_| verified)
       .ok_or(StorageError::Unauthorized)?;
     let session = AdminSession {
-      token: random_token()?,
-      csrf: random_token()?,
+      token: random_token()?.into(),
+      csrf: random_token()?.into(),
       expires_at: now
         .checked_add(ttl_seconds)
         .ok_or(StorageError::Unauthorized)?,

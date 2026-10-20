@@ -117,7 +117,7 @@ async fn v1_migration_preserves_business_data_and_revokes_token_admin_credential
     store.login("operator", LEGACY_ADMIN, 100, 10).await,
     Err(StorageError::Unauthorized)
   ));
-  store
+  let session = store
     .login("operator", "new-fixture-password-v2", 100, 10)
     .await
     .expect("password login");
@@ -133,6 +133,62 @@ async fn v1_migration_preserves_business_data_and_revokes_token_admin_credential
     .login("operator", "new-fixture-password-v2", 100, 10)
     .await
     .expect("account survives reopen");
+  drop(reopened);
+
+  // Reconstruct the original v2 ledger without changing its schema or business data.
+  // Importing this deployed state must seed Diesel rather than replay destructive v2 SQL.
+  {
+    let mut connection =
+      SqliteConnection::establish(path.to_str().expect("path")).expect("connection");
+    connection
+      .batch_execute(
+        "CREATE TABLE gateway_migrations (version INTEGER PRIMARY KEY NOT NULL);
+         DROP TABLE __diesel_schema_migrations;",
+      )
+      .expect("legacy v2 ledger fixture");
+    diesel::insert_into(legacy::gateway_migrations::table)
+      .values([
+        legacy::gateway_migrations::version.eq(1),
+        legacy::gateway_migrations::version.eq(2),
+      ])
+      .execute(&mut connection)
+      .expect("legacy v2 versions");
+  }
+  let imported = GatewayStorage::open(&path).expect("legacy v2 imported");
+  assert!(
+    imported
+      .authenticate_session(session.token(), 100)
+      .await
+      .expect("v2 session survives import")
+  );
+  assert!(
+    imported
+      .verify_csrf(session.token(), session.csrf_token(), 100)
+      .await
+      .expect("v2 CSRF credential survives import")
+  );
+  assert!(
+    AccessControl::authorize(&imported, API)
+      .await
+      .expect("API survives legacy v2 import")
+  );
+  assert_eq!(
+    imported.load_policy().await.expect("policy preserved"),
+    Some(decision_core::Policy::default())
+  );
+  assert_eq!(imported.list_audits(20, 0).await.expect("audits").total, 1);
+  imported
+    .login("operator", "new-fixture-password-v2", 100, 10)
+    .await
+    .expect("account and password hash survive legacy v2 import");
+  drop(imported);
+  let reopened = GatewayStorage::open(&path).expect("imported v2 reopens");
+  assert!(
+    reopened
+      .authenticate_session(session.token(), 100)
+      .await
+      .expect("session survives imported v2 reopen")
+  );
 }
 fn digest(purpose: &str, token: &str) -> String {
   let mut hash = Sha256::new();

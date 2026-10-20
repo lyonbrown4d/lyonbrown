@@ -194,6 +194,14 @@ async fn swagger_schema_is_public_and_model_list_hides_secrets() {
     .json()
     .await
     .expect("schema JSON");
+  assert_eq!(schema["info"]["title"], "Lyonbrown AI Gateway");
+  assert_eq!(schema["info"]["version"], "0.1.0");
+  assert!(
+    schema["info"]["description"]
+      .as_str()
+      .unwrap()
+      .contains("Authenticated text")
+  );
   for path in [
     "/v1/models",
     "/v1/chat/completions",
@@ -201,6 +209,45 @@ async fn swagger_schema_is_public_and_model_list_hides_secrets() {
     "/health/ready",
   ] {
     assert!(schema["paths"].get(path).is_some());
+  }
+  assert_eq!(schema["paths"].as_object().unwrap().len(), 4);
+  for (path, method) in [("/v1/models", "get"), ("/v1/chat/completions", "post")] {
+    assert_eq!(
+      schema["paths"][path][method]["security"][0]["bearer"],
+      json!([])
+    );
+  }
+  assert!(schema["paths"]["/v1/models"]["post"].is_null());
+  assert!(schema["paths"]["/v1/chat/completions"]["get"].is_null());
+  for (method, path) in [
+    ("POST", "/v1/models"),
+    ("GET", "/v1/chat/completions"),
+    ("POST", "/health/live"),
+    ("DELETE", "/health/ready"),
+  ] {
+    assert_eq!(
+      client()
+        .request(method.parse().unwrap(), format!("{}{path}", server.base))
+        .bearer_auth(TOKEN)
+        .send()
+        .await
+        .unwrap()
+        .status(),
+      405,
+      "handler methods must not be shared across distinct paths"
+    );
+  }
+  for path in ["/health/live", "/health/ready"] {
+    assert!(schema["paths"][path]["get"]["security"].is_null());
+    assert_eq!(
+      client()
+        .get(format!("{}{path}", server.base))
+        .send()
+        .await
+        .unwrap()
+        .status(),
+      200
+    );
   }
   assert!(
     schema["components"]["securitySchemes"]

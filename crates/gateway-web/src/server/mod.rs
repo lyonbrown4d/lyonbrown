@@ -10,11 +10,9 @@ use axum::{Router, extract::FromRef, http::header, middleware as axum_middleware
 use decision_core::DecisionEngine;
 use gateway_core::Gateway;
 use gateway_storage::GatewayStorage;
+use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 use leptos_axum::{LeptosRoutes, generate_route_list};
-use std::{
-  sync::{Arc, Mutex},
-  time::Instant,
-};
+use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 use tower_http::{limit::RequestBodyLimitLayer, services::ServeDir};
 
@@ -26,12 +24,8 @@ pub(crate) struct WebState {
   origin: Option<String>,
   secure: bool,
   options: LeptosOptions,
-  attempts: Arc<Mutex<AttemptWindow>>,
+  attempts: Arc<DefaultDirectRateLimiter>,
   policy_write: Arc<AsyncMutex<()>>,
-}
-struct AttemptWindow {
-  started: Instant,
-  count: u32,
 }
 impl FromRef<WebState> for LeptosOptions {
   fn from_ref(state: &WebState) -> Self {
@@ -86,10 +80,9 @@ pub fn router_with_options(
     secure: parsed.as_ref().is_some_and(|u| u.scheme() == "https"),
     origin: parsed.map(|u| u.origin().ascii_serialization()),
     options: options.clone(),
-    attempts: Arc::new(Mutex::new(AttemptWindow {
-      started: Instant::now(),
-      count: 0,
-    })),
+    attempts: Arc::new(RateLimiter::direct(Quota::per_minute(
+      nonzero_ext::nonzero!(10u32),
+    ))),
     policy_write: Arc::new(AsyncMutex::new(())),
   };
   let routes = generate_route_list(crate::App)

@@ -1,17 +1,12 @@
-use std::{collections::BTreeMap, fmt, net::SocketAddr, path::PathBuf};
+use std::{collections::BTreeMap, net::SocketAddr, path::PathBuf};
 
 use anyhow::{Result, ensure};
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use url::Url;
 
-#[derive(Clone, Default)]
-pub(crate) struct Credentials(pub BTreeMap<String, String>);
-
-impl fmt::Debug for Credentials {
-  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-    formatter.write_str("Credentials([REDACTED])")
-  }
-}
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Credentials(pub BTreeMap<String, SecretString>);
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -66,22 +61,23 @@ impl Settings {
       .credentials
       .0
       .get(&format!("command:{name}"))
-      .map(String::as_str)
+      .map(|value| value.expose_secret())
   }
   pub fn mcp_environment_value(&self, name: &str) -> Option<&str> {
     self
       .credentials
       .0
       .get(&format!("mcp:{name}"))
-      .map(String::as_str)
+      .map(|value| value.expose_secret())
   }
   pub fn credential(&self, provider: &str) -> Option<String> {
     self
       .credentials
       .0
       .get(provider)
+      .map(|value| value.expose_secret())
       .filter(|value| !value.trim().is_empty())
-      .cloned()
+      .map(str::to_owned)
   }
 
   /// Revalidate after applying explicit command-line overrides.

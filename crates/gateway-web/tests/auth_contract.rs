@@ -114,7 +114,7 @@ async fn origin_csrf_and_logout_enforce_session_bound_mutations() {
   );
 }
 #[tokio::test]
-async fn login_requires_configured_origin_and_has_a_bounded_attempt_window() {
+async fn login_requires_configured_origin_and_limits_global_attempts_with_retry_after() {
   let fixture = Fixture::new("local-model").await;
   let page = fixture
     .send("GET", "/ui/login", None, None, String::new())
@@ -171,7 +171,13 @@ async fn login_requires_configured_origin_and_has_a_bounded_attempt_window() {
     )
     .await;
   assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
-  assert_eq!(response.headers()[header::RETRY_AFTER], "60");
+  let retry_after = response.headers()[header::RETRY_AFTER]
+    .to_str()
+    .expect("retry-after")
+    .parse::<u64>()
+    .expect("seconds");
+  assert!((1..=6).contains(&retry_after));
+  assert!(!response.headers().contains_key(header::SET_COOKIE));
 }
 #[tokio::test]
 async fn expired_session_cannot_read_protected_pages() {

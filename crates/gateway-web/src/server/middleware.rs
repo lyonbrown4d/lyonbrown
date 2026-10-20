@@ -6,8 +6,8 @@ use axum::{
   middleware::Next,
   response::{IntoResponse, Redirect, Response},
 };
+use governor::clock::Clock;
 use leptos::{prelude::ServerFnError, server_fn::error::FromServerFnError};
-use std::time::{Duration, Instant};
 
 pub(crate) async fn guard(
   State(state): State<WebState>,
@@ -45,25 +45,27 @@ pub(crate) async fn guard(
       return headers((StatusCode::BAD_REQUEST, "分页参数无效。").into_response());
     }
   }
-  if mutation && path == "/ui/login" {
-    match rate_limit(&state) {
-      Ok(true) => {}
-      Ok(false) => {
-        let mut response = action_error(
-          WebError {
-            status: StatusCode::TOO_MANY_REQUESTS,
-            message: "登录尝试过多，请在一分钟后重试。",
-          },
-          &path,
-          native_form,
-        );
-        response
-          .headers_mut()
-          .insert(header::RETRY_AFTER, HeaderValue::from_static("60"));
-        return headers(response);
-      }
-      Err(error) => return headers(action_error(error, &path, native_form)),
-    }
+  if mutation
+    && path == "/ui/login"
+    && let Err(rejected) = state.attempts.check()
+  {
+    let wait = rejected.wait_time_from(state.attempts.clock().now());
+    let retry_after = wait
+      .as_secs()
+      .saturating_add(u64::from(wait.subsec_nanos() > 0))
+      .max(1);
+    let mut response = action_error(
+      WebError {
+        status: StatusCode::TOO_MANY_REQUESTS,
+        message: "登录尝试过多，请稍后重试。",
+      },
+      &path,
+      native_form,
+    );
+    response
+      .headers_mut()
+      .insert(header::RETRY_AFTER, HeaderValue::from(retry_after));
+    return headers(response);
   }
   let server_fn = mutation || path.starts_with("/ui/api/");
   // The framework may otherwise copy Referer and serialized argument errors into redirects.
@@ -143,19 +145,6 @@ fn fn_error(error: WebError) -> Response {
   response
 }
 
-fn rate_limit(state: &WebState) -> Result<bool, WebError> {
-  let mut window = state.attempts.lock().map_err(|_| WebError::unavailable())?;
-  if window.started.elapsed() >= Duration::from_secs(60) {
-    window.started = Instant::now();
-    window.count = 0;
-  }
-  if window.count >= 10 {
-    Ok(false)
-  } else {
-    window.count += 1;
-    Ok(true)
-  }
-}
 fn safe_error(status: StatusCode, path: &str) -> &'static str {
   match status {
     StatusCode::UNAUTHORIZED if path == "/ui/login" => "用户名或密码无效",
@@ -165,7 +154,7 @@ fn safe_error(status: StatusCode, path: &str) -> &'static str {
     StatusCode::UNPROCESSABLE_ENTITY => "策略校验失败。请检查 JSON 字段范围，并使用新的版本名称。",
     StatusCode::BAD_REQUEST => "请求参数无效。",
     StatusCode::PAYLOAD_TOO_LARGE => "请求内容过大，请精简后重试。",
-    StatusCode::TOO_MANY_REQUESTS => "登录尝试过多，请在一分钟后重试。",
+    StatusCode::TOO_MANY_REQUESTS => "登录尝试过多，请稍后重试。",
     _ => "服务暂时不可用，请稍后重试。",
   }
 }

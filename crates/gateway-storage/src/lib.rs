@@ -6,6 +6,7 @@ mod auth;
 mod catalog;
 mod error;
 mod files;
+mod migrations;
 mod password;
 mod policy;
 mod schema;
@@ -46,30 +47,7 @@ impl GatewayStorage {
       "PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;",
     )?;
     connection.immediate_transaction::<_, StorageError, _>(|connection| {
-      connection.batch_execute(
-        "CREATE TABLE IF NOT EXISTS gateway_migrations (version INTEGER PRIMARY KEY NOT NULL);",
-      )?;
-      use schema::gateway_migrations as migrations;
-      let versions = migrations::table
-        .select(migrations::version)
-        .load::<i32>(connection)?;
-      if versions.iter().any(|version| !matches!(*version, 1 | 2))
-        || (versions.contains(&2) && !versions.contains(&1))
-      {
-        return Err(StorageError::InvalidData);
-      }
-      if !versions.contains(&1) {
-        connection.batch_execute(include_str!("../migrations/0001_initial/up.sql"))?;
-        diesel::insert_into(migrations::table)
-          .values(migrations::version.eq(1))
-          .execute(connection)?;
-      }
-      if !versions.contains(&2) {
-        connection.batch_execute(include_str!("../migrations/0002_super_admin/up.sql"))?;
-        diesel::insert_into(migrations::table)
-          .values(migrations::version.eq(2))
-          .execute(connection)?;
-      }
+      migrations::run(connection)?;
       audit::reconcile(connection)?;
       Ok(())
     })?;

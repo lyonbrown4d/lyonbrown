@@ -41,7 +41,7 @@ pub fn LoginPage() -> impl IntoView {
       .and_then(Result::err)
       .map(|error| {
         if error.to_string().contains("过多") {
-          "登录尝试过多，请在一分钟后重试。".to_owned()
+          "登录尝试过多，请稍后重试。".to_owned()
         } else {
           "用户名或密码无效".to_owned()
         }
@@ -49,7 +49,7 @@ pub fn LoginPage() -> impl IntoView {
       .or_else(|| invalid.get().then(|| "用户名或密码无效".to_owned()))
       .or_else(|| match query.read().get("error").as_deref() {
         Some("credentials") => Some("用户名或密码无效".to_owned()),
-        Some("rate_limit") => Some("登录尝试过多，请在一分钟后重试。".to_owned()),
+        Some("rate_limit") => Some("登录尝试过多，请稍后重试。".to_owned()),
         Some("origin") => Some("请求来源无效，请从管理台重新登录。".to_owned()),
         Some("unavailable") => Some("服务暂时不可用，请稍后重试。".to_owned()),
         _ => None,

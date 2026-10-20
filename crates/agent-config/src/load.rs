@@ -99,7 +99,7 @@ pub fn load_with_environment(
     .filter_map(|(provider, key)| {
       merged
         .get(key)
-        .map(|value| (provider.into(), value.clone()))
+        .map(|value| (provider.into(), value.clone().into()))
     })
     .collect(),
   );
@@ -116,7 +116,7 @@ pub fn load_with_environment(
       settings
         .credentials
         .0
-        .insert(format!("mcp:{name}"), value.clone());
+        .insert(format!("mcp:{name}"), value.clone().into());
     }
   }
   for name in settings.commands.environment.values() {
@@ -130,7 +130,7 @@ pub fn load_with_environment(
     settings
       .credentials
       .0
-      .insert(format!("command:{name}"), value.clone());
+      .insert(format!("command:{name}"), value.clone().into());
   }
   Ok(settings)
 }

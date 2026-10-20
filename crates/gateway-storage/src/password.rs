@@ -3,6 +3,7 @@ use argon2::{
   Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version,
   password_hash::SaltString,
 };
+use secrecy::{ExposeSecret, SecretString};
 use std::sync::LazyLock;
 
 // A non-credential fixture, generated once by this implementation with the same parameters.
@@ -13,11 +14,12 @@ static DUMMY_PHC: LazyLock<std::result::Result<String, ()>> = LazyLock::new(|| {
 
 impl GatewayStorage {
   pub(crate) async fn hash_password(&self, password: String) -> Result<String> {
+    let password: SecretString = password.into();
     self
       .password_work(move || {
         let mut salt = [0_u8; 16];
         getrandom::fill(&mut salt).map_err(|_| StorageError::Worker)?;
-        hash_with_salt(password.as_bytes(), &salt)
+        hash_with_salt(password.expose_secret().as_bytes(), &salt)
       })
       .await
   }
@@ -26,6 +28,7 @@ impl GatewayStorage {
     password: String,
     phc: Option<String>,
   ) -> Result<bool> {
+    let password: SecretString = password.into();
     self
       .password_work(move || {
         let dummy = LazyLock::force(&DUMMY_PHC)
@@ -39,7 +42,7 @@ impl GatewayStorage {
         let parsed = PasswordHash::new(phc).map_err(|_| StorageError::InvalidData)?;
         Ok(
           argon()?
-            .verify_password(password.as_bytes(), &parsed)
+            .verify_password(password.expose_secret().as_bytes(), &parsed)
             .is_ok(),
         )
       })
