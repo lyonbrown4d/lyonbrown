@@ -106,6 +106,8 @@ These commands check formatting, static issues, tests, compilation and documenta
 
 Clients own presentation and input. Models, tools, permissions and durable state remain in the daemon. Add shared fields to `proto/agent/v1/agent.proto` and update both consumers; do not put execution-library internals in protocol messages.
 
+Client views follow MVVM. The TUI projects `App` into read-only `ViewModel` data; `view.rs` reuses Ratatui, the composer reuses `ratatui-textarea`, and Markdown reuses the public style interface of `tui-markdown`. Desktop stores active chat presentation in `DesktopViewModel`; `operations.rs` issues protocol requests, `projection.rs` applies replies, and `views/`, `panes.rs` and `tabs/view.rs` compose `gpui-kit` components. Keep network clients, runtimes, credentials and native hosts outside ViewModels. Reuse library input, Markdown, Tab, docking and resizing behavior when changing shared controls. Background replies must remain isolated by tab and generation. See [terminal and desktop clients](clients.md) for controls and limits.
+
 Assess responsibility-based decomposition when a handwritten source file reaches 300 lines. Integration tests belong in each crate's `tests/` directory. Avoid production `panic`, `unwrap` and uncontrolled `unsafe`. Necessary FFI stays at platform adapter boundaries with its safety conditions documented.
 
 ## Maintain the books

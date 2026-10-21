@@ -15,10 +15,12 @@ cargo run -p agent-cli -- --help
 cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/lyonbrown-data
 ```
 
-The workbench contains sessions, conversation, tasks, approvals and a composer. Failed connections display `Disconnected` without simulated model replies. Failed submissions preserve the draft and are not replayed automatically. The matching draft is cleared only after the service confirms acceptance.
+The workbench shows the conversation and composer by default. Sessions, tasks, computer details and help open in an on-demand context panel rather than persistent empty panels. Pending approvals show the tool, arguments and approve/deny controls above the composer. Wide terminals place context beside the conversation; narrow terminals replace the conversation area with context. `Esc` closes the panel. Failed connections display `Disconnected` without simulated model replies. Failed submissions preserve the draft and are not replayed automatically. The matching draft is cleared only after the service confirms acceptance.
 
 | Key | Action |
 | --- | --- |
+| `F1` / `F2` / `F3` / `F4` / `F5` | Toggle help / sessions / tasks / computer / full approval context |
+| `Esc` | Close the context panel |
 | `Ctrl+N` | Create a session using the current working directory |
 | `Tab` | Select the next session and load its runs |
 | `Enter` | Submit input to the selected session |
@@ -27,14 +29,16 @@ The workbench contains sessions, conversation, tasks, approvals and a composer. 
 | `Ctrl+R` | Reconnect to the daemon |
 | `Ctrl+X` | Request cancellation of the active run |
 | `Ctrl+Y` / `Ctrl+E` | Approve / deny the first pending approval |
-| `PageUp` / `PageDown` | Scroll the conversation |
+| `PageUp` / `PageDown` | Scroll the open context panel, or the conversation when no panel is open |
 | `Ctrl+C` / `Ctrl+D` | Exit the client |
 
 The composer uses `ratatui-textarea` 0.9.3 for cursor editing, multiline text, wrapping and paste. Application shortcuts take precedence over matching editor bindings: `Ctrl+X` still requests run cancellation and `Ctrl+Y` still handles approval. Pending submissions are not sent again; failure preserves the draft, and service acceptance clears the matching draft and its undo history.
 
-The approval panel displays the tool and arguments. The daemon validates and saves decisions before the UI updates them. Durable runs refresh every two seconds; newly submitted runs also subscribe to an event stream. Exiting restores the terminal and sends no cancellation request.
+The approval area displays the tool and arguments. Compact layouts retain only the pending count and approval shortcuts; use `F5` to read the full arguments. The daemon validates and saves decisions before the UI updates them. Durable runs refresh every two seconds; newly submitted runs also subscribe to an event stream. Exiting restores the terminal and sends no cancellation request.
 
-`--theme auto` uses `COLORFGBG` to choose text colors while preserving the terminal background. Without a hint it uses a dark-terminal palette; select `--theme light` or `--theme dark` explicitly when needed.
+The UI uses warm dark or warm light solid terminal backgrounds, text and accents. `--theme auto` uses `COLORFGBG` to choose the palette, falling back to dark without a hint. Select `--theme light` or `--theme dark` explicitly when needed. Model replies render Markdown through fixed `tui-markdown` 0.3.10, adapting the theme through its public `StyleSheet` interface. Default features are disabled, omitting code syntax-highlighting dependencies.
+
+The TUI separates presentation through MVVM: `view_model.rs` projects client `App` state into a read-only `ViewModel` containing connection labels, messages, approvals and current context. `view.rs` renders that data and the composer through Ratatui. Input actions and background updates remain in `input.rs`, `backend.rs` and `update.rs`; presentation never dispatches daemon operations.
 
 ## Native computer attachment
 
@@ -82,7 +86,9 @@ Pairing identity and credentials stay in the daemon; an address grants no trust.
 cargo run -p agent-desktop
 ```
 
-The desktop uses GPUI and `gpui-kit` for the session sidebar, multiple chat tabs, conversation input and Browser, Computer, Files, Editor, Diff and Tasks dock panels. The custom title bar reuses the library's `TitleBar`; macOS uses native close, minimize and zoom controls. The session sidebar starts open and the right workbench starts closed. Title bar buttons toggle each side independently and remain available to restore either panel when both are hidden.
+The desktop uses GPUI and `gpui-kit` for a session sidebar grouped by workspace, multiple chat tabs, conversation input and Browser, Computer, Files, Editor, Diff and Tasks dock panels. The custom title bar reuses the library's `TitleBar`; macOS uses native close, minimize and zoom controls. The session sidebar starts open and the right workbench starts closed. Title bar buttons toggle each side independently and remain available to restore either panel when both are hidden. Collapsing the left sidebar leaves a compact icon rail. Assistant replies use flat prose, while the composer and workspace information occupy separate layers. Light and dark views share colors and dimensions from `theme.rs`.
+
+Desktop presentation follows MVVM: `DesktopViewModel` holds the active session selection, runs, event cursor, messages, approvals and status, and groups sessions by the service-provided `Session.workspace`. It holds no network client, async runtime or connection credentials. `operations.rs` issues requests through the client port, and `projection.rs` applies replies to presentation state. GPUI views read that state and reuse `gpui-kit` buttons, inputs, Markdown, docking and resizable components.
 
 Background results use bounded `async-channel` 2.5.0 queues; producers await capacity when a queue is full. GPUI applies results on its main thread and discards replies for obsolete tabs or generations. Browser frames retain an independent 160 ms refresh timer, and Computer hosts retain an independent 80 ms health timer. Closing a window cleans up local subscriptions and hosts; daemon jobs retain their independent lifetime.
 
@@ -96,7 +102,7 @@ Connect is unavailable while a run is active, a request is pending, or file edit
 
 ### Chat tabs and drafts
 
-Use “＋ New chat” to create a chat tab. Selecting a session in the sidebar opens its tab or activates the existing tab for that session. Each tab has its own identity and retains its native composer, workspace path, input draft, messages, approvals and run state. Background tabs continue receiving their own run events; their responses do not appear in the visible chat.
+Use the sidebar’s “新对话” (New chat) control or the tab bar’s “＋” to create a chat tab. Selecting a session in the sidebar opens its tab or activates the existing tab for that session. Each tab has its own identity and retains its native composer, workspace path, input draft, messages, approvals and run state. Inactive tabs retain that state in separate `ChatState` values. Updates carry the tab identity; applying a background result temporarily swaps in its state and then restores the visible chat. Background responses do not enter another chat.
 
 Closing a tab stops only its local event subscription and sends no cancellation request to the daemon. Closing the last tab leaves a fresh blank tab. Closing the desktop does not automatically cancel daemon work either.
 
@@ -130,11 +136,12 @@ Starting a Connect attempt revokes the old host and clears the catalog even if a
 | `Cmd/Ctrl+T` | Create a chat tab |
 | `Cmd/Ctrl+W` | Close the current tab; return to the chat when in Settings |
 | `Cmd/Ctrl+L` | Return to the chat and focus the composer |
-| `Cmd/Ctrl+Enter` | Submit input from the composer |
+| `Enter` / `Cmd/Ctrl+Enter` | Submit committed composer text; active IME composition does not submit |
+| `Shift+Enter` | Insert a newline in the composer |
 | `Cmd/Ctrl+S` | Save a file in Editor |
 
 Native window startup depends on the target platform's graphical environment and dependencies. Compilation does not replace runtime checks for window creation, input, theme switching and connection to a real daemon, or establish acceptance on Windows, macOS and Linux.
 
-Entry points: `apps/agent-cli/src/main.rs`, `apps/agent-desktop/src/main.rs`. Desktop interaction is defined in `apps/agent-desktop/src/lib.rs`, `chrome.rs`, `settings.rs`, `tabs.rs`, `tabs/` and `workbench/drafts.rs`.
+Entry points: `apps/agent-cli/src/main.rs`, `apps/agent-desktop/src/main.rs`. TUI presentation is defined in `apps/agent-cli/src/view_model.rs`, `view.rs` and `markdown.rs`; Desktop interaction is defined in `apps/agent-desktop/src/view_model.rs`, `operations.rs`, `projection.rs`, `chrome.rs`, `settings.rs`, `tabs.rs`, `tabs/` and `workbench/drafts.rs`.
 
 See [Desktop screenshots and acceptance scope](runtime-evidence.md) for actual windows, light/dark switching, approval, file reading and their verification limits.

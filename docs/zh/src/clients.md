@@ -15,10 +15,12 @@ cargo run -p agent-cli -- --help
 cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/lyonbrown-data
 ```
 
-工作台包含会话列表、对话、任务、审批和输入区。初次连接失败时显示 `Disconnected`，不会展示虚构的模型回复。提交请求失败时保留草稿，不自动重放请求；只有服务端确认接受后才清空对应草稿。
+工作台默认显示对话和输入区。会话、任务、计算机与帮助通过上下文面板按需打开，不常驻空面板；待处理审批出现时，在输入区上方显示工具、参数和批准／拒绝操作。宽终端将上下文面板放在对话右侧，窄终端用面板替换对话区域；`Esc` 关闭面板。初次连接失败时显示 `Disconnected`，不会展示虚构的模型回复。提交请求失败时保留草稿，不自动重放请求；只有服务端确认接受后才清空对应草稿。
 
 | 按键 | 操作 |
 | --- | --- |
+| `F1` / `F2` / `F3` / `F4` / `F5` | 切换帮助／会话／任务／计算机／完整审批上下文面板 |
+| `Esc` | 关闭上下文面板 |
 | `Ctrl+N` | 以当前工作目录创建会话 |
 | `Tab` | 切换到下一个会话并加载运行记录 |
 | `Enter` | 向已选会话提交输入 |
@@ -27,14 +29,16 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 | `Ctrl+R` | 重新连接 daemon |
 | `Ctrl+X` | 请求取消当前运行 |
 | `Ctrl+Y` / `Ctrl+E` | 批准 / 拒绝首个待处理审批 |
-| `PageUp` / `PageDown` | 滚动对话 |
+| `PageUp` / `PageDown` | 滚动已打开的上下文面板，否则滚动对话 |
 | `Ctrl+C` / `Ctrl+D` | 退出客户端 |
 
 输入区复用 `ratatui-textarea` 0.9.3，支持光标编辑、多行文本、换行显示和粘贴。应用快捷键优先于编辑器的同名映射，例如 `Ctrl+X` 仍请求取消运行，`Ctrl+Y` 仍处理审批。提交等待期间不重复发送；失败保留草稿，服务端接受后清空对应草稿及其撤销历史。
 
-审批区展示工具和参数。审批决定由 daemon 校验并保存，界面按服务端结果更新。任务记录每两秒刷新一次，新提交的运行同时订阅事件流。客户端退出时恢复终端状态，不向 daemon 发送取消请求。
+审批区展示工具和参数；紧凑布局只保留待处理数量和审批快捷键，完整参数通过 `F5` 查看。审批决定由 daemon 校验并保存，界面按服务端结果更新。任务记录每两秒刷新一次，新提交的运行同时订阅事件流。客户端退出时恢复终端状态，不向 daemon 发送取消请求。
 
-`--theme auto` 根据 `COLORFGBG` 选择文字配色，并保留终端背景。无法检测时使用深色终端配色；可显式指定 `--theme light` 或 `--theme dark`。
+界面使用暖深色或暖浅色的纯色终端背景、正文和强调色。`--theme auto` 根据 `COLORFGBG` 选择配色；无法检测时使用深色，可显式指定 `--theme light` 或 `--theme dark`。模型回复的 Markdown 复用固定版本 `tui-markdown` 0.3.10，经公开 `StyleSheet` 接口适配主题；关闭该库的默认 features，不启用代码语法高亮依赖。
+
+TUI 按 MVVM 分离呈现：`view_model.rs` 从客户端 `App` 状态生成只读 `ViewModel`，整理连接标签、消息、审批和当前上下文；`view.rs` 只通过 Ratatui 渲染该数据与输入组件。输入动作和后台更新分别留在 `input.rs`、`backend.rs` 与 `update.rs`，呈现层不派发 daemon 操作。
 
 ## 原生计算机连接
 
@@ -82,7 +86,9 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 cargo run -p agent-desktop
 ```
 
-桌面使用 GPUI 和 `gpui-kit` 组件，包含会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 `TitleBar`；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开。
+桌面使用 GPUI 和 `gpui-kit` 组件，包含按工作区分组的会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 `TitleBar`；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开；左侧收起后保留紧凑图标栏。助手回复以扁平正文显示，输入区与工作区信息分层放置，明暗外观共用 `theme.rs` 的颜色和尺寸定义。
+
+桌面按 MVVM 组织呈现状态：`DesktopViewModel` 保存当前会话选择、运行、事件游标、消息、审批和状态信息，并按服务端的 `Session.workspace` 分组会话。它不保存网络客户端、异步运行时或连接凭据。`operations.rs` 通过客户端端口发起请求，`projection.rs` 将回复投影到状态；GPUI 视图读取状态并复用 `gpui-kit` 的按钮、输入、Markdown、停靠和调整尺寸组件。
 
 后台结果通过 `async-channel` 2.5.0 的有界队列投递，队列满时生产者异步等待；GPUI 在主线程应用结果，并丢弃过期会话或代次的回复。Browser 帧刷新保留独立的 160 毫秒定时器，Computer 宿主存活检查保留独立的 80 毫秒定时器。窗口关闭时清理本地订阅与宿主，daemon 作业保留自身生命周期。
 
@@ -96,7 +102,7 @@ cargo run -p agent-desktop
 
 ### 聊天标签页与草稿
 
-使用「＋ New chat」创建聊天标签页；从侧栏选择会话时，打开对应标签页，或切换到已打开的同一会话。每个标签页有独立标识，并保留自己的原生输入组件、工作区路径、输入草稿、消息、审批和运行状态。后台标签页继续接收自己的运行事件，响应不会写入当前可见聊天。
+使用侧栏「新对话」或标签栏「＋」创建聊天标签页；从侧栏选择会话时，打开对应标签页，或切换到已打开的同一会话。每个标签页有独立标识，并保留自己的原生输入组件、工作区路径、输入草稿、消息、审批和运行状态。非活动标签页由独立的 `ChatState` 保留这些状态；后台更新按标签页标识投递，在应用结果时暂时切换对应状态，结束后恢复当前可见聊天。后台响应不会写入其他聊天。
 
 关闭标签页只停止该标签页的本地事件订阅，不向 daemon 发送取消请求。关闭最后一个标签页后，界面保留一个新的空白标签页。关闭桌面也不默认取消 daemon 作业。
 
@@ -130,11 +136,12 @@ Connect 开始尝试时就撤销旧宿主并清空目录，即使新连接认证
 | `Cmd/Ctrl+T` | 新建聊天标签页 |
 | `Cmd/Ctrl+W` | 关闭当前标签页；在 Settings 中返回聊天 |
 | `Cmd/Ctrl+L` | 返回聊天并聚焦输入区 |
-| `Cmd/Ctrl+Enter` | 在输入区提交输入 |
+| `Enter` / `Cmd/Ctrl+Enter` | 在输入区提交已确认的输入；输入法组合态不发送 |
+| `Shift+Enter` | 在输入区换行 |
 | `Cmd/Ctrl+S` | 在 Editor 中保存文件 |
 
 原生窗口是否可启动取决于目标平台的图形环境和依赖。编译通过不能替代窗口创建、输入、主题切换以及真实 daemon 连接的运行验收，也不能据此认定 Windows、macOS 和 Linux 均已验收。
 
-源码入口：`apps/agent-cli/src/main.rs`、`apps/agent-desktop/src/main.rs`。桌面交互见 `apps/agent-desktop/src/lib.rs`、`chrome.rs`、`settings.rs`、`tabs.rs`、`tabs/` 和 `workbench/drafts.rs`。
+源码入口：`apps/agent-cli/src/main.rs`、`apps/agent-desktop/src/main.rs`。终端呈现见 `apps/agent-cli/src/view_model.rs`、`view.rs` 和 `markdown.rs`；桌面交互见 `apps/agent-desktop/src/view_model.rs`、`operations.rs`、`projection.rs`、`chrome.rs`、`settings.rs`、`tabs.rs`、`tabs/` 和 `workbench/drafts.rs`。
 
 实际窗口、明暗切换、审批与文件读取截图及其验收边界见[桌面运行截图与验收范围](runtime-evidence.md)。

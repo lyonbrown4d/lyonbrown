@@ -106,6 +106,8 @@ mdbook build docs/en
 
 客户端只修改呈现与输入；模型、工具、权限和持久状态应留在 daemon。新增字段先维护 `proto/agent/v1/agent.proto` 和两端消费者，避免把运行库内部类型放进协议。
 
+客户端视图按 MVVM 组织。TUI 的 `ViewModel` 从 `App` 生成只读呈现数据，`view.rs` 复用 Ratatui，输入区复用 `ratatui-textarea`，Markdown 复用 `tui-markdown` 的公开样式接口。Desktop 的 `DesktopViewModel` 保存当前聊天呈现状态，`operations.rs` 负责协议请求，`projection.rs` 负责应用回复，`views/`、`panes.rs` 和 `tabs/view.rs` 组合 `gpui-kit` 组件。网络客户端、运行时、凭据与原生宿主不放入 ViewModel。变更共享控件时复用组件库的输入、Markdown、Tab、停靠和调整尺寸能力；后台回复仍须按标签页及代次隔离。界面操作与限制见[终端与桌面客户端](clients.md)。
+
 单个手写源文件达到 300 行时评估按职责拆分。集成测试放入对应 crate 的 `tests/` 目录。生产代码避免 `panic`、`unwrap` 和未受控的 `unsafe`。必要 FFI 只保留在平台适配边界，并说明安全条件。
 
 ## 维护文档

@@ -145,3 +145,31 @@ The [runtime record](evidence/gateway-library-reuse-macos.json) stores these res
 ## Capabilities outside this screenshot set
 
 These images do not show model-driven browser semantic actions or native terminal-window presentation. Synthetic-host protocol regressions and actual autonomous CEF acceptance have separate records. See [Local tools and browser actions](tools.md).
+
+## Conversational terminal and inline approval
+
+This section records `agent-cli` 0.1.0 running on macOS arm64 on October 21, 2026. The actual client process authenticated to a local daemon in a 140-column, 36-row PTY and used synthetic HTTP model replies. `vt100` parsed the actual ANSI output, and Pillow rasterized the captured characters, colors and styles. **These are not screenshots of an operating-system Terminal window.** Conversation and approval content were not inserted manually.
+
+![Dark conversation view from the actual PTY process on macOS](images/tui-conversation-mvvm-macos.png)
+
+![Actual PTY process awaiting file-write approval on macOS](images/tui-approval-mvvm-macos.png)
+
+Actual PTY tests passed Chinese and emoji cursor editing, multiline input, viewport resizing, draft retention through disconnection and reconnection, exact file-write approval and denial, execution cancellation, and absence of request replay after reconnect. They also checked persisted approval and run states, absence of the denied file effect, continued daemon execution after client exit, and terminal-state restoration.
+
+Separate `TestBackend` checks cover Markdown colors, narrow-viewport approval controls and the reversed input cursor in light and dark themes; these images show only the dark theme. The [terminal runtime record](evidence/tui-mvvm-macos.json) includes SHA-256 digests for the images, cell captures, corresponding source and dependency files, plus parser, rasterizer and font information. Raw cell captures and process environments are omitted from the public record. This does not establish native terminal-window font or input-method acceptance, or Windows, Linux, public-network, cross-device or installer acceptance.
+
+## Desktop conversation layout and Enter submission
+
+![New chat and its separate workspace strip in the macOS light theme](images/desktop-mvvm-welcome-macos.png)
+
+This section uses the actual GPUI Desktop version 0.1.0 on macOS arm64, an isolated agentd and a loopback synthetic model. The logical window is 1440 × 921; captures are 2880 × 1842. A new chat centers the composer; an existing conversation anchors it at the bottom. Collapsing the sidebar leaves an icon rail.
+
+![Chinese messages and assistant text at normal horizontal reading widths](images/desktop-mvvm-chat-macos.png)
+
+Typing a Chinese draft and pressing `Shift+Enter` inserted a newline without creating a run. Plain `Enter` then created exactly one completed run; the persisted prompt retained that newline and the acknowledged composer cleared. The model text in the capture is a fixed synthetic reply, not evidence of a file change in this read-only request. A GPUI integration test separately checks that active IME composition cannot submit.
+
+![Dark conversation, preserved draft and the right Files workbench](images/desktop-mvvm-dark-files-macos.png)
+
+Switching between a new tab and the original conversation preserved the original Chinese draft; see the [tab capture](images/desktop-mvvm-tabs-macos.png). The separate settings view switched light and dark themes while masking the token, and Files listed the synthetic workspace. All three acceptance processes exited and their loopback ports closed without registering an operating-system service.
+
+The [runtime record](evidence/desktop-mvvm-macos.json) contains binary, source and image digests. GPUI rendered-bounds tests also check long Chinese message wrapping and containment at normal and 960 × 640 window sizes. These captures do not claim native narrow-window, final-build approval replay, Editor/Diff, real-model, Windows, Linux or installer acceptance.
