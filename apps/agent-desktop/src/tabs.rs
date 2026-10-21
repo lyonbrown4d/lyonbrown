@@ -109,8 +109,11 @@ impl Desktop {
       cx.notify();
     } else if let Update::Session(session, _) = update {
       // Creating a daemon session is durable even when its requesting tab was closed.
-      self.sessions.retain(|previous| previous.id != session.id);
-      self.sessions.insert(0, session);
+      self
+        .vm
+        .sessions
+        .retain(|previous| previous.id != session.id);
+      self.vm.sessions.insert(0, session);
       cx.notify();
     }
   }
@@ -118,8 +121,8 @@ impl Desktop {
   pub(super) fn any_active_work(&self) -> bool {
     self.navigation.connecting
       || self.navigation.pending_requests > 0
-      || self.busy
-      || self.active_run.is_some()
+      || self.vm.busy
+      || self.vm.active_run.is_some()
       || self
         .navigation
         .inactive
@@ -129,17 +132,17 @@ impl Desktop {
 
   pub(super) fn can_change_chat(&mut self, cx: &mut Context<Self>) -> bool {
     if self.tasks.read(cx).computer.read(cx).pending {
-      self.error = Some(COMPUTER_WAIT_MESSAGE.into());
+      self.vm.error = Some(COMPUTER_WAIT_MESSAGE.into());
       cx.notify();
       return false;
     }
     if self.tasks.read(cx).pending_save {
-      self.error = Some(SAVE_WAIT_MESSAGE.into());
+      self.vm.error = Some(SAVE_WAIT_MESSAGE.into());
       cx.notify();
       return false;
     }
     if self.tasks.read(cx).pending_browser_operation {
-      self.error = Some(BROWSER_WAIT_MESSAGE.into());
+      self.vm.error = Some(BROWSER_WAIT_MESSAGE.into());
       cx.notify();
       return false;
     }
@@ -234,8 +237,8 @@ impl Desktop {
     self.tasks.update(cx, |tasks, cx| {
       tasks.bind(
         self.client.clone(),
-        self.selected.clone(),
-        self.runs.clone(),
+        self.vm.selected.clone(),
+        self.vm.runs.clone(),
         window,
         cx,
       )
@@ -249,14 +252,14 @@ impl Desktop {
       .iter()
       .filter_map(|id| {
         let (session, run) = if *id == self.navigation.active {
-          (&self.selected, &self.active_run)
+          (&self.vm.selected, &self.vm.active_run)
         } else {
           let state = self.navigation.inactive.get(id)?;
           (&state.selected, &state.active_run)
         };
         let title = session
           .as_ref()
-          .and_then(|id| self.sessions.iter().find(|session| &session.id == id))
+          .and_then(|id| self.vm.sessions.iter().find(|session| &session.id == id))
           .map(|session| session.title.clone())
           .unwrap_or_else(|| "New chat".into());
         Some(ChatTabSnapshot {

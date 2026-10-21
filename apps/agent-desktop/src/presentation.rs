@@ -52,17 +52,19 @@ impl Desktop {
       workbench_expanded: self.show_workbench,
       settings_open: self.show_settings,
       tabs: self.chat_tab_snapshots(cx),
-      status: self.status.clone(),
+      status: self.vm.status.clone(),
       session_titles: self
+        .vm
         .sessions
         .iter()
         .map(|session| session.title.clone())
         .collect(),
-      selected_session: self.selected.clone(),
-      active_run: self.active_run.clone(),
-      event_cursor: self.cursor,
+      selected_session: self.vm.selected.clone(),
+      active_run: self.vm.active_run.clone(),
+      event_cursor: self.vm.cursor,
       draft: self.composer.read(cx).value().to_string(),
       messages: self
+        .vm
         .conversation
         .iter()
         .map(|message| {
@@ -78,6 +80,7 @@ impl Desktop {
         })
         .collect(),
       approvals: self
+        .vm
         .approvals
         .iter()
         .map(|approval| {
@@ -88,8 +91,8 @@ impl Desktop {
           )
         })
         .collect(),
-      error: self.error.clone(),
-      busy: self.busy,
+      error: self.vm.error.clone(),
+      busy: self.vm.busy,
       workbench: {
         let state = self.tasks.read(cx);
         WorkbenchSnapshot {

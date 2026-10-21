@@ -1,6 +1,5 @@
 use crate::workbench;
 use agent_client::AgentClient;
-use agent_protocol::v1::{Approval, Run, Session};
 use gpui_kit::component::{
   ActiveTheme,
   dock::DockArea,
@@ -30,16 +29,7 @@ pub struct Desktop {
   pub(super) runtime: Arc<tokio::runtime::Runtime>,
   pub(super) sender: async_channel::Sender<crate::tabs::ScopedUpdate>,
   pub(super) client: Option<AgentClient>,
-  pub(super) sessions: Vec<Session>,
-  pub(super) selected: Option<String>,
-  pub(super) runs: Vec<Run>,
-  pub(super) active_run: Option<String>,
-  pub(super) cursor: u64,
-  pub(super) busy: bool,
-  pub(super) error: Option<String>,
-  pub(super) status: String,
-  pub(super) conversation: Vec<crate::message::ChatMessage>,
-  pub(super) approvals: Vec<Approval>,
+  pub(crate) vm: crate::view_model::DesktopViewModel,
   pub(super) endpoint: Entity<InputState>,
   pub(super) token: Entity<InputState>,
   pub(super) workspace: Entity<InputState>,
@@ -80,7 +70,9 @@ impl Desktop {
     let (sender, receiver) = crate::completion::channel(256);
     let (dock, tasks) = workbench::build(runtime.clone(), browser, computer, window, cx);
     let composer = cx.new(|cx| {
-      TextareaState::new(window, cx).placeholder("Ask Lyonbrown to work on your project…")
+      TextareaState::new(window, cx)
+        .submit_on_enter(true)
+        .placeholder("描述你的任务，或补充要求…")
     });
     composer.read(cx).focus_handle(cx).focus(window, cx);
     let completion = cx.spawn_in(window, async move |view, cx| {
@@ -110,16 +102,7 @@ impl Desktop {
       connector,
       sender,
       client: None,
-      sessions: Vec::new(),
-      selected: None,
-      runs: Vec::new(),
-      active_run: None,
-      cursor: 0,
-      busy: false,
-      error: None,
-      status: "Disconnected".into(),
-      conversation: Vec::new(),
-      approvals: Vec::new(),
+      vm: crate::view_model::DesktopViewModel::default(),
       endpoint: cx.new(|cx| {
         InputState::new(window, cx)
           .default_value(settings.endpoint.clone())
@@ -159,14 +142,14 @@ impl Desktop {
 
   fn clear_finished_wait(&mut self, cx: &mut Context<Self>) {
     let tasks = self.tasks.read(cx);
-    let finished = match self.error.as_deref() {
+    let finished = match self.vm.error.as_deref() {
       Some(crate::tabs::SAVE_WAIT_MESSAGE) => !tasks.pending_save,
       Some(crate::tabs::BROWSER_WAIT_MESSAGE) => !tasks.pending_browser_operation,
       Some(crate::tabs::COMPUTER_WAIT_MESSAGE) => !tasks.computer.read(cx).pending,
       _ => false,
     };
     if finished {
-      self.error = None;
+      self.vm.error = None;
       cx.notify();
     }
   }
@@ -219,21 +202,29 @@ impl Render for Desktop {
         this.child(self.settings_view(cx))
       })
       .when(!self.show_settings, |this| {
-        this.child(self.chat_tabs(cx)).child(
+        this.child(
           div().flex_1().min_h_0().child(
             h_resizable("desktop-layout")
               .when(self.show_sidebar, |this| {
                 this.child(
                   resizable_panel()
-                    .size(px(242.))
-                    .size_range(px(190.)..px(340.))
+                    .size(px(crate::theme::SIDEBAR_WIDTH))
+                    .size_range(px(240.)..px(380.))
                     .child(self.sidebar(cx)),
+                )
+              })
+              .when(!self.show_sidebar, |layout| {
+                layout.child(
+                  resizable_panel()
+                    .size(px(crate::theme::RAIL_WIDTH))
+                    .size_range(px(crate::theme::RAIL_WIDTH)..px(crate::theme::RAIL_WIDTH))
+                    .child(self.sidebar_rail(cx)),
                 )
               })
               .child(
                 resizable_panel()
                   .size_range(px(360.)..px(2000.))
-                  .child(self.conversation(cx)),
+                  .child(self.conversation(window, cx)),
               )
               .when(self.show_workbench, |this| {
                 this.child(

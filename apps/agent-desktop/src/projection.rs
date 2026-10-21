@@ -31,31 +31,34 @@ impl Desktop {
         if let Some(task) = self.watch_task.take() {
           task.abort();
         }
-        self.active_run = None;
-        self.cursor = 0;
-        self.error = None;
-        self.selected = None;
-        self.conversation.clear();
-        self.runs.clear();
-        self.approvals.clear();
+        self.vm.active_run = None;
+        self.vm.cursor = 0;
+        self.vm.error = None;
+        self.vm.selected = None;
+        self.vm.conversation.clear();
+        self.vm.runs.clear();
+        self.vm.approvals.clear();
         self.client = Some(*client);
-        self.sessions = sessions;
-        self.status = "Connected · authenticated".into();
-        self.busy = false;
+        self.vm.sessions = sessions;
+        self.vm.status = "Connected · authenticated".into();
+        self.vm.busy = false;
       }
       Update::Session(session, keep_busy) => {
-        self.selected = Some(session.id.clone());
-        self.sessions.retain(|previous| previous.id != session.id);
-        self.sessions.insert(0, session);
-        self.conversation.clear();
-        self.runs.clear();
-        self.approvals.clear();
-        self.error = None;
-        self.busy = keep_busy;
+        self.vm.selected = Some(session.id.clone());
+        self
+          .vm
+          .sessions
+          .retain(|previous| previous.id != session.id);
+        self.vm.sessions.insert(0, session);
+        self.vm.conversation.clear();
+        self.vm.runs.clear();
+        self.vm.approvals.clear();
+        self.vm.error = None;
+        self.vm.busy = keep_busy;
       }
       Update::Runs(mut runs) => {
         runs.sort_by_key(|run| run.created_at_ms);
-        self.conversation = runs
+        self.vm.conversation = runs
           .iter()
           .flat_map(|run| {
             let mut messages = vec![ChatMessage::new("You", run.prompt.clone(), cx)];
@@ -69,12 +72,12 @@ impl Desktop {
           })
           .collect();
         if let Some(run) = runs.iter().rev().find(|run| !terminal(&run.status)) {
-          self.active_run = Some(run.id.clone());
-          self.cursor = 0;
+          self.vm.active_run = Some(run.id.clone());
+          self.vm.cursor = 0;
           self.inspect_run(cx);
         }
-        self.runs = runs;
-        self.busy = false;
+        self.vm.runs = runs;
+        self.vm.busy = false;
       }
       Update::Started(run) => {
         if self.composer.read(cx).value().as_ref() == run.prompt {
@@ -83,24 +86,26 @@ impl Desktop {
             .update(cx, |composer, cx| composer.set_value("", window, cx));
         }
         self
+          .vm
           .conversation
           .push(ChatMessage::new("You", run.prompt.clone(), cx));
-        self.active_run = Some(run.id.clone());
-        self.cursor = 0;
-        self.status = format!("Run {} · {}", run.id, run.status);
-        self.runs.push(run);
-        self.busy = false;
+        self.vm.active_run = Some(run.id.clone());
+        self.vm.cursor = 0;
+        self.vm.status = format!("Run {} · {}", run.id, run.status);
+        self.vm.runs.push(run);
+        self.vm.busy = false;
       }
       Update::Event(event) => {
-        if self.active_run.as_deref() != Some(event.run_id.as_str()) || event.cursor <= self.cursor
+        if self.vm.active_run.as_deref() != Some(event.run_id.as_str())
+          || event.cursor <= self.vm.cursor
         {
           return;
         }
-        self.cursor = event.cursor;
-        self.status = format!("{} · event {}", event.kind, event.cursor);
+        self.vm.cursor = event.cursor;
+        self.vm.status = format!("{} · event {}", event.kind, event.cursor);
         let payload: serde_json::Value =
           serde_json::from_str(&event.payload_json).unwrap_or_default();
-        if let Some(run) = self.runs.iter_mut().find(|run| run.id == event.run_id) {
+        if let Some(run) = self.vm.runs.iter_mut().find(|run| run.id == event.run_id) {
           if let Some(status) = payload["status"].as_str() {
             run.status = status.to_string();
           } else if event.kind == "approval_required" {
@@ -110,6 +115,7 @@ impl Desktop {
         if event.kind == "text_delta" {
           if let Some(text) = payload["text"].as_str() {
             if let Some(message) = self
+              .vm
               .conversation
               .last_mut()
               .filter(|message| message.role == "Lyonbrown")
@@ -117,12 +123,13 @@ impl Desktop {
               message.append(text, cx);
             } else {
               self
+                .vm
                 .conversation
                 .push(ChatMessage::new("Lyonbrown", text.to_string(), cx));
             }
           }
         } else if event.kind == "tool_started" || event.kind == "tool_finished" {
-          self.conversation.push(ChatMessage::new(
+          self.vm.conversation.push(ChatMessage::new(
             "Tool",
             format!(
               "**{}** · {}\n\n```json\n{}\n```",
@@ -138,27 +145,34 @@ impl Desktop {
         }
       }
       Update::Run(run) => {
-        if self.selected.as_deref() != Some(run.session_id.as_str()) {
+        if self.vm.selected.as_deref() != Some(run.session_id.as_str()) {
           return;
         }
-        self.status = format!("Run {} · {}", run.id, run.status);
+        self.vm.status = format!("Run {} · {}", run.id, run.status);
         if !run.result.is_empty()
           && self
+            .vm
             .conversation
             .last()
             .is_none_or(|message| message.role != "Lyonbrown")
         {
           self
+            .vm
             .conversation
             .push(ChatMessage::new("Lyonbrown", run.result.clone(), cx));
         }
         if !run.error.is_empty() {
-          self.error = Some(run.error.clone());
+          self.vm.error = Some(run.error.clone());
         }
         if terminal(&run.status) {
-          self.active_run = None;
+          self.vm.active_run = None;
         }
-        if let Some(previous) = self.runs.iter_mut().find(|previous| previous.id == run.id) {
+        if let Some(previous) = self
+          .vm
+          .runs
+          .iter_mut()
+          .find(|previous| previous.id == run.id)
+        {
           *previous = run;
         }
       }
@@ -168,15 +182,15 @@ impl Desktop {
           operation = "client.connect_or_request",
           outcome = "failed",
           process_id = std::process::id(),
-          session_id = self.selected.as_deref(),
-          run_id = self.active_run.as_deref(),
+          session_id = self.vm.selected.as_deref(),
+          run_id = self.vm.active_run.as_deref(),
           client_present = self.client.is_some(),
           error_category = "connection_or_request_failed",
           "Desktop operation failed; inspect daemon state before retrying"
         );
-        self.error = Some(error);
-        self.busy = false;
-        self.status = if self.active_run.is_some() {
+        self.vm.error = Some(error);
+        self.vm.busy = false;
+        self.vm.status = if self.vm.active_run.is_some() {
           "Run outcome unknown · inspect daemon"
         } else {
           "Connection or request failed"
@@ -184,11 +198,11 @@ impl Desktop {
         .into();
       }
       Update::Approvals(approvals) => {
-        self.approvals = approvals
+        self.vm.approvals = approvals
           .into_iter()
           .filter(|approval| {
             approval.status.eq_ignore_ascii_case("pending")
-              && self.active_run.as_deref() == Some(approval.run_id.as_str())
+              && self.vm.active_run.as_deref() == Some(approval.run_id.as_str())
           })
           .collect();
       }

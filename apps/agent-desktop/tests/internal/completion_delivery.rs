@@ -48,7 +48,7 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
   cx.run_until_parked();
   cx.update(|cx| {
     let view = harness.view.read(cx);
-    assert_eq!(view.error.as_deref(), Some("completion 255"));
+    assert_eq!(view.vm.error.as_deref(), Some("completion 255"));
     assert_eq!(view.navigation.pending_requests, 0);
   });
 
@@ -66,7 +66,7 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
     cx.update(|cx| {
       harness
         .view
-        .update(cx, |view, _| view.error = Some(wait_message.into()));
+        .update(cx, |view, _| view.vm.error = Some(wait_message.into()));
       workbench.update(cx, |view, _| {
         view.pending_save = wait_message == crate::tabs::SAVE_WAIT_MESSAGE;
         view.pending_browser_operation = wait_message == crate::tabs::BROWSER_WAIT_MESSAGE;
@@ -79,7 +79,7 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
     cx.run_until_parked();
     cx.update(|cx| {
       assert!(
-        harness.view.read(cx).error.is_none(),
+        harness.view.read(cx).vm.error.is_none(),
         "completed work clears close/switch wait"
       );
       assert!(!workbench.read(cx).pending_save);
@@ -89,7 +89,7 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
 
   cx.update(|cx| {
     harness.view.update(cx, |view, _| {
-      view.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
+      view.vm.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
     });
     workbench.read(cx).computer.clone().update(cx, |view, _| {
       view.pending = true;
@@ -101,7 +101,7 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
   });
   cx.run_until_parked();
   cx.update(|cx| {
-    assert!(harness.view.read(cx).error.is_none());
+    assert!(harness.view.read(cx).vm.error.is_none());
     assert!(!workbench.read(cx).computer.read(cx).pending);
   });
 }

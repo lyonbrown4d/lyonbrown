@@ -76,7 +76,9 @@ impl ChatState {
       approvals: Vec::new(),
       watch_task: None,
       composer: cx.new(|cx| {
-        TextareaState::new(window, cx).placeholder("Ask Lyonbrown to work on your project…")
+        TextareaState::new(window, cx)
+          .submit_on_enter(true)
+          .placeholder("描述你的任务，或补充要求…")
       }),
       workspace: cx.new(|cx| {
         InputState::new(window, cx)
@@ -87,15 +89,15 @@ impl ChatState {
   }
 
   pub fn swap_with(&mut self, desktop: &mut Desktop) {
-    std::mem::swap(&mut self.selected, &mut desktop.selected);
-    std::mem::swap(&mut self.runs, &mut desktop.runs);
-    std::mem::swap(&mut self.active_run, &mut desktop.active_run);
-    std::mem::swap(&mut self.cursor, &mut desktop.cursor);
-    std::mem::swap(&mut self.busy, &mut desktop.busy);
-    std::mem::swap(&mut self.error, &mut desktop.error);
-    std::mem::swap(&mut self.status, &mut desktop.status);
-    std::mem::swap(&mut self.conversation, &mut desktop.conversation);
-    std::mem::swap(&mut self.approvals, &mut desktop.approvals);
+    std::mem::swap(&mut self.selected, &mut desktop.vm.selected);
+    std::mem::swap(&mut self.runs, &mut desktop.vm.runs);
+    std::mem::swap(&mut self.active_run, &mut desktop.vm.active_run);
+    std::mem::swap(&mut self.cursor, &mut desktop.vm.cursor);
+    std::mem::swap(&mut self.busy, &mut desktop.vm.busy);
+    std::mem::swap(&mut self.error, &mut desktop.vm.error);
+    std::mem::swap(&mut self.status, &mut desktop.vm.status);
+    std::mem::swap(&mut self.conversation, &mut desktop.vm.conversation);
+    std::mem::swap(&mut self.approvals, &mut desktop.vm.approvals);
     std::mem::swap(&mut self.composer, &mut desktop.composer);
     std::mem::swap(&mut self.workspace, &mut desktop.workspace);
     std::mem::swap(&mut self.watch_task, &mut desktop.watch_task);

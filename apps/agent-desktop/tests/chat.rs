@@ -40,7 +40,10 @@ async fn real_keyboard_submission_streams_markdown_and_loads_sidebar_history(
   harness
     .wait(cx, |snapshot| snapshot.session_titles.len() == 2)
     .await;
-  harness.input_prompt(cx, "Explain the code in markdown.");
+  harness.input_prompt(
+    cx,
+    "请只读检查这个合成 Rust 工作区，并说明客户端与 agentd 的边界。请解释会话状态如何保存，以及任务取消和重连时应注意的行为，不要修改任何文件。请保持中文正文可读，并使用 Markdown 列出检查结果。",
+  );
   let complete = harness
     .wait(cx, |snapshot| {
       snapshot.active_run.is_none()
@@ -61,7 +64,30 @@ async fn real_keyboard_submission_streams_markdown_and_loads_sidebar_history(
   );
   let requests = harness.runtime.block_on(harness.model.requests());
   assert_eq!(requests.len(), 1, "UI must not duplicate the model prompt");
+  let assert_message_layout = |window: &mut gpui_kit::Window| {
+    let user_row = window.find(("message", 0usize)).bounds();
+    let user_body = window.find(("message-body", 0usize)).bounds();
+    let assistant_row = window.find(("message", 1usize)).bounds();
+    let assistant_body = window.find(("message-body", 1usize)).bounds();
+    assert!(
+      user_body.size.width > px(200.),
+      "CJK prompts need a readable line width, not a one-character column: {user_body:?}"
+    );
+    assert!(
+      user_body.size.height < px(300.),
+      "the prompt must wrap into normal lines: {user_body:?}"
+    );
+    assert!(
+      user_body.origin.x > user_row.origin.x,
+      "user prompt stays right aligned"
+    );
+    assert!(user_body.right() <= user_row.right() + px(1.));
+    assert!(assistant_body.size.width > px(200.));
+    assert!(assistant_body.size.width <= assistant_row.size.width + px(1.));
+  };
   cx.update_window(harness.window.into(), |_, window, cx| {
+    window.render_frame(cx);
+    assert_message_layout(window);
     assert!(
       window.try_find("access-token").is_none(),
       "credentials are outside the chat view"
@@ -86,6 +112,7 @@ async fn real_keyboard_submission_streams_markdown_and_loads_sidebar_history(
   cx.simulate_window_resize(harness.window.into(), size(px(960.), px(640.)));
   cx.update_window(harness.window.into(), |_, window, cx| {
     window.render_frame(cx);
+    assert_message_layout(window);
     assert!(window.find("composer").visible());
     assert!(window.find("composer").bounds().bottom() <= window.viewport_size().height);
     window.press(&support::shortcut("l"), cx);

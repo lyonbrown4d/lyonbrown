@@ -93,7 +93,7 @@ impl Desktop {
                 div()
                   .text_sm()
                   .text_color(cx.theme().muted_foreground)
-                  .child(self.status.clone()),
+                  .child(self.vm.status.clone()),
               ),
           )
           .when(
@@ -110,7 +110,7 @@ impl Desktop {
               )
             },
           )
-          .when_some(self.error.clone(), |this, error| {
+          .when_some(self.vm.error.clone(), |this, error| {
             this.child(
               div()
                 .p_3()

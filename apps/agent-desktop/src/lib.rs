@@ -14,6 +14,9 @@ mod projection;
 mod settings;
 mod shell;
 mod tabs;
+mod theme;
+mod view_model;
+mod views;
 mod workbench;
 
 #[cfg(test)]
@@ -23,6 +26,10 @@ mod test_support;
 #[cfg(test)]
 #[path = "../tests/internal/completion_delivery.rs"]
 mod completion_delivery;
+
+#[cfg(test)]
+#[path = "../tests/internal/composer_submission.rs"]
+mod composer_submission;
 
 #[cfg(test)]
 #[path = "../tests/internal/frame_generation.rs"]

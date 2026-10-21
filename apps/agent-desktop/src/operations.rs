@@ -9,12 +9,12 @@ use gpui_kit::*;
 impl Desktop {
   pub(super) fn connect(&mut self, cx: &mut Context<Self>) {
     if self.tasks.read(cx).computer.read(cx).pending {
-      self.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
+      self.vm.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
       cx.notify();
       return;
     }
     if self.tasks.read(cx).pending_browser_operation {
-      self.error = Some(crate::tabs::BROWSER_WAIT_MESSAGE.into());
+      self.vm.error = Some(crate::tabs::BROWSER_WAIT_MESSAGE.into());
       cx.notify();
       return;
     }
@@ -29,8 +29,8 @@ impl Desktop {
       });
       cx.notify();
     });
-    self.error = None;
-    self.status = "Connecting to daemon…".into();
+    self.vm.error = None;
+    self.vm.status = "Connecting to daemon…".into();
     let endpoint = self.endpoint.read(cx).value().to_string();
     let token = self.token.read(cx).value().to_string();
     let sender = self.sender.clone();
@@ -52,13 +52,13 @@ impl Desktop {
   }
 
   pub(super) fn create_session(&mut self, cx: &mut Context<Self>) {
-    if self.navigation.connecting || self.busy {
+    if self.navigation.connecting || self.vm.busy {
       return;
     }
     let Some(client) = self.client.clone() else {
       return;
     };
-    self.busy = true;
+    self.vm.busy = true;
     self.navigation.pending_requests += 1;
     let workspace = self.workspace.read(cx).value().to_string();
     let sender = self.scoped_sender();
@@ -90,13 +90,13 @@ impl Desktop {
       return;
     }
     self.open_session_tab(window, cx);
-    self.selected = Some(id.clone());
+    self.vm.selected = Some(id.clone());
     self.bind_active_chat(window, cx);
-    self.conversation.clear();
-    self.runs.clear();
-    self.approvals.clear();
-    self.error = None;
-    self.busy = true;
+    self.vm.conversation.clear();
+    self.vm.runs.clear();
+    self.vm.approvals.clear();
+    self.vm.error = None;
+    self.vm.busy = true;
     let sender = self.scoped_sender();
     self.runtime.spawn(async move {
       let update = client
@@ -109,8 +109,13 @@ impl Desktop {
     cx.notify();
   }
 
-  pub(super) fn send(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
-    if self.navigation.connecting || self.busy || self.active_run.is_some() {
+  pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if self.composer.update(cx, |input, cx| {
+      input.marked_text_range(window, cx).is_some()
+    }) {
+      return;
+    }
+    if self.navigation.connecting || self.vm.busy || self.vm.active_run.is_some() {
       return;
     }
     let Some(client) = self.client.clone() else {
@@ -120,10 +125,10 @@ impl Desktop {
     if prompt.trim().is_empty() {
       return;
     }
-    self.busy = true;
+    self.vm.busy = true;
     self.navigation.pending_requests += 1;
-    self.error = None;
-    let session = self.selected.clone();
+    self.vm.error = None;
+    let session = self.vm.selected.clone();
     let workspace = self.workspace.read(cx).value().to_string();
     let sender = self.scoped_sender();
     let key = uuid::Uuid::now_v7().to_string();
@@ -167,7 +172,7 @@ impl Desktop {
   }
 
   pub(super) fn cancel_run(&mut self, cx: &mut Context<Self>) {
-    let (Some(client), Some(id)) = (self.client.clone(), self.active_run.clone()) else {
+    let (Some(client), Some(id)) = (self.client.clone(), self.vm.active_run.clone()) else {
       return;
     };
     let sender = self.scoped_sender();
@@ -183,12 +188,12 @@ impl Desktop {
   }
 
   pub(super) fn inspect_run(&mut self, cx: &mut Context<Self>) {
-    let (Some(client), Some(id)) = (self.client.clone(), self.active_run.clone()) else {
+    let (Some(client), Some(id)) = (self.client.clone(), self.vm.active_run.clone()) else {
       return;
     };
     let sender = self.scoped_sender();
-    let cursor = self.cursor;
-    self.error = None;
+    let cursor = self.vm.cursor;
+    self.vm.error = None;
     if let Some(task) = self.watch_task.take() {
       task.abort();
     }
@@ -217,9 +222,9 @@ impl Desktop {
     let Some(client) = self.client.clone() else {
       return;
     };
-    self.approvals.retain(|approval| approval.id != id);
+    self.vm.approvals.retain(|approval| approval.id != id);
     let sender = self.scoped_sender();
-    let run = self.active_run.clone();
+    let run = self.vm.active_run.clone();
     self.runtime.spawn(async move {
       let result = async {
         client.approve(&id, approved).await?;

@@ -1,56 +1,116 @@
-use crate::shell::Desktop;
+use crate::{
+  shell::Desktop,
+  theme::{DesktopColors, RAIL_WIDTH},
+};
+use gpui_kit::assets::IconName;
 use gpui_kit::component::{
-  ActiveTheme, Disableable, Sizable,
+  Disableable, Icon, Sizable,
   button::{Button, ButtonVariants},
-  input::Textarea,
-  text::TextView,
 };
 use gpui_kit::{TestSupportExt as _, prelude::FluentBuilder as _, *};
 
 impl Desktop {
   pub(super) fn sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
+    let colors = DesktopColors::get(cx);
+    let groups = self.vm.session_groups();
+    let mut rows = Vec::new();
+    let mut row_index: usize = 0;
+    for (workspace, sessions) in groups {
+      let name = std::path::Path::new(workspace)
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "工作区".into());
+      rows.push(
+        div()
+          .mt_3()
+          .mb_1()
+          .px_2()
+          .h_8()
+          .flex()
+          .items_center()
+          .gap_2()
+          .child(Icon::new(IconName::Folder).small())
+          .child(div().min_w_0().truncate().child(name))
+          .into_any_element(),
+      );
+      for session in sessions {
+        let id = session.id.clone();
+        let selected = self.vm.selected.as_deref() == Some(session.id.as_str());
+        rows.push(
+          Button::new(("session-button", row_index))
+            .ghost()
+            .small()
+            .w_full()
+            .h(px(34.))
+            .when(selected, |row| row.bg(colors.selection))
+            .accessibility_label(session.title.clone())
+            .tooltip(session.title.clone())
+            .child(
+              div()
+                .id(("session", row_index))
+                .test_support()
+                .w_full()
+                .min_w_0()
+                .pl_3()
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(Icon::new(IconName::MessageSquare).small())
+                .child(
+                  div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(session.title.clone()),
+                ),
+            )
+            .on_click(
+              cx.listener(move |this, _, window, cx| this.select_session(id.clone(), window, cx)),
+            )
+            .into_any_element(),
+        );
+        row_index += 1;
+      }
+    }
     div()
       .id("sidebar")
       .test_support()
       .flex()
       .flex_col()
       .size_full()
-      .p_4()
-      .gap_3()
-      .bg(cx.theme().secondary)
-      .child(
-        div()
-          .text_lg()
-          .font_weight(FontWeight::SEMIBOLD)
-          .child("Lyonbrown"),
-      )
-      .child(
-        div()
-          .text_xs()
-          .text_color(cx.theme().muted_foreground)
-          .child("YOUR WORKSPACE"),
-      )
-      .child(
-        div().text_sm().overflow_hidden().child(
-          std::path::Path::new(self.workspace.read(cx).value().as_ref())
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Workspace".into()),
-        ),
-      )
+      .px_3()
+      .pt_2()
+      .pb_3()
+      .gap_1()
+      .bg(colors.sidebar)
+      .text_color(colors.foreground)
+      .text_size(px(13.))
       .child(
         Button::new("new-session")
-          .label("＋ New chat")
+          .ghost()
+          .small()
           .w_full()
-          .disabled(self.client.is_none() || self.busy)
+          .h(px(34.))
+          .disabled(self.client.is_none() || self.navigation.connecting || self.vm.busy)
+          .accessibility_label("新对话")
+          .child(
+            div()
+              .w_full()
+              .flex()
+              .items_center()
+              .gap_2()
+              .child(Icon::new(IconName::SquarePen).small())
+              .child("新对话"),
+          )
           .on_click(cx.listener(|this, _, window, cx| this.new_chat_tab(window, cx))),
       )
       .child(
         div()
-          .mt_4()
+          .mt_6()
+          .px_2()
           .text_xs()
-          .text_color(cx.theme().muted_foreground)
-          .child("CHATS"),
+          .text_color(colors.muted)
+          .child("工作区"),
       )
       .child(
         div()
@@ -58,102 +118,91 @@ impl Desktop {
           .flex_1()
           .min_h_0()
           .overflow_y_scroll()
-          .children(
-            self
-              .sessions
-              .iter()
-              .enumerate()
-              .map(|(index, session)| {
-                let id = session.id.clone();
-                div()
-                  .id(("session", index))
-                  .test_support()
-                  .px_3()
-                  .py_2()
-                  .rounded_md()
-                  .cursor_pointer()
-                  .when(
-                    self.selected.as_deref() == Some(session.id.as_str()),
-                    |this| this.bg(cx.theme().background),
-                  )
-                  .hover(|this| this.bg(cx.theme().muted))
-                  .child(session.title.clone())
-                  .on_click(cx.listener(move |this, _, window, cx| {
-                    this.select_session(id.clone(), window, cx)
-                  }))
-              })
-              .collect::<Vec<_>>(),
-          )
-          .when(self.sessions.is_empty(), |this| {
-            this.child(
+          .children(rows)
+          .when(self.vm.sessions.is_empty(), |list| {
+            list.child(
               div()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
+                .p_2()
+                .text_color(colors.muted)
                 .child(if self.client.is_some() {
-                  "No chats yet. Start a new chat."
+                  "还没有对话。开始一个新任务。"
                 } else {
-                  "Connect to load your chats."
+                  "连接后显示会话。"
                 }),
             )
           }),
       )
       .child(
-        Button::new("sidebar-settings")
-          .ghost()
-          .small()
-          .label("Settings")
-          .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+        div()
+          .flex()
+          .items_center()
+          .justify_between()
+          .gap_2()
+          .child(
+            Button::new("sidebar-settings")
+              .ghost()
+              .small()
+              .icon(IconName::Settings)
+              .label("设置")
+              .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+          )
+          .child(
+            div()
+              .text_xs()
+              .text_color(colors.muted)
+              .child(self.connection_label()),
+          ),
       )
       .into_any_element()
   }
 
-  pub(super) fn conversation(&self, cx: &mut Context<Self>) -> AnyElement {
-    let title = self
-      .sessions
-      .iter()
-      .find(|session| Some(&session.id) == self.selected.as_ref())
-      .map_or("New conversation", |session| session.title.as_str())
-      .to_string();
-    div().flex().flex_col().size_full().min_w_0()
-            .child(div().h(px(54.)).px_6().flex().items_center().border_b_1().border_color(cx.theme().border)
-                .child(div().flex_1().font_weight(FontWeight::MEDIUM).child(title))
-                .child(div().text_xs().text_color(cx.theme().muted_foreground).child("agentd")))
-            .child(div().id("conversation").flex_1().min_h_0().overflow_y_scroll().p_6().children(
-                self.conversation.iter().map(|message| div().mb_6().flex().flex_col().gap_2()
-                    .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(cx.theme().muted_foreground).child(message.role.clone()))
-                    .child(TextView::new(&message.markdown).selectable(true))).collect::<Vec<_>>()
-            ).when(self.conversation.is_empty(), |this| this.child(div().flex().flex_col().items_center().justify_center().h_full().gap_3()
-                .child(div().text_2xl().font_weight(FontWeight::MEDIUM).child("What shall we build?"))
-                .child(div().text_sm().text_center().text_color(cx.theme().muted_foreground)
-                    .child(if self.client.is_some() {
-                      "Describe a task to start working in your workspace."
-                    } else {
-                      "Connect to your daemon, then start a chat.\nYour sessions and jobs stay with agentd."
-                    })))))
-            .when_some(self.error.clone(), |this, error| this.child(div().mx_5().p_3().rounded_md().border_1().border_color(cx.theme().danger)
-                .text_sm().child(error)))
-            .children(self.approvals.iter().enumerate().map(|(index, approval)| {
-                let allow_id = approval.id.clone();
-                let deny_id = approval.id.clone();
-                div().mx_5().p_3().rounded_md().border_1().border_color(cx.theme().border).flex().flex_col().gap_2()
-                    .child(format!("Permission required: {}", approval.tool))
-                    .child(div().text_xs().child(approval.arguments_json.clone()))
-                    .child(div().flex().gap_2()
-                        .child(Button::new(("allow", index)).label("Allow once").primary()
-                            .on_click(cx.listener(move |this, _, _, cx| this.approve(allow_id.clone(), true, cx))))
-                        .child(Button::new(("deny", index)).label("Deny")
-                            .on_click(cx.listener(move |this, _, _, cx| this.approve(deny_id.clone(), false, cx)))))
-            }).collect::<Vec<_>>())
-            .child(div().p_5().flex().flex_col().gap_3()
-                .child(div().id("composer").test_support().key_context("Composer").child(Textarea::new(&self.composer).accessibility_id("composer").readonly(self.busy).h(px(110.))))
-                .child(div().flex().items_center().gap_2()
-                    .child(div().flex_1().text_xs().text_color(cx.theme().muted_foreground).child("Runs execute on your daemon"))
-                    .when(self.active_run.is_some(), |this| this.child(
-                        Button::new("inspect").label(if self.error.is_some(){"Inspect / reconnect"}else{"Refresh run"})
-                            .on_click(cx.listener(|this, _, _, cx| this.inspect_run(cx)))))
-                    .child(Button::new("cancel").ghost().label("Stop").disabled(self.active_run.is_none())
-                        .on_click(cx.listener(|this, _, _, cx| this.cancel_run(cx))))
-                    .child(Button::new("send").primary().label("Send ↑").disabled(self.client.is_none() || self.busy || self.active_run.is_some())
-                        .on_click(cx.listener(|this, _, window, cx| this.send(window, cx)))))).into_any_element()
+  pub(super) fn sidebar_rail(&self, cx: &mut Context<Self>) -> AnyElement {
+    let colors = DesktopColors::get(cx);
+    div()
+      .id("sidebar-rail")
+      .test_support()
+      .w(px(RAIL_WIDTH))
+      .h_full()
+      .flex_shrink_0()
+      .flex()
+      .flex_col()
+      .items_center()
+      .py_2()
+      .gap_2()
+      .bg(colors.sidebar)
+      .text_color(colors.foreground)
+      .child(
+        Button::new("rail-new-session")
+          .ghost()
+          .small()
+          .icon(IconName::SquarePen)
+          .accessibility_label("新对话")
+          .tooltip("新对话")
+          .disabled(self.client.is_none() || self.navigation.connecting || self.vm.busy)
+          .on_click(cx.listener(|this, _, window, cx| this.new_chat_tab(window, cx))),
+      )
+      .child(
+        Button::new("rail-sessions")
+          .ghost()
+          .small()
+          .icon(IconName::MessageSquare)
+          .accessibility_label("展开会话侧栏")
+          .tooltip("会话")
+          .on_click(cx.listener(|this, _, _, cx| {
+            this.show_sidebar = true;
+            cx.notify();
+          })),
+      )
+      .child(div().flex_1())
+      .child(
+        Button::new("rail-settings")
+          .ghost()
+          .small()
+          .icon(IconName::Settings)
+          .accessibility_label("设置")
+          .tooltip("设置")
+          .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+      )
+      .into_any_element()
   }
 }
