@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d97f41ab.js";
+            window.path_to_searchindex_js = "searchindex-d7c55164.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-dab33207.js"></script>
@@ -239,6 +239,7 @@ mdbook build docs/en
 <p>这些命令分别检查格式、静态问题、测试、构建和文档生成。它们不能替代真实模型调用、GUI 启动、CEF 操作、系统权限或跨设备网络验收。验证结果应同时说明命令、环境、场景和未覆盖范围。</p>
 <h2 id="修改模块"><a class="header" href="#修改模块">修改模块</a></h2>
 <p>客户端只修改呈现与输入；模型、工具、权限和持久状态应留在 daemon。新增字段先维护 <code>proto/agent/v1/agent.proto</code> 和两端消费者，避免把运行库内部类型放进协议。</p>
+<p>客户端视图按 MVVM 组织。TUI 的 <code>ViewModel</code> 从 <code>App</code> 生成只读呈现数据，<code>view.rs</code> 复用 Ratatui，输入区复用 <code>ratatui-textarea</code>，Markdown 复用 <code>tui-markdown</code> 的公开样式接口。Desktop 的 <code>DesktopViewModel</code> 保存当前聊天呈现状态，<code>operations.rs</code> 负责协议请求，<code>projection.rs</code> 负责应用回复，<code>views/</code>、<code>panes.rs</code> 和 <code>tabs/view.rs</code> 组合 <code>gpui-kit</code> 组件。网络客户端、运行时、凭据与原生宿主不放入 ViewModel。变更共享控件时复用组件库的输入、Markdown、Tab、停靠和调整尺寸能力；后台回复仍须按标签页及代次隔离。界面操作与限制见<a href="clients.html">终端与桌面客户端</a>。</p>
 <p>单个手写源文件达到 300 行时评估按职责拆分。集成测试放入对应 crate 的 <code>tests/</code> 目录。生产代码避免 <code>panic</code>、<code>unwrap</code> 和未受控的 <code>unsafe</code>。必要 FFI 只保留在平台适配边界，并说明安全条件。</p>
 <h2 id="维护文档"><a class="header" href="#维护文档">维护文档</a></h2>
 <pre><code class="language-sh">mdbook serve docs/zh --open

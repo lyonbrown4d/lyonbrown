@@ -37,7 +37,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-04278665.js";
+            window.path_to_searchindex_js = "searchindex-ea3e6dbb.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-67d94056.js"></script>
@@ -239,6 +239,7 @@ mdbook build docs/en
 <p>These commands check formatting, static issues, tests, compilation and documentation generation. They do not replace real-model requests, GUI startup, CEF operation, system permissions or cross-device acceptance. Report the command, environment, scenario and remaining coverage limits together.</p>
 <h2 id="module-changes"><a class="header" href="#module-changes">Module changes</a></h2>
 <p>Clients own presentation and input. Models, tools, permissions and durable state remain in the daemon. Add shared fields to <code>proto/agent/v1/agent.proto</code> and update both consumers; do not put execution-library internals in protocol messages.</p>
+<p>Client views follow MVVM. The TUI projects <code>App</code> into read-only <code>ViewModel</code> data; <code>view.rs</code> reuses Ratatui, the composer reuses <code>ratatui-textarea</code>, and Markdown reuses the public style interface of <code>tui-markdown</code>. Desktop stores active chat presentation in <code>DesktopViewModel</code>; <code>operations.rs</code> issues protocol requests, <code>projection.rs</code> applies replies, and <code>views/</code>, <code>panes.rs</code> and <code>tabs/view.rs</code> compose <code>gpui-kit</code> components. Keep network clients, runtimes, credentials and native hosts outside ViewModels. Reuse library input, Markdown, Tab, docking and resizing behavior when changing shared controls. Background replies must remain isolated by tab and generation. See <a href="clients.html">terminal and desktop clients</a> for controls and limits.</p>
 <p>Assess responsibility-based decomposition when a handwritten source file reaches 300 lines. Integration tests belong in each crate’s <code>tests/</code> directory. Avoid production <code>panic</code>, <code>unwrap</code> and uncontrolled <code>unsafe</code>. Necessary FFI stays at platform adapter boundaries with its safety conditions documented.</p>
 <h2 id="maintain-the-books"><a class="header" href="#maintain-the-books">Maintain the books</a></h2>
 <pre><code class="language-sh">mdbook serve docs/zh --open

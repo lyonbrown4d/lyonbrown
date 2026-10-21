@@ -1,0 +1,208 @@
+{
+  "recorded_on": "2026-10-21",
+  "application": "agent-cli",
+  "version": "0.1.0",
+  "platform": {
+    "os": "macOS",
+    "architecture": "arm64"
+  },
+  "capture": {
+    "source": "actual agent-cli child process through portable-pty; ANSI state parsed by vt100 and rasterized from captured cells",
+    "kind": "PTY rasterization",
+    "native_os_terminal_window_screenshot": false,
+    "theme": "dark",
+    "model": "local synthetic HTTP model fixture; no paid-model call or model-weight loading",
+    "public_capture_policy": "Only cell-capture digests are published; raw terminal cell JSON and process environment are omitted."
+  },
+  "images": {
+    "conversation": {
+      "image": "images/tui-conversation-mvvm-macos.png",
+      "sha256": "b2d70f9968b0e5800597fac2252664c538a8c8cd2f69da179ecf302d359502be",
+      "bytes": 47145,
+      "columns": 140,
+      "rows": 36,
+      "width": 1540,
+      "height": 864,
+      "cell_capture_sha256": "407475a2a7699cd371078aa223b73d16bf271b5d2e239bd0dc63be5c877cb089",
+      "cell_capture_bytes": 821548,
+      "non_default_color_cells": 5007,
+      "content": "synthetic loopback model fixture; no manually inserted UI content"
+    },
+    "approval": {
+      "image": "images/tui-approval-mvvm-macos.png",
+      "sha256": "c44fca2028c47e0e71e7000fbd91ba6ab2c5bb76ea99416789ab52a1d8b86820",
+      "bytes": 52562,
+      "columns": 140,
+      "rows": 36,
+      "width": 1540,
+      "height": 864,
+      "cell_capture_sha256": "7b408d9dc295e61b8d5880799c8ec5958e96c32cf6f685a3c87f03b362cc3472",
+      "cell_capture_bytes": 821957,
+      "non_default_color_cells": 4998,
+      "content": "synthetic loopback model fixture; no manually inserted UI content"
+    }
+  },
+  "rasterizer": {
+    "library": "Pillow",
+    "version": "12.3.0",
+    "python_version": "3.12.14",
+    "cell_width": 11,
+    "cell_height": 24,
+    "font_size": 18,
+    "emoji_font_size": 20,
+    "fonts": [
+      "macOS SF Mono (400/700 weights and italic)",
+      "macOS Menlo (terminal symbols)",
+      "macOS Heiti SC (Light/Medium)",
+      "macOS Apple Color Emoji"
+    ],
+    "system_font_locations": [
+      "/System/Library/Fonts/SFNSMono.ttf",
+      "/System/Library/Fonts/SFNSMonoItalic.ttf",
+      "/System/Library/Fonts/Menlo.ttc",
+      "/System/Library/Fonts/STHeiti Light.ttc",
+      "/System/Library/Fonts/STHeiti Medium.ttc",
+      "/System/Library/Fonts/Apple Color Emoji.ttc"
+    ],
+    "renderer_sha256": "d1613b0f5a97c907dfef0f46bacdcabcf27cfc19cecdcf19c7be76586c4c3c2b",
+    "preserved": [
+      "captured Unicode cell content",
+      "RGB and ANSI indexed colors",
+      "bold and Latin italic styles",
+      "inverse cursor",
+      "wide-character cell placement"
+    ]
+  },
+  "dependencies": {
+    "crossterm": [
+      "0.29.0"
+    ],
+    "portable-pty": [
+      "0.9.0"
+    ],
+    "ratatui": [
+      "0.30.2"
+    ],
+    "ratatui-textarea": [
+      "0.9.3"
+    ],
+    "tui-markdown": [
+      "0.3.10"
+    ],
+    "vt100": [
+      "0.16.2"
+    ]
+  },
+  "source_files": {
+    "apps/agent-cli/src/view.rs": {
+      "sha256": "af82d2cb9a587ac4d250e5c491bd6e772cc850ae1360313185fe3b475974b71e",
+      "bytes": 7513
+    },
+    "apps/agent-cli/src/view_model.rs": {
+      "sha256": "ad617973a8898caf79d32b228e35eb43b819aabff7df4af6d69a911ab15cf8d2",
+      "bytes": 7044
+    },
+    "apps/agent-cli/src/markdown.rs": {
+      "sha256": "86a36a4425b2d3d42b32c1642b0b3c5aba8fb0d7d94ee76a72c5e258d72227dc",
+      "bytes": 2732
+    },
+    "apps/agent-cli/src/theme.rs": {
+      "sha256": "8092fbfc1bdfe8b168bc1b2e4869148d86fec2c30b01136f252505cda29ffadf",
+      "bytes": 1211
+    },
+    "apps/agent-cli/src/composer.rs": {
+      "sha256": "3851984b1ba40607df7b81a889a5880326dc0153a5da2499564443b0439cf189",
+      "bytes": 1513
+    },
+    "apps/agent-cli/src/model.rs": {
+      "sha256": "89275ee5f8c095399ee9418ffb9deba46a1f125df2a4f5195487893518b924bc",
+      "bytes": 2255
+    },
+    "apps/agent-cli/src/input.rs": {
+      "sha256": "cc2609ccfcbbe3242dd4d6f4a3deae7379df2eb231cf2b4f36f16385423dc7fe",
+      "bytes": 4627
+    },
+    "apps/agent-cli/src/update.rs": {
+      "sha256": "df492ea945f2806def684f7f9a3c3a71767a039270d99863513ac1ae6ba5768c",
+      "bytes": 3850
+    },
+    "apps/agent-cli/tests/presentation.rs": {
+      "sha256": "d188cf02148d0c743fd2a9e26e1d2d22fa5436ad0078db230c5766efe6c45717",
+      "bytes": 6099
+    },
+    "apps/agent-cli/tests/composer.rs": {
+      "sha256": "1557599cb2a083024ba1d511d8a6d9e413460131744caf618743423c8053a827",
+      "bytes": 8818
+    },
+    "apps/agent-cli/tests/pty_acceptance.rs": {
+      "sha256": "d27ee8b22aff538e9990d7fa99c6a9e7bacad62057b9306c2467d9f73d922aac",
+      "bytes": 9350
+    },
+    "apps/agent-cli/tests/support/pty.rs": {
+      "sha256": "f8fae87747eb6126390e800b057ff6321d98de6d5ff315c79604dc097a97304c",
+      "bytes": 7025
+    }
+  },
+  "dependency_files": {
+    "Cargo.toml": {
+      "sha256": "f436d5133a78cd66225260093f7ccf6bbf1451ac1718988fa03a8ffed2e6b3ca",
+      "bytes": 2782
+    },
+    "Cargo.lock": {
+      "sha256": "09f82c593e583081ae0e06789f5a4feff5cf8f4dd2745a735e37f2ff42f6df39",
+      "bytes": 410207
+    },
+    "apps/agent-cli/Cargo.toml": {
+      "sha256": "57df0344bea531cbaace4f1bc48a57a6f9a42612ee1ebb15afa0c9a1a957cd66",
+      "bytes": 1536
+    }
+  },
+  "verification": {
+    "scope": "TUI checks from the completed workspace test run; desktop-only changes after that run are outside this record.",
+    "test_result": "passed",
+    "test_source": "completed workspace test log; digest retained without publishing private run paths or environment",
+    "test_log_sha256": "4b317f63e8a400cc67a8b1274e95247de3c44c18194f60e1aadfa65a9a6659f2",
+    "actual_pty_tests": [
+      "real_terminal_auth_history_multiline_resize_reconnect_and_cleanup",
+      "real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs",
+      "task_management_cli_uses_authenticated_daemon_without_entering_terminal"
+    ],
+    "actual_pty_behaviors": [
+      "authenticated local daemon connection",
+      "Chinese and emoji cursor editing",
+      "multiline paste, Alt+Enter newline and Enter submission",
+      "viewport resize and current reply visibility",
+      "draft retention across disconnect and reconnect",
+      "exact file-write approval with Ctrl+Y and persisted consumed approval",
+      "denial with Ctrl+E and absence of denied file effect",
+      "live reply cancellation and persisted cancelled run",
+      "no inference or prompt replay after reconnect",
+      "daemon job remains running after client exit",
+      "alternate screen, bracketed paste and terminal settings restored"
+    ],
+    "testbackend_themes": [
+      "dark",
+      "light"
+    ],
+    "testbackend_behaviors": [
+      "Markdown content and active theme colors",
+      "welcome and conversation layout",
+      "inline approval shortcuts at narrow viewports",
+      "explicit reversed composer cursor",
+      "computer binding ownership across session switch"
+    ]
+  },
+  "limitations": [
+    "Images show dark-theme PTY state, not an operating-system Terminal window.",
+    "Light theme is covered by TestBackend checks; no light-theme terminal image is claimed.",
+    "No native terminal font or input-method acceptance is established by these rasterizations.",
+    "This record does not establish Windows, Linux, public-network, installer or cross-device acceptance."
+  ],
+  "source_state": "Working tree with uncommitted changes; per-file SHA-256 identifies the recorded TUI scope.",
+  "executable": {
+    "name": "agent-cli",
+    "sha256": "8d40cf24ab8214608540501c79ff3d339b319960573fc68b4e6aa0126c3b13d1",
+    "bytes": 41475408,
+    "build": "debug product executable used by the real PTY integration tests"
+  }
+}

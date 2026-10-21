@@ -1,0 +1,125 @@
+{
+  "artifact_type": "Actual macOS GPUI product window captures; not design concepts",
+  "version": "0.1.0",
+  "platform": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "macos": "27.0.1",
+    "machine": "arm64"
+  },
+  "viewport": {
+    "logical": [
+      1440,
+      921
+    ],
+    "png": [
+      2880,
+      1842
+    ],
+    "native_960_verified": false
+  },
+  "binary_sha256": {
+    "agent-desktop": "8e4a70e0a469ecb9b0984a9c5d560e44824c3a901c5cc49a2b0257302a75ba7d",
+    "agentd": "9458249a667d35d02f2cf39e9f8cc67ba45387dd1d8d4dc240849dd440f3e0bd",
+    "model-mock": "6f39cb327fcd6bb74dfb45c776e99458a7e475385d27fa71a60d1ab2b232fc06"
+  },
+  "source_sha256": {
+    "apps/agent-desktop/src/chrome.rs": "78cf7cb4ff427b58ed64c24c39f5dadea119587b8a903d7cf75613bf86c46f54",
+    "apps/agent-desktop/src/completion.rs": "e4100e4d8ef452b284d7e8b16e0a2f33dea35983c73c92223f4aadd829ff2efe",
+    "apps/agent-desktop/src/composition.rs": "b553b354862c601f5a1d914044ea6b310490c70b7f0db96cd8bc6613b54cbf55",
+    "apps/agent-desktop/src/computer/lifecycle.rs": "4b8844720bf2f81d624bd00afd8b9eeaef06cd44005624da7922b58c8a852ef6",
+    "apps/agent-desktop/src/computer/view.rs": "181e00284426210cae9db4fa9577ece37b5d21cf20da566bc621cda5ec7760bf",
+    "apps/agent-desktop/src/computer.rs": "969207740fd06708fc1b998e16c2a2498a4e31ab544f2351d2eb48aef91b45ed",
+    "apps/agent-desktop/src/connection.rs": "f1492027a11e69a869dc33ec6c583310167af32415e645a52c2e06b37ad4babf",
+    "apps/agent-desktop/src/lib.rs": "70d220ea3f38a0a361f6418929305c7f27c08ec8f19b924393885f78029b9201",
+    "apps/agent-desktop/src/main.rs": "5e0694087233be0c939601d892e0911bbb78b5d2cfb8e86fa6d8ba0e3690b481",
+    "apps/agent-desktop/src/message.rs": "7f0c768af343b368b0a505d4be4c4639536e77149eda7a137f0f2d6966da9e75",
+    "apps/agent-desktop/src/operations.rs": "d4eecbc403038ca465ab837223003b42e8a29c0216d4d0d352aebd684141a8d7",
+    "apps/agent-desktop/src/panes.rs": "eccef76ab69a4adf8397c83af10d0cc1d1faccc83ffdd68573ac55c6bc6c7587",
+    "apps/agent-desktop/src/presentation.rs": "7331cc7e6f3999a950192b7dfc646d500a63ad856b2a25fffb61e2af755c186b",
+    "apps/agent-desktop/src/projection.rs": "5fcdff2610e8a693fd7b8b7ccbc3aa885341c5c9ac9913d14e897f661cbf9d6d",
+    "apps/agent-desktop/src/settings.rs": "2aadae0615b199a4e250731be85fde1815adba81a4089cae78b253740fa003ef",
+    "apps/agent-desktop/src/shell.rs": "7ff723e4474384a5df3c01acd4747a1ddf97b0f0a737ea1018c7d81c07f8d1f6",
+    "apps/agent-desktop/src/tabs/delivery.rs": "2aa40785bf46e6d6ab0e942a18967a88b0a3dc54bf3822b6d1b30dbb8174e695",
+    "apps/agent-desktop/src/tabs/state.rs": "ca4dc712fdc3236b27463b7ed28904de051610b7a2f89b1bb6889e77a5a9721d",
+    "apps/agent-desktop/src/tabs/view.rs": "7ec4b24cd9ce045d786a46b4570067bdc93f25c425e71022d21d200953fa0edb",
+    "apps/agent-desktop/src/tabs.rs": "6712c652f9c9b81cf308602460a0e9c050bceb06bc3dae3c8c5ec748ebe0a663",
+    "apps/agent-desktop/src/theme.rs": "b88a63c2ad72559d05b354d709909f24203e24cc71f4d6ec8162fb82dfcdbe97",
+    "apps/agent-desktop/src/view_model.rs": "01c555f7c0cb98537ba8d77bbd930d08a2c437629cf2dba0d708331562cbac1e",
+    "apps/agent-desktop/src/views/approval.rs": "c0da20df6333355a64468fa80295e62045fe2e7c9d7e257c30be9169cf8e698f",
+    "apps/agent-desktop/src/views/composer.rs": "cf54f607d6b923d2e2a3f6fa070b68e953bc67dc04c3a4d0c3d965580be134ae",
+    "apps/agent-desktop/src/views/conversation.rs": "44ec489a179a2b29a97d2f57bd0edf50dbbe4926142f0b61f158ff8cb9905131",
+    "apps/agent-desktop/src/views/message.rs": "a69d34ff590e950d2a367547c1cff979060743be90fd3150c2ca8226d19e6515",
+    "apps/agent-desktop/src/views/mod.rs": "55e07a6bbf204014c012f5a68bd7b209f3049eec7f64ab3ab101919de369d668",
+    "apps/agent-desktop/src/workbench/browser.rs": "645d40c36d1207f33dbbb6dd15d8b1ac72cfee51e760a5d0745f71c4f014d537",
+    "apps/agent-desktop/src/workbench/drafts.rs": "d51afad0bb3f935d96848f28214982dcc8f0404c55724999c6c5a463fac8e20c",
+    "apps/agent-desktop/src/workbench/files.rs": "0e9b20ca014cbdd33f12dd1aff5b5dad64248e317dfbe879245edd7dc079bc2f",
+    "apps/agent-desktop/src/workbench/frames.rs": "c1d8e0dce4a0e8db160ba0de814b227939d99173e335544de81f1324eb9a646d",
+    "apps/agent-desktop/src/workbench/ime.rs": "a5f2f1c4bc5931ab99f6014a830ef10afa6373c39d9297df5a4d836b0e19a35b",
+    "apps/agent-desktop/src/workbench/input.rs": "70d10d2b78c104262d60b0517c1bb7d6a41790c9d6d374744a003cc9f246c90e",
+    "apps/agent-desktop/src/workbench/replies.rs": "fbc3176e4c40702896278cf82ce64f00ab98367c99a31b044e03bbb314ee266a",
+    "apps/agent-desktop/src/workbench/state.rs": "edcdec66f95ed24ebb650db61ea0069eed1f2bef0dffc48227f0e0610fbb516f",
+    "apps/agent-desktop/src/workbench/tasks.rs": "25a0259525e529f79564719999b105d6e11a49e067976c3d1d0abfcab46f3b77",
+    "apps/agent-desktop/src/workbench/watch.rs": "866a12efdaf1294acf59c953ae00a36bc5e855be4b03c4ef8e61ef8207ec7c72",
+    "apps/agent-desktop/src/workbench.rs": "eba0653aeeb6f3121997ff7241d3507102d4fcd6523f49330919ad34c9f6b85c",
+    "apps/agent-desktop/Cargo.toml": "830a87067e5df08701548f2e8ec5a1290d4cbf6e18e285b339cf0a4894dea181",
+    "Cargo.lock": "09f82c593e583081ae0e06789f5a4feff5cf8f4dd2745a735e37f2ff42f6df39"
+  },
+  "sources_scope": "Uncommitted working-tree source used for the captured build; relative repository paths",
+  "images": {
+    "desktop-mvvm-welcome-macos.png": {
+      "sha256": "5ce40991c3914bc57362d3732ebc69a6620114b6d1663dfc0fd1279987a56c66",
+      "pixels": [
+        2880,
+        1842
+      ]
+    },
+    "desktop-mvvm-chat-macos.png": {
+      "sha256": "20d99ad0da2b150b356bdcf3c25f3088ba9919777006216617fb6ec47153797b",
+      "pixels": [
+        2880,
+        1842
+      ]
+    },
+    "desktop-mvvm-tabs-macos.png": {
+      "sha256": "3291b61e38f77c13adf5fef68ed72939ba22a89a8860032a368f925d6cfe5f6d",
+      "pixels": [
+        2880,
+        1842
+      ]
+    },
+    "desktop-mvvm-dark-files-macos.png": {
+      "sha256": "209c68c315e00c3bdb1880d1cdf3706e4bf4ed1e4840654fa48a5f5a659893ba",
+      "pixels": [
+        2880,
+        1842
+      ]
+    }
+  },
+  "observations": {
+    "plain_enter_run_count": 1,
+    "run_status": "completed",
+    "shift_enter_newline_persisted": true,
+    "submit_used_button": false,
+    "user_and_assistant_text_horizontal": true,
+    "independent_tab_draft_preserved": true,
+    "light_and_dark": true,
+    "right_files_panel_lists_synthetic_workspace": true,
+    "settings_separate_and_token_masked": true
+  },
+  "automated_checks": {
+    "workspace_passed": 445,
+    "workspace_failed": 0,
+    "workspace_ignored": 11,
+    "native_input_composition_guard": "GPUI integration test covers no submission while marked text is active",
+    "long_cjk_layout": "GPUI rendered bounds checked at normal and 960x640 sizes"
+  },
+  "limits": [
+    "Final native window measured 1440x921; 960x640 covered by GPUI integration tests, not native window capture.",
+    "Final request received a fixed repeat-last synthetic text response, not real inference or an applied file change.",
+    "The final native round did not replay approval, Editor or Diff; existing automated regression covers those product flows.",
+    "Only synthetic loopback model traffic; no paid models, model weights, Windows, Linux, public-network, cross-device, native CEF/Computer or installer acceptance."
+  ],
+  "native_service_registration": false,
+  "owned_processes_stopped": true
+}
