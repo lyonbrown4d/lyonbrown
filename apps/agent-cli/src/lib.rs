@@ -6,11 +6,13 @@ mod computer_backend;
 mod computer_command;
 pub mod config;
 pub mod input;
+mod markdown;
 pub mod model;
 mod session_backend;
 pub mod theme;
 pub mod update;
 pub mod view;
+pub mod view_model;
 
 mod entry;
 pub mod task_command;

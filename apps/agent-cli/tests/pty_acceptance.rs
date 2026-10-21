@@ -50,7 +50,7 @@ async fn real_terminal_auth_history_multiline_resize_reconnect_and_cleanup() {
   })
   .await
   .unwrap();
-  terminal.screen("Tasks keep running").await;
+  terminal.screen("关闭终端不会取消").await;
   // Tab switches back to the previous durable conversation.
   terminal.send("\t");
   terminal.screen("终端回复 🦀").await;
@@ -59,7 +59,7 @@ async fn real_terminal_auth_history_multiline_resize_reconnect_and_cleanup() {
   terminal.screen_without("Sessions").await;
   terminal.snapshot("compact");
   terminal.resize(36, 140);
-  terminal.screen("Conversation").await;
+  terminal.screen("F1 帮助").await;
   terminal.screen("终端回复 🦀").await;
 
   node.disconnect().await;
@@ -185,7 +185,7 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
   terminal.screen("streamed before cancellation").await;
   terminal.snapshot("compact-streaming");
   terminal.resize(36, 140);
-  terminal.screen("Conversation").await;
+  terminal.screen("F1 帮助").await;
   node.disconnect().await;
   terminal.screen("Disconnected").await;
   node.reconnect().await;

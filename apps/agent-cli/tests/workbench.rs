@@ -66,15 +66,15 @@ fn empty_and_changed_session_clear_stale_content() {
 fn explicit_theme_overrides_terminal_hint() {
   assert_eq!(
     Theme::resolve(ThemeChoice::Light, Some("15;0")).accent,
-    Color::Blue
+    Color::Rgb(143, 77, 44)
   );
   assert_eq!(
     Theme::resolve(ThemeChoice::Dark, Some("0;15")).accent,
-    Color::Cyan
+    Color::Rgb(213, 154, 120)
   );
   assert_eq!(
     Theme::resolve(ThemeChoice::Auto, Some("0;15")).accent,
-    Color::Blue
+    Color::Rgb(143, 77, 44)
   );
 }
 

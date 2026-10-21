@@ -228,3 +228,47 @@ fn application_shortcuts_take_precedence_over_editor_bindings() {
   );
   assert!(requests.try_recv().is_err());
 }
+
+#[test]
+fn context_shortcuts_keep_editor_draft_and_existing_daemon_authority() {
+  use agent_cli::model::{Approval, ContextPanel};
+  let (actions, mut requests) = mpsc::channel(8);
+  let mut app = connected();
+  paste(&mut app, &actions, "keep draft");
+  for (number, panel) in [
+    (1, ContextPanel::Help),
+    (2, ContextPanel::Sessions),
+    (3, ContextPanel::Tasks),
+    (4, ContextPanel::Computer),
+    (5, ContextPanel::Approval),
+  ] {
+    key(&mut app, &actions, KeyCode::F(number), KeyModifiers::NONE);
+    assert_eq!(app.panel, panel);
+    assert_eq!(app.input.text(), "keep draft");
+    assert!(requests.try_recv().is_err());
+    key(&mut app, &actions, KeyCode::Esc, KeyModifiers::NONE);
+    assert_eq!(app.panel, ContextPanel::Closed);
+  }
+  app.approvals.push(Approval {
+    id: "pending".into(),
+    description: "write_file".into(),
+  });
+  key(&mut app, &actions, KeyCode::Char('y'), KeyModifiers::NONE);
+  assert!(
+    requests.try_recv().is_err(),
+    "plain y must not grant approval"
+  );
+  key(
+    &mut app,
+    &actions,
+    KeyCode::Char('y'),
+    KeyModifiers::CONTROL,
+  );
+  assert!(
+    matches!(requests.try_recv().unwrap(), Action::Approve { id, approved: true } if id == "pending")
+  );
+  key(&mut app, &actions, KeyCode::PageUp, KeyModifiers::NONE);
+  assert!(app.scroll > 0);
+  key(&mut app, &actions, KeyCode::PageDown, KeyModifiers::NONE);
+  assert_eq!(app.scroll, 0);
+}

@@ -54,7 +54,9 @@ impl Composer {
     self.0.insert_str(text);
   }
 
-  pub(crate) fn render(&self, frame: &mut Frame, area: Rect) {
-    frame.render_widget(&self.0, area);
+  pub(crate) fn render(&self, frame: &mut Frame, area: Rect, theme: crate::theme::Theme) {
+    let mut editor = self.0.clone();
+    editor.set_style(Style::default().fg(theme.text).bg(theme.background));
+    frame.render_widget(&editor, area);
   }
 }

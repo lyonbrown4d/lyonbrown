@@ -39,6 +39,10 @@ impl Terminal {
     ]);
     command.env("LYONBROWN_TOKEN", node.daemon.auth_token());
     command.env("TERM", "xterm-256color");
+    command.env("COLORTERM", "truecolor");
+    // Acceptance verifies the color-capable terminal, independent of the
+    // test runner's own plain-log preference. Product NO_COLOR remains intact.
+    command.env_remove("NO_COLOR");
     command.env("RUST_LOG", "warn");
     command.cwd(node.workspace.path());
     for variable in [
@@ -138,6 +142,32 @@ impl Terminal {
     )
     .unwrap();
     std::fs::write(self.evidence.join("terminal.ansi"), &self.transcript).unwrap();
+    let screen = self.parser.screen();
+    let (rows, columns) = screen.size();
+    let cells: Vec<_> = (0..rows)
+      .flat_map(|row| {
+        (0..columns).filter_map(move |column| {
+          screen.cell(row, column).map(|cell| {
+            serde_json::json!({
+              "row": row, "column": column, "text": cell.contents(),
+              "foreground": color(cell.fgcolor()), "background": color(cell.bgcolor()),
+              "bold": cell.bold(), "italic": cell.italic(), "inverse": cell.inverse(),
+              "wide": cell.is_wide(), "continuation": cell.is_wide_continuation(),
+            })
+          })
+        })
+      })
+      .collect();
+    let capture = serde_json::json!({
+      "source": "actual agent-cli child process through portable-pty and vt100",
+      "platform": std::env::consts::OS, "version": env!("CARGO_PKG_VERSION"),
+      "rows": rows, "columns": columns, "cells": cells,
+    });
+    std::fs::write(
+      self.evidence.join(format!("{name}.cells.json")),
+      serde_json::to_vec(&capture).unwrap(),
+    )
+    .unwrap();
   }
   pub fn resize(&mut self, rows: u16, cols: u16) {
     self
@@ -190,6 +220,14 @@ impl Terminal {
     );
     self.snapshot("quit");
     eprintln!("TUI PTY acceptance evidence: {}", self.evidence.display());
+  }
+}
+
+fn color(color: vt100::Color) -> serde_json::Value {
+  match color {
+    vt100::Color::Default => serde_json::Value::Null,
+    vt100::Color::Idx(index) => serde_json::json!({"index": index}),
+    vt100::Color::Rgb(red, green, blue) => serde_json::json!([red, green, blue]),
   }
 }
 impl Drop for Terminal {

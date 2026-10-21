@@ -1,223 +1,253 @@
 use ratatui::{
   Frame,
-  layout::{Constraint, Layout},
+  layout::{Constraint, Layout, Margin, Rect},
   style::{Modifier, Style},
   text::{Line, Span},
-  widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+  widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-use crate::{
-  model::{App, Connection},
-  theme::Theme,
-};
+use crate::{model::App, theme::Theme, view_model::ViewModel};
 
 pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
-  if frame.area().width < 70 || frame.area().height < 15 {
-    compact(frame, app, theme);
+  render_model(frame, &ViewModel::new(app, theme), theme);
+}
+
+/// Rendering consumes presentation data only; it never dispatches daemon actions.
+pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
+  let area = frame.area();
+  let base = Style::default().fg(theme.text).bg(theme.background);
+  frame.render_widget(Block::default().style(base), area);
+  if area.is_empty() {
     return;
   }
+  let compact = area.width < 70 || area.height < 16;
+  let inset = if area.width >= 70 { 2 } else { 0 };
+  let area = area.inner(Margin::new(inset, 0));
+  let approval_height = model
+    .approval
+    .as_ref()
+    .map_or(0, |approval| {
+      if compact {
+        4
+      } else {
+        (approval.description.lines().count() as u16 + 4).clamp(6, 10)
+      }
+    })
+    .min(area.height.saturating_sub(5));
+  let composer_height = if compact { 3 } else { 4 };
   let rows = Layout::vertical([
-    Constraint::Length(3),
-    Constraint::Min(5),
-    Constraint::Length(4),
-    Constraint::Length(2),
+    Constraint::Length(if compact { 2 } else { 3 }),
+    Constraint::Min(0),
+    Constraint::Length(approval_height),
+    Constraint::Length(composer_height),
+    Constraint::Length(if compact { 0 } else { 2 }),
   ])
-  .split(frame.area());
-  let (status, color) = match &app.connection {
-    Connection::Connected => ("Connected".to_owned(), theme.accent),
-    Connection::Connecting => ("Connecting…".to_owned(), theme.muted),
-    Connection::Disconnected(reason) => (format!("Disconnected · {reason}"), theme.warning),
-  };
-  frame.render_widget(
-    Paragraph::new(vec![
-      Line::from(vec![
-        Span::styled(
-          " Lyonbrown ",
-          Style::default()
-            .fg(theme.accent)
-            .add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(status, Style::default().fg(color)),
-      ]),
-      Line::from(app.computer.summary()),
+  .split(area);
+  header(frame, model, rows[0], theme, compact);
+  body(frame, model, rows[1], theme);
+  if let Some(approval) = &model.approval {
+    let block = Block::default()
+      .borders(Borders::TOP | Borders::BOTTOM)
+      .border_style(Style::default().fg(theme.warning));
+    let inner = block.inner(rows[2]);
+    frame.render_widget(block, rows[2]);
+    let parts = Layout::vertical([
+      Constraint::Length(1),
+      Constraint::Min(0),
+      Constraint::Length(1),
     ])
-    .wrap(Wrap { trim: false }),
-    rows[0],
-  );
-  let columns = Layout::horizontal([
-    Constraint::Length(24),
-    Constraint::Min(20),
-    Constraint::Length(27),
-  ])
-  .split(rows[1]);
-  let sessions = app
-    .sessions
-    .iter()
-    .enumerate()
-    .map(|(index, session)| {
-      ListItem::new(format!(
-        "{} {}",
-        if index == app.selected { "›" } else { " " },
-        session.title
-      ))
-    })
-    .collect::<Vec<_>>();
-  frame.render_widget(
-    List::new(sessions).block(panel("Sessions", theme)),
-    columns[0],
-  );
-  let mut conversation = Vec::new();
-  if app.messages.is_empty() {
-    conversation.push(Line::styled(
-      "Start a conversation with your agent.",
-      Style::default().fg(theme.muted),
-    ));
-    conversation.push(Line::from(
-      "Tasks keep running in agentd when this terminal closes.",
-    ));
-  }
-  for message in &app.messages {
-    conversation.push(Line::styled(
-      &message.role,
-      Style::default()
-        .fg(theme.accent)
-        .add_modifier(Modifier::BOLD),
-    ));
-    conversation.extend(
-      message
-        .content
-        .lines()
-        .map(|line| Line::from(line.to_owned())),
+    .split(inner);
+    frame.render_widget(
+      Paragraph::new(Line::styled(
+        format!("! 需要批准 · {} 项待处理", approval.pending),
+        Style::default()
+          .fg(theme.warning)
+          .add_modifier(Modifier::BOLD),
+      )),
+      parts[0],
     );
-    conversation.push(Line::from(""));
+    if !compact {
+      frame.render_widget(
+        Paragraph::new(approval.description.as_str()).wrap(Wrap { trim: false }),
+        parts[1],
+      );
+    }
+    frame.render_widget(
+      Paragraph::new(Line::styled(
+        if compact {
+          "Ctrl+Y 批准一次  Ctrl+E 拒绝"
+        } else {
+          "Ctrl+Y 批准一次    Ctrl+E 拒绝    F5 完整内容"
+        },
+        Style::default().fg(theme.accent),
+      )),
+      parts[2],
+    );
   }
-  if let Some((_, text)) = &app.streaming {
-    conversation.push(Line::styled("Agent", Style::default().fg(theme.accent)));
-    conversation.extend(text.lines().map(|line| Line::from(line.to_owned())));
-  }
-  frame.render_widget(
-    Paragraph::new(conversation)
-      .wrap(Wrap { trim: false })
-      .scroll((app.scroll, 0))
-      .block(panel("Conversation", theme)),
-    columns[1],
-  );
-  let side = Layout::vertical([
-    Constraint::Percentage(35),
-    Constraint::Percentage(35),
-    Constraint::Percentage(30),
-  ])
-  .split(columns[2]);
-  let tasks = if app.tasks.is_empty() {
-    "No tasks".into()
-  } else {
-    app.tasks.join("\n\n")
-  };
-  frame.render_widget(
-    Paragraph::new(tasks)
-      .wrap(Wrap { trim: false })
-      .block(panel("Tasks", theme)),
-    side[0],
-  );
-  let approvals = if app.approvals.is_empty() {
-    "No pending approvals".into()
-  } else {
-    app
-      .approvals
-      .iter()
-      .map(|approval| format!("{}\n{}", approval.id, approval.description))
-      .collect::<Vec<_>>()
-      .join("\n\n")
-  };
-  frame.render_widget(
-    Paragraph::new(approvals)
-      .wrap(Wrap { trim: false })
-      .block(panel("Approvals", theme)),
-    side[1],
-  );
-  frame.render_widget(
-    Paragraph::new(if app.computer_detail.is_empty() {
-      "/computer targets · attach window ID|display ID · detach · status"
+  composer(frame, model, rows[3], theme, compact);
+  if !compact {
+    let execution = if model.active {
+      "Ctrl+X 取消执行 · "
     } else {
-      &app.computer_detail
-    })
-    .wrap(Wrap { trim: false })
-    .scroll((app.computer_scroll, 0))
-    .block(panel("Computer · Alt+PgUp/PgDn", theme)),
-    side[2],
-  );
-  composer(frame, app, rows[2], theme);
-  frame.render_widget(
-    Paragraph::new(app.notice.as_str())
+      ""
+    };
+    let hint = format!("{execution}F1 帮助 · F2 会话 · F3 任务 · F4 计算机");
+    frame.render_widget(
+      Paragraph::new(vec![
+        Line::from(hint),
+        Line::from(if model.notice.is_empty() {
+          "任务由 agentd 持续运行"
+        } else {
+          &model.notice
+        }),
+      ])
       .style(Style::default().fg(theme.muted))
       .wrap(Wrap { trim: false }),
-    rows[3],
-  );
-}
-
-fn compact(frame: &mut Frame, app: &App, theme: Theme) {
-  let connection = match &app.connection {
-    Connection::Connected => "Connected".to_owned(),
-    Connection::Connecting => "Connecting…".to_owned(),
-    Connection::Disconnected(reason) => format!("Disconnected · {reason}"),
-  };
-  let mut lines = vec![
-    Line::styled(
-      "Lyonbrown",
-      Style::default()
-        .fg(theme.accent)
-        .add_modifier(Modifier::BOLD),
-    ),
-    Line::from(connection),
-    Line::from(app.computer.summary()),
-  ];
-  lines.extend(
-    app
-      .computer_detail
-      .lines()
-      .skip(usize::from(app.computer_scroll))
-      .take(3)
-      .map(|line| Line::from(line.to_owned())),
-  );
-  if let Some(session) = app.selected_session() {
-    lines.push(Line::from(session.title.clone()));
-  }
-  if let Some((_, text)) = &app.streaming {
-    lines.extend(text.lines().map(|line| Line::from(line.to_owned())));
-  } else if let Some(message) = app.messages.last() {
-    lines.extend(
-      message
-        .content
-        .lines()
-        .map(|line| Line::from(line.to_owned())),
+      rows[4],
     );
   }
-  lines.push(Line::from(app.notice.clone()));
-  let rows = Layout::vertical([
-    Constraint::Min(1),
-    Constraint::Length(frame.area().height.min(3)),
-  ])
-  .split(frame.area());
-  frame.render_widget(
-    Paragraph::new(lines)
-      .style(Style::default().fg(theme.text))
-      .wrap(Wrap { trim: false }),
-    rows[0],
-  );
-  composer(frame, app, rows[1], theme);
 }
 
-fn composer(frame: &mut Frame, app: &App, area: ratatui::layout::Rect, theme: Theme) {
-  let block = panel("Message · Enter send · Alt/Shift+Enter newline", theme);
+fn header(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, compact: bool) {
+  let mut heading = vec![Span::styled(
+    "Lyonbrown",
+    Style::default()
+      .fg(theme.accent)
+      .add_modifier(Modifier::BOLD),
+  )];
+  if area.width >= 45 {
+    heading.push(Span::raw(format!("  /  {}", model.title)));
+  }
+  let status = Style::default().fg(if model.connected {
+    theme.muted
+  } else {
+    theme.warning
+  });
+  if !compact {
+    let block = Block::default()
+      .borders(Borders::BOTTOM)
+      .border_style(Style::default().fg(theme.muted));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let top = Rect::new(inner.x, inner.y, inner.width, inner.height.min(1));
+    let columns = Layout::horizontal([
+      Constraint::Min(9),
+      Constraint::Length(Line::from(model.connection).width() as u16),
+    ])
+    .split(top);
+    frame.render_widget(Paragraph::new(Line::from(heading)), columns[0]);
+    frame.render_widget(Paragraph::new(model.connection).style(status), columns[1]);
+    return;
+  }
+  let lines = vec![Line::from(heading), Line::styled(model.connection, status)];
+  frame.render_widget(
+    Paragraph::new(lines).block(
+      Block::default()
+        .borders(if compact {
+          Borders::NONE
+        } else {
+          Borders::BOTTOM
+        })
+        .border_style(Style::default().fg(theme.muted)),
+    ),
+    area,
+  );
+}
+
+fn body(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
+  if let Some((title, content)) = &model.context {
+    if area.width >= 95 {
+      let columns = Layout::horizontal([Constraint::Min(30), Constraint::Length(34)]).split(area);
+      transcript(frame, model, columns[0], theme);
+      context(
+        frame,
+        title,
+        content,
+        model.context_scroll,
+        columns[1],
+        theme,
+      );
+    } else {
+      context(frame, title, content, model.context_scroll, area, theme);
+    }
+  } else {
+    transcript(frame, model, area, theme);
+  }
+}
+
+fn transcript(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
+  let compact = area.width < 66 || area.height < 5;
+  let mut text = if compact && model.scroll == 0 {
+    model.compact_transcript.clone()
+  } else {
+    model.transcript.clone()
+  };
+  for line in &mut text.lines {
+    // Presentation markers are owned UI text, never inferred from tool content.
+    if matches!(
+      line.to_string().as_str(),
+      "❯ 你" | "● Lyonbrown" | "● Lyonbrown · 正在回复"
+    ) {
+      line.style = Style::default()
+        .fg(theme.accent)
+        .add_modifier(Modifier::BOLD);
+    }
+  }
+  let paragraph = Paragraph::new(text)
+    .style(Style::default().fg(theme.text))
+    .wrap(Wrap { trim: false });
+  let end = paragraph
+    .line_count(area.width)
+    .saturating_sub(usize::from(area.height));
+  let scroll = if compact && model.scroll == 0 {
+    0
+  } else {
+    end.saturating_sub(usize::from(model.scroll))
+  }
+  .min(usize::from(u16::MAX)) as u16;
+  frame.render_widget(paragraph.scroll((scroll, 0)), area);
+}
+
+fn context(
+  frame: &mut Frame,
+  title: &str,
+  content: &ratatui::text::Text<'_>,
+  scroll: u16,
+  area: Rect,
+  theme: Theme,
+) {
+  frame.render_widget(
+    Paragraph::new(content.clone())
+      .wrap(Wrap { trim: false })
+      .scroll((scroll, 0))
+      .block(
+        Block::default()
+          .title(title)
+          .borders(Borders::LEFT)
+          .border_style(Style::default().fg(theme.muted)),
+      ),
+    area,
+  );
+}
+
+fn composer(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, compact: bool) {
+  let title = if model.submitting {
+    " 正在发送 · 草稿保留至确认 "
+  } else if compact {
+    " Enter 发送 · F1 帮助 "
+  } else {
+    " Enter 发送 · Alt/Shift+Enter 换行 "
+  };
+  let block = Block::default()
+    .title(title)
+    .borders(Borders::TOP | Borders::BOTTOM)
+    .border_style(Style::default().fg(theme.muted));
   let inner = block.inner(area);
   frame.render_widget(block, area);
-  app.input.render(frame, inner);
-}
-
-fn panel(title: &str, theme: Theme) -> Block<'_> {
-  Block::default()
-    .title(title)
-    .borders(Borders::ALL)
-    .border_style(Style::default().fg(theme.muted))
-    .style(Style::default().fg(theme.text))
+  let columns = Layout::horizontal([Constraint::Length(2), Constraint::Min(0)]).split(inner);
+  frame.render_widget(
+    Paragraph::new("❯").style(Style::default().fg(theme.accent)),
+    columns[0],
+  );
+  model.composer.render(frame, columns[1], theme);
 }

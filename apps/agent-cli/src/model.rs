@@ -23,8 +23,20 @@ pub struct Approval {
   pub description: String,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ContextPanel {
+  #[default]
+  Closed,
+  Help,
+  Sessions,
+  Tasks,
+  Computer,
+  Approval,
+}
+
 #[derive(Debug)]
 pub struct App {
+  pub panel: ContextPanel,
   pub connection: Connection,
   pub computer: crate::computer::ComputerStatus,
   pub computer_detail: String,
@@ -45,22 +57,27 @@ pub struct App {
 impl Default for App {
   fn default() -> Self {
     Self {
-            connection: Connection::Disconnected("Not connected".into()),
-            computer: if cfg!(feature = "native-computer") { crate::computer::ComputerStatus::Detached } else { crate::computer::ComputerStatus::Unavailable },
-            computer_detail: String::new(),
-            computer_scroll: 0,
-            sessions: Vec::new(),
-            selected: 0,
-            messages: Vec::new(),
-            tasks: Vec::new(),
-            active_run: None,
-            streaming: None,
-            approvals: Vec::new(),
-            input: crate::composer::Composer::default(),
-            submitting: false,
-            notice: "Ctrl+C quit · Ctrl+N new · Ctrl+R reconnect · Tab session · Ctrl+X cancel · Ctrl+Y approve / Ctrl+E deny".into(),
-            scroll: 0,
-        }
+      panel: ContextPanel::Closed,
+      connection: Connection::Disconnected("Not connected".into()),
+      computer: if cfg!(feature = "native-computer") {
+        crate::computer::ComputerStatus::Detached
+      } else {
+        crate::computer::ComputerStatus::Unavailable
+      },
+      computer_detail: String::new(),
+      computer_scroll: 0,
+      sessions: Vec::new(),
+      selected: 0,
+      messages: Vec::new(),
+      tasks: Vec::new(),
+      active_run: None,
+      streaming: None,
+      approvals: Vec::new(),
+      input: crate::composer::Composer::default(),
+      submitting: false,
+      notice: String::new(),
+      scroll: 0,
+    }
   }
 }
 

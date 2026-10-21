@@ -3,7 +3,7 @@ use tokio::sync::mpsc;
 
 use crate::{
   backend::Action,
-  model::{App, Connection},
+  model::{App, Connection, ContextPanel},
 };
 
 /// Handle the same terminal events in the live loop and terminal integration tests.
@@ -11,7 +11,7 @@ use crate::{
 pub fn handle(app: &mut App, event: Event, actions: &mpsc::Sender<Action>) -> anyhow::Result<bool> {
   match event {
     Event::Key(key) if key.kind == KeyEventKind::Press => return handle_key(app, key, actions),
-    Event::Paste(text) => app.input.paste(&text),
+    Event::Paste(text) => app.input.paste(&crate::view_model::safe_text(&text)),
     _ => {}
   }
   Ok(false)
@@ -50,6 +50,21 @@ fn handle_key(
     }
   } else {
     match key.code {
+      KeyCode::F(number @ 1..=5) => {
+        let panel = match number {
+          1 => ContextPanel::Help,
+          2 => ContextPanel::Sessions,
+          3 => ContextPanel::Tasks,
+          4 => ContextPanel::Computer,
+          _ => ContextPanel::Approval,
+        };
+        app.panel = if app.panel == panel {
+          ContextPanel::Closed
+        } else {
+          panel
+        };
+      }
+      KeyCode::Esc => app.panel = ContextPanel::Closed,
       KeyCode::Enter
         if key
           .modifiers
@@ -65,13 +80,21 @@ fn handle_key(
         }
       }
       KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => {
+        app.panel = ContextPanel::Computer;
         app.computer_scroll = app.computer_scroll.saturating_add(3);
       }
       KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => {
+        app.panel = ContextPanel::Computer;
         app.computer_scroll = app.computer_scroll.saturating_sub(3);
       }
-      KeyCode::PageDown => app.scroll = app.scroll.saturating_add(5),
-      KeyCode::PageUp => app.scroll = app.scroll.saturating_sub(5),
+      KeyCode::PageDown if app.panel != ContextPanel::Closed => {
+        app.computer_scroll = app.computer_scroll.saturating_add(5);
+      }
+      KeyCode::PageUp if app.panel != ContextPanel::Closed => {
+        app.computer_scroll = app.computer_scroll.saturating_sub(5);
+      }
+      KeyCode::PageDown => app.scroll = app.scroll.saturating_sub(5),
+      KeyCode::PageUp => app.scroll = app.scroll.saturating_add(5),
       _ => app.input.key(key),
     }
   }
@@ -81,6 +104,7 @@ fn handle_key(
 fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
   let prompt = app.input.text();
   if let Some(command) = crate::computer::parse_local(&prompt) {
+    app.panel = ContextPanel::Computer;
     match command {
       Ok(command) => {
         send(
