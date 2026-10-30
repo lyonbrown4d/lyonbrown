@@ -95,12 +95,12 @@ jobs:
           python -m unittest discover -s packaging/ci -p 'test_*.py'
           python packaging/ci/verify.py '${{ matrix.target }}' --index
       - name: Install maintained CEF downloader
-        run: cargo install export-cef-dir --version '=154.5.0+154.0.34' --locked
+        run: cargo install export-cef-dir --version '=156.2.0+156.0.14' --locked
       - name: Download and extract the exact matching CEF SDK
         shell: pwsh
         run: |
           $sdk = Join-Path $env:RUNNER_TEMP 'lyonbrown-cef'
-          export-cef-dir --target '${{ matrix.target }}' --version '154.0.34' --mirror-url 'https://cef-builds.spotifycdn.com' --save-archive $sdk
+          export-cef-dir --target '${{ matrix.target }}' --version '156.0.14' --mirror-url 'https://cef-builds.spotifycdn.com' --save-archive $sdk
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CEF SDK download/extraction failed' }
           python packaging/ci/verify.py '${{ matrix.target }}' --sdk $sdk
           if ($LASTEXITCODE -ne 0) { throw 'Pinned CEF SDK integrity check failed' }
@@ -173,7 +173,7 @@ jobs:
       - name: Upload reviewable native packages
         uses: actions/upload-artifact@v4
         with:
-          name: native-${{ matrix.target }}-cef154.0.34-llama-mistral-cpu-unsigned
+          name: native-${{ matrix.target }}-cef156.0.14-llama-mistral-cpu-unsigned
           if-no-files-found: error
           retention-days: 14
           compression-level: 0

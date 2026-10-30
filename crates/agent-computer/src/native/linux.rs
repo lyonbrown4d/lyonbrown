@@ -1,4 +1,4 @@
-use zbus::{Proxy, zvariant::OwnedObjectPath};
+use zbus::{OwnedObjectPath, Proxy};
 
 use crate::*;
 
