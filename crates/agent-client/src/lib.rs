@@ -2,6 +2,7 @@
 mod browser;
 mod computer;
 mod development;
+pub mod local_state;
 mod orchestration;
 mod workspace;
 use agent_protocol::v1::{self, client_service_client::ClientServiceClient};

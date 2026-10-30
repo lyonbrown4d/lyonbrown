@@ -10,6 +10,10 @@ use ratatui::{Terminal, backend::TestBackend, style::Color};
 #[test]
 fn disconnect_and_failed_submission_preserve_draft() {
   let mut app = App {
+    sessions: vec![Session {
+      id: "session".into(),
+      title: "Work".into(),
+    }],
     input: "A draft 🦀".into(),
     submitting: true,
     ..App::default()
@@ -28,12 +32,20 @@ fn disconnect_and_failed_submission_preserve_draft() {
   assert_eq!(app.input.text(), "A draft 🦀");
   agent_cli::update::apply(
     &mut app,
-    agent_cli::backend::Update::Submitted("Older draft".into()),
+    agent_cli::backend::Update::Submitted {
+      session: "session".into(),
+      prompt: "Older draft".into(),
+      generation: 0,
+    },
   );
   assert_eq!(app.input.text(), "A draft 🦀");
   agent_cli::update::apply(
     &mut app,
-    agent_cli::backend::Update::Submitted("A draft 🦀".into()),
+    agent_cli::backend::Update::Submitted {
+      session: "session".into(),
+      prompt: "A draft 🦀".into(),
+      generation: 0,
+    },
   );
   assert!(app.input.is_empty());
 }
@@ -152,21 +164,25 @@ fn durable_run_results_and_approvals_belong_to_selected_session() {
   };
   update::apply(
     &mut app,
-    Update::Runs(vec![
-      Run {
-        id: "old".into(),
-        session_id: "other".into(),
-        result: "Wrong session".into(),
-        ..Run::default()
-      },
-      Run {
-        id: "active".into(),
-        session_id: "selected".into(),
-        prompt: "Read the repo".into(),
-        status: "accepted".into(),
-        ..Run::default()
-      },
-    ]),
+    Update::Runs {
+      session: "selected".into(),
+      generation: 0,
+      runs: vec![
+        Run {
+          id: "old".into(),
+          session_id: "other".into(),
+          result: "Wrong session".into(),
+          ..Run::default()
+        },
+        Run {
+          id: "active".into(),
+          session_id: "selected".into(),
+          prompt: "Read the repo".into(),
+          status: "accepted".into(),
+          ..Run::default()
+        },
+      ],
+    },
   );
   assert_eq!(app.active_run.as_deref(), Some("active"));
   assert_eq!(app.messages.len(), 1);
@@ -175,6 +191,7 @@ fn durable_run_results_and_approvals_belong_to_selected_session() {
     &mut app,
     Update::Approvals {
       session: "other".into(),
+      generation: 0,
       approvals: vec![Approval {
         id: "wrong".into(),
         ..Approval::default()
@@ -186,6 +203,7 @@ fn durable_run_results_and_approvals_belong_to_selected_session() {
     &mut app,
     Update::Approvals {
       session: "selected".into(),
+      generation: 0,
       approvals: vec![Approval {
         id: "review".into(),
         tool: "shell".into(),
@@ -198,4 +216,42 @@ fn durable_run_results_and_approvals_belong_to_selected_session() {
   assert!(app.approvals[0].description.contains("ls"));
   update::apply(&mut app, Update::ApprovalDecided("review".into()));
   assert!(app.approvals.is_empty());
+}
+
+#[test]
+fn narrow_task_list_keeps_the_last_selected_task_visible() {
+  use agent_cli::model::ContextPanel;
+  let app = App {
+    panel: ContextPanel::Tasks,
+    task_rows: (0..12)
+      .map(|index| {
+        serde_json::json!({
+          "envelope": {"task_id": format!("task-{index:02}")},
+          "status": "completed",
+          "attempt_status": "succeeded"
+        })
+      })
+      .collect(),
+    task_selected: 11,
+    ..App::default()
+  };
+  let mut terminal = Terminal::new(TestBackend::new(36, 12)).expect("test backend");
+  terminal
+    .draw(|frame| view::render(frame, &app, Theme::resolve(ThemeChoice::Dark, None)))
+    .expect("render task list");
+  let screen = terminal
+    .backend()
+    .buffer()
+    .content
+    .iter()
+    .map(|cell| cell.symbol())
+    .collect::<String>();
+  assert!(
+    screen.contains("task-11"),
+    "last selected row should scroll into view: {screen}"
+  );
+  assert!(
+    !screen.contains("task-00"),
+    "older rows should scroll out of view: {screen}"
+  );
 }

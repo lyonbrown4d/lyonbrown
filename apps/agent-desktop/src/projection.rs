@@ -10,7 +10,12 @@ impl Desktop {
     foreground: bool,
   ) {
     match update {
-      Update::Connected(client, sessions) => {
+      Update::Connected {
+        client,
+        sessions,
+        endpoint,
+        node_id,
+      } => {
         tracing::info!(
           operation = "client.connect",
           outcome = "authenticated",
@@ -18,6 +23,65 @@ impl Desktop {
           session_count = sessions.len(),
           "Desktop client connected"
         );
+        let scope = agent_client::local_state::identity("desktop", &endpoint, &node_id).ok();
+        let same_identity = scope
+          .as_deref()
+          .is_some_and(|scope| self.persistence_scope.as_deref() == Some(scope));
+        if same_identity {
+          let client = *client;
+          let known = sessions
+            .iter()
+            .map(|session| session.id.clone())
+            .collect::<std::collections::HashSet<_>>();
+          let previous = self.vm.selected.clone();
+          let selected = previous.clone().filter(|id| known.contains(id));
+          if selected.is_none()
+            && let Some(previous) = previous
+          {
+            self
+              .navigation
+              .unbound
+              .insert(self.navigation.active, previous);
+          }
+          self.tasks.update(cx, |state, cx| {
+            state
+              .computer
+              .update(cx, |computer, cx| computer.reset_connection(window, cx));
+            state.attachment = None;
+            state.browser_sessions.clear();
+            state.space = None;
+            state.tab = None;
+            state.bind(
+              Some(client.clone()),
+              selected.clone(),
+              Vec::new(),
+              window,
+              cx,
+            );
+            state.client = Some(client.clone());
+            state.refresh_after_reconnect(window, cx);
+          });
+          for state in self.navigation.inactive.values_mut() {
+            state.reset_connection_preserving_session();
+          }
+          if let Some(task) = self.watch_task.take() {
+            task.abort();
+          }
+          self.client = Some(client);
+          self.vm.sessions = sessions;
+          self.vm.selected = selected;
+          self.vm.active_run = None;
+          self.vm.cursor = 0;
+          self.vm.error = None;
+          self.vm.conversation.clear();
+          self.vm.runs.clear();
+          self.vm.approvals.clear();
+          self.vm.status = "Connected · authenticated".into();
+          self.vm.busy = false;
+          self.refresh_restored_session(cx);
+          self.start_persistence(&endpoint, &node_id, window, cx);
+          return;
+        }
         self.tasks.update(cx, |state, cx| {
           state
             .computer
@@ -42,6 +106,7 @@ impl Desktop {
         self.vm.sessions = sessions;
         self.vm.status = "Connected · authenticated".into();
         self.vm.busy = false;
+        self.start_persistence(&endpoint, &node_id, window, cx);
       }
       Update::Session(session, keep_busy) => {
         self.vm.selected = Some(session.id.clone());

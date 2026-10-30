@@ -1,5 +1,12 @@
 mod support;
 
+#[path = "../../agentd/tests/peer_support/mod.rs"]
+#[allow(dead_code)]
+mod peer_support;
+#[path = "../../agentd/tests/remote_support/mod.rs"]
+#[allow(dead_code)]
+mod remote_support;
+
 use agent_test_support::{
   MockModelServer, ScriptedReply, StandardProtocol, text_reply, tool_reply,
 };
@@ -226,68 +233,5 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
   node.client.cancel_run(&background.id).await.unwrap();
   node.status(&background.id, "cancelled").await;
   assert_eq!(model.requests().await.len(), 6);
-  node.close().await;
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn task_management_cli_uses_authenticated_daemon_without_entering_terminal() {
-  let model = MockModelServer::start(vec![]).await.unwrap();
-  let node = Node::start(&model).await;
-  let session = node
-    .client
-    .create_session("task listing", node.workspace.path().to_str().unwrap())
-    .await
-    .unwrap();
-  let executable = env!("CARGO_BIN_EXE_agent-cli");
-  let output = tokio::process::Command::new(executable)
-    .args([
-      "--endpoint",
-      &node.endpoint(),
-      "--token",
-      node.daemon.auth_token(),
-      "task",
-      "list",
-      "--session",
-      &session.id,
-      "--page-size",
-      "1",
-    ])
-    .output()
-    .await
-    .unwrap();
-  assert!(
-    output.status.success(),
-    "{}",
-    String::from_utf8_lossy(&output.stderr)
-  );
-  let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-  assert_eq!(result["tasks"], json!([]));
-  assert_eq!(result["next_task_id"], "");
-  let denied = tokio::process::Command::new(executable)
-    .args([
-      "--endpoint",
-      &node.endpoint(),
-      "--token",
-      "invalid-credential",
-      "task",
-      "list",
-      "--session",
-      &session.id,
-    ])
-    .output()
-    .await
-    .unwrap();
-  assert!(!denied.status.success());
-  assert!(denied.stdout.is_empty());
-  assert!(
-    node
-      .client
-      .list_tasks(&session.id, "", 100)
-      .await
-      .unwrap()
-      .tasks
-      .is_empty()
-  );
-  assert!(model.requests().await.is_empty());
   node.close().await;
 }

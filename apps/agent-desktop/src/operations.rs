@@ -8,6 +8,9 @@ use gpui_kit::*;
 
 impl Desktop {
   pub(super) fn connect(&mut self, cx: &mut Context<Self>) {
+    if self.persistence_loading {
+      return;
+    }
     if self.tasks.read(cx).computer.read(cx).pending {
       self.vm.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
       cx.notify();
@@ -39,7 +42,13 @@ impl Desktop {
       let result = async {
         let client = connector.connect(&endpoint, &token).await?;
         let sessions = client.list_sessions().await?;
-        anyhow::Ok(Update::Connected(Box::new(client), sessions))
+        let node_id = client.node().await?.id;
+        anyhow::Ok(Update::Connected {
+          client: Box::new(client),
+          sessions,
+          endpoint,
+          node_id,
+        })
       }
       .await;
       let _ = sender
@@ -52,7 +61,7 @@ impl Desktop {
   }
 
   pub(super) fn create_session(&mut self, cx: &mut Context<Self>) {
-    if self.navigation.connecting || self.vm.busy {
+    if self.navigation.connecting || self.persistence_loading || self.vm.busy {
       return;
     }
     let Some(client) = self.client.clone() else {
@@ -75,7 +84,7 @@ impl Desktop {
   }
 
   pub(super) fn select_session(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
-    if self.navigation.connecting || !self.can_change_chat(cx) {
+    if self.navigation.connecting || self.persistence_loading || !self.can_change_chat(cx) {
       return;
     }
     let Some(client) = self.client.clone() else {
@@ -89,7 +98,9 @@ impl Desktop {
       self.activate_chat_tab(tab.id, window, cx);
       return;
     }
-    self.open_session_tab(window, cx);
+    if !self.open_session_tab(window, cx) {
+      return;
+    }
     self.vm.selected = Some(id.clone());
     self.bind_active_chat(window, cx);
     self.vm.conversation.clear();
@@ -110,12 +121,28 @@ impl Desktop {
   }
 
   pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if self
+      .navigation
+      .unbound
+      .contains_key(&self.navigation.active)
+    {
+      self.vm.error = Some(
+        "This restored draft has no session. Create a session for this draft before submitting."
+          .into(),
+      );
+      cx.notify();
+      return;
+    }
     if self.composer.update(cx, |input, cx| {
       input.marked_text_range(window, cx).is_some()
     }) {
       return;
     }
-    if self.navigation.connecting || self.vm.busy || self.vm.active_run.is_some() {
+    if self.navigation.connecting
+      || self.persistence_loading
+      || self.vm.busy
+      || self.vm.active_run.is_some()
+    {
       return;
     }
     let Some(client) = self.client.clone() else {

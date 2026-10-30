@@ -2,7 +2,7 @@ use super::node::Node;
 use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 use std::{
   io::{Read, Write},
-  path::PathBuf,
+  path::{Path, PathBuf},
   sync::mpsc,
   time::Duration,
 };
@@ -20,6 +20,15 @@ pub struct Terminal {
 }
 impl Terminal {
   pub fn start(node: &Node) -> Self {
+    Self::start_with(
+      &node.endpoint(),
+      node.daemon.auth_token(),
+      node.data.path(),
+      node.workspace.path(),
+    )
+  }
+
+  pub fn start_with(endpoint: &str, token: &str, data_dir: &Path, workspace: &Path) -> Self {
     let pair = native_pty_system()
       .openpty(PtySize {
         rows: 36,
@@ -33,18 +42,18 @@ impl Terminal {
     let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_agent-cli"));
     command.args([
       "--endpoint",
-      &node.endpoint(),
+      endpoint,
       "--data-dir",
-      node.data.path().to_str().unwrap(),
+      data_dir.to_str().expect("client data directory"),
     ]);
-    command.env("LYONBROWN_TOKEN", node.daemon.auth_token());
+    command.env("LYONBROWN_TOKEN", token);
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
     // Acceptance verifies the color-capable terminal, independent of the
     // test runner's own plain-log preference. Product NO_COLOR remains intact.
     command.env_remove("NO_COLOR");
     command.env("RUST_LOG", "warn");
-    command.cwd(node.workspace.path());
+    command.cwd(workspace);
     for variable in [
       "HTTP_PROXY",
       "HTTPS_PROXY",

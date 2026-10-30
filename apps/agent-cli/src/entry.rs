@@ -50,10 +50,13 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
   let mut events = EventStream::new();
   let mut app = App {
     connection: Connection::Connecting,
+    state_loaded: false,
     ..App::default()
   };
   let stop = terminal::shutdown();
   tokio::pin!(stop);
+  let mut save_state = tokio::time::interval(std::time::Duration::from_millis(300));
+  let mut last_saved = None;
   loop {
     terminal.draw(|frame| view::render(frame, &app, theme))?;
     tokio::select! {
@@ -61,9 +64,27 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
         update = updates.recv() => {
             let Some(update) = update else { break };
             let connected = matches!(update, backend::Update::Connected(_));
+            let restored = matches!(update, backend::Update::LocalState { .. });
             update::apply(&mut app, update);
             if connected && let Some(session) = app.selected_session() {
-                send(&actions, Action::Select(session.id.clone()))?;
+                send(&actions, Action::Select { session: session.id.clone(), generation: app.generation })?;
+            }
+            if restored {
+                if let Some(session) = app.selected_session() {
+                    send(&actions, Action::Select { session: session.id.clone(), generation: app.generation })?;
+                }
+                if app.panel == crate::model::ContextPanel::Tasks {
+                    crate::local_command::load_tasks(&app, &actions)?;
+                }
+            }
+        }
+        _ = save_state.tick() => {
+            if app.state_loaded && let Some(node_id) = app.persistence_node_id.clone() {
+                let state = app.client_state();
+                if last_saved.as_ref() != Some(&state) {
+                    send(&actions, Action::SaveState { node_id, state: state.clone() })?;
+                    last_saved = Some(state);
+                }
             }
         }
         event = events.next() => match event {
@@ -74,6 +95,12 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
             None => break,
         }
     }
+  }
+  if app.state_loaded
+    && let Some(node_id) = app.persistence_node_id.clone()
+  {
+    let state = app.client_state();
+    actions.send(Action::SaveState { node_id, state }).await?;
   }
   let (done, closed) = tokio::sync::oneshot::channel();
   if actions.send(Action::Shutdown(done)).await.is_ok() {

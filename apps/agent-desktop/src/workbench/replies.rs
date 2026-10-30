@@ -14,6 +14,13 @@ impl Workbench {
     if matches!(reply, Reply::Saved(_) | Reply::SaveError(_)) {
       self.pending_save = false;
     }
+    if matches!(&reply, Reply::Saved(_)) {
+      self.restored_editor_draft = false;
+      self.unbound_editor = None;
+      if let Some(session) = &self.session {
+        self.editor_drafts.remove(session);
+      }
+    }
     if matches!(
       reply,
       Reply::Attached(_)
@@ -33,6 +40,7 @@ impl Workbench {
       }
       Reply::WatchError(error) => self.error = Some(error),
       Reply::Revision(path, revision) => {
+        self.busy = false;
         if self.error.is_none()
           && self
             .file
@@ -41,6 +49,60 @@ impl Workbench {
         {
           self.error=Some("File changed in the workspace. Reload to inspect it; Save will validate the original revision.".into());
         }
+      }
+      Reply::Tasks(generation, tasks, cursor) => {
+        if generation != self.task_generation {
+          return;
+        }
+        self.task_pending = false;
+        for task in tasks {
+          if let Some(id) = task.envelope.as_ref().map(|value| value.task_id.as_str()) {
+            self.tasks.retain(|existing| {
+              existing
+                .envelope
+                .as_ref()
+                .is_none_or(|value| value.task_id != id)
+            });
+          }
+          self.tasks.push(task);
+        }
+        self.task_cursor = cursor;
+        self.error = None;
+      }
+      Reply::Task(generation, task) => {
+        if generation != self.task_generation {
+          return;
+        }
+        self.task_pending = false;
+        if self.dispatch_intent.as_ref().is_some_and(|intent| {
+          task
+            .envelope
+            .as_ref()
+            .is_some_and(|envelope| envelope.task_id == intent.task_id)
+        }) && task.status != "uncertain"
+        {
+          self.dispatch_intent = None;
+        }
+        if let Some(id) = task.envelope.as_ref().map(|value| value.task_id.as_str()) {
+          self.tasks.retain(|existing| {
+            existing
+              .envelope
+              .as_ref()
+              .is_none_or(|value| value.task_id != id)
+          });
+        }
+        self.tasks.insert(0, task);
+        self.error = None;
+      }
+      Reply::TaskError(generation, error, uncertainty) => {
+        if generation != self.task_generation {
+          return;
+        }
+        self.task_pending = false;
+        if let (Some(intent), Some(uncertain)) = (&mut self.dispatch_intent, uncertainty) {
+          intent.uncertain = uncertain;
+        }
+        self.error = Some(error);
       }
       Reply::Changed(paths) => {
         if !self.busy {

@@ -5,7 +5,7 @@ use gpui_kit::component::{
   diff::{Diff, DiffMode},
   input::Editor,
 };
-use gpui_kit::{TestSupportExt as _, *};
+use gpui_kit::{TestSupportExt as _, prelude::FluentBuilder as _, *};
 
 actions!(workbench, [SaveFile]);
 
@@ -29,6 +29,7 @@ impl Workbench {
     let (Some(client), Some(session)) = (self.client.clone(), self.session.clone()) else {
       return;
     };
+    self.restored_editor_draft = false;
     self.busy = true;
     self.error = None;
     self.request(async move { Ok(Reply::File(client.read_file(&session, &path).await?)) });
@@ -186,6 +187,8 @@ impl Workbench {
                 .map_or("Open a file in Files", |file| file.path.as_str()),
               if self.connection_pending {
                 " · reconnecting"
+              } else if self.restored_editor_draft {
+                " · restored draft"
               } else if dirty {
                 " · modified"
               } else {
@@ -213,6 +216,45 @@ impl Workbench {
               .on_click(cx.listener(|this, _, _, cx| this.save_file(cx))),
           ),
       )
+      .when(!self.unbound_editor_drafts.is_empty(), |panel| {
+        panel.child(
+          div()
+            .id("unbound-editor-drafts")
+            .test_support()
+            .flex()
+            .items_center()
+            .gap_2()
+            .px_2()
+            .py_1()
+            .child("Unbound restored drafts")
+            .children(
+              self
+                .unbound_editor_drafts
+                .iter()
+                .enumerate()
+                .map(|(index, draft)| {
+                  let draft = draft.clone();
+                  Button::new(("open-unbound-draft", index))
+                    .small()
+                    .label(draft.file.path.clone())
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                      this.open_unbound_editor(draft.clone(), window, cx)
+                    }))
+                }),
+            )
+            .when(
+              self.unbound_editor.is_some() && self.session.is_some(),
+              |row| {
+                row.child(
+                  Button::new("bind-unbound-draft")
+                    .small()
+                    .label("Bind to current session")
+                    .on_click(cx.listener(|this, _, _, cx| this.bind_unbound_editor(cx))),
+                )
+              },
+            ),
+        )
+      })
       .child(self.error_view(cx))
       .child(
         div()

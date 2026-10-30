@@ -9,11 +9,26 @@ use crate::{
 /// Handle the same terminal events in the live loop and terminal integration tests.
 /// Returns true when the client should close; daemon work remains owned by agentd.
 pub fn handle(app: &mut App, event: Event, actions: &mpsc::Sender<Action>) -> anyhow::Result<bool> {
+  if app.connection == Connection::Connecting
+    || (app.connection == Connection::Connected && !app.state_loaded)
+  {
+    if matches!(event, Event::Key(key) if key.kind == KeyEventKind::Press && key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c' | 'd')))
+    {
+      return Ok(true);
+    }
+    app.notice = "Restoring client state; input is temporarily paused.".into();
+    return Ok(false);
+  }
   match event {
-    Event::Key(key) if key.kind == KeyEventKind::Press => return handle_key(app, key, actions),
+    Event::Key(key) if key.kind == KeyEventKind::Press => {
+      let close = handle_key(app, key, actions)?;
+      app.save_current_draft();
+      return Ok(close);
+    }
     Event::Paste(text) => app.input.paste(&crate::view_model::safe_text(&text)),
     _ => {}
   }
+  app.save_current_draft();
   Ok(false)
 }
 
@@ -27,6 +42,11 @@ fn handle_key(
       KeyCode::Char('c' | 'd') => return Ok(true),
       KeyCode::Char('n') => send(actions, Action::NewSession)?,
       KeyCode::Char('r') => {
+        if let Some(node_id) = app.persistence_node_id.clone() {
+          let state = app.client_state();
+          send(actions, Action::SaveState { node_id, state })?;
+        }
+        app.state_loaded = false;
         send(actions, Action::Connect)?;
         app.connection = Connection::Connecting;
       }
@@ -63,6 +83,9 @@ fn handle_key(
         } else {
           panel
         };
+        if number == 3 && app.panel == ContextPanel::Tasks {
+          crate::local_command::request_task_page(app, actions, "")?;
+        }
       }
       KeyCode::Esc => app.panel = ContextPanel::Closed,
       KeyCode::Enter
@@ -72,11 +95,46 @@ fn handle_key(
       {
         app.input.newline();
       }
-      KeyCode::Enter => submit(app, actions)?,
+      KeyCode::Enter
+        if app.panel == ContextPanel::Tasks
+          && app.input.is_empty()
+          && !app.task_rows.is_empty() =>
+      {
+        if let Some(task_id) = app
+          .task_rows
+          .get(app.task_selected)
+          .and_then(|row| row.get("envelope"))
+          .and_then(|envelope| envelope.get("task_id"))
+          .and_then(serde_json::Value::as_str)
+        {
+          send(
+            actions,
+            Action::Task {
+              session: app.selected_session().map(|session| session.id.clone()),
+              generation: app.generation,
+              source: None,
+              append: false,
+              command: crate::task_command::TaskCommand::Get {
+                task_id: task_id.into(),
+              },
+            },
+          )?;
+        }
+      }
+      KeyCode::Enter => crate::local_command::submit(app, actions)?,
       KeyCode::Tab => {
         app.next_session();
         if let Some(session) = app.selected_session() {
-          send(actions, Action::Select(session.id.clone()))?;
+          send(
+            actions,
+            Action::Select {
+              session: session.id.clone(),
+              generation: app.generation,
+            },
+          )?;
+        }
+        if app.panel == ContextPanel::Tasks {
+          crate::local_command::request_task_page(app, actions, "")?;
         }
       }
       KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => {
@@ -86,6 +144,16 @@ fn handle_key(
       KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => {
         app.panel = ContextPanel::Computer;
         app.computer_scroll = app.computer_scroll.saturating_sub(3);
+      }
+      KeyCode::PageDown if app.panel == ContextPanel::Tasks && !app.task_cursor.is_empty() => {
+        let cursor = app.task_cursor.clone();
+        crate::local_command::request_task_page(app, actions, &cursor)?;
+      }
+      KeyCode::Down if app.panel == ContextPanel::Tasks && !app.task_rows.is_empty() => {
+        app.task_selected = (app.task_selected + 1).min(app.task_rows.len().saturating_sub(1));
+      }
+      KeyCode::Up if app.panel == ContextPanel::Tasks => {
+        app.task_selected = app.task_selected.saturating_sub(1);
       }
       KeyCode::PageDown if app.panel != ContextPanel::Closed => {
         app.computer_scroll = app.computer_scroll.saturating_add(5);
@@ -99,42 +167,6 @@ fn handle_key(
     }
   }
   Ok(false)
-}
-
-fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
-  let prompt = app.input.text();
-  if let Some(command) = crate::computer::parse_local(&prompt) {
-    app.panel = ContextPanel::Computer;
-    match command {
-      Ok(command) => {
-        send(
-          actions,
-          Action::Computer {
-            session: app.selected_session().map(|session| session.id.clone()),
-            command,
-          },
-        )?;
-        app.input.clear();
-      }
-      Err(error) => app.computer_detail = error.to_string(),
-    }
-  } else if app.connection != Connection::Connected {
-    app.notice = "Disconnected: Ctrl+R reconnects. Your draft is preserved.".into();
-  } else if let Some(session) = app.selected_session() {
-    if !app.submitting && !prompt.trim().is_empty() {
-      send(
-        actions,
-        Action::Submit {
-          session: session.id.clone(),
-          prompt,
-        },
-      )?;
-      app.submitting = true;
-    }
-  } else {
-    app.notice = "Ctrl+N creates a session before sending.".into();
-  }
-  Ok(())
 }
 
 pub(crate) fn send(actions: &mpsc::Sender<Action>, action: Action) -> anyhow::Result<()> {

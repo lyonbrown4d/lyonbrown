@@ -156,10 +156,20 @@ fn header(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, co
 
 fn body(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
   if let Some((title, content)) = &model.context {
+    if let Some(task_list) = &model.task_list {
+      if area.width >= 95 {
+        let columns = Layout::horizontal([Constraint::Min(30), Constraint::Length(34)]).split(area);
+        transcript(frame, model, columns[0], theme);
+        crate::context_view::render_task_list(frame, title, task_list, columns[1], theme);
+      } else {
+        crate::context_view::render_task_list(frame, title, task_list, area, theme);
+      }
+      return;
+    }
     if area.width >= 95 {
       let columns = Layout::horizontal([Constraint::Min(30), Constraint::Length(34)]).split(area);
       transcript(frame, model, columns[0], theme);
-      context(
+      crate::context_view::render_text(
         frame,
         title,
         content,
@@ -168,7 +178,7 @@ fn body(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
         theme,
       );
     } else {
-      context(frame, title, content, model.context_scroll, area, theme);
+      crate::context_view::render_text(frame, title, content, model.context_scroll, area, theme);
     }
   } else {
     transcript(frame, model, area, theme);
@@ -206,28 +216,6 @@ fn transcript(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme
   }
   .min(usize::from(u16::MAX)) as u16;
   frame.render_widget(paragraph.scroll((scroll, 0)), area);
-}
-
-fn context(
-  frame: &mut Frame,
-  title: &str,
-  content: &ratatui::text::Text<'_>,
-  scroll: u16,
-  area: Rect,
-  theme: Theme,
-) {
-  frame.render_widget(
-    Paragraph::new(content.clone())
-      .wrap(Wrap { trim: false })
-      .scroll((scroll, 0))
-      .block(
-        Block::default()
-          .title(title)
-          .borders(Borders::LEFT)
-          .border_style(Style::default().fg(theme.muted)),
-      ),
-    area,
-  );
 }
 
 fn composer(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, compact: bool) {

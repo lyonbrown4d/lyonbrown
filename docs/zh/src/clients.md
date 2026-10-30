@@ -34,7 +34,7 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 
 输入区复用 `ratatui-textarea` 0.9.3，支持光标编辑、多行文本、换行显示和粘贴。应用快捷键优先于编辑器的同名映射，例如 `Ctrl+X` 仍请求取消运行，`Ctrl+Y` 仍处理审批。提交等待期间不重复发送；失败保留草稿，服务端接受后清空对应草稿及其撤销历史。
 
-审批区展示工具和参数；紧凑布局只保留待处理数量和审批快捷键，完整参数通过 `F5` 查看。审批决定由 daemon 校验并保存，界面按服务端结果更新。任务记录每两秒刷新一次，新提交的运行同时订阅事件流。客户端退出时恢复终端状态，不向 daemon 发送取消请求。
+审批区展示工具和参数；紧凑布局只保留待处理数量和审批快捷键，完整参数通过 `F5` 查看。审批决定由 daemon 校验并保存，界面按服务端结果更新。对话的 Run 记录每两秒刷新一次，新提交的运行同时订阅事件流。持久 Task 按面板查询与本地管理命令刷新。客户端退出时恢复终端状态，不向 daemon 发送取消请求。
 
 界面使用暖深色或暖浅色的纯色终端背景、正文和强调色。`--theme auto` 根据 `COLORFGBG` 选择配色；无法检测时使用深色，可显式指定 `--theme light` 或 `--theme dark`。模型回复的 Markdown 复用固定版本 `tui-markdown` 0.3.10，经公开 `StyleSheet` 接口适配主题；关闭该库的默认 features，不启用代码语法高亮依赖。
 
@@ -80,6 +80,10 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 
 配对身份和凭据留在 daemon，节点地址不授予信任。提交响应丢失时，保留原 Task ID，通过 `get` 和 `reconcile` 核对，不生成新的任务身份自动重试。分页返回 `next_task_id`，后续查询通过 `--after` 继续。
 
+TUI 的 `F3` 面板查询当前会话的持久 Task，分别显示 Task 与 Worker Attempt 状态。方向键选择任务，输入区为空时按 `Enter` 查看详情，`PageDown` 查询下一页；重新打开面板回到第一页。输入区中的 `/task ...` 使用与独立 CLI 相同的子命令和参数，例如 `/task get TASK_ID`、`/task cancel TASK_ID --node-id WORKER_ID --node-endpoint https://worker.example:7448`。这些命令在本地解析，语法错误也不会成为模型 Prompt。
+
+TUI 保存各会话草稿、未绑定草稿、所选会话、上下文面板和滚动位置。会话切换保留各自的输入；提交确认只清除原会话中仍与已提交文本一致的草稿。`/draft list` 列出本地草稿，`/draft recover SESSION_ID` 将选定草稿放入输入区，`/draft recover unbound` 读取未绑定草稿，供用户检查后决定是否提交。原会话当前不可用的草稿仍保留，不会自动附到其他会话。
+
 ## GPUI 桌面
 
 ```sh
@@ -94,6 +98,8 @@ cargo run -p agent-desktop
 
 工作台标签栏的省略号菜单列出 Browser、Files、Editor、Diff、Tasks 和 Computer 六个面板，可直接选择；标签被窄窗口挤出时也可从这里切换。当前组件库的辅助功能树仍不能正确提供这些标签的名称，菜单入口不代表标签的辅助功能问题已解决。
 
+Tasks 面板读取 daemon 的持久 Task，提供首页、下一页、详情、核对、取消和显式采纳／拒绝。派发前须选定有活动 Run 的会话，并填写已配对 Worker 的节点 ID、HTTPS 地址和任务说明；默认只授予只读工作区范围，选择读写范围时写入仍须经过审批，daemon 还会检查配对权限。桌面在发送前生成 Task UUID、Attempt UUID 和幂等键，截止时间为一小时。未知结果保留原身份供查询、核对，不自动重发；Worker Attempt 成功仍显示为等待 Master 采纳。
+
 ### 设置与连接
 
 标题栏的 Settings 按钮打开独立设置页。Daemon 地址和访问令牌只在设置页编辑；Workspace path 用于当前标签页的新聊天。连接地址、令牌和工作区路径应与 daemon 对应；远程 daemon 的工作区路径指向远端文件系统。Appearance 提供手动选择的 Light 和 Dark 外观。选择 Back to chats 或按 `Esc` 返回聊天时，保留两侧面板的展开状态和聊天草稿。
@@ -106,7 +112,11 @@ cargo run -p agent-desktop
 
 关闭标签页只停止该标签页的本地事件订阅，不向 daemon 发送取消请求。关闭最后一个标签页后，界面保留一个新的空白标签页。关闭桌面也不默认取消 daemon 作业。
 
-Editor 与差异视图复用组件库，文件操作通过 daemon 的工作区协议执行。切换聊天时，Editor 按会话缓存并恢复打开文件及未保存文本；文件保存请求尚未完成时，必须等待保存结束才能切换、新建或关闭当前聊天。标签页、草稿、面板状态和外观选择均没有跨应用重启的恢复保证。
+Editor 与差异视图复用组件库，文件操作通过 daemon 的工作区协议执行。切换聊天时，Editor 按会话缓存并恢复打开文件及未保存文本；文件保存请求尚未完成时，必须等待保存结束才能切换、新建或关闭当前聊天。
+
+认证后，桌面恢复标签页顺序、活动标签页、各标签页的聊天草稿和工作区路径，以及两侧面板、停靠布局、宽度和明暗外观。恢复期间暂停编辑和导航；后台合并快照并写入本地，正常关闭窗口前等待最后一次刷盘。原会话当前不可用的标签页标为未绑定草稿，须点击「为此草稿新建会话」完成绑定后才能提交。运行、事件和审批重新向 daemon 查询，不从快照恢复执行状态。
+
+未保存的 Editor 草稿包含原会话、文件路径、原始内容和版本。恢复后重新读取当前文件版本；文件已改变时保留草稿并报告冲突，保存仍由 daemon 校验原始版本，不覆盖较新的文件。找不到原会话的文件草稿保留为未绑定草稿，须显式绑定；恢复本身不会保存文件。
 
 Browser 的连接、导航、关闭或接管请求尚未完成时，也必须等待结果才能切换、新建或关闭当前聊天，以及重新连接 daemon。Space 创建成功但地址打开失败时，界面保留该 Space，可修正地址后继续打开，或显式关闭。切换接管状态后，面板清除旧帧并重新获取；迟到的旧帧、空帧或错误不会覆盖新的读取状态。
 
@@ -141,6 +151,12 @@ Connect 开始尝试时就撤销旧宿主并清空目录，即使新连接认证
 | `Cmd/Ctrl+S` | 在 Editor 中保存文件 |
 
 原生窗口是否可启动取决于目标平台的图形环境和依赖。编译通过不能替代窗口创建、输入、主题切换以及真实 daemon 连接的运行验收，也不能据此认定 Windows、macOS 和 Linux 均已验收。
+
+## 本地恢复文件
+
+客户端的恢复文件位于配置数据目录的 `client-state/` 下。`agent-client::local_state` 按客户端类型、规范化的 daemon 地址和认证后的节点身份隔离文件；同一身份的恢复文件由独占锁保护，第二个客户端实例不能同时覆盖它。写入使用同目录临时文件并原子替换，文件大小上限为 4 MiB；Unix 上目录和文件权限分别为 `0700`、`0600`。
+
+恢复文件只保存客户端展示与输入状态。令牌、审批决定、原生执行句柄、Browser/Computer 控制权和 daemon 的执行状态均不从恢复文件取得。重启后仍须认证并向 daemon 查询；恢复草稿不会提交请求。损坏、身份不符或版本不支持的文件会保留并报告错误，不会用空白状态覆盖。
 
 源码入口：`apps/agent-cli/src/main.rs`、`apps/agent-desktop/src/main.rs`。终端呈现见 `apps/agent-cli/src/view_model.rs`、`view.rs` 和 `markdown.rs`；桌面交互见 `apps/agent-desktop/src/view_model.rs`、`operations.rs`、`projection.rs`、`chrome.rs`、`settings.rs`、`tabs.rs`、`tabs/` 和 `workbench/drafts.rs`。
 

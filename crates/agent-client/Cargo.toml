@@ -11,3 +11,12 @@ anyhow.workspace = true
 tonic = { workspace = true, features = ["tls-webpki-roots"] }
 url = "2.5"
 futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+fs2.workspace = true
+sha2.workspace = true
+hex.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true

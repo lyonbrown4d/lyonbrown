@@ -4,6 +4,11 @@ use agent_computer::*;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+// A concurrent process spawn can briefly inherit another test's flock file
+// description before exec closes it. Keep these physical-exclusion checks
+// separate so the thread-drain assertion measures the worker's ownership.
+static PROCESS_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 struct Backend(DesktopIdentity);
 impl DesktopBackend for Backend {
   fn capabilities(&mut self) -> Result<DesktopCapabilities, DesktopError> {
@@ -63,6 +68,9 @@ fn lease(runtime: &ComputerRuntime) -> LeaseToken {
 
 #[test]
 fn native_drop_revokes_stale_lease_but_worker_retains_physical_exclusion() {
+  let _serial = PROCESS_TEST
+    .lock()
+    .expect("serialize native exclusion tests");
   let root = tempfile::tempdir().expect("temporary exclusion directory");
   let original = identity("first-node");
   let exclusion = NativeDesktopLease::acquire_in(root.path(), &original).expect("first attachment");
@@ -134,6 +142,9 @@ fn native_drop_revokes_stale_lease_but_worker_retains_physical_exclusion() {
 
 #[test]
 fn native_identity_excludes_another_process_despite_different_daemon_node() {
+  let _serial = PROCESS_TEST
+    .lock()
+    .expect("serialize native exclusion tests");
   const CHILD_ROOT: &str = "LYONBROWN_NATIVE_LOCK_TEST_ROOT";
   const CHILD_BUSY: &str = "LYONBROWN_NATIVE_LOCK_EXPECT_BUSY";
   if let Some(root) = std::env::var_os(CHILD_ROOT) {

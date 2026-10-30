@@ -30,6 +30,7 @@ tokio.workspace = true
 tonic.workspace = true
 uuid.workspace = true
 serde_json.workspace = true
+serde.workspace = true
 tracing.workspace = true
 fluxdi.workspace = true
 agent-client = { path = "../../crates/agent-client" }
@@ -52,6 +53,9 @@ clap.workspace = true
 gpui-kit = { version = "0.8.1", features = ["test-support"] }
 agent-test-support = { path = "../../crates/agent-test-support" }
 agentd = { path = "../agentd" }
+agent-core = { path = "../../crates/agent-core" }
+agent-distributed = { path = "../../crates/agent-distributed" }
+agent-inference = { path = "../../crates/agent-inference" }
 tempfile.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true

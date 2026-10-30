@@ -7,6 +7,9 @@ pub struct DesktopSnapshot {
   pub sidebar_expanded: bool,
   pub workbench_expanded: bool,
   pub settings_open: bool,
+  pub local_state_loading: bool,
+  pub local_state_loaded: bool,
+  pub layout_sizes: Vec<f32>,
   pub tabs: Vec<crate::tabs::ChatTabSnapshot>,
   pub status: String,
   pub session_titles: Vec<String>,
@@ -23,6 +26,7 @@ pub struct DesktopSnapshot {
 
 #[derive(Clone, Debug)]
 pub struct WorkbenchSnapshot {
+  pub task_pending: bool,
   pub computer: ComputerSnapshot,
   pub paths: Vec<String>,
   pub file: Option<String>,
@@ -51,6 +55,15 @@ impl Desktop {
       sidebar_expanded: self.show_sidebar,
       workbench_expanded: self.show_workbench,
       settings_open: self.show_settings,
+      local_state_loading: self.persistence_loading,
+      local_state_loaded: self.persistence_loaded,
+      layout_sizes: self
+        .main_layout
+        .read(cx)
+        .sizes()
+        .iter()
+        .map(|size| size.as_f32())
+        .collect(),
       tabs: self.chat_tab_snapshots(cx),
       status: self.vm.status.clone(),
       session_titles: self
@@ -96,6 +109,7 @@ impl Desktop {
       workbench: {
         let state = self.tasks.read(cx);
         WorkbenchSnapshot {
+          task_pending: state.task_pending,
           computer: state.computer.read(cx).snapshot(cx),
           paths: state.files.iter().map(|file| file.path.clone()).collect(),
           file: state.file.as_ref().map(|file| file.path.clone()),

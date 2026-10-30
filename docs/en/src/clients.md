@@ -80,6 +80,10 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 
 Pairing identity and credentials stay in the daemon; an address grants no trust. After a lost submission response, retain the original Task ID and use `get` and `reconcile`, without automatically generating a new task identity. Pages return `next_task_id`; pass it through `--after` to continue.
 
+The TUI `F3` panel queries durable Tasks for the selected session and displays Task and Worker Attempt status separately. Use arrow keys to select a task, `Enter` with an empty composer to inspect it, and `PageDown` to fetch the next page. Reopening the panel returns to the first page. Composer commands `/task ...` use the standalone CLI subcommands and arguments, such as `/task get TASK_ID` or `/task cancel TASK_ID --node-id WORKER_ID --node-endpoint https://worker.example:7448`. Parsing is local; malformed commands never become model prompts.
+
+The TUI saves session drafts, the unbound draft, selected session, context panel and scroll positions. Switching sessions retains independent input. A submission acknowledgement clears only the originating session draft that still matches the submitted text. `/draft list` lists local drafts; `/draft recover SESSION_ID` places the selected text in the composer, and `/draft recover unbound` retrieves the unbound draft, for inspection before the user decides whether to submit it. Drafts whose original sessions are unavailable remain stored and are never automatically attached to another session.
+
 ## GPUI desktop
 
 ```sh
@@ -94,6 +98,8 @@ Background results use bounded `async-channel` 2.5.0 queues; producers await cap
 
 The ellipsis menu in the workbench tab bar lists all six panels: Browser, Files, Editor, Diff, Tasks and Computer. Use it to switch panels when a narrow window hides a tab. The component library still does not expose proper tab names in its accessibility tree; the menu does not resolve that tab accessibility limitation.
 
+Tasks reads durable daemon Tasks and provides first/next pages, details, reconciliation, cancellation and explicit acceptance/rejection. Dispatch requires a selected session with an active Run, a paired Worker node ID, its HTTPS endpoint and instructions. Workspace access defaults to read-only; the read/write choice still requires approval for writes, and the daemon checks paired capabilities. Desktop generates the Task UUID, Attempt UUID and idempotency key before sending, with a one-hour deadline. Unknown outcomes retain the original identity for inspection and reconciliation without automatic resubmission. A successful Worker Attempt still awaits Master acceptance.
+
 ### Settings and connection
 
 The title bar's Settings button opens a dedicated page. The daemon address and access token are edited only there; Workspace path selects the daemon-side folder for new chats in the current tab. The endpoint, token and workspace must match the daemon. A workspace for a remote daemon refers to that daemon's filesystem. Appearance offers manual Light and Dark choices. Back to chats and `Esc` return to the chat while preserving panel visibility and chat drafts.
@@ -106,7 +112,11 @@ Use the sidebar’s “新对话” (New chat) control or the tab bar’s “＋
 
 Closing a tab stops only its local event subscription and sends no cancellation request to the daemon. Closing the last tab leaves a fresh blank tab. Closing the desktop does not automatically cancel daemon work either.
 
-Editor and diff views reuse library components; file operations use the daemon workspace protocol. Switching chats caches and restores the open file and unsaved Editor text by session. A pending file save must finish before switching chats, creating a tab or closing the current tab. Tabs, drafts, panel visibility and appearance choices have no restoration guarantee across application restarts.
+Editor and diff views reuse library components; file operations use the daemon workspace protocol. Switching chats caches and restores the open file and unsaved Editor text by session. A pending file save must finish before switching chats, creating a tab or closing the current tab.
+
+After authentication, Desktop restores tab order, the active tab, each tab's composer draft and workspace path, panel visibility, dock layout, widths and appearance. Editing and navigation pause during restoration. Snapshots are coalesced and written in the background; normal window closure waits for the final flush. A tab whose original session is unavailable becomes an unbound draft. Use “为此草稿新建会话” (Create a session for this draft) to bind it before submission. Runs, events and approvals are fetched afresh from the daemon.
+
+Unsaved Editor drafts retain the original session, path, base content and revision. Restoration checks the current file revision; a changed file leaves the draft intact and reports a conflict. Saving still validates the original revision in the daemon, protecting newer file content. Drafts with unavailable sessions remain unbound until explicitly attached. Restoration itself never saves a file.
 
 Browser attachment, navigation, close and takeover requests must finish before creating, switching or closing the current chat, or reconnecting to the daemon. If a Space is created but opening its URL fails, the view retains that Space so the address can be corrected or the Space explicitly closed. A control change clears the old frame and requests a fresh one; late frames, empty results and errors from the previous frame generation cannot replace the new read state.
 
@@ -141,6 +151,12 @@ Starting a Connect attempt revokes the old host and clears the catalog even if a
 | `Cmd/Ctrl+S` | Save a file in Editor |
 
 Native window startup depends on the target platform's graphical environment and dependencies. Compilation does not replace runtime checks for window creation, input, theme switching and connection to a real daemon, or establish acceptance on Windows, macOS and Linux.
+
+## Local recovery files
+
+Recovery files live under `client-state/` in the configured data directory. `agent-client::local_state` isolates them by client kind, canonical daemon endpoint and authenticated node identity. An exclusive lock prevents a second client instance from overwriting the same identity's file. Writes atomically replace the file using a temporary file in the same directory, with a 4 MiB size limit. On Unix, directory and file permissions are `0700` and `0600` respectively.
+
+Snapshots contain client presentation and input state. They do not provide credentials, approval decisions, native execution handles, Browser/Computer control or daemon execution state. Restarting still requires authentication and fresh daemon queries; restoring a draft sends no request. Corrupt files, identity mismatches and unsupported versions are reported and preserved instead of being overwritten with empty state.
 
 Entry points: `apps/agent-cli/src/main.rs`, `apps/agent-desktop/src/main.rs`. TUI presentation is defined in `apps/agent-cli/src/view_model.rs`, `view.rs` and `markdown.rs`; Desktop interaction is defined in `apps/agent-desktop/src/view_model.rs`, `operations.rs`, `projection.rs`, `chrome.rs`, `settings.rs`, `tabs.rs`, `tabs/` and `workbench/drafts.rs`.
 

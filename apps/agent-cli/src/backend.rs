@@ -1,4 +1,5 @@
 use agent_client::AgentClient;
+use agent_client::local_state::LocalStateStore;
 use agent_protocol::v1::{Approval, Event, Run, Session};
 use tokio::sync::mpsc;
 
@@ -7,7 +8,7 @@ use crate::{
   computer::{ComputerStatus, LocalCommand},
   computer_backend::ComputerOwner,
   config::ResolvedConfig,
-  session_backend::{refresh_session, watch},
+  session_backend::refresh_session,
 };
 use agent_computer_runtime::{ComputerHostFactory, NativeComputerHost};
 use std::sync::Arc;
@@ -20,15 +21,30 @@ pub enum Action {
   },
   Shutdown(tokio::sync::oneshot::Sender<()>),
   NewSession,
-  Select(String),
+  Select {
+    session: String,
+    generation: u64,
+  },
   Submit {
     session: String,
     prompt: String,
+    generation: u64,
   },
   Cancel(String),
   Approve {
     id: String,
     approved: bool,
+  },
+  Task {
+    session: Option<String>,
+    generation: u64,
+    source: Option<String>,
+    append: bool,
+    command: crate::task_command::TaskCommand,
+  },
+  SaveState {
+    node_id: String,
+    state: crate::local_state::ClientState,
   },
 }
 
@@ -40,15 +56,40 @@ pub enum Update {
   Connected(Vec<Session>),
   Disconnected(String),
   Selected(Session),
-  Runs(Vec<Run>),
+  Runs {
+    session: String,
+    generation: u64,
+    runs: Vec<Run>,
+  },
   Approvals {
     session: String,
+    generation: u64,
     approvals: Vec<Approval>,
   },
-  Event(Event),
+  Event {
+    generation: u64,
+    event: Event,
+  },
   Notice(String),
-  Submitted(String),
+  Submitted {
+    session: String,
+    prompt: String,
+    generation: u64,
+  },
   ApprovalDecided(String),
+  TaskResult {
+    session: Option<String>,
+    generation: u64,
+    source: Option<String>,
+    append: bool,
+    value: serde_json::Value,
+  },
+  LocalState {
+    node_id: Option<String>,
+    state: Option<crate::local_state::ClientState>,
+    warning: Option<String>,
+    preserve: bool,
+  },
 }
 
 pub fn spawn(config: ResolvedConfig) -> (mpsc::Sender<Action>, mpsc::Receiver<Update>) {
@@ -61,6 +102,8 @@ pub fn spawn_with_computer_factory(
   factory: Arc<dyn ComputerHostFactory>,
 ) -> (mpsc::Sender<Action>, mpsc::Receiver<Update>) {
   let profiles = config.data_dir.join("browser-profiles").join("cli");
+  let state_root = config.data_dir.clone();
+  let state_endpoint = config.endpoint.clone();
   let services = ClientModule::new(fluxdi::Shared::new(config));
   let (actions, mut receiver) = mpsc::channel(32);
   let (updates, output) = mpsc::channel(128);
@@ -68,7 +111,10 @@ pub fn spawn_with_computer_factory(
     let mut computer = ComputerOwner::new(factory);
     let _ = updates.send(computer.snapshot()).await;
     let mut client = None;
+    let mut state_store: Option<LocalStateStore> = None;
+    let mut state_node_id: Option<String> = None;
     let mut selected = None;
+    let mut selected_generation = 0;
     let mut browser: Option<agent_browser_runtime::RuntimeAttachment> = None;
     let mut stream: Option<tokio::task::JoinHandle<()>> = None;
     let mut refresh = tokio::time::interval(std::time::Duration::from_secs(2));
@@ -91,6 +137,22 @@ pub fn spawn_with_computer_factory(
                   let _ = updates.send(computer.snapshot()).await;
                   continue;
               }
+              if let Action::SaveState { node_id, state } = action {
+                  if state_node_id.as_deref() == Some(node_id.as_str())
+                    && let Some(store) = state_store.take() {
+                      match crate::state_backend::save(store, state).await {
+                          Ok((store, Ok(()))) => state_store = Some(store),
+                          Ok((store, Err(error))) => {
+                              state_store = Some(store);
+                              let _ = updates.send(Update::Notice(format!("TUI state could not be saved: {error}"))).await;
+                          }
+                          Err(error) => {
+                              let _ = updates.send(Update::Notice(format!("TUI state save worker failed: {error}"))).await;
+                          }
+                      }
+                  }
+                  continue;
+              }
               if matches!(action, Action::Connect) {
                   computer.disconnected();
                   let _ = updates.send(computer.snapshot()).await;
@@ -109,8 +171,34 @@ pub fn spawn_with_computer_factory(
                                   }
                               }
                           }
-                          client = Some(connected);
+                          client = Some(connected.clone());
                           let _ = updates.send(Update::Connected(sessions)).await;
+                          match connected.node().await {
+                              Ok(node) if state_node_id.as_deref() != Some(node.id.as_str()) => {
+                                  state_node_id = Some(node.id.clone());
+                                  state_store = None;
+                                  match crate::state_backend::load(state_root.clone(), state_endpoint.clone(), node.id.clone()).await {
+                                      Ok((store, state)) => {
+                                          state_store = Some(store);
+                                          let _ = updates.send(Update::LocalState { node_id: Some(node.id), state, warning: None, preserve: false }).await;
+                                      }
+                                      Err(error) => {
+                                              let _ = updates.send(Update::LocalState {
+                                                  node_id: Some(node.id),
+                                              state: None,
+                                              warning: Some(format!("Saved TUI state is corrupt or unavailable; it was left untouched. Recover or remove the client-state file to resume saving: {error}")),
+                                                  preserve: false,
+                                          }).await;
+                                      }
+                                  }
+                              }
+                              Ok(node) => {
+                                  let _ = updates.send(Update::LocalState { node_id: Some(node.id), state: None, warning: None, preserve: true }).await;
+                              }
+                              Err(error) => {
+                                  let _ = updates.send(Update::LocalState { node_id: None, state: None, warning: Some(format!("TUI state persistence is unavailable because daemon identity could not be verified: {error}")), preserve: false }).await;
+                              }
+                          }
                       }
                       Err(error) => {
                           tracing::warn!(operation = "client.connect", outcome = "failed", process_id = std::process::id(), error_category = "connection_or_handshake", "Terminal client connection failed");
@@ -128,20 +216,25 @@ pub fn spawn_with_computer_factory(
                   Action::Connect => "client.connect",
                   Action::Computer { .. } | Action::Shutdown(_) => "computer.control",
                   Action::NewSession => "session.create",
-                  Action::Select(_) => "session.select",
+                  Action::Select { .. } => "session.select",
                   Action::Submit { .. } => "run.submit",
                   Action::Cancel(_) => "run.cancel",
                   Action::Approve { .. } => "approval.decide",
+                  Action::Task { .. } => "task.manage",
+                  Action::SaveState { .. } => "client.state.save",
               };
               let session_id = match &action {
-                  Action::Select(id) | Action::Submit { session: id, .. } => Some(id.clone()),
+                  Action::Select { session: id, .. } | Action::Submit { session: id, .. } => Some(id.clone()),
                   _ => selected.clone(),
               };
               let run_id = match &action {
                   Action::Cancel(id) => Some(id.clone()),
                   _ => None,
               };
-              if let Err(error) = execute(client, action, &mut selected, &mut stream, &updates).await {
+              if let Action::Select { generation, .. } = &action {
+                  selected_generation = *generation;
+              }
+              if let Err(error) = crate::action_backend::execute(client, action, &mut selected, &mut selected_generation, &mut stream, &updates).await {
                   tracing::warn!(operation, outcome = "failed", process_id = std::process::id(), session_id = session_id.as_deref(), run_id = run_id.as_deref(), error_category = "request_failed", "Terminal request failed; no submission was replayed");
                   let _ = updates.send(Update::Notice(format!("Request failed: {error}. Unknown outcomes are not retried."))).await;
               }
@@ -156,7 +249,7 @@ pub fn spawn_with_computer_factory(
                   let _ = updates.send(Update::Notice(format!("BrowserRuntime disconnected: {reason}. Browser actions are not replayed."))).await;
               }
               if let (Some(connected), Some(session)) = (&client, &selected)
-                  && let Err(error) = refresh_session(connected, session, &updates).await {
+                  && let Err(error) = refresh_session(connected, session, selected_generation, &updates).await {
                       tracing::warn!(operation = "session.refresh", outcome = "disconnected", process_id = std::process::id(), session_id = session.as_str(), error_category = "refresh_failed", "Terminal client disconnected after refresh failed");
                       let _ = updates.send(Update::Disconnected(error.to_string())).await;
                       computer.disconnected();
@@ -187,64 +280,4 @@ async fn connect(services: &ClientModule) -> anyhow::Result<(AgentClient, Vec<Se
   let client = services.client().await?;
   let sessions = client.list_sessions().await?;
   Ok(((*client).clone(), sessions))
-}
-
-async fn execute(
-  client: &AgentClient,
-  action: Action,
-  selected: &mut Option<String>,
-  stream: &mut Option<tokio::task::JoinHandle<()>>,
-  updates: &mpsc::Sender<Update>,
-) -> anyhow::Result<()> {
-  match action {
-    Action::Connect | Action::Computer { .. } | Action::Shutdown(_) => {}
-    Action::NewSession => {
-      let workspace = std::env::current_dir()?.to_string_lossy().into_owned();
-      let session = client
-        .create_session("New conversation", &workspace)
-        .await?;
-      *selected = Some(session.id.clone());
-      let _ = updates.send(Update::Selected(session)).await;
-      let _ = updates
-        .send(Update::Connected(client.list_sessions().await?))
-        .await;
-    }
-    Action::Select(id) => {
-      *selected = Some(id.clone());
-      if let Some(task) = stream.take() {
-        task.abort();
-      }
-      if let Some(run) = refresh_session(client, &id, updates).await? {
-        *stream = Some(watch(client, &run, updates).await?);
-      }
-    }
-    Action::Submit { session, prompt } => {
-      let run = client
-        .start_run(&session, &prompt, &uuid::Uuid::now_v7().to_string())
-        .await?;
-      let _ = updates.send(Update::Submitted(prompt)).await;
-      let _ = updates
-        .send(Update::Notice(format!("Submitted task {}", run.id)))
-        .await;
-      refresh_session(client, &session, updates).await?;
-      if let Some(task) = stream.take() {
-        task.abort();
-      }
-      *stream = Some(watch(client, &run.id, updates).await?);
-    }
-    Action::Cancel(id) => {
-      let run = client.cancel_run(&id).await?;
-      let _ = updates
-        .send(Update::Notice(format!("Task {}: {}", run.id, run.status)))
-        .await;
-    }
-    Action::Approve { id, approved } => {
-      client.approve(&id, approved).await?;
-      let _ = updates.send(Update::ApprovalDecided(id)).await;
-      let _ = updates
-        .send(Update::Notice("Approval decision recorded.".into()))
-        .await;
-    }
-  }
-  Ok(())
 }

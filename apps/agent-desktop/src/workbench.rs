@@ -4,6 +4,7 @@ pub(crate) mod files;
 mod frames;
 mod ime;
 mod input;
+mod layout;
 mod replies;
 pub(crate) mod state;
 mod tasks;
@@ -105,7 +106,7 @@ impl Render for WorkbenchPanel {
       Kind::Files => state.files_view(cx),
       Kind::Editor => state.editor_view(cx),
       Kind::Diff => state.diff_view(cx),
-      Kind::Tasks => state.tasks_view(cx),
+      Kind::Tasks => state.tasks_view(window, cx),
     });
     div()
       .size_full()
@@ -147,5 +148,6 @@ pub fn build(
       layout.panel_view(panel_handle(panel), cx)
     });
   area.update(cx, |area, cx| area.set_center(layout, window, cx));
+  layout::register(&area, &navigation, cx);
   (area, state)
 }

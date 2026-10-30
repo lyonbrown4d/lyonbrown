@@ -2,7 +2,12 @@ use agent_client::AgentClient;
 use agent_protocol::v1::{Approval, Event, Run, Session};
 
 pub enum Update {
-  Connected(Box<AgentClient>, Vec<Session>),
+  Connected {
+    client: Box<AgentClient>,
+    sessions: Vec<Session>,
+    endpoint: String,
+    node_id: String,
+  },
   Session(Session, bool),
   Runs(Vec<Run>),
   Started(Run),

@@ -10,9 +10,10 @@ pub(crate) struct Navigation {
   pub active: u64,
   pub order: Vec<u64>,
   pub inactive: BTreeMap<u64, ChatState>,
+  pub unbound: BTreeMap<u64, String>,
   pub connecting: bool,
   pub pending_requests: usize,
-  next_id: u64,
+  pub(super) next_id: u64,
 }
 
 impl Default for Navigation {
@@ -21,6 +22,7 @@ impl Default for Navigation {
       active: 1,
       order: vec![1],
       inactive: BTreeMap::new(),
+      unbound: BTreeMap::new(),
       connecting: false,
       pending_requests: 0,
       next_id: 2,
@@ -29,11 +31,14 @@ impl Default for Navigation {
 }
 
 impl Navigation {
-  pub fn allocate(&mut self) -> u64 {
+  pub fn allocate(&mut self) -> Option<u64> {
+    if self.order.len() >= 64 {
+      return None;
+    }
     let id = self.next_id;
-    self.next_id += 1;
+    self.next_id = id.checked_add(1)?;
     self.order.push(id);
-    id
+    Some(id)
   }
 }
 
@@ -47,8 +52,9 @@ pub(crate) struct ChatState {
   status: String,
   conversation: Vec<ChatMessage>,
   pub approvals: Vec<Approval>,
-  composer: Entity<TextareaState>,
-  workspace: Entity<InputState>,
+  pub(super) composer: Entity<TextareaState>,
+  pub(super) workspace: Entity<InputState>,
+  _persistence_watch: [Subscription; 2],
   pub watch_task: Option<tokio::task::JoinHandle<()>>,
 }
 
@@ -59,6 +65,20 @@ impl ChatState {
     window: &mut Window,
     cx: &mut Context<Desktop>,
   ) -> Self {
+    let composer = cx.new(|cx| {
+      TextareaState::new(window, cx)
+        .submit_on_enter(true)
+        .placeholder("描述你的任务，或补充要求…")
+    });
+    let workspace = cx.new(|cx| {
+      InputState::new(window, cx)
+        .default_value(workspace)
+        .placeholder("Workspace path on daemon")
+    });
+    let persistence_watch = [
+      cx.observe(&composer, |desktop, _, cx| desktop.queue_snapshot(cx)),
+      cx.observe(&workspace, |desktop, _, cx| desktop.queue_snapshot(cx)),
+    ];
     Self {
       selected: None,
       runs: Vec::new(),
@@ -75,16 +95,9 @@ impl ChatState {
       conversation: Vec::new(),
       approvals: Vec::new(),
       watch_task: None,
-      composer: cx.new(|cx| {
-        TextareaState::new(window, cx)
-          .submit_on_enter(true)
-          .placeholder("描述你的任务，或补充要求…")
-      }),
-      workspace: cx.new(|cx| {
-        InputState::new(window, cx)
-          .default_value(workspace)
-          .placeholder("Workspace path on daemon")
-      }),
+      composer,
+      workspace,
+      _persistence_watch: persistence_watch,
     }
   }
 
@@ -103,8 +116,7 @@ impl ChatState {
     std::mem::swap(&mut self.watch_task, &mut desktop.watch_task);
   }
 
-  pub fn reset_connection(&mut self) {
-    self.selected = None;
+  pub fn reset_connection_preserving_session(&mut self) {
     self.runs.clear();
     self.active_run = None;
     self.cursor = 0;

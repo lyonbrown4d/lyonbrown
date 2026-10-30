@@ -138,11 +138,15 @@ async fn explicit_scope_attach_stays_with_original_chat_and_detach_closes_real_h
   harness.connect(cx);
   harness
     .wait(cx, |state| {
-      state.selected_session.is_none()
+      state.selected_session == other.selected_session
         && !state.workbench.computer.attached
         && factory.dropped.load(Ordering::SeqCst) == 2
     })
     .await;
+  let restored = harness.snapshot(cx).workbench.computer;
+  assert!(restored.bound_session.is_none());
+  assert!(restored.selected_scope.is_none());
+  assert!(restored.targets.is_empty());
   assert_eq!(
     factory.attached.load(Ordering::SeqCst),
     2,

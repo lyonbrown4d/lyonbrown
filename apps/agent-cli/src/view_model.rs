@@ -12,6 +12,11 @@ pub struct ApprovalView {
   pub pending: usize,
 }
 
+pub struct TaskListView {
+  pub items: Vec<String>,
+  pub selected: usize,
+}
+
 pub struct ViewModel<'a> {
   pub connection: &'static str,
   pub connected: bool,
@@ -20,6 +25,7 @@ pub struct ViewModel<'a> {
   pub compact_transcript: Text<'static>,
   pub approval: Option<ApprovalView>,
   pub context: Option<(&'static str, Text<'static>)>,
+  pub task_list: Option<TaskListView>,
   pub composer: &'a Composer,
   pub submitting: bool,
   pub active: bool,
@@ -67,12 +73,42 @@ impl<'a> ViewModel<'a> {
       lines.push(Line::from("● Lyonbrown · 正在回复"));
       lines.extend(crate::markdown::render(&safe_text(content), theme).lines);
     }
+    let task_list =
+      (app.panel == ContextPanel::Tasks && app.task_detail.is_empty() && !app.task_rows.is_empty())
+        .then(|| TaskListView {
+          items: app
+            .task_rows
+            .iter()
+            .map(|task| {
+              let envelope = task.get("envelope");
+              let id = envelope
+                .and_then(|value| value.get("task_id"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("未知 ID");
+              let status = task
+                .get("status")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("未知");
+              let attempt = task
+                .get("attempt_status")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("attempt 未知");
+              format!(
+                "{} · {} · {}",
+                safe_text(id),
+                safe_text(status),
+                safe_text(attempt)
+              )
+            })
+            .collect(),
+          selected: app.task_selected,
+        });
     let context = match app.panel {
       ContextPanel::Closed => None,
       ContextPanel::Help => Some((
         "快捷键 · F1 关闭",
         Text::from(
-          "Enter 发送\nAlt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话\nTab 切换会话\nCtrl+R 重连\nCtrl+X 取消执行\nCtrl+Y 批准一次\nCtrl+E 拒绝\nCtrl+C / Ctrl+D 退出\n\nF2 会话 · F3 任务 · F4 计算机\nF5 完整审批内容\nEsc 关闭面板\n\n/computer targets\n/computer attach window ID\n/computer attach display ID\n/computer detach\n/computer status\nAlt+PgUp/PgDn 滚动计算机详情",
+          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\n\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 关闭面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n管理命令由本机解析，格式错误不会作为模型提示发送。草稿属于客户端状态；原会话不可用时用 /draft list 查看并显式恢复。远程结果不确定时保留原 task/attempt/idempotency 身份，用 get/reconcile 查证；不要创建新身份重放。",
         ),
       )),
       ContextPanel::Sessions => Some((
@@ -93,21 +129,21 @@ impl<'a> ViewModel<'a> {
         ),
       )),
       ContextPanel::Tasks => Some((
-        "任务 · Ctrl+X 取消执行",
-        Text::from(if app.tasks.is_empty() {
-          "当前会话没有任务".to_owned()
+        "持久任务 · ↑/↓ 选择 · Enter 查看 · PgDn 下一页",
+        Text::from(if task_list.is_some() {
+          String::new()
+        } else if !app.task_detail.is_empty() {
+          app.task_detail.clone()
         } else {
-          // Run identifiers remain in the model, not in the presentation.
-          app
-            .tasks
-            .iter()
-            .enumerate()
-            .map(|(index, task)| {
-              let status = task.lines().last().unwrap_or("未知");
-              format!("任务 {} · {}", index + 1, safe_text(status))
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+          "当前会话没有已返回的持久任务。输入 /task list 查看，命令失败或返回不确定状态时先 get/reconcile，保留原始身份。".to_owned()
+        }),
+      )),
+      ContextPanel::Drafts => Some((
+        "草稿 · /draft recover SESSION_ID",
+        Text::from(if app.draft_detail.is_empty() {
+          "使用 /draft list 查看当前及原会话草稿。恢复只填入编辑器；必须由你检查后按 Enter 才会提交。".into()
+        } else {
+          safe_text(&app.draft_detail)
         }),
       )),
       ContextPanel::Approval => Some((
@@ -139,6 +175,13 @@ impl<'a> ViewModel<'a> {
     } else {
       Text::from("从一个具体问题开始。\nF1 帮助 · Ctrl+N 新建会话")
     };
+    let notice = if app.persistence_warning.is_empty() {
+      app.notice.clone()
+    } else if app.notice.is_empty() {
+      app.persistence_warning.clone()
+    } else {
+      format!("{} · {}", app.notice, app.persistence_warning)
+    };
     Self {
       connection,
       connected: app.connection == Connection::Connected,
@@ -153,10 +196,11 @@ impl<'a> ViewModel<'a> {
         pending: app.approvals.len(),
       }),
       context,
+      task_list,
       composer: &app.input,
       submitting: app.submitting,
       active: app.active_run.is_some(),
-      notice: safe_text(&app.notice),
+      notice: safe_text(&notice),
       scroll: app.scroll,
       context_scroll: app.computer_scroll,
     }

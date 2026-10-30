@@ -55,7 +55,9 @@ impl Desktop {
                 .selected(self.show_sidebar)
                 .toggled(self.show_sidebar)
                 .on_click(cx.listener(|this, _, _, cx| {
-                  this.show_sidebar = !this.show_sidebar;
+                  if !this.persistence_loading && !this.navigation.connecting {
+                    this.show_sidebar = !this.show_sidebar;
+                  }
                   cx.notify();
                 })),
             )
@@ -91,7 +93,9 @@ impl Desktop {
                 .selected(self.show_workbench)
                 .toggled(self.show_workbench)
                 .on_click(cx.listener(|this, _, _, cx| {
-                  this.show_workbench = !this.show_workbench;
+                  if !this.persistence_loading && !this.navigation.connecting {
+                    this.show_workbench = !this.show_workbench;
+                  }
                   cx.notify();
                 })),
             )

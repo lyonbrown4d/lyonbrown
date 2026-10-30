@@ -64,8 +64,14 @@ async fn explicit_selection_detach_reconnect_disconnect_and_exit_own_real_attach
     matches!(update, Update::Connected(_))
   })
   .await;
-  actions.send(Action::Select(a.id.clone())).await.unwrap();
-  next(&mut updates, |update| matches!(update, Update::Runs(_))).await;
+  actions
+    .send(Action::Select {
+      session: a.id.clone(),
+      generation: 1,
+    })
+    .await
+    .unwrap();
+  next(&mut updates, |update| matches!(update, Update::Runs { .. })).await;
   let (status, detail) = command(&actions, &mut updates, &a.id, LocalCommand::Targets).await;
   assert_eq!(status, ComputerStatus::Detached);
   assert!(detail.contains("window 7"));
@@ -120,8 +126,14 @@ async fn explicit_selection_detach_reconnect_disconnect_and_exit_own_real_attach
     .unwrap()
     .unwrap();
   assert_eq!(info.desktop_session.scope, DesktopScope::Window(7));
-  actions.send(Action::Select(b.id.clone())).await.unwrap();
-  next(&mut updates, |update| matches!(update, Update::Runs(_))).await;
+  actions
+    .send(Action::Select {
+      session: b.id.clone(),
+      generation: 2,
+    })
+    .await
+    .unwrap();
+  next(&mut updates, |update| matches!(update, Update::Runs { .. })).await;
   let (selected_status, _) = command(&actions, &mut updates, &b.id, LocalCommand::Status).await;
   assert_eq!(selected_status, status);
   let (rejected_status, detail) = command(

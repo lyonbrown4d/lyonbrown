@@ -83,6 +83,7 @@ impl Desktop {
                   })
                   .disabled(
                     self.any_active_work()
+                      || self.persistence_loading
                       || self.tasks.read(cx).blocks_connection(cx)
                       || self.tasks.read(cx).pending_browser_operation
                       || self.tasks.read(cx).computer.read(cx).pending,
@@ -129,6 +130,7 @@ impl Desktop {
             "Workspace path",
             Input::new(&self.workspace)
               .id("workspace")
+              .readonly(self.navigation.connecting || self.persistence_loading)
               .into_any_element(),
             cx,
           ))
@@ -145,12 +147,14 @@ impl Desktop {
                 Button::new("theme-light")
                   .label("Light")
                   .selected(!cx.theme().mode.is_dark())
+                  .disabled(self.navigation.connecting || self.persistence_loading)
                   .on_click(|_, window, cx| Theme::change(ThemeMode::Light, Some(window), cx)),
               )
               .child(
                 Button::new("theme-dark")
                   .label("Dark")
                   .selected(cx.theme().mode.is_dark())
+                  .disabled(self.navigation.connecting || self.persistence_loading)
                   .on_click(|_, window, cx| Theme::change(ThemeMode::Dark, Some(window), cx)),
               ),
           ),

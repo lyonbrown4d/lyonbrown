@@ -189,7 +189,9 @@ impl Desktop {
           .accessibility_label("展开会话侧栏")
           .tooltip("会话")
           .on_click(cx.listener(|this, _, _, cx| {
-            this.show_sidebar = true;
+            if !this.persistence_loading && !this.navigation.connecting {
+              this.show_sidebar = true;
+            }
             cx.notify();
           })),
       )

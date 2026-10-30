@@ -23,6 +23,10 @@ pub struct Harness {
   pub directory: tempfile::TempDir,
   pub window: WindowHandle<Root>,
   pub view: Entity<Desktop>,
+  pub configuration: fluxdi::Shared<DesktopConfiguration>,
+  connector: fluxdi::Shared<agent_desktop::ClientPort>,
+  browser: fluxdi::Shared<agent_desktop::BrowserPort>,
+  computer: fluxdi::Shared<agent_desktop::ComputerPort>,
   shutdown: CancellationToken,
 }
 
@@ -126,9 +130,11 @@ impl Harness {
       let browser_service = agentd::browser_service(daemon.clone());
       let runtime_service = agentd::runtime_service(daemon.clone());
       let computer_service = agentd::computer_runtime_service(daemon.clone());
+      let orchestration = agentd::orchestration_service(daemon.clone());
       tokio::spawn(async move {
         tonic::transport::Server::builder()
           .add_service(service)
+          .add_service(orchestration)
           .add_service(workspace_service)
           .add_service(browser_service)
           .add_service(runtime_service)
@@ -164,6 +170,10 @@ impl Harness {
     let computer = computer
       .map(|factory| fluxdi::Shared::new(agent_desktop::ComputerPort(factory)))
       .unwrap_or_else(|| module.computer().expect("production computer port"));
+    let saved_configuration = configuration.clone();
+    let saved_connector = connector.clone();
+    let saved_browser = browser.clone();
+    let saved_computer = computer.clone();
     let (window, view) = cx.update(|cx| {
       agent_desktop::init(cx);
       let (window, view) = gpui_kit::open_window(
@@ -209,8 +219,59 @@ impl Harness {
       directory,
       window,
       view,
+      configuration: saved_configuration,
+      connector: saved_connector,
+      browser: saved_browser,
+      computer: saved_computer,
       shutdown,
     }
+  }
+
+  pub fn flush_local_state(&self, cx: &mut TestAppContext) {
+    let completion = cx
+      .update_window(self.window.into(), |_, _, cx| {
+        self
+          .view
+          .update(cx, |desktop, _| desktop.flush_local_state())
+      })
+      .expect("flush desktop state");
+    self.client_runtime.block_on(completion);
+  }
+
+  pub fn recreate_view(&self, cx: &mut TestAppContext) -> (WindowHandle<Root>, Entity<Desktop>) {
+    cx.update(|cx| {
+      agent_desktop::init(cx);
+      let runtime = self.client_runtime.clone();
+      let connector = self.connector.clone();
+      let browser = self.browser.clone();
+      let computer = self.computer.clone();
+      let configuration = self.configuration.clone();
+      let (window, view) = gpui_kit::open_window(
+        WindowOptions {
+          window_bounds: Some(WindowBounds::Windowed(Bounds {
+            origin: Point::default(),
+            size: size(px(1440.), px(920.)),
+          })),
+          ..gpui_kit::component::TitleBar::window_options()
+        },
+        cx,
+        |window, cx| {
+          cx.new(|cx| {
+            Desktop::new(
+              runtime,
+              connector,
+              browser,
+              computer,
+              configuration,
+              window,
+              cx,
+            )
+          })
+        },
+      )
+      .expect("recreated desktop view");
+      (window.downcast::<Root>().expect("native Root"), view)
+    })
   }
 
   pub fn click(&self, id: impl Into<ElementId>, cx: &mut TestAppContext) {
@@ -244,7 +305,7 @@ impl Harness {
       cx.update_window(self.window.into(), |_, window, cx| window.render_frame(cx))
         .expect("render native frame");
       let snapshot = self.snapshot(cx);
-      if ready(&snapshot) {
+      if ready(&snapshot) && !snapshot.local_state_loading {
         return snapshot;
       }
       assert!(

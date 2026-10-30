@@ -26,11 +26,16 @@ agent-computer-runtime = { path = "../../crates/agent-computer-runtime", default
 thiserror.workspace = true
 fluxdi.workspace = true
 serde_json.workspace = true
+serde.workspace = true
+shell-words.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
 agent-computer = { path = "../../crates/agent-computer", default-features = false }
 agentd = { path = "../agentd" }
+agent-core = { path = "../../crates/agent-core" }
+agent-distributed = { path = "../../crates/agent-distributed" }
+agent-inference = { path = "../../crates/agent-inference" }
 agent-test-support = { path = "../../crates/agent-test-support" }
 portable-pty = "0.9"
 vt100 = "0.18"

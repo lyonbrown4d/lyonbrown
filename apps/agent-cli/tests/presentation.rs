@@ -58,6 +58,27 @@ fn assert_surface(buffer: &ratatui::buffer::Buffer, theme: Theme) {
 }
 
 #[test]
+fn selected_task_remains_visible_in_a_short_narrow_terminal() {
+  let app = App {
+    panel: agent_cli::model::ContextPanel::Tasks,
+    task_rows: (0..50)
+      .map(|index| {
+        serde_json::json!({
+          "envelope": { "task_id": format!("task-{index:02}") },
+          "status": "awaiting_acceptance", "attempt_status": "succeeded"
+        })
+      })
+      .collect(),
+    task_selected: 49,
+    ..App::default()
+  };
+  let buffer = painted(&app, ThemeChoice::Dark, 48, 14);
+  let screen = visible(&buffer);
+  assert!(screen.contains("task-49"), "{screen}");
+  assert!(!screen.contains("task-00"), "list must scroll to selection");
+}
+
+#[test]
 fn warm_conversation_has_readable_cell_colors_and_no_empty_panels() {
   for choice in [ThemeChoice::Dark, ThemeChoice::Light] {
     let theme = Theme::resolve(choice, None);

@@ -5,6 +5,7 @@ use tokio::sync::mpsc;
 pub(crate) async fn refresh_session(
   client: &AgentClient,
   session: &str,
+  generation: u64,
   updates: &mpsc::Sender<Update>,
 ) -> anyhow::Result<Option<String>> {
   let runs = client.list_runs(session).await?;
@@ -30,10 +31,17 @@ pub(crate) async fn refresh_session(
     .flatten()
     .filter(|approval| approval.status == "pending")
     .collect();
-  let _ = updates.send(Update::Runs(runs)).await;
+  let _ = updates
+    .send(Update::Runs {
+      session: session.to_owned(),
+      generation,
+      runs,
+    })
+    .await;
   let _ = updates
     .send(Update::Approvals {
       session: session.to_owned(),
+      generation,
       approvals,
     })
     .await;
@@ -43,6 +51,7 @@ pub(crate) async fn refresh_session(
 pub(crate) async fn watch(
   client: &AgentClient,
   run: &str,
+  generation: u64,
   updates: &mpsc::Sender<Update>,
 ) -> anyhow::Result<tokio::task::JoinHandle<()>> {
   let mut events = client.watch_run(run, 0).await?;
@@ -52,7 +61,11 @@ pub(crate) async fn watch(
     loop {
       match events.message().await {
         Ok(Some(event)) => {
-          if updates.send(Update::Event(event)).await.is_err() {
+          if updates
+            .send(Update::Event { generation, event })
+            .await
+            .is_err()
+          {
             break;
           }
         }

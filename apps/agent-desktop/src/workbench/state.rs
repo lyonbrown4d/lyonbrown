@@ -1,10 +1,11 @@
 use agent_client::AgentClient;
 use agent_protocol::v1::{
-  BrowserFrame, BrowserSpace, BrowserTab, Run, WorkspaceEntry, WorkspaceFile,
+  BrowserFrame, BrowserSpace, BrowserTab, Run, Task as AgentTask, WorkspaceEntry, WorkspaceFile,
 };
 use gpui_kit::component::{
   diff::DiffState,
-  input::{EditorState, InputState},
+  input::{EditorState, InputState, TextareaState},
+  select::SelectState,
 };
 use gpui_kit::*;
 use std::{
@@ -34,6 +35,23 @@ pub(crate) enum Reply {
   Revision(String, String),
   WatchError(String),
   Error(String),
+  Tasks(u64, Vec<AgentTask>, String),
+  Task(u64, AgentTask),
+  TaskError(u64, String, Option<bool>),
+}
+
+#[derive(Clone)]
+pub(crate) struct DispatchIntent {
+  pub task_id: String,
+  pub attempt_id: String,
+  pub idempotency_key: String,
+  pub uncertain: bool,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct TaskDispatchContext {
+  pub intent: Option<DispatchIntent>,
+  pub history: Vec<DispatchIntent>,
 }
 
 pub struct Workbench {
@@ -46,10 +64,24 @@ pub struct Workbench {
   pub(crate) client: Option<AgentClient>,
   pub(crate) session: Option<String>,
   pub(crate) runs: Vec<Run>,
+  pub(crate) tasks: Vec<AgentTask>,
+  pub(crate) task_cursor: String,
+  pub(crate) task_pending: bool,
+  pub(crate) task_generation: u64,
+  pub(crate) dispatch_intent: Option<DispatchIntent>,
+  pub(crate) dispatch_history: Vec<DispatchIntent>,
+  pub(crate) dispatch_contexts: std::collections::BTreeMap<String, TaskDispatchContext>,
+  pub(crate) task_target_id: Entity<InputState>,
+  pub(crate) task_target_endpoint: Entity<InputState>,
+  pub(crate) task_instructions: Entity<TextareaState>,
+  pub(crate) task_capabilities: Entity<SelectState<Vec<String>>>,
   pub(crate) files: Vec<WorkspaceEntry>,
   pub(crate) directory: String,
   pub(crate) file: Option<WorkspaceFile>,
   pub(super) editor_drafts: std::collections::BTreeMap<String, super::drafts::EditorDraft>,
+  pub(super) unbound_editor_drafts: Vec<super::drafts::EditorDraft>,
+  pub(super) unbound_editor: Option<super::drafts::EditorDraft>,
+  pub(super) restored_editor_draft: bool,
   pub(crate) editor: Entity<EditorState>,
   pub(crate) diff: Entity<DiffState>,
   pub(crate) patch: String,
@@ -99,6 +131,26 @@ impl Workbench {
         .placeholder("Open a workspace file")
     });
     let editor_subscription = cx.observe(&editor, |_, _, cx| cx.notify());
+    let task_target_id =
+      cx.new(|cx| InputState::new(window, cx).placeholder("Paired Worker node ID"));
+    let task_target_endpoint =
+      cx.new(|cx| InputState::new(window, cx).placeholder("Worker endpoint (HTTPS)"));
+    let task_instructions = cx.new(|cx| {
+      TextareaState::new(window, cx)
+        .placeholder("Task instructions for Worker")
+        .submit_on_enter(false)
+    });
+    let task_capabilities = cx.new(|cx| {
+      SelectState::new(
+        vec![
+          "Read only".to_string(),
+          "Read and write after approval".to_string(),
+        ],
+        Some(gpui_kit::base::IndexPath::new(0)),
+        window,
+        cx,
+      )
+    });
     let completion = cx.spawn_in(window, async move |view, cx| {
       let mut remaining = 32;
       while let Ok((generation, reply)) = receiver.recv().await {
@@ -150,10 +202,24 @@ impl Workbench {
       client: None,
       session: None,
       runs: Vec::new(),
+      tasks: Vec::new(),
+      task_cursor: String::new(),
+      task_pending: false,
+      task_generation: 0,
+      dispatch_intent: None,
+      dispatch_history: Vec::new(),
+      dispatch_contexts: Default::default(),
+      task_target_id,
+      task_target_endpoint,
+      task_instructions,
+      task_capabilities,
       files: Vec::new(),
       directory: String::new(),
       file: None,
       editor_drafts: Default::default(),
+      unbound_editor_drafts: Vec::new(),
+      unbound_editor: None,
+      restored_editor_draft: false,
       editor,
       diff: cx.new(|cx| DiffState::new(Vec::new(), cx)),
       patch: String::new(),
@@ -206,6 +272,22 @@ impl Workbench {
     let connected_changed = self.client.is_some() != client.is_some();
     self.client = client.clone();
     if self.session != session || connected_changed {
+      let previous_session = self.session.clone();
+      if connected_changed {
+        self.dispatch_contexts.clear();
+      } else if let Some(previous_session) = previous_session {
+        self.dispatch_contexts.insert(
+          previous_session,
+          TaskDispatchContext {
+            intent: self.dispatch_intent.clone(),
+            history: self.dispatch_history.clone(),
+          },
+        );
+      }
+      self.task_generation = self.task_generation.saturating_add(1);
+      self.task_pending = false;
+      self.tasks.clear();
+      self.task_cursor.clear();
       if connected_changed {
         self.editor_drafts.clear();
       } else {
@@ -219,6 +301,14 @@ impl Workbench {
       }
       self.session = session;
       self.client = client;
+      let context = self
+        .session
+        .as_ref()
+        .and_then(|id| self.dispatch_contexts.get(id))
+        .cloned()
+        .unwrap_or_default();
+      self.dispatch_intent = context.intent;
+      self.dispatch_history = context.history;
       self.files.clear();
       self.directory.clear();
       self.file = None;

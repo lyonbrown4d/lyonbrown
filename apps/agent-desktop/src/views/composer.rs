@@ -9,7 +9,9 @@ use gpui_kit::{TestSupportExt as _, prelude::FluentBuilder as _, *};
 
 impl Desktop {
   pub(crate) fn connection_label(&self) -> &'static str {
-    if self.navigation.connecting {
+    if self.persistence_loading {
+      "恢复本地状态…"
+    } else if self.navigation.connecting {
       "连接中…"
     } else if self.vm.status == "Run outcome unknown · inspect daemon"
       || self.vm.status == "Connection or request failed"
@@ -38,6 +40,34 @@ impl Desktop {
       .min_w_0()
       .flex()
       .flex_col()
+      .when(
+        self
+          .navigation
+          .unbound
+          .contains_key(&self.navigation.active),
+        |view| {
+          view.child(
+            div()
+              .p_2()
+              .flex()
+              .flex_col()
+              .gap_2()
+              .child("原会话当前不可用。草稿尚未绑定，恢复不会发送内容。")
+              .child(
+                Button::new("bind-restored-chat")
+                  .small()
+                  .label("为此草稿新建会话")
+                  .disabled(
+                    self.client.is_none()
+                      || self.navigation.connecting
+                      || self.persistence_loading
+                      || self.vm.busy,
+                  )
+                  .on_click(cx.listener(|desktop, _, _, cx| desktop.create_session(cx))),
+              ),
+          )
+        },
+      )
       .child(
         div()
           .bg(colors.composer)
@@ -66,7 +96,7 @@ impl Desktop {
                   .aria_label("输入任务或补充要求")
                   .appearance(false)
                   .bordered(false)
-                  .readonly(self.vm.busy)
+                  .readonly(self.vm.busy || self.navigation.connecting || self.persistence_loading)
                   .text_size(px(15.))
                   .h(px(66.)),
               ),
@@ -84,7 +114,9 @@ impl Desktop {
                   .accessibility_label("打开文件与上下文工作区")
                   .tooltip("文件与上下文")
                   .on_click(cx.listener(|this, _, _, cx| {
-                    this.show_workbench = !this.show_workbench;
+                    if !this.persistence_loading && !this.navigation.connecting {
+                      this.show_workbench = !this.show_workbench;
+                    }
                     cx.notify();
                   })),
               )

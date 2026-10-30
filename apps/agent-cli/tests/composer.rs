@@ -113,6 +113,7 @@ fn multiline_paste_and_newlines_submit_once_and_keep_newer_edits() {
     Action::Submit {
       session,
       prompt: submitted,
+      ..
     } => {
       assert_eq!(session, "session");
       assert_eq!(submitted, prompt);
@@ -129,11 +130,25 @@ fn multiline_paste_and_newlines_submit_once_and_keep_newer_edits() {
     "unacknowledged text remains a draft"
   );
   paste(&mut app, &actions, " edit");
-  update::apply(&mut app, Update::Submitted(prompt.into()));
+  update::apply(
+    &mut app,
+    Update::Submitted {
+      session: "session".into(),
+      prompt: prompt.into(),
+      generation: 0,
+    },
+  );
   assert!(!app.submitting);
   assert_eq!(app.input.text(), format!("{prompt} edit"));
   let edited = app.input.text();
-  update::apply(&mut app, Update::Submitted(edited));
+  update::apply(
+    &mut app,
+    Update::Submitted {
+      session: "session".into(),
+      prompt: edited,
+      generation: 0,
+    },
+  );
   assert!(app.input.is_empty());
 }
 
@@ -195,8 +210,17 @@ fn application_shortcuts_take_precedence_over_editor_bindings() {
   });
   paste(&mut app, &actions, "keep draft");
   key(&mut app, &actions, KeyCode::Tab, KeyModifiers::NONE);
-  assert!(matches!(requests.try_recv().unwrap(), Action::Select(id) if id == "next"));
-  assert_eq!(app.input.text(), "keep draft");
+  assert!(
+    matches!(requests.try_recv().unwrap(), Action::Select { session: id, .. } if id == "next")
+  );
+  assert!(
+    app.input.is_empty(),
+    "switching sessions loads that session's draft"
+  );
+  assert_eq!(
+    app.drafts.get("session").map(String::as_str),
+    Some("keep draft")
+  );
   key(
     &mut app,
     &actions,
@@ -245,7 +269,11 @@ fn context_shortcuts_keep_editor_draft_and_existing_daemon_authority() {
     key(&mut app, &actions, KeyCode::F(number), KeyModifiers::NONE);
     assert_eq!(app.panel, panel);
     assert_eq!(app.input.text(), "keep draft");
-    assert!(requests.try_recv().is_err());
+    if number == 3 {
+      assert!(matches!(requests.try_recv(), Ok(Action::Task { .. })));
+    } else {
+      assert!(requests.try_recv().is_err());
+    }
     key(&mut app, &actions, KeyCode::Esc, KeyModifiers::NONE);
     assert_eq!(app.panel, ContextPanel::Closed);
   }

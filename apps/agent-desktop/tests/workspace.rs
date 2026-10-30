@@ -49,10 +49,10 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
     );
   }
   harness.connect(cx);
-  harness.show_workbench(cx);
   harness
     .wait(cx, |state| state.status.starts_with("Connected"))
     .await;
+  harness.show_workbench(cx);
   harness.click("new-session", cx);
   harness
     .wait(cx, |state| {
@@ -255,6 +255,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   );
   assert_eq!(workspace_diff.workbench.file.as_deref(), Some("notes.txt"));
   tab(&harness, 2, cx);
+  let selected_before_reconnect = harness.snapshot(cx).selected_session;
   cx.update_window(harness.window.into(), |_, window, cx| {
     window.click("open-settings", cx);
     window.click("connect", cx);
@@ -275,10 +276,14 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
       "pending connection replacement must freeze the old workspace editor"
     );
   })
-  .expect("reconnect cannot accept edits that its acknowledgement would discard");
+  .expect("reconnect keeps the previous editor read-only until authentication completes");
   harness
     .wait(cx, |state| {
-      state.status.starts_with("Connected") && state.selected_session.is_none()
+      state.status.starts_with("Connected") && state.selected_session == selected_before_reconnect
     })
     .await;
+  assert_eq!(
+    harness.snapshot(cx).workbench.content,
+    "Untracked editor notes\n"
+  );
 }
