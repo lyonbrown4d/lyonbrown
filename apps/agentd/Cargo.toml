@@ -53,7 +53,7 @@ agent-test-support = { path = "../../crates/agent-test-support" }
 agent-client = { path = "../../crates/agent-client" }
 tempfile.workspace = true
 tokio-stream.workspace = true
-rmcp = { version = "=3.5.1", default-features = false, features = ["server", "transport-streamable-http-server"] }
+rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
 axum = "0.8"
 
 [target.'cfg(windows)'.dependencies]

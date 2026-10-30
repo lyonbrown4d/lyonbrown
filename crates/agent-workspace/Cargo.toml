@@ -7,11 +7,11 @@ license.workspace = true
 [dependencies]
 agent-core = { path = "../agent-core" }
 anyhow.workspace = true
-cap-std = "3.4.5"
+cap-std = "4.0.3"
 sha2.workspace = true
 hex.workspace = true
 serde.workspace = true
-notify = "8.2.0"
+notify = "8.2.1"
 notify-debouncer-full = "0.7.0"
 tokio.workspace = true
 async-trait.workspace = true

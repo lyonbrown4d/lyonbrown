@@ -24,7 +24,7 @@ async fn real_protocol_calls_use_cached_contract_and_exact_authorization() {
       "#/properties/call/oneOf/0/properties/arguments/$defs/Message"
     );
     let definition_validator =
-      jsonschema::JSONSchema::compile(&schema.parameters).expect("relocated model-facing schema");
+      jsonschema::validator_for(&schema.parameters).expect("relocated model-facing schema");
     assert!(definition_validator.is_valid(&call(json!("valid")).arguments));
     assert!(!definition_validator.is_valid(&call(json!(123)).arguments));
     let output = manager

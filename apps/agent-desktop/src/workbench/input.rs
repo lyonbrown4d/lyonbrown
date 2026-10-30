@@ -236,7 +236,7 @@ impl Workbench {
             cx,
           );
         }))
-        .on_scroll_wheel(cx.listener(|this, event: &ScrollWheelEvent, _, cx| {
+        .on_scroll(cx.listener(|this, event: &ScrollEvent, _, cx| {
           let (x, y) = this.pointer(event.position);
           let delta = event.delta.pixel_delta(px(20.));
           this.browser_input(

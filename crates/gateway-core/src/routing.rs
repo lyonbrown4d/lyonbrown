@@ -104,18 +104,18 @@ impl Gateway {
     if tokio::time::Instant::now() >= deadline {
       return Err(GatewayError::routing_timeout());
     }
+    if result
+      .provenance
+      .reason_codes
+      .iter()
+      .any(|code| matches!(code.as_str(), "DEADLINE_EXCEEDED" | "BACKEND_TIMEOUT"))
+    {
+      return Err(GatewayError::routing_timeout());
+    }
     if !matches!(
       result.status,
       DecisionStatus::Accepted | DecisionStatus::Degraded
     ) {
-      if result
-        .provenance
-        .reason_codes
-        .iter()
-        .any(|code| matches!(code.as_str(), "DEADLINE_EXCEEDED" | "BACKEND_TIMEOUT"))
-      {
-        return Err(GatewayError::routing_timeout());
-      }
       return Err(no_model());
     }
     if let DecisionOutput::RouteModel(advice) = result.output {

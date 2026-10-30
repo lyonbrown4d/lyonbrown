@@ -8,7 +8,7 @@ license.workspace = true
 diesel_migrations.workspace = true
 secrecy.workspace = true
 gateway-validation = { path = "../gateway-validation" }
-argon2 = "=0.5.3"
+argon2 = "=0.6.0"
 async-trait.workspace = true
 decision-core = { path = "../decision-core" }
 gateway-core = { path = "../gateway-core" }

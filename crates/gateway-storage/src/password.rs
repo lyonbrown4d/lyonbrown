@@ -1,8 +1,5 @@
 use crate::{GatewayStorage, Result, StorageError};
-use argon2::{
-  Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version,
-  password_hash::SaltString,
-};
+use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier, Version};
 use secrecy::{ExposeSecret, SecretString};
 use std::sync::LazyLock;
 
@@ -75,9 +72,8 @@ fn argon() -> Result<Argon2<'static>> {
   Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
 }
 fn hash_with_salt(password: &[u8], salt: &[u8]) -> Result<String> {
-  let salt = SaltString::encode_b64(salt).map_err(|_| StorageError::Worker)?;
   argon()?
-    .hash_password(password, &salt)
+    .hash_password_with_salt(password, salt)
     .map(|hash| hash.to_string())
     .map_err(|_| StorageError::Worker)
 }

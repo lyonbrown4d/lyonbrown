@@ -4,7 +4,7 @@ use agent_inference::{
   ChatMessage, GenerationRequest, InferenceBackend, InputContent, MessageRole,
 };
 use async_trait::async_trait;
-use rpi_ai::event_stream::create_assistant_message_event_stream;
+use rpi_ai::event_stream::create_assistant_message_event_stream_with_cancellation;
 use rpi_ai::{
   Api, AssistantMessageEventStream, Content, Context, Model, Provider, SimpleStreamOptions,
   UserContent,
@@ -62,17 +62,18 @@ impl Provider for LocalProvider {
     context: &Context,
     options: &SimpleStreamOptions,
   ) -> AssistantMessageEventStream {
-    let (producer, stream) = create_assistant_message_event_stream();
+    let (producer, stream) =
+      create_assistant_message_event_stream_with_cancellation(&options.signal);
     let request = convert_request(context, model, options);
     let backend = self.backend.clone();
     let model = model.clone();
     let cancellation = options.signal.child_token();
     tokio::spawn(async move {
-      let mut state = StreamState::new(model, producer);
+      let mut state = StreamState::new(model, producer).await;
       let request = match request {
         Ok(request) => request,
         Err(error) => {
-          state.fail(error.to_string(), false);
+          state.fail(error.to_string(), false).await;
           return;
         }
       };
@@ -81,18 +82,26 @@ impl Provider for LocalProvider {
       let worker =
         tokio::spawn(async move { backend.generate(request, worker_cancel, sender).await });
       while let Some(chunk) = receiver.recv().await {
-        if !state.chunk(chunk) {
+        if !state.chunk(chunk).await {
           cancellation.cancel();
           break;
         }
       }
       match worker.await {
-        Ok(Ok(summary)) => state.finish(summary),
-        Ok(Err(error)) => state.fail(
-          error.to_string(),
-          matches!(error, agent_inference::InferenceError::Cancelled),
-        ),
-        Err(error) => state.fail(format!("local inference worker stopped: {error}"), false),
+        Ok(Ok(summary)) => state.finish(summary).await,
+        Ok(Err(error)) => {
+          state
+            .fail(
+              error.to_string(),
+              matches!(error, agent_inference::InferenceError::Cancelled),
+            )
+            .await
+        }
+        Err(error) => {
+          state
+            .fail(format!("local inference worker stopped: {error}"), false)
+            .await
+        }
       }
     });
     stream

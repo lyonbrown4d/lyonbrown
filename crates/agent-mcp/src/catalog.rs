@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use agent_runtime::{Result, ToolDefinition};
-use jsonschema::JSONSchema;
+use jsonschema::Validator;
 use rmcp::model::Tool;
 use serde_json::{Value, json};
 
@@ -14,7 +14,7 @@ use crate::{
 pub(crate) struct CatalogEntry {
   pub schema: Value,
   pub description: Option<String>,
-  pub validator: JSONSchema,
+  pub validator: Validator,
 }
 
 pub(crate) async fn catalog(
@@ -88,9 +88,9 @@ fn compile(tool: Tool, limits: &McpLimits) -> Result<CatalogEntry> {
       "MCP schema must be a bounded object schema without external references",
     ));
   }
-  let validator = JSONSchema::options()
+  let validator = jsonschema::options()
     .with_draft(jsonschema::Draft::Draft202012)
-    .compile(&schema)
+    .build(&schema)
     .map_err(|_| invalid("MCP tool schema is unsupported or invalid"))?;
   let description = tool.description.map(|value| value.into_owned());
   if description.as_ref().is_some_and(|value| value.len() > 4096) {

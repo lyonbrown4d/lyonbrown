@@ -68,7 +68,7 @@ Gateway 使用 `utoipa-axum` 0.3.0 的 `routes!` 和 `OpenApiRouter`，从同一
 
 Swagger 页面与规范在本机地址可直接打开，业务 API 仍需通过 Swagger 的 Authorize 提供 API Key。规范不包含实际模型目录或凭据，Swagger 资源随程序内嵌，不要求访问 CDN。当前入站协议为 Chat Completions；图片、音频、Responses 和 Anthropic 入站请求不在此接口的兼容范围内。
 
-Gateway 上游传输复用 [Rig-Core 0.44.0](https://docs.rs/rig-core/0.44.0/rig_core/) 的公开 raw HTTP 接口与 `SseFramer`，以及 [Rig-Reqwest 0.44.0](https://docs.rs/rig-reqwest/0.44.0/rig_reqwest/) 的 `ReqwestMiddlewareClient`。Gateway 保留 `n` 等已开放的请求参数，并按原始字节转发 JSON 和 SSE 响应，包括多候选结果、工具调用片段和 usage。中间件在非 2xx 时立即释放原始响应正文，只向 Rig 提供相同状态的空正文；Gateway 继续负责字节限制、严格 `[DONE]` 检查、时限、取消和审计。这里不使用 Rig Agent 或 Agent Loop；Agent 与 `model-provider` 继续复用 rpi-ai 的 Responses、Chat Completions 和 Anthropic 三协议适配。
+Gateway 上游传输复用 [Rig-Core 0.45.0](https://docs.rs/rig-core/0.45.0/rig_core/) 的公开 raw HTTP 接口与 `SseFramer`，以及 [Rig-Reqwest 0.45.0](https://docs.rs/rig-reqwest/0.45.0/rig_reqwest/) 的 `ReqwestMiddlewareClient`。Gateway 保留 `n` 等已开放的请求参数，并按原始字节转发 JSON 和 SSE 响应，包括多候选结果、工具调用片段和 usage。中间件在非 2xx 时立即释放原始响应正文，只向 Rig 提供相同状态的空正文；Gateway 继续负责字节限制、严格 `[DONE]` 检查、时限、取消和审计。这里不使用 Rig Agent 或 Agent Loop；Agent 与 `model-provider` 继续复用 rpi-ai 的 Responses、Chat Completions 和 Anthropic 三协议适配。
 
 指定 `model` 为公共模型 ID 时按配置直连，不因不存在或能力不足切换模型。`model = "router/auto"` 时调用 [共享决策引擎](decision-engine.md)，选择实际模型后再次核对工具能力、上下文容量、本地范围及服务器约束。请求中的 `routing.local_only` 和 `routing.allowed_tiers` 只能进一步收紧服务器限制，转发前移除。
 

@@ -33,7 +33,7 @@ agent-computer = { path = "../../crates/agent-computer", default-features = fals
 agentd = { path = "../agentd" }
 agent-test-support = { path = "../../crates/agent-test-support" }
 portable-pty = "0.9"
-vt100 = "0.16"
+vt100 = "0.18"
 tempfile.workspace = true
 tokio-stream.workspace = true
 tonic.workspace = true

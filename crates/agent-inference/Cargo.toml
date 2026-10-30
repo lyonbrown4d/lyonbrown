@@ -13,9 +13,9 @@ tokio.workspace = true
 tokio-util.workspace = true
 futures.workspace = true
 mistralrs = { version = "=0.8.1", default-features = false, optional = true }
-llama-cpp-2 = { version = "=0.1.156", default-features = false, optional = true }
+llama-cpp-2 = { version = "=0.1.160", default-features = false, optional = true }
 encoding_rs = { version = "0.8", optional = true }
-base64 = { version = "0.22", optional = true }
+base64 = { version = "0.23", optional = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"], optional = true }
 
 [features]

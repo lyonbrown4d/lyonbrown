@@ -2,7 +2,7 @@
 use crate::Secret;
 use axum::http::{Extensions, header};
 use rig_core::{
-  http_client::{Error, HttpClientExt, Request, StreamingResponse, make_auth_header},
+  http_client::{Error, HttpClientExt, Request, StreamingResponse},
   wasm_compat::WasmBoxedFuture,
 };
 use rig_reqwest::{ReqwestMiddlewareClient, reqwest};
@@ -35,9 +35,11 @@ impl Client {
       .header(header::CONTENT_TYPE, "application/json")
       .header("x-request-id", request_id);
     if let Some(key) = key {
-      let (name, mut authorization) = make_auth_header(key.expose_secret())?;
+      let mut authorization =
+        header::HeaderValue::from_str(&format!("Bearer {}", key.expose_secret()))
+          .map_err(Error::instance)?;
       authorization.set_sensitive(true);
-      request = request.header(name, authorization);
+      request = request.header(header::AUTHORIZATION, authorization);
     }
     let bytes = serde_json::to_vec(body).map_err(Error::instance)?;
     self

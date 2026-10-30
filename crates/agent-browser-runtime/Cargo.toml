@@ -22,7 +22,7 @@ anyhow.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 fluxdi.workspace = true
-cef = { version = "154.5.0", default-features = false, features = ["sandbox", "resources"], optional = true }
+cef = { version = "156.2.0", default-features = false, features = ["sandbox", "resources"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6", optional = true }

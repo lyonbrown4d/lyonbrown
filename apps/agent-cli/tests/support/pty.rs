@@ -77,7 +77,11 @@ impl Terminal {
       child,
       writer,
       reader,
-      parser: vt100::Parser::new(36, 140, 0),
+      parser: vt100::Parser::new(
+        std::num::NonZeroU16::new(36).expect("rows"),
+        std::num::NonZeroU16::new(140).expect("columns"),
+        0,
+      ),
       transcript: Vec::new(),
       evidence,
       #[cfg(unix)]
@@ -144,9 +148,9 @@ impl Terminal {
     std::fs::write(self.evidence.join("terminal.ansi"), &self.transcript).unwrap();
     let screen = self.parser.screen();
     let (rows, columns) = screen.size();
-    let cells: Vec<_> = (0..rows)
+    let cells: Vec<_> = (0..rows.get())
       .flat_map(|row| {
-        (0..columns).filter_map(move |column| {
+        (0..columns.get()).filter_map(move |column| {
           screen.cell(row, column).map(|cell| {
             serde_json::json!({
               "row": row, "column": column, "text": cell.contents(),
@@ -179,7 +183,10 @@ impl Terminal {
         pixel_height: 0,
       })
       .unwrap();
-    self.parser.screen_mut().set_size(rows, cols);
+    self.parser.screen_mut().set_size(
+      std::num::NonZeroU16::new(rows).expect("rows"),
+      std::num::NonZeroU16::new(cols).expect("columns"),
+    );
   }
   pub async fn quit(mut self) {
     self.send("\x03");
