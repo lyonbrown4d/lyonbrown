@@ -1,4 +1,4 @@
-use crate::components::{LoginPage, ModelsPage, PolicyPage, RequestsPage};
+use crate::components::{KeysPage, LoginPage, ModelsPage, PolicyPage, RequestsPage};
 use leptos::prelude::*;
 use leptos_meta::{Stylesheet, Title, provide_meta_context};
 use leptos_router::{
@@ -20,6 +20,7 @@ pub fn App() -> impl IntoView {
         <Route path=path!("/ui/models") view=ModelsPage/>
         <Route path=path!("/ui/policy") view=PolicyPage/>
         <Route path=path!("/ui/requests") view=RequestsPage/>
+        <Route path=path!("/ui/keys") view=KeysPage/>
       </Routes>
     </Router>
   }

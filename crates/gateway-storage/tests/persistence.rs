@@ -5,6 +5,9 @@ use gateway_storage::{GatewayStorage, StorageError};
 fn audit(id: &str, status: AuditStatus) -> AuditRecord {
   AuditRecord {
     request_id: id.into(),
+    principal: None,
+    reserved_tokens: 0,
+    usage: None,
     model: "local".into(),
     status,
     elapsed_ms: 20,

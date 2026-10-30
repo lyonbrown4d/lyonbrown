@@ -48,6 +48,7 @@ async fn timed_out_pending_insert_still_reaches_terminal_without_upstream_dispat
       capabilities: BTreeSet::from(["text".into()]),
       context_tokens: Some(16384),
     }],
+    endpoints: vec![],
     limits: Limits {
       first_byte_ms: 100,
       total_ms: 100,

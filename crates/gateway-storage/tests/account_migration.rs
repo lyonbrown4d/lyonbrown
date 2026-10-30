@@ -135,11 +135,14 @@ async fn v1_migration_preserves_business_data_and_revokes_token_admin_credential
     .expect("account survives reopen");
   drop(reopened);
 
-  // Reconstruct the original v2 ledger without changing its schema or business data.
+  // Reconstruct the original v2 schema and ledger while preserving its business data.
   // Importing this deployed state must seed Diesel rather than replay destructive v2 SQL.
   {
     let mut connection =
       SqliteConnection::establish(path.to_str().expect("path")).expect("connection");
+    connection
+      .batch_execute(include_str!("../migrations/0003_scoped_budgets/down.sql"))
+      .expect("remove later schema additions from v2 fixture");
     connection
       .batch_execute(
         "CREATE TABLE gateway_migrations (version INTEGER PRIMARY KEY NOT NULL);

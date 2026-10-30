@@ -22,7 +22,10 @@ pub(crate) async fn guard(
     .is_some_and(|v| v.contains("text/html"))
     && request.method() == Method::POST;
   let mutation = request.method() == Method::POST
-    && matches!(path.as_str(), "/ui/login" | "/ui/logout" | "/ui/policy");
+    && matches!(
+      path.as_str(),
+      "/ui/login" | "/ui/logout" | "/ui/policy" | "/ui/keys/create" | "/ui/keys/revoke"
+    );
   if mutation && !auth::origin_valid(&state, request.headers()) {
     return headers(action_error(WebError::forbidden(), &path, native_form));
   }
@@ -32,7 +35,10 @@ pub(crate) async fn guard(
     return headers(fn_error(error));
   }
   if request.method() == Method::GET
-    && matches!(path.as_str(), "/ui/models" | "/ui/policy" | "/ui/requests")
+    && matches!(
+      path.as_str(),
+      "/ui/models" | "/ui/policy" | "/ui/requests" | "/ui/keys"
+    )
   {
     if let Err(error) = auth::authenticated(&state, request.headers()).await {
       return headers(if error.status == StatusCode::UNAUTHORIZED {
@@ -129,6 +135,7 @@ fn action_error(error: WebError, path: &str, native: bool) -> Response {
       StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY | StatusCode::PAYLOAD_TOO_LARGE,
     ) => "/ui/policy?error=validation",
     ("/ui/policy", _) => "/ui/policy?error=unavailable",
+    ("/ui/keys/create" | "/ui/keys/revoke", _) => "/ui/keys?error=failed",
     (_, StatusCode::FORBIDDEN | StatusCode::UNAUTHORIZED) => "/ui/models?error=csrf",
     _ => "/ui/models?error=unavailable",
   };

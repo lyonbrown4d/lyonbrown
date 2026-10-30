@@ -2,6 +2,7 @@
 mod access;
 mod audit;
 mod config;
+mod endpoints;
 mod error;
 mod http;
 mod openapi;
@@ -12,10 +13,12 @@ mod signals;
 mod sse;
 mod transport;
 mod upstream;
+mod usage;
 pub use access::*;
 pub use audit::*;
 pub use config::*;
 use decision_core::DecisionEngine;
+pub use endpoints::*;
 pub use error::*;
 pub use openapi::ApiDoc;
 pub use request::{ChatRequestSchema, RoutingConstraints};
@@ -36,6 +39,7 @@ struct Inner {
   permits: Arc<Semaphore>,
   ready: AtomicBool,
   signals: Arc<signals::Signals>,
+  endpoints: EndpointRegistry,
 }
 #[derive(Clone)]
 pub struct Gateway {
@@ -60,6 +64,7 @@ impl Gateway {
     config.validate()?;
     agent_security::initialize_tls();
     let client = upstream::Client::new()?;
+    let endpoints = EndpointRegistry::new(config.endpoints.clone())?;
     let permits = Arc::new(Semaphore::new(config.limits.max_concurrent));
     Ok(Self {
       inner: Arc::new(Inner {
@@ -71,6 +76,7 @@ impl Gateway {
         permits,
         ready: AtomicBool::new(true),
         signals: Arc::new(signals::Signals::default()),
+        endpoints,
       }),
     })
   }

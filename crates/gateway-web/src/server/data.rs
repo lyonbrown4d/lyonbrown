@@ -78,6 +78,19 @@ pub(crate) async fn requests(offset: u64, limit: u32) -> Result<RequestsView, Se
         model: record.model,
         elapsed_ms: record.elapsed_ms,
         policy_revision: record.policy_revision,
+        project_id: record
+          .principal
+          .as_ref()
+          .map(|principal| principal.project_id.clone()),
+        key_id: record
+          .principal
+          .as_ref()
+          .map(|principal| principal.key_id.clone()),
+        reserved_tokens: record.reserved_tokens,
+        input_tokens: record.usage.map(|usage| usage.input_tokens),
+        output_tokens: record.usage.map(|usage| usage.output_tokens),
+        cached_input_tokens: record.usage.map(|usage| usage.cached_input_tokens),
+        reasoning_tokens: record.usage.map(|usage| usage.reasoning_tokens),
         status: match record.status {
           AuditStatus::Pending => "pending",
           AuditStatus::Succeeded => "succeeded",

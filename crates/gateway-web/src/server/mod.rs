@@ -2,6 +2,7 @@ pub(crate) mod actions;
 mod auth;
 pub(crate) mod data;
 mod errors;
+pub(crate) mod keys;
 mod middleware;
 pub(crate) mod policy;
 mod render;

@@ -52,6 +52,7 @@ pub(crate) struct ValidatedRequest {
   pub stream: bool,
   pub tools: bool,
   pub context_tokens: u64,
+  pub reserved_tokens: u64,
   pub routing: RoutingConstraints,
 }
 impl ValidatedRequest {
@@ -135,9 +136,15 @@ impl ValidatedRequest {
       object.insert("max_tokens".into(), output.into());
     }
     // A conservative UTF-8 byte budget includes message/tool JSON overhead and reserved output.
+    let reserved_output = output
+      .checked_mul(body.get("n").and_then(Value::as_u64).unwrap_or(1))
+      .ok_or_else(|| GatewayError::invalid("Output token reservation overflow"))?;
     let context_tokens = (body.to_string().len() as u64)
       .checked_add(output)
       .ok_or_else(|| GatewayError::invalid("Context limit overflow"))?;
+    let reserved_tokens = (body.to_string().len() as u64)
+      .checked_add(reserved_output)
+      .ok_or_else(|| GatewayError::invalid("Token reservation overflow"))?;
     Ok(Self {
       body,
       requested_model,
@@ -145,6 +152,7 @@ impl ValidatedRequest {
       stream,
       tools,
       context_tokens,
+      reserved_tokens,
       routing,
     })
   }

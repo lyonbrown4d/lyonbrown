@@ -54,6 +54,7 @@ impl Fixture {
             capabilities: ["text".into()].into(),
             context_tokens: Some(4096),
           }],
+          endpoints: vec![],
           limits: Limits::default(),
           constraints: Default::default(),
         },

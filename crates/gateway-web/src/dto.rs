@@ -19,6 +19,13 @@ pub struct RequestRowDto {
   pub status: String,
   pub elapsed_ms: u64,
   pub policy_revision: String,
+  pub project_id: Option<String>,
+  pub key_id: Option<String>,
+  pub reserved_tokens: u64,
+  pub input_tokens: Option<u64>,
+  pub output_tokens: Option<u64>,
+  pub cached_input_tokens: Option<u64>,
+  pub reasoning_tokens: Option<u64>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ModelsView {
@@ -40,4 +47,23 @@ pub struct RequestsView {
   pub total: u64,
   pub offset: u64,
   pub limit: u32,
+}
+
+/// Metadata only: API key material and token hashes have no representation here.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct KeyRowDto {
+  pub id: String,
+  pub label: String,
+  pub project_id: String,
+  pub allowed_models: Vec<String>,
+  pub max_output_tokens: Option<u64>,
+  pub token_budget: Option<u64>,
+  pub tokens_charged: u64,
+  pub expires_at: u64,
+  pub revoked: bool,
+}
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct KeysView {
+  pub csrf: String,
+  pub keys: Vec<KeyRowDto>,
 }

@@ -98,3 +98,4 @@ th,td{padding:16px 20px}
 .pagination{padding:18px 20px;flex-wrap:wrap}
 textarea{min-height:420px}
 }
+.one-time-token { display: block; overflow-wrap: anywhere; user-select: all; }

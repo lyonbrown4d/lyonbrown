@@ -59,6 +59,7 @@ pub(super) fn body(
     } else {
       AuditStatus::Uncertain
     };
+    audit.set_usage(validator.usage());
     if matches!(status, AuditStatus::Uncertain) {
       terminal.store(true, Ordering::Release);
     }

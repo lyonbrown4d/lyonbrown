@@ -5,6 +5,8 @@ pub mod api;
 mod app;
 mod components;
 pub mod dto;
+pub mod key_api;
+mod key_form;
 pub use app::App;
 pub use leptos::config::LeptosOptions;
 #[cfg(feature = "ssr")]

@@ -23,6 +23,7 @@ pub(super) struct AuditGuard {
   signals: Arc<crate::signals::Signals>,
   permit: Option<OwnedSemaphorePermit>,
   body_done: Option<oneshot::Receiver<()>>,
+  endpoint: Option<crate::EndpointLease>,
 }
 impl AuditGuard {
   pub(super) fn new(
@@ -42,10 +43,29 @@ impl AuditGuard {
       signals,
       permit: Some(permit),
       body_done: None,
+      endpoint: None,
     }
   }
   pub(super) fn request_id(&self) -> &str {
     &self.record.request_id
+  }
+  pub(super) fn with_endpoint(mut self, endpoint: Option<crate::EndpointLease>) -> Self {
+    self.endpoint = endpoint;
+    self
+  }
+  pub(super) fn cooldown_endpoint(&self, rate_limited: bool) {
+    if let Some(endpoint) = &self.endpoint {
+      if rate_limited {
+        endpoint.mark_rate_limited(std::time::Duration::from_secs(30));
+      } else {
+        endpoint.mark_unavailable(std::time::Duration::from_secs(5));
+      }
+    }
+  }
+  pub(super) fn set_usage(&mut self, usage: Option<crate::TokenUsage>) {
+    if usage.is_some() {
+      self.record.usage = usage;
+    }
   }
   pub(super) fn body_completion(&mut self) -> BodyCompletion {
     let (send, receive) = oneshot::channel();
@@ -56,12 +76,21 @@ impl AuditGuard {
   pub(super) async fn prepare(mut self, first_deadline: Instant) -> Result<Self, GatewayError> {
     let (send, receive) = oneshot::channel();
     tokio::spawn(async move {
-      if self.sink.record(self.record.clone()).await.is_err() {
+      if let Err(error) = self.sink.admit(self.record.clone()).await {
         self.terminal = true;
         drop(self);
+        let error = match error {
+          crate::AdmissionError::BudgetExceeded => GatewayError(
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            "budget_exceeded",
+            "API key token budget exhausted",
+          ),
+          crate::AdmissionError::Unavailable => GatewayError::unavailable(),
+        };
+        let _ = send.send(Err(error));
         return;
       }
-      if let Err(guard) = send.send(self) {
+      if let Err(Ok(guard)) = send.send(Ok(self)) {
         // The caller cannot dispatch upstream after this receiver has disappeared.
         let _ = guard.finish(AuditStatus::Failed).await;
       }
@@ -69,7 +98,7 @@ impl AuditGuard {
     timeout_at(first_deadline, receive)
       .await
       .map_err(|_| GatewayError::unavailable())?
-      .map_err(|_| GatewayError::unavailable())
+      .map_err(|_| GatewayError::unavailable())?
   }
   /// An owned writer retains both terminal responsibility and admission after an HTTP timeout.
   /// The acknowledgment precedes the body lease wait, so awaiting EOF cannot deadlock the writer.
@@ -83,6 +112,9 @@ impl AuditGuard {
       if result.is_ok() {
         self.terminal = true;
         self.signals.terminal(status, self.record.elapsed_ms);
+        if matches!(status, AuditStatus::Succeeded) {
+          self.signals.usage(self.record.usage);
+        }
         tracing::info!(request_id=%self.record.request_id, model=%self.record.model, status=?status, elapsed_ms=self.record.elapsed_ms, policy_revision=%self.record.policy_revision, "gateway request terminated");
       }
       let _ = send.send(result.map_err(|_| GatewayError::unavailable()));
@@ -115,10 +147,12 @@ impl Drop for AuditGuard {
       return;
     };
     let permit = self.permit.take();
+    let endpoint = self.endpoint.take();
     let body_done = self.body_done.take();
     let deadline = self.deadline;
     runtime.spawn(async move {
       let _permit = permit;
+      let _endpoint = endpoint;
       if sink.record(record).await.is_err() {
         tracing::error!("gateway uncertain audit update failed; pending intent requires recovery");
       }

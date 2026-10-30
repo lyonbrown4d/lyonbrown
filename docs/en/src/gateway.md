@@ -30,6 +30,22 @@ context_tokens = 4096
 
 Replace the endpoint with a deployed service. `api_key_env` selects an environment or dotenv credential instead of putting it in the model configuration.
 
+The optional `gateway.endpoints` list maps public model IDs to one or more upstream endpoints. A model with no endpoint mapping continues to use `api_base` and `api_key_env` from `gateway.models`; an empty endpoint list leaves all models on this legacy configuration. Once an endpoint maps a model ID, Gateway selects only from that model's mapped endpoints. If they are all disabled, cooling down or unavailable, it does not fall back to the legacy model URL.
+
+```toml
+[[gateway.endpoints]]
+id = "local-primary"
+provider_id = "local-provider"
+api_base = "http://127.0.0.1:8080/v1"
+api_key_env = "LOCAL_MODEL_API_KEY"
+enabled = true
+priority = 10
+max_concurrent = 8
+model_ids = ["local-chat"]
+```
+
+`id` and `provider_id` are configuration identifiers. `api_base` is the Chat Completions API base URL; `api_key_env` reads the credential from the environment or dotenv. `model_ids` must list the public model IDs served by this endpoint. Lower `priority` values are tried first, with `id` breaking ties. `enabled` defaults to true, `priority` to `0`, and `max_concurrent` to `1`. The application configuration accepts `api_key_env`, not an inline endpoint secret. Remote endpoints require HTTPS; HTTP is allowed only for a literal loopback IP.
+
 The administration UI uses username/password sign-in. First startup initializes the single super administrator from environment variables or adjacent `.env`. There is no built-in account or default password.
 
 | Variable | Requirement |
@@ -46,6 +62,8 @@ Keep Gateway TOML and its credential `.env` in a separate configuration director
 
 `local_inference = true` is a trusted operator assertion about actual local inference and requires a literal loopback address. A loopback proxy to cloud inference must not be declared local. Remote upstreams require HTTPS; clients cannot choose arbitrary upstream URLs.
 
+When the request or server policy requires `local_only`, the model must be marked as local by trusted configuration and the selected endpoint address must also be a literal loopback IP. A client can narrow scope with `routing.local_only`, but cannot grant a model local-inference status. A loopback endpoint alone does not prove that the model runs locally.
+
 ## Build assets and distribution
 
 The launcher uses the workspace's `gateway` cargo-leptos project. Assets default to `.local/gateway-web/site/ui/pkg`. `--build-only` builds without starting a server; `--release` selects release builds. The launcher reads the server executable from Cargo's build results, preserves settings such as `CARGO_TARGET_DIR` and passes the actual site root to Gateway.
@@ -60,11 +78,12 @@ Gateway uses `utoipa-axum` 0.3.0 `routes!` and `OpenApiRouter` to register Axum 
 | --- | --- |
 | `GET /health/live` | Process liveness |
 | `GET /health/ready` | Validated configuration and admission state; not an upstream health probe |
-| `GET /v1/models` | Public configured model IDs; API Bearer key required |
+| `GET /v1/models` | Public model IDs allowed for the current API key; API Bearer key required |
 | `POST /v1/chat/completions` | Text/function-tool Chat Completions forwarding; API Bearer key required |
 | `GET /swagger-ui/` | Official read-only Swagger UI |
 | `GET /api-doc/openapi.json` | Code-generated `utoipa` OpenAPI |
 | `GET /ui/login` | Administration login |
+| `GET /ui/keys` | API key management; super-administrator session required |
 
 Swagger and the specification are accessible on the local listener. Business operations still require an API key through Authorize. The schema contains no live model catalog or credentials, and UI assets are embedded without CDN requests. The inbound protocol is Chat Completions; images, audio, Responses and Anthropic inbound requests are outside this endpoint's compatibility scope.
 
@@ -76,15 +95,27 @@ SSE tool fragments, usage and data bytes are retained while a maintained SSE par
 
 The first-byte budget starts when the request is accepted and includes automatic routing. Routing expiry returns `504 routing_timeout` without dispatching an upstream request.
 
+An explicit upstream `429` cools that endpoint for 30 seconds for future selections in the current process. An upstream `5xx` cools it for 5 seconds. Cooldowns affect later requests; Gateway does not replay or switch the current request. The selected endpoint's concurrency permit, like Gateway's request permit, stays held until terminal auditing finishes and the response body is drained, dropped or reaches its total deadline.
+
 ## SQLite and administration
 
-Diesel manages `gateway.sqlite` in the data directory with WAL, busy timeout and full synchronous writes. A single owner holds a database lock; startup reconciles abandoned Pending requests to Uncertain. Tables retain model snapshots, policy history, hashed API keys, admin sessions and request metadata, with no prompt or completion body fields.
+Diesel manages `gateway.sqlite` in the data directory with WAL, busy timeout and full synchronous writes. A single owner holds a database lock; startup reconciles abandoned Pending requests to Uncertain. Tables retain model snapshots, policy history, API key hashes and scopes, admin accounts, sessions and request metadata, with no prompt or completion body fields.
 
 Database scripts are embedded with `diesel_migrations` 2.3.2 `embed_migrations!` and tracked by Diesel’s migration ledger. One SQLite immediate transaction bridges legacy `gateway_migrations` histories containing version 1 or versions 1 and 2, applies pending scripts and reconciles Pending requests. Already applied scripts are not replayed. Unknown versions, gaps, conflicting ledgers or existing application tables without a ledger fail startup and roll back the transaction.
 
 A Pending intent is persisted before upstream dispatch. Succeeded means the upstream success terminal was received and validated, rather than proving client consumption. Database write ownership is independent of HTTP deadlines, so started intent and terminal writes still finish after the caller times out. Actual database failures can leave Pending for startup reconciliation to Uncertain; closing HTTP does not prove inference never happened.
 
-The UI shares one Rust Leptos component tree. The server renders HTML first; generated JavaScript boots the browser WASM, which attaches events and reactive state to the existing page. There is no separate Node frontend stack. Pages cover model catalog, routing policy and paginated request metadata, following system light/dark preferences.
+### API keys and token budgets
+
+Super administrators create and revoke API keys at `/ui/keys`. Creation requires a valid administrator session, the correct `Origin`, and a CSRF token bound to that session. A newly issued key is shown only once. The database stores its hash and management metadata, never the secret for later display. Each key can have a project label, allowed model IDs, a per-choice output cap, a cumulative token budget and an expiry from 1 to 31,536,000 seconds (the form defaults to 30 days). An empty model list means no model-ID restriction; leaving the output cap or budget blank leaves that limit unset.
+
+`project_id` labels request ownership; it does not combine keys under a shared project budget. Budgets accumulate per key, count input plus output tokens, do not reset periodically, and are not monetary billing.
+
+Before dispatch, Gateway writes the Pending audit record and reserves that key's budget in the same local SQLite immediate transaction. The conservative reservation is the validated request JSON's UTF-8 byte length plus the per-choice output limit multiplied by `n`. If the remaining budget cannot cover the reservation, Gateway returns `429` without sending the upstream request. When valid terminal usage is available, the known input-plus-output total replaces the reservation. Cached-input and reasoning counts are subsets of those totals; they are recorded for audit and are not counted again.
+
+If the upstream omits usable usage, Gateway keeps the reservation rather than treating unknown usage as zero. Uncertain outcomes also keep the full reservation. On restart, unfinished Pending records become Uncertain and their reservations remain charged. Actual usage can exceed the reservation; Gateway records the actual total even if it exceeds the configured budget. Request records contain project and key identity, model, status, reservation and usage metadata, but no prompt or completion body.
+
+The UI shares one Rust Leptos component tree. The server renders HTML first; generated JavaScript boots the browser WASM, which attaches events and reactive state to the existing page. There is no separate Node frontend stack. Pages cover the model catalog, routing policy, paginated request metadata and API key management, following system light/dark preferences.
 
 Shared components provide layout, form fields, submission state and notices. Leptos Signals manage policy drafts, dirty state, immediate validation and reset; official `ServerAction` / `ActionForm` handle login, save and logout. Tables reuse the public `leptos-struct-table` `TableRow` derive and row-rendering interfaces. Page components own headings, semantic table markup and pagination, so SSR emits row content directly without requiring browser virtualization for the initial page.
 
@@ -96,8 +127,8 @@ Cookie parsing and construction use `cookie` 0.18.2. The server examines all Coo
 
 Login attempts share one process-local direct GCRA limiter from `governor` 0.10.4: 10 attempts per minute, burst capacity 10, with one opportunity replenished every 6 seconds rather than a fixed 60-second reset window. Client IPs and forwarded headers do not select separate quotas. Rejection includes a dynamic `Retry-After`, rounded up to seconds with a minimum of 1; enhanced forms receive 429, while native HTML forms redirect to the login page.
 
-Deployment configuration owns the model catalog, recorded as immutable snapshots at startup. The UI does not edit upstream credentials. This skeleton includes no multi-tenant quota ledger, billing, provider-account management or public deployment. Shared rolling structured logs persist in the data directory; observation snapshots expose request, rejection, latency and outcome counters.
+Deployment configuration owns the model catalog, recorded as immutable snapshots at startup. The UI does not edit upstream credentials. Gateway provides cumulative token budgets per API key, but no shared project budget or monetary billing. It also includes no provider-account management or public deployment. `Gateway::observations()` exposes process-local metrics: successful terminal requests with and without usage, and cumulative input, output, cached-input and reasoning tokens. These usage and token counters use saturating addition and update only after terminal audit persistence succeeds; missing usage is distinguishable from an actual zero. Process restart resets these in-memory metrics, while persisted request audit records remain. Shared rolling structured logs persist in the data directory.
 
 ## Validation
 
-Local HTTP tests use synthetic upstreams to check actual model rewriting, Bearer checks, locality/capabilities, streaming cancellation/deadlines, uncertain outcomes, SQLite recovery, login, CSRF, policy versions and generated OpenAPI. SSR tests and WASM hydrate compilation commands are in [Development and verification](development.md#reusable-decision-and-gateway-checks). See [runtime evidence](runtime-evidence.md) for screenshots and scope; earlier screenshots do not automatically establish acceptance of the new hydrated interactions. Tests use no paid models and do not establish public-network, multi-tenant or three-platform runtime acceptance.
+Gateway backend tests use local synthetic upstreams to cover JSON/SSE usage parsing and byte preservation, token-budget reservation and settlement, endpoint selection and cooldowns, authentication and key scopes; they do not call paid models. SSR tests and WASM hydrate compilation commands are in [Development and verification](development.md#reusable-decision-and-gateway-checks). [Runtime evidence](runtime-evidence.md) screenshots apply only to the version and pages they identify; no new runtime screenshot was added for API key management. These tests do not establish public-network behavior, shared project budgets or three-platform runtime acceptance.

@@ -82,7 +82,7 @@ async fn upstream(
       .any(|record| record.request_id == id && matches!(record.status, AuditStatus::Pending))
   );
   Json(
-    json!({"id":"completion-1","object":"chat.completion","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"total_tokens":5}}),
+    json!({"id":"completion-1","object":"chat.completion","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}),
   )
 }
 #[tokio::test]
@@ -117,6 +117,7 @@ async fn real_http_obeys_database_access_and_persists_intent_before_upstream() {
       capabilities: BTreeSet::from(["text".into()]),
       context_tokens: Some(16384),
     }],
+    endpoints: vec![],
     limits: Limits {
       max_concurrent: 1,
       ..Default::default()
@@ -146,6 +147,75 @@ async fn real_http_obeys_database_access_and_persists_intent_before_upstream() {
   );
   assert_eq!(store.list_audits(20, 0).await.expect("audits").total, 0);
   assert_eq!(calls.load(Ordering::SeqCst), 0);
+  let now = std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .expect("clock")
+    .as_secs();
+  let exhausted = store
+    .create_scoped_access_token(
+      "empty budget",
+      now,
+      3600,
+      "team-a",
+      BTreeSet::from(["public-model".into()]),
+      Some(32),
+      Some(0),
+    )
+    .await
+    .expect("scoped key");
+  let rejected = client
+    .post(&url)
+    .bearer_auth(exhausted.token())
+    .json(&request)
+    .send()
+    .await
+    .expect("budget refusal");
+  assert_eq!(rejected.status(), 429);
+  assert_eq!(
+    rejected.json::<Value>().await.expect("error")["error"]["code"],
+    "budget_exceeded"
+  );
+  assert_eq!(calls.load(Ordering::SeqCst), 0);
+  assert_eq!(
+    store
+      .list_audits(20, 0)
+      .await
+      .expect("atomic rollback")
+      .total,
+    0
+  );
+  let mut multiple = request.clone();
+  multiple["n"] = json!(2);
+  let one_choice_budget = multiple.to_string().len() as u64 + 32;
+  let bounded = store
+    .create_scoped_access_token(
+      "multi choice",
+      now,
+      3600,
+      "team-a",
+      BTreeSet::from(["public-model".into()]),
+      Some(64),
+      Some(one_choice_budget),
+    )
+    .await
+    .expect("bounded key");
+  let rejected = client
+    .post(&url)
+    .bearer_auth(bounded.token())
+    .json(&multiple)
+    .send()
+    .await
+    .expect("multi-choice reservation");
+  assert_eq!(rejected.status(), 429);
+  assert_eq!(calls.load(Ordering::SeqCst), 0);
+  assert_eq!(
+    store
+      .list_audits(20, 0)
+      .await
+      .expect("budget rollback")
+      .total,
+    0
+  );
   let response = client
     .post(&url)
     .bearer_auth(TOKEN)
@@ -162,7 +232,13 @@ async fn real_http_obeys_database_access_and_persists_intent_before_upstream() {
   assert_eq!(body["choices"][0]["message"]["content"], "ok");
   let tokens = store.list_access_tokens().await.expect("tokens");
   store
-    .revoke_access_token(&tokens[0].id)
+    .revoke_access_token(
+      &tokens
+        .iter()
+        .find(|key| key.label == "bootstrap")
+        .expect("bootstrap key")
+        .id,
+    )
     .await
     .expect("revoke access");
   assert_eq!(
@@ -197,4 +273,28 @@ async fn real_http_obeys_database_access_and_persists_intent_before_upstream() {
   assert_eq!(audits.records[0].model, "public-model");
   assert_eq!(audits.records[0].policy_revision, "rules-v1");
   assert!(matches!(audits.records[0].status, AuditStatus::Succeeded));
+  assert_eq!(
+    audits.records[0]
+      .usage
+      .expect("persisted usage")
+      .input_tokens,
+    3
+  );
+  let principal = audits.records[0]
+    .principal
+    .as_ref()
+    .expect("persisted principal");
+  assert_eq!(principal.project_id, "default");
+  let keys = reopened
+    .list_access_tokens()
+    .await
+    .expect("settled budgets");
+  assert_eq!(
+    keys
+      .iter()
+      .find(|key| key.id == principal.key_id)
+      .expect("key")
+      .tokens_charged,
+    5
+  );
 }

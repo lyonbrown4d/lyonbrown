@@ -13,6 +13,13 @@ local_inference = true
 capabilities = ["text", "tools"]
 context_tokens = 65536
 api_key_env = "GATEWAY_TEST_PROVIDER_KEY"
+[[gateway.endpoints]]
+id = "local-primary"
+provider_id = "synthetic"
+api_base = "http://127.0.0.1:1235/v1"
+api_key_env = "GATEWAY_TEST_PROVIDER_KEY"
+model_ids = ["local"]
+max_concurrent = 2
 "#;
 const USERNAME: &str = "LYONBROWN_GATEWAY_ADMIN_USERNAME";
 const PASSWORD: &str = "LYONBROWN_GATEWAY_ADMIN_PASSWORD";
@@ -74,6 +81,14 @@ fn file_dotenv_environment_layers_and_secret_redaction() {
     "provider-credential"
   );
   let debug = format!("{:?} {:?}", settings.gateway, settings.admin_password);
+  assert_eq!(
+    settings.gateway.endpoints[0]
+      .api_key
+      .as_ref()
+      .expect("endpoint credential")
+      .expose_secret(),
+    "provider-credential"
+  );
   for secret in [
     "configuration-file-secret",
     "dotenv-secret",

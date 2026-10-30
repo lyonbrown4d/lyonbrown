@@ -10,6 +10,7 @@ impl Gateway {
     request_id: &str,
     request: &ValidatedRequest,
     deadline: tokio::time::Instant,
+    principal: &crate::AccessPrincipal,
   ) -> Result<(ModelConfig, String), GatewayError> {
     if tokio::time::Instant::now() >= deadline {
       return Err(GatewayError::routing_timeout());
@@ -51,6 +52,7 @@ impl Gateway {
       .config
       .models
       .iter()
+      .filter(|model| principal.permits_model(&model.id))
       .filter(|model| model_eligible(model, &constraints))
       .collect();
     if eligible.is_empty() {

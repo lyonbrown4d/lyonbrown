@@ -13,6 +13,8 @@ pub enum StorageError {
   InvalidInput(&'static str),
   #[error("gateway storage state conflict")]
   Conflict,
+  #[error("API key token budget exhausted")]
+  BudgetExceeded,
   #[error("authentication failed")]
   Unauthorized,
   #[error("gateway storage worker unavailable")]

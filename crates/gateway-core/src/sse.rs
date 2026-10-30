@@ -8,6 +8,7 @@ pub(crate) struct SseValidator {
   utf8_pending: Vec<u8>,
   pub done: bool,
   saw_choice: bool,
+  usage: Option<crate::TokenUsage>,
 }
 impl SseValidator {
   pub fn new() -> Self {
@@ -16,7 +17,11 @@ impl SseValidator {
       utf8_pending: Vec::new(),
       done: false,
       saw_choice: false,
+      usage: None,
     }
+  }
+  pub fn usage(&self) -> Option<crate::TokenUsage> {
+    self.usage
   }
   pub fn check(&mut self, bytes: &Bytes) -> Result<(), io::Error> {
     // Rig's framer intentionally uses lossy UTF-8. Validate first so malformed
@@ -53,6 +58,9 @@ impl SseValidator {
       } else {
         let value: serde_json::Value = serde_json::from_str(&event.data)
           .map_err(|_| io::Error::other("Invalid upstream completion event"))?;
+        if let Some(usage) = crate::usage::from_sse_event(&value)? {
+          self.usage = Some(usage);
+        }
         self.saw_choice |= value
           .get("choices")
           .and_then(serde_json::Value::as_array)

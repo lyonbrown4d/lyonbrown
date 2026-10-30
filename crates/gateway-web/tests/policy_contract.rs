@@ -86,6 +86,9 @@ async fn audit_pagination_and_policy_textarea_escape_persisted_content() {
       .record_audit(AuditRecord {
         request_id: format!("request-{index}"),
         model: "local-model".into(),
+        principal: None,
+        reserved_tokens: 0,
+        usage: None,
         status: AuditStatus::Pending,
         elapsed_ms: index,
         policy_revision: "rules-v1".into(),

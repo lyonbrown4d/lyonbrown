@@ -23,6 +23,7 @@ pub fn Navigation() -> impl IntoView {
       <A href="/ui/models" exact=true>"模型"</A>
       <A href="/ui/policy" exact=true>"路由策略"</A>
       <A href="/ui/requests" exact=true>"请求记录"</A>
+      <A href="/ui/keys" exact=true>"API Keys"</A>
       <a href="/swagger-ui/" rel="external">"API 文档"</a>
     </nav>
   }

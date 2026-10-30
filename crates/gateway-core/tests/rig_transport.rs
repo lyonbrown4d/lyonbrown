@@ -54,7 +54,7 @@ async fn multiple_choices_tools_finish_reasons_and_usage_remain_original_json() 
 
 #[tokio::test]
 async fn split_utf8_and_interleaved_candidates_preserve_sse_bytes() {
-  const SSE: &str = "data: {\"choices\":[{\"index\":1,\"delta\":{\"content\":\"杭州\"},\"finish_reason\":null},{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: {\"choices\":[],\"usage\":{\"total_tokens\":7}}\n\ndata: [DONE]\n\n";
+  const SSE: &str = "data: {\"choices\":[{\"index\":1,\"delta\":{\"content\":\"杭州\"},\"finish_reason\":null},{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: {\"choices\":[],\"usage\":{\"prompt_tokens\":4,\"completion_tokens\":3,\"total_tokens\":7}}\n\ndata: [DONE]\n\n";
   let split = SSE.find('杭').expect("Chinese fixture") + 1;
   let (release, next) = tokio::sync::oneshot::channel();
   let next = Arc::new(std::sync::Mutex::new(Some(next)));

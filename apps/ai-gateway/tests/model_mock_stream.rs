@@ -61,6 +61,7 @@ async fn shared_mock_success_truncation_and_post_terminal_data_have_distinct_dur
       capabilities: ["text".into(), "tools".into()].into(),
       context_tokens: Some(4096),
     }],
+    endpoints: vec![],
     limits: Default::default(),
     constraints: Default::default(),
   };

@@ -136,6 +136,8 @@ pub struct GatewayConfig {
   pub token: Secret,
   pub models: Vec<ModelConfig>,
   #[serde(default)]
+  pub endpoints: Vec<crate::ProviderEndpoint>,
+  #[serde(default)]
   pub limits: Limits,
   #[serde(default)]
   pub constraints: Constraints,
@@ -176,6 +178,19 @@ impl GatewayConfig {
     for model in &self.models {
       model.validate()?;
       ensure!(ids.insert(&model.id), "duplicate model id");
+    }
+    ensure!(self.endpoints.len() <= 1024, "too many provider endpoints");
+    let mut endpoints = BTreeSet::new();
+    for endpoint in &self.endpoints {
+      endpoint.validate()?;
+      ensure!(
+        endpoints.insert(&endpoint.id),
+        "duplicate provider endpoint id"
+      );
+      ensure!(
+        !endpoint.model_ids.is_empty() && endpoint.model_ids.iter().all(|id| ids.contains(id)),
+        "provider endpoint references an unknown model"
+      );
     }
     Ok(())
   }

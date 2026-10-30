@@ -11,7 +11,16 @@ pub struct AuditPage {
   pub records: Vec<AuditRecord>,
   pub total: u64,
 }
-type Row = (String, String, i16, i64, String);
+type Row = (
+  String,
+  String,
+  i16,
+  i64,
+  String,
+  Option<String>,
+  i64,
+  Option<String>,
+);
 impl GatewayStorage {
   pub async fn list_audits(&self, limit: u32, offset: u64) -> Result<AuditPage> {
     if !(1..=200).contains(&limit) {
@@ -32,6 +41,9 @@ impl GatewayStorage {
               audits::status,
               audits::elapsed_ms,
               audits::policy_revision,
+              audits::principal,
+              audits::reserved_tokens,
+              audits::usage,
             ))
             .load::<Row>(connection)?;
           let records = rows.into_iter().map(decode).collect::<Result<_>>()?;
@@ -53,10 +65,33 @@ impl GatewayStorage {
     let elapsed =
       i64::try_from(record.elapsed_ms).map_err(|_| StorageError::InvalidInput("elapsed time"))?;
     let status = encode(record.status);
+    if record.usage.is_some_and(|usage| {
+      usage.cached_input_tokens > usage.input_tokens || usage.reasoning_tokens > usage.output_tokens
+    }) {
+      return Err(StorageError::InvalidInput("token usage subsets"));
+    }
+    let principal = record
+      .principal
+      .as_ref()
+      .map(serde_json::to_string)
+      .transpose()
+      .map_err(|_| StorageError::InvalidData)?;
+    let usage = record
+      .usage
+      .as_ref()
+      .map(serde_json::to_string)
+      .transpose()
+      .map_err(|_| StorageError::InvalidData)?;
+    let reserved = i64::try_from(record.reserved_tokens)
+      .map_err(|_| StorageError::InvalidInput("reserved tokens"))?;
     self
       .run(move |connection| {
         connection.immediate_transaction(|connection| {
           if status == 0 {
+            if record.usage.is_some() {
+              return Err(StorageError::InvalidInput("pending usage"));
+            }
+            crate::budget::reserve(connection, &record)?;
             let changed = diesel::insert_into(audits::table)
               .values((
                 audits::request_id.eq(&record.request_id),
@@ -64,6 +99,8 @@ impl GatewayStorage {
                 audits::status.eq(status),
                 audits::elapsed_ms.eq(elapsed),
                 audits::policy_revision.eq(&record.policy_revision),
+                audits::principal.eq(&principal),
+                audits::reserved_tokens.eq(reserved),
               ))
               .on_conflict_do_nothing()
               .execute(connection)?;
@@ -74,27 +111,55 @@ impl GatewayStorage {
           }
           let previous = audits::table
             .filter(audits::request_id.eq(&record.request_id))
-            .select((audits::model, audits::status, audits::policy_revision))
-            .first::<(String, i16, String)>(connection)
+            .select((
+              audits::model,
+              audits::status,
+              audits::policy_revision,
+              audits::principal,
+              audits::reserved_tokens,
+              audits::usage,
+            ))
+            .first::<(String, i16, String, Option<String>, i64, Option<String>)>(connection)
             .optional()?;
-          let Some((model, previous_status, revision)) = previous else {
+          let Some((
+            model,
+            previous_status,
+            revision,
+            previous_principal,
+            previous_reserved,
+            previous_usage,
+          )) = previous
+          else {
             return Err(StorageError::Conflict);
           };
-          if model != record.model || revision != record.policy_revision {
+          if model != record.model
+            || revision != record.policy_revision
+            || principal != previous_principal
+            || reserved != previous_reserved
+          {
             return Err(StorageError::Conflict);
           }
           if previous_status == status {
-            return Ok(());
+            return if usage == previous_usage {
+              Ok(())
+            } else {
+              Err(StorageError::Conflict)
+            };
           }
           if previous_status != 0 {
             return Err(StorageError::Conflict);
           }
+          crate::budget::settle(connection, &record)?;
           diesel::update(
             audits::table
               .filter(audits::request_id.eq(&record.request_id))
               .filter(audits::status.eq(0)),
           )
-          .set((audits::status.eq(status), audits::elapsed_ms.eq(elapsed)))
+          .set((
+            audits::status.eq(status),
+            audits::elapsed_ms.eq(elapsed),
+            audits::usage.eq(usage),
+          ))
           .execute(connection)?;
           Ok(())
         })
@@ -104,6 +169,18 @@ impl GatewayStorage {
 }
 #[async_trait]
 impl AuditSink for GatewayStorage {
+  async fn admit(
+    &self,
+    record: AuditRecord,
+  ) -> std::result::Result<(), gateway_core::AdmissionError> {
+    self
+      .record_audit(record)
+      .await
+      .map_err(|error| match error {
+        StorageError::BudgetExceeded => gateway_core::AdmissionError::BudgetExceeded,
+        _ => gateway_core::AdmissionError::Unavailable,
+      })
+  }
   async fn record(&self, record: AuditRecord) -> std::result::Result<(), AuditError> {
     self.record_audit(record).await.map_err(|_| AuditError)
   }
@@ -138,5 +215,18 @@ fn decode(row: Row) -> Result<AuditRecord> {
     status,
     elapsed_ms: u64::try_from(row.3).map_err(|_| StorageError::InvalidData)?,
     policy_revision: row.4,
+    principal: row
+      .5
+      .as_deref()
+      .map(serde_json::from_str)
+      .transpose()
+      .map_err(|_| StorageError::InvalidData)?,
+    reserved_tokens: crate::access::unsigned(row.6)?,
+    usage: row
+      .7
+      .as_deref()
+      .map(serde_json::from_str)
+      .transpose()
+      .map_err(|_| StorageError::InvalidData)?,
   })
 }

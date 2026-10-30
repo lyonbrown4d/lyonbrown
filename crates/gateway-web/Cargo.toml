@@ -17,6 +17,7 @@ ssr = [
 hydrate = ["leptos/hydrate", "dep:wasm-bindgen", "dep:console_error_panic_hook"]
 
 [dependencies]
+garde = { version = "=0.23.0", default-features = false, features = ["derive"] }
 gateway-validation = { path = "../gateway-validation" }
 axum = { version = "0.8.9", features = ["form"], optional = true }
 cookie = { workspace = true, optional = true }

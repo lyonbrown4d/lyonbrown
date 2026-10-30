@@ -3,6 +3,7 @@
 mod access;
 mod audit;
 mod auth;
+mod budget;
 mod catalog;
 mod error;
 mod files;

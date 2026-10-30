@@ -152,6 +152,21 @@ impl AppConfig {
         model.api_key = Some(Secret::new(value.clone()));
       }
     }
+    for endpoint in &mut settings.gateway.endpoints {
+      ensure!(
+        endpoint.api_key.is_none(),
+        "provider endpoint credentials must use api_key_env"
+      );
+      if let Some(name) = &endpoint.api_key_env {
+        endpoint.api_key = Some(Secret::new(
+          merged
+            .get(name)
+            .filter(|value| !value.is_empty())
+            .context("configured provider endpoint credential is unavailable")?
+            .clone(),
+        ));
+      }
+    }
     settings.validate()?;
     Ok(settings)
   }

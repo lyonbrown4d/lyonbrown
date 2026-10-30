@@ -1,7 +1,8 @@
 mod audit;
 mod streaming;
 use crate::{
-  AuditRecord, AuditStatus, Gateway, GatewayError, ModelConfig, request::ValidatedRequest,
+  AccessPrincipal, AuditRecord, AuditStatus, Gateway, GatewayError, ModelConfig,
+  request::ValidatedRequest,
 };
 use audit::AuditGuard;
 use axum::{
@@ -21,13 +22,57 @@ impl Gateway {
     mut request: ValidatedRequest,
     model: ModelConfig,
     revision: String,
-    permit: OwnedSemaphorePermit,
-    started: Instant,
+    admission: (OwnedSemaphorePermit, Instant),
+    principal: AccessPrincipal,
   ) -> Result<Response, GatewayError> {
+    let (permit, started) = admission;
+    let endpoint = if self
+      .inner
+      .config
+      .endpoints
+      .iter()
+      .any(|endpoint| endpoint.model_ids.contains(&model.id))
+    {
+      Some(
+        self
+          .inner
+          .endpoints
+          .acquire(
+            &model.id,
+            model.local_inference || request.routing.local_only,
+          )
+          .map_err(|error| match error {
+            crate::EndpointAcquireError::CapacityExhausted => GatewayError(
+              StatusCode::TOO_MANY_REQUESTS,
+              "endpoint_capacity",
+              "Provider endpoints are at capacity",
+            ),
+            crate::EndpointAcquireError::Unavailable => GatewayError(
+              StatusCode::SERVICE_UNAVAILABLE,
+              "endpoint_unavailable",
+              "No eligible provider endpoint is available",
+            ),
+          })?,
+      )
+    } else {
+      None
+    };
+    let (base, key) = endpoint
+      .as_ref()
+      .map(|lease| {
+        (
+          lease.endpoint().api_base.clone(),
+          lease.endpoint().api_key.clone(),
+        )
+      })
+      .unwrap_or_else(|| (model.api_base.clone(), model.api_key.clone()));
     request.body["model"] = model.upstream_model.into();
     let record = AuditRecord {
       request_id,
       model: model.id,
+      principal: Some(principal),
+      reserved_tokens: request.reserved_tokens,
+      usage: None,
       status: AuditStatus::Pending,
       elapsed_ms: 0,
       policy_revision: revision,
@@ -44,18 +89,22 @@ impl Gateway {
       self.inner.signals.clone(),
       permit,
     )
+    .with_endpoint(endpoint)
     .prepare(first_deadline)
     .await?;
-    let outgoing = self.inner.client.send(
-      &model.api_base,
-      model.api_key.as_ref(),
-      audit.request_id(),
-      &request.body,
-    );
+    let outgoing = self
+      .inner
+      .client
+      .send(&base, key.as_ref(), audit.request_id(), &request.body);
     let response = match timeout_at(first_deadline, outgoing).await {
       Ok(Ok(response)) => response,
       Ok(Err(error)) if error.non_success_status().is_some() => {
         let upstream_status = error.non_success_status();
+        if upstream_status
+          .is_some_and(|status| status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error())
+        {
+          audit.cooldown_endpoint(upstream_status == Some(StatusCode::TOO_MANY_REQUESTS));
+        }
         let status = if upstream_status == Some(StatusCode::TOO_MANY_REQUESTS) {
           StatusCode::TOO_MANY_REQUESTS
         } else {
@@ -132,6 +181,7 @@ impl Gateway {
       let mut validator = crate::sse::SseValidator::new();
       if validator.check(&first).is_err() {
         drop(source);
+        audit.set_usage(validator.usage());
         audit.finish(AuditStatus::Uncertain).await?;
         return Err(GatewayError::upstream());
       }
@@ -172,19 +222,37 @@ impl Gateway {
           }
         }
       }
-      let valid = serde_json::from_slice::<serde_json::Value>(&bytes).is_ok_and(|value| {
-        value.is_object()
-          && value.get("error").is_none()
-          && value.get("object").and_then(serde_json::Value::as_str) == Some("chat.completion")
-          && value
-            .get("choices")
-            .and_then(serde_json::Value::as_array)
-            .is_some_and(|choices| !choices.is_empty())
-      });
-      if !valid {
+      let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        audit.finish(AuditStatus::Uncertain).await?;
+        return Err(GatewayError::upstream());
+      };
+      if !value.is_object()
+        || value.get("error").is_some()
+        || value.get("object").and_then(serde_json::Value::as_str) != Some("chat.completion")
+        || !value
+          .get("choices")
+          .and_then(serde_json::Value::as_array)
+          .is_some_and(|choices| !choices.is_empty())
+      {
         audit.finish(AuditStatus::Uncertain).await?;
         return Err(GatewayError::upstream());
       }
+      let usage: Option<crate::TokenUsage> = match crate::usage::from_response(&value) {
+        Ok(usage) => usage,
+        Err(_) => {
+          audit.finish(AuditStatus::Uncertain).await?;
+          return Err(GatewayError::upstream());
+        }
+      };
+      if value
+        .get("usage")
+        .is_some_and(|metadata| !metadata.is_null())
+        && usage.is_none()
+      {
+        audit.finish(AuditStatus::Uncertain).await?;
+        return Err(GatewayError::upstream());
+      }
+      audit.set_usage(usage);
       let completion = audit.body_completion();
       let stream = async_stream::stream! {
         let _completion = completion;
