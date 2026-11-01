@@ -64,7 +64,7 @@ The UI uses warm dark or warm light solid terminal backgrounds, text and accents
 
 The TUI separates presentation through MVVM: `view_model.rs` projects client `App` state into a read-only `ViewModel` containing connection labels, messages, approvals and current context. `view.rs` renders that data and the composer through Ratatui. Input actions and background updates remain in `input.rs`, `backend.rs` and `update.rs`; presentation never dispatches daemon operations.
 
-The TUI `Router` owns the context page, bounded back stack and page scroll position. `Esc` returns to the previous page, including the context behind the command palette. Session or connection changes clear old history and transient resource pages. `AppLayout` and `BodyLayout` compose Ratatui constraints for wide and narrow screens, approvals and command overlays; routes hold no daemon execution authority.
+The TUI `Router` owns the context page, bounded back stack and page scroll position. `Esc` returns to the previous page. Slash completion is transient composer state and never occupies the route: typing `/` in an empty composer floats candidates above it, `↑↓` moves, `Tab` or `Enter` completes, and typing an argument or `Esc` dismisses it, leaving the transcript and the open page untouched. Session or connection changes clear old history and transient resource pages. `AppLayout` and `BodyLayout` compose Ratatui constraints for wide and narrow screens, approvals and completion overlays; routes hold no daemon execution authority.
 
 ## Native computer attachment
 

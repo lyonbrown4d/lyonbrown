@@ -33,7 +33,6 @@ pub enum ContextPanel {
   Computer,
   Approval,
   Drafts,
-  Commands,
   Resource,
 }
 
@@ -66,6 +65,8 @@ pub struct App {
   pub generation: u64,
   pub draft_detail: String,
   pub recovered_draft_from: Option<String>,
+  /// Transient slash-command completion; never a navigation route.
+  pub command_menu_open: bool,
   pub command_selected: usize,
   pub resource_title: String,
   pub resource_detail: String,
@@ -106,6 +107,7 @@ impl Default for App {
       generation: 0,
       draft_detail: String::new(),
       recovered_draft_from: None,
+      command_menu_open: false,
       command_selected: 0,
       resource_title: String::new(),
       resource_detail: String::new(),
@@ -171,6 +173,41 @@ impl App {
       None => self.unbound_draft.clone(),
     };
     self.input = crate::composer::Composer::from(text.as_str());
+  }
+
+  /// Slash completion opens over the composer and leaves the panel route untouched.
+  pub fn open_command_menu(&mut self) {
+    self.command_menu_open = true;
+    self.command_selected = 0;
+  }
+
+  pub fn close_command_menu(&mut self) {
+    self.command_menu_open = false;
+    self.command_selected = 0;
+  }
+
+  /// Completion survives only while the composer holds a bare `/token` with no argument yet.
+  pub fn refresh_command_menu(&mut self) {
+    let text = self.input.text();
+    let mut words = text.split_whitespace();
+    let head = words.next().unwrap_or_default();
+    self.command_menu_open = words.next().is_none() && head.starts_with('/');
+    self.command_selected = 0;
+  }
+
+  pub fn command_query(&self) -> String {
+    self
+      .input
+      .text()
+      .split_whitespace()
+      .next()
+      .unwrap_or("/")
+      .into()
+  }
+
+  /// A side panel owns the body while open, so completion yields to it.
+  pub fn command_menu_visible(&self) -> bool {
+    self.command_menu_open && self.router.current() == ContextPanel::Closed
   }
 
   pub fn client_state(&mut self) -> crate::local_state::ClientState {

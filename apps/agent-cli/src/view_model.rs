@@ -110,10 +110,9 @@ impl<'a> ViewModel<'a> {
         .collect(),
       selected: app.task_selected,
     });
-    let command_palette = (app.router.current() == ContextPanel::Commands).then(|| {
-      let query = app.input.text();
-      let query = query.split_whitespace().next().unwrap_or("/");
-      let commands = crate::slash_command::filter(query);
+    let command_palette = app.command_menu_visible().then(|| {
+      let query = app.command_query();
+      let commands = crate::slash_command::filter(&query);
       CommandPaletteView {
         items: commands
           .iter()
@@ -169,10 +168,6 @@ impl<'a> ViewModel<'a> {
         } else {
           safe_text(&app.draft_detail)
         }),
-      )),
-      ContextPanel::Commands => Some((
-        "命令 · ↑/↓ 选择 · Tab 补全 · Enter 补全 · Esc 返回",
-        Text::from("输入命令名称以筛选。所有 / 命令均由 CLI 本地解析。"),
       )),
       ContextPanel::Resource => Some((
         "资源详情 · Esc 返回",

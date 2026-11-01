@@ -105,7 +105,7 @@ impl Router {
   /// A new session/connection cannot inherit a return stack or transient resource details.
   pub fn rebind(&mut self) {
     let route = match self.current() {
-      ContextPanel::Resource | ContextPanel::Commands => ContextPanel::Closed,
+      ContextPanel::Resource => ContextPanel::Closed,
       other => other,
     };
     self.restore(route);

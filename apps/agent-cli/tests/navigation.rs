@@ -28,8 +28,17 @@ fn back_restores_panel_scroll_and_palette_origin_without_dispatching_daemon_work
   assert_eq!(app.router.current(), ContextPanel::Help);
   assert_eq!(app.router.scroll(), 0);
   key(&mut app, &actions, KeyCode::Char('/'), KeyModifiers::NONE);
-  assert_eq!(app.router.current(), ContextPanel::Commands);
+  assert!(
+    app.command_menu_open,
+    "slash opens completion over the composer"
+  );
+  assert_eq!(
+    app.router.current(),
+    ContextPanel::Help,
+    "completion never replaces the open panel"
+  );
   key(&mut app, &actions, KeyCode::Esc, KeyModifiers::NONE);
+  assert!(!app.command_menu_open);
   assert_eq!(app.router.current(), ContextPanel::Help);
   key(&mut app, &actions, KeyCode::Esc, KeyModifiers::NONE);
   assert_eq!(app.router.current(), ContextPanel::Computer);
@@ -206,7 +215,7 @@ fn responsive_regions_stay_inside_tiny_and_wide_terminal_bounds() {
       layout.approval,
       layout.composer,
       layout.footer,
-      layout.palette(usize::MAX),
+      layout.palette(usize::MAX).area,
     ] {
       assert!(region.x >= terminal.x && region.y >= terminal.y);
       assert!(region.right() <= terminal.right() && region.bottom() <= terminal.bottom());

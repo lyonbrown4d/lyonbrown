@@ -64,7 +64,7 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 
 TUI 按 MVVM 分离呈现：`view_model.rs` 从客户端 `App` 状态生成只读 `ViewModel`，整理连接标签、消息、审批和当前上下文；`view.rs` 只通过 Ratatui 渲染该数据与输入组件。输入动作和后台更新分别留在 `input.rs`、`backend.rs` 与 `update.rs`，呈现层不派发 daemon 操作。
 
-TUI 的 `Router` 统一上下文页面、返回栈和页面滚动位置。`Esc` 返回上一层；从命令面板返回时恢复原上下文。会话或连接变更会清除旧返回栈及临时资源页面。`AppLayout`、`BodyLayout` 复用 Ratatui 的约束布局，集中计算宽屏、窄屏、审批区和命令弹层的区域；路由不持有 daemon 的执行权限。
+TUI 的 `Router` 统一上下文页面、返回栈和页面滚动位置。`Esc` 返回上一层。斜杠命令补全是输入框的临时状态，不占用路由：在空输入框输入 `/` 会在输入框上方浮出候选，`↑↓` 选择、`Tab` 或 `Enter` 补全、输入参数或 `Esc` 收起，对话和当前页面保持原样。会话或连接变更会清除旧返回栈及临时资源页面。`AppLayout`、`BodyLayout` 复用 Ratatui 的约束布局，集中计算宽屏、窄屏、审批区和补全浮层的区域；路由不持有 daemon 的执行权限。
 
 ## 原生计算机连接
 

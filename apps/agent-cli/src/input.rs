@@ -25,7 +25,12 @@ pub fn handle(app: &mut App, event: Event, actions: &mpsc::Sender<Action>) -> an
       app.save_current_draft();
       return Ok(close);
     }
-    Event::Paste(text) => app.input.paste(&crate::view_model::safe_text(&text)),
+    Event::Paste(text) => {
+      app.input.paste(&crate::view_model::safe_text(&text));
+      if app.command_menu_open {
+        app.refresh_command_menu();
+      }
+    }
     _ => {}
   }
   app.save_current_draft();
@@ -38,6 +43,7 @@ fn handle_key(
   actions: &mpsc::Sender<Action>,
 ) -> anyhow::Result<bool> {
   if key.modifiers.contains(KeyModifiers::CONTROL) {
+    app.close_command_menu();
     match key.code {
       KeyCode::Char('c' | 'd') => return Ok(true),
       KeyCode::Char('n') => send(actions, Action::NewSession)?,
@@ -70,19 +76,18 @@ fn handle_key(
     }
   } else {
     match key.code {
-      KeyCode::Esc if app.router.current() == ContextPanel::Commands => {
-        app.router.back();
+      KeyCode::Esc if app.command_menu_open => {
+        app.close_command_menu();
       }
-      KeyCode::Up if app.router.current() == ContextPanel::Commands => {
+      KeyCode::Up if app.command_menu_open => {
         app.command_selected = app.command_selected.saturating_sub(1);
       }
       KeyCode::Up if app.router.current() == ContextPanel::Sessions => {
         app.sessions_cursor = app.sessions_cursor.saturating_sub(1);
       }
-      KeyCode::Down if app.router.current() == ContextPanel::Commands => {
-        let query = app.input.text();
-        let query = query.split_whitespace().next().unwrap_or("/");
-        let count = crate::slash_command::filter(query).len();
+      KeyCode::Down if app.command_menu_open => {
+        let query = app.command_query();
+        let count = crate::slash_command::filter(&query).len();
         if count > 0 {
           app.command_selected = (app.command_selected + 1).min(count - 1);
         }
@@ -90,30 +95,21 @@ fn handle_key(
       KeyCode::Down if app.router.current() == ContextPanel::Sessions => {
         app.sessions_cursor = (app.sessions_cursor + 1).min(app.sessions.len().saturating_sub(1));
       }
-      KeyCode::Tab if app.router.current() == ContextPanel::Commands => {
-        let query = app.input.text();
-        let query = query.split_whitespace().next().unwrap_or("/");
-        if let Some(command) = crate::slash_command::filter(query).get(app.command_selected) {
-          app.input = crate::composer::Composer::from(format!("/{} ", command.name).as_str());
-          app.router.back();
-        }
+      KeyCode::Tab if app.command_menu_open => {
+        complete_selected(app);
       }
-      KeyCode::Enter if app.router.current() == ContextPanel::Commands => {
+      KeyCode::Enter if app.command_menu_open => {
         let text = app.input.text();
-        let token = text.split_whitespace().next().unwrap_or("/");
-        let command = token.trim_start_matches('/');
-        if text.trim() == "/" || crate::slash_command::find(command).is_none() {
-          let query = text.split_whitespace().next().unwrap_or("/");
-          if let Some(command) = crate::slash_command::filter(query).get(app.command_selected) {
-            app.input = crate::composer::Composer::from(format!("/{} ", command.name).as_str());
-            app.router.back();
-          } else {
+        let token = text.split_whitespace().next().unwrap_or("/").to_owned();
+        let command = token.trim_start_matches('/').to_owned();
+        if text.trim() == "/" || crate::slash_command::find(&command).is_none() {
+          if !complete_selected(app) {
             app.notice = format!("未知命令 {token}。输入 /help 查看可用命令。");
             app.input.clear();
-            app.router.back();
+            app.close_command_menu();
           }
         } else {
-          app.router.back();
+          app.close_command_menu();
           crate::local_command::submit(app, actions)?;
         }
       }
@@ -135,6 +131,7 @@ fn handle_key(
         }
       }
       KeyCode::F(number @ 1..=5) => {
+        app.close_command_menu();
         let panel = match number {
           1 => ContextPanel::Help,
           2 => ContextPanel::Sessions,
@@ -186,6 +183,7 @@ fn handle_key(
       }
       KeyCode::Enter => crate::local_command::submit(app, actions)?,
       KeyCode::Tab => {
+        app.close_command_menu();
         app.next_session();
         app.sessions_cursor = app.selected;
         if let Some(session) = app.selected_session() {
@@ -202,10 +200,12 @@ fn handle_key(
         }
       }
       KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => {
+        app.close_command_menu();
         app.router.navigate(ContextPanel::Computer);
         app.router.set_scroll(app.router.scroll().saturating_add(3));
       }
       KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => {
+        app.close_command_menu();
         app.router.navigate(ContextPanel::Computer);
         app.router.set_scroll(app.router.scroll().saturating_sub(3));
       }
@@ -231,22 +231,28 @@ fn handle_key(
       KeyCode::PageUp => app.scroll = app.scroll.saturating_add(5),
       KeyCode::Char('/') if app.input.is_empty() => {
         app.input.key(key);
-        app.router.navigate(ContextPanel::Commands);
-        app.command_selected = 0;
+        app.open_command_menu();
       }
-      KeyCode::Char(_) | KeyCode::Backspace if app.router.current() == ContextPanel::Commands => {
+      KeyCode::Char(_) | KeyCode::Backspace if app.command_menu_open => {
         app.input.key(key);
-        let text = app.input.text();
-        if text.split_whitespace().count() > 1 {
-          app.router.back();
-        } else {
-          app.command_selected = 0;
-        }
+        app.refresh_command_menu();
       }
       _ => app.input.key(key),
     }
   }
   Ok(false)
+}
+
+/// Writes the highlighted command into the composer and closes completion.
+fn complete_selected(app: &mut App) -> bool {
+  let query = app.command_query();
+  let matches = crate::slash_command::filter(&query);
+  let Some(name) = matches.get(app.command_selected).map(|spec| spec.name) else {
+    return false;
+  };
+  app.input = crate::composer::Composer::from(format!("/{name} ").as_str());
+  app.close_command_menu();
+  true
 }
 
 pub(crate) fn send(actions: &mpsc::Sender<Action>, action: Action) -> anyhow::Result<()> {

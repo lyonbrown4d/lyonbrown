@@ -6,7 +6,12 @@ use ratatui::{
   widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
-use crate::{model::App, theme::Theme, view_model::ViewModel};
+use crate::{
+  layout::PaletteLayout,
+  model::App,
+  theme::Theme,
+  view_model::{CommandPaletteView, ViewModel},
+};
 
 pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
   render_model(frame, &ViewModel::new(app, theme), theme);
@@ -73,30 +78,7 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
   if let Some(palette) = &model.command_palette
     && !palette.items.is_empty()
   {
-    let popup = layout.palette(palette.items.len());
-    frame.render_widget(Clear, popup);
-    let block = Block::default()
-      .title(" 命令 · Tab 补全 · Esc 返回 ")
-      .borders(Borders::ALL)
-      .border_style(Style::default().fg(theme.accent));
-    let inner = block.inner(popup);
-    frame.render_widget(block, popup);
-    let items = palette
-      .items
-      .iter()
-      .map(|(name, summary)| ListItem::new(format!("{name:<14} {summary}")))
-      .collect::<Vec<_>>();
-    let mut state = ListState::default();
-    state.select(Some(palette.selected.min(items.len().saturating_sub(1))));
-    frame.render_stateful_widget(
-      List::new(items).highlight_symbol("› ").highlight_style(
-        Style::default()
-          .fg(theme.accent)
-          .add_modifier(Modifier::BOLD),
-      ),
-      inner,
-      &mut state,
-    );
+    command_palette(frame, palette, layout.palette(palette.items.len()), theme);
   }
   if !compact {
     let execution = if model.active {
@@ -219,6 +201,62 @@ fn transcript(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme
   }
   .min(usize::from(u16::MAX)) as u16;
   frame.render_widget(paragraph.scroll((scroll, 0)), area);
+}
+
+/// Completion floats above the composer; hidden matches are reported instead of scrolled away.
+fn command_palette(
+  frame: &mut Frame,
+  palette: &CommandPaletteView,
+  popup: PaletteLayout,
+  theme: Theme,
+) {
+  frame.render_widget(Clear, popup.area);
+  let block = Block::default()
+    .title(" 命令 · ↑↓ 选择 · Tab 补全 · Esc 收起 ")
+    .borders(Borders::ALL)
+    .border_style(Style::default().fg(theme.accent));
+  let inner = block.inner(popup.area);
+  frame.render_widget(block, popup.area);
+  let hint_visible = popup.has_more && inner.height > 1;
+  let list_area = if hint_visible {
+    Rect::new(inner.x, inner.y, inner.width, inner.height - 1)
+  } else {
+    inner
+  };
+  let start = palette
+    .selected
+    .saturating_sub(popup.rows.saturating_sub(1));
+  let items = palette
+    .items
+    .iter()
+    .skip(start)
+    .take(popup.rows)
+    .map(|(name, summary)| ListItem::new(format!("{name:<14} {summary}")))
+    .collect::<Vec<_>>();
+  let mut state = ListState::default();
+  state.select(Some(palette.selected.saturating_sub(start)));
+  frame.render_stateful_widget(
+    List::new(items).highlight_symbol("› ").highlight_style(
+      Style::default()
+        .fg(theme.accent)
+        .add_modifier(Modifier::BOLD),
+    ),
+    list_area,
+    &mut state,
+  );
+  if hint_visible {
+    frame.render_widget(
+      Paragraph::new(Line::styled(
+        format!(
+          "↓ 还有 {} 条 · 共 {} 条",
+          palette.items.len().saturating_sub(popup.rows),
+          palette.items.len()
+        ),
+        Style::default().fg(theme.muted),
+      )),
+      Rect::new(inner.x, inner.y + inner.height - 1, inner.width, 1),
+    );
+  }
 }
 
 fn composer(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, compact: bool) {

@@ -25,7 +25,12 @@ fn slash_palette_filters_completes_and_keeps_unknown_commands_local() {
     &actions,
   )
   .expect("open slash palette");
-  assert_eq!(app.router.current(), ContextPanel::Commands);
+  assert!(app.command_menu_open);
+  assert_eq!(
+    app.router.current(),
+    ContextPanel::Closed,
+    "completion is transient composer state, not a route"
+  );
   assert_eq!(app.input.text(), "/");
 
   input::handle(
@@ -42,6 +47,7 @@ fn slash_palette_filters_completes_and_keeps_unknown_commands_local() {
   )
   .expect("complete selected command");
   assert_eq!(app.input.text(), "/task ");
+  assert!(!app.command_menu_open);
   assert_eq!(app.router.current(), ContextPanel::Closed);
 
   app.input = "/not-a-command run this".into();

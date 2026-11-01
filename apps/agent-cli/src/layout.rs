@@ -10,6 +10,16 @@ pub struct AppLayout {
   pub footer: Rect,
 }
 
+/// Completion rows are bounded so the popup never becomes a full-screen list.
+const PALETTE_MAX_ROWS: usize = 8;
+const PALETTE_MAX_WIDTH: u16 = 72;
+
+pub struct PaletteLayout {
+  pub area: Rect,
+  pub rows: usize,
+  pub has_more: bool,
+}
+
 impl AppLayout {
   pub fn new(area: Rect, approval_lines: Option<usize>) -> Self {
     let compact = area.width < 70 || area.height < 16;
@@ -42,19 +52,32 @@ impl AppLayout {
     }
   }
 
-  pub fn palette(&self, count: usize) -> Rect {
-    let height = count
-      .saturating_add(2)
-      .min(usize::from(self.body.height.saturating_sub(1))) as u16;
-    Rect::new(
-      self.body.x,
-      self
-        .body
-        .y
-        .saturating_add(self.body.height.saturating_sub(height)),
-      self.body.width.min(72),
-      height,
-    )
+  /// Slash completion floats directly above the composer instead of taking a panel column.
+  pub fn palette(&self, count: usize) -> PaletteLayout {
+    let space = self.composer.y.saturating_sub(self.body.y);
+    // Align the popup with the composer text, not with its `❯ ` prompt column.
+    let left = self.composer.x.saturating_add(2).min(self.body.right());
+    let width = self
+      .composer
+      .width
+      .saturating_sub(2)
+      .min(PALETTE_MAX_WIDTH)
+      .min(self.body.right().saturating_sub(left));
+    let room = usize::from(self.body.height / 2).max(3);
+    let mut rows = count.clamp(1, PALETTE_MAX_ROWS.min(room));
+    loop {
+      let has_more = count > rows;
+      let height = rows as u16 + 2 + u16::from(has_more);
+      if height <= space || rows == 1 {
+        let height = height.min(space);
+        return PaletteLayout {
+          area: Rect::new(left, self.composer.y.saturating_sub(height), width, height),
+          rows,
+          has_more,
+        };
+      }
+      rows -= 1;
+    }
   }
 }
 
