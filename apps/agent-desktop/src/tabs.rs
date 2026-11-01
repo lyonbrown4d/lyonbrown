@@ -163,6 +163,11 @@ impl Desktop {
     if self.navigation.connecting || self.persistence_loading {
       return false;
     }
+    if self.recovery.as_ref().is_some_and(|state| state.pending) {
+      self.vm.error = Some("等待异常运行核对或恢复请求结束后再切换聊天。".into());
+      cx.notify();
+      return false;
+    }
     if self.tasks.read(cx).computer.read(cx).pending {
       self.vm.error = Some(COMPUTER_WAIT_MESSAGE.into());
       cx.notify();

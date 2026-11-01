@@ -32,11 +32,11 @@ The workbench shows the conversation and composer by default. Sessions, tasks, c
 | `PageUp` / `PageDown` | Scroll the open context panel, or the conversation when no panel is open |
 | `Ctrl+C` / `Ctrl+D` | Exit the client |
 
-The composer uses `ratatui-textarea` 0.9.3 for cursor editing, multiline text, wrapping and paste. Application shortcuts take precedence over matching editor bindings: `Ctrl+X` still requests run cancellation and `Ctrl+Y` still handles approval. Pending submissions are not sent again; failure preserves the draft, and service acceptance clears the matching draft and its undo history.
+The composer uses `ratatui-textarea` 0.9.4 for cursor editing, multiline text, wrapping and paste. Application shortcuts take precedence over matching editor bindings: `Ctrl+X` still requests run cancellation and `Ctrl+Y` still handles approval. Pending submissions are not sent again; failure preserves the draft, and service acceptance clears the matching draft and its undo history.
 
 The approval area displays the tool and arguments. Compact layouts retain only the pending count and approval shortcuts; use `F5` to read the full arguments. The daemon validates and saves decisions before the UI updates them. Durable runs refresh every two seconds; newly submitted runs also subscribe to an event stream. Exiting restores the terminal and sends no cancellation request.
 
-The UI uses warm dark or warm light solid terminal backgrounds, text and accents. `--theme auto` uses `COLORFGBG` to choose the palette, falling back to dark without a hint. Select `--theme light` or `--theme dark` explicitly when needed. Model replies render Markdown through fixed `tui-markdown` 0.3.10, adapting the theme through its public `StyleSheet` interface. Default features are disabled, omitting code syntax-highlighting dependencies.
+The UI uses warm dark or warm light solid terminal backgrounds, text and accents. `--theme auto` uses `COLORFGBG` to choose the palette, falling back to dark without a hint. Select `--theme light` or `--theme dark` explicitly when needed. Model replies render Markdown through fixed `tui-markdown` 0.3.12, adapting the theme through its public `StyleSheet` interface. Default features are disabled, omitting code syntax-highlighting dependencies.
 
 The TUI separates presentation through MVVM: `view_model.rs` projects client `App` state into a read-only `ViewModel` containing connection labels, messages, approvals and current context. `view.rs` renders that data and the composer through Ratatui. Input actions and background updates remain in `input.rs`, `backend.rs` and `update.rs`; presentation never dispatches daemon operations.
 
@@ -153,6 +153,12 @@ Starting a Connect attempt revokes the old host and clears the catalog even if a
 Native window startup depends on the target platform's graphical environment and dependencies. Compilation does not replace runtime checks for window creation, input, theme switching and connection to a real daemon, or establish acceptance on Windows, macOS and Linux.
 
 ## Inspect and recover interrupted Runs
+
+Desktop shows a recovery entry above the composer for each uncertain Run. The panel displays the reason and pending tools. “核对未终结 Task” (Inspect unresolved Tasks) opens and selects Tasks, filtered to nonterminal Tasks in the original session. Enter the original paired Worker ID and HTTPS endpoint, reconcile, then cancel or explicitly accept/reject according to the actual result. Return to recovery and refresh the report. The daemon checks all Tasks in the session again inside the recovery transaction.
+
+The filter preserves the underlying page cursor: an empty filtered page does not imply that later pages contain no blockers. Continue with Next page when available. CLI/TUI `run inspect` also returns `unresolved_tasks`, `next_task_id` and management guidance. Query later pages with `task list --session SESSION_ID --after NEXT_TASK_ID`.
+
+After verifying file, command and external effects, enter a verification note. Abandon only records a decision; continuing also requires explicit fresh input. The verification note is an audit record; the model receives only the fresh input, which must include the verified facts it needs. “打开继续会话” (Open continuation session) opens the new Run and its approvals while preserving the original chat and draft. Switching or closing the requesting chat is blocked while the request is pending. An unknown result retains the exact request identity and inputs in that chat for the current process. Refresh first: show an existing decision, or explicitly retry the retained request only when recovery is still allowed. No recovery request is sent automatically. A note does not prove an old action succeeded. After restarting the app, inspect the daemon's durable decision again; local snapshots do not restore execution state.
 
 The TUI parses `/run` commands locally, rather than sending them as model input. Use `/run inspect RUN_ID` to inspect the original run, uncertainty reason, pending tools and recorded resolution. Verify actual file, command or external effects before choosing:
 

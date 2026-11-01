@@ -177,6 +177,19 @@ LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test
 
 该测试使用独立的校准与回放样本，检查真实模型加载、向量维度、阈值和 Unknown 行为；小样本结果不能当作生产多语言准确率。引擎接口见[可复用决策引擎](decision-engine.md)，服务启动、密钥和 Swagger 见 [AI Gateway](gateway.md)。
 
+## 异常 Run 恢复验收
+
+```sh
+cargo test --locked -p agent-desktop --test recovery_tasks
+cargo test --locked -p agent-desktop --lib recovery::tests
+cargo test --locked -p agent-cli --test run_recovery
+cargo run --locked -p agent-desktop --example recovery_acceptance -- --evidence-dir .local/acceptance/desktop-recovery
+```
+
+原生示例和 `recovery_tasks` 要求 Unix 的 `/bin/sh`。示例使用独立临时数据、回环合成模型与配对 mTLS Worker，不安装系统服务，不调用付费模型或加载权重。连接后选择 `master` 会话，检查并批准一次临时命令：它向隔离工作区的 `effect.txt` 追加一行后等待。原生示例给命令 120 秒总预算，包含审批等待；确认文件已写入和 Worker 已返回后，从聊天中选择「停止」，让 Run 进入 `Uncertain`。组件测试使用 5 秒预算验证超时路径。获批命令开始执行后，示例派发一个只读 Worker Task；成功结果保留为待 Master 采纳。
+
+打开异常运行核对入口，通过 Tasks 面板核对并采纳或拒绝该结果，再刷新恢复报告。Worker ID 与回环 HTTPS 地址见输出目录的 `fixture.json`。核对实际文件后填写记录和明确新输入，再选择继续。正常关闭窗口后，`runtime.json` 保存原 Run、新 Run、恢复决定、两侧 Task、事件、Outbox、文件实际内容和模型请求次数。截图须另从实际窗口采集；记录和测试不代表真实模型、其他平台、公网或安装生命周期验收。
+
 ## 原生服务验收
 
 macOS 的以下测试使用真实 launchd 注册，只能在没有 Lyonbrown 服务注册且 `127.0.0.1:7447` 空闲的测试账号上执行。先构建产品 daemon，再提供其绝对路径：

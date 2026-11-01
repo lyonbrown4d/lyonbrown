@@ -15,6 +15,14 @@ impl Workbench {
     let blocked = self.task_pending || self.connection_pending;
     let mut content = div().id("task-list").test_support().size_full().overflow_y_scroll().p_4().flex().flex_col().gap_3()
       .child(div().text_xs().text_color(cx.theme().muted_foreground).child("Tasks are durable in agentd. Worker attempt completion is separate from Master acceptance."))
+      .child(Button::new("task-recovery-filter").small().label(if self.recovery_tasks_only { "查看全部 Task" } else { "仅查看阻塞恢复的 Task" }).disabled(blocked || !selected).on_click(cx.listener(|this, _, _, cx| {
+        this.recovery_tasks_only = !this.recovery_tasks_only;
+        this.refresh_tasks(String::new());
+        cx.notify();
+      })))
+      .child(div().text_xs().child(if self.recovery_tasks_only {
+        "正在核对未终结 Task。使用原 Worker 地址核对，再取消或明确采纳／拒绝。空页可能仍有下一页；完成后返回恢复面板刷新核对。"
+      } else { "未终结 Task 会阻止原会话中的异常 Run 恢复。" }))
       .child(Input::new(&self.task_target_id).id("task-worker-id").disabled(blocked))
       .child(Input::new(&self.task_target_endpoint).id("task-worker-endpoint").disabled(blocked))
       .child(Select::new(&self.task_capabilities).id("task-capabilities").placeholder("Task permission scope").accessibility_label("Task permission scope").disabled(blocked))
@@ -229,6 +237,13 @@ impl Workbench {
             ),
         );
       content = content.child(row);
+    }
+    if self.tasks.is_empty() && self.recovery_tasks_only {
+      content = content.child(div().text_xs().child(if self.task_pending {
+        "正在读取未终结 Task…"
+      } else {
+        "当前已加载页没有未终结 Task。如有下一页，请继续查询；恢复条件须返回恢复面板刷新核对。"
+      }));
     }
     if let Some(error) = &self.error {
       content = content.child(

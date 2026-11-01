@@ -5,6 +5,7 @@ mod frames;
 mod ime;
 mod input;
 mod layout;
+pub(crate) use layout::select_tasks;
 mod replies;
 pub(crate) mod state;
 mod tasks;

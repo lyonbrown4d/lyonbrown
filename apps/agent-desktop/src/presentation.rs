@@ -21,12 +21,15 @@ pub struct DesktopSnapshot {
   pub approvals: Vec<(String, String, String)>,
   pub error: Option<String>,
   pub busy: bool,
+  pub recovery: Option<RecoverySnapshot>,
   pub workbench: WorkbenchSnapshot,
 }
 
 #[derive(Clone, Debug)]
 pub struct WorkbenchSnapshot {
   pub task_pending: bool,
+  pub recovery_tasks_only: bool,
+  pub tasks: Vec<(String, String, String)>,
   pub computer: ComputerSnapshot,
   pub paths: Vec<String>,
   pub file: Option<String>,
@@ -106,10 +109,43 @@ impl Desktop {
         .collect(),
       error: self.vm.error.clone(),
       busy: self.vm.busy,
+      recovery: self.recovery.as_ref().map(|state| RecoverySnapshot {
+        run_id: state.run_id.clone(),
+        pending: state.pending,
+        inspected: state.inspected,
+        allowed_actions: state
+          .report
+          .as_ref()
+          .map(|report| report.allowed_actions.clone())
+          .unwrap_or_default(),
+        replacement_session: state
+          .report
+          .as_ref()
+          .and_then(|report| report.resolution.as_ref())
+          .and_then(|result| result.session.as_ref())
+          .map(|session| session.id.clone()),
+        resolved: state
+          .report
+          .as_ref()
+          .is_some_and(|report| report.resolution.is_some()),
+        error: state.error.clone(),
+      }),
       workbench: {
         let state = self.tasks.read(cx);
         WorkbenchSnapshot {
           task_pending: state.task_pending,
+          recovery_tasks_only: state.recovery_tasks_only,
+          tasks: state
+            .tasks
+            .iter()
+            .filter_map(|task| {
+              Some((
+                task.envelope.as_ref()?.task_id.clone(),
+                task.status.clone(),
+                task.attempt_status.clone(),
+              ))
+            })
+            .collect(),
           computer: state.computer.read(cx).snapshot(cx),
           paths: state.files.iter().map(|file| file.path.clone()).collect(),
           file: state.file.as_ref().map(|file| file.path.clone()),
@@ -137,6 +173,17 @@ impl Desktop {
       },
     }
   }
+}
+
+#[derive(Clone, Debug)]
+pub struct RecoverySnapshot {
+  pub run_id: String,
+  pub pending: bool,
+  pub inspected: bool,
+  pub allowed_actions: Vec<i32>,
+  pub replacement_session: Option<String>,
+  pub resolved: bool,
+  pub error: Option<String>,
 }
 
 /// Presentation-only ownership and selection; contains no native handles or credentials.

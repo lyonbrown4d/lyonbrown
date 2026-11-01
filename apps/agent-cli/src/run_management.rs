@@ -18,12 +18,23 @@ pub async fn execute(client: &AgentClient, command: RunCommand) -> Result<Value>
   let (recovery, action, prompt) = match command {
     RunCommand::Inspect { run_id } => {
       let value = client.run_recovery(&run_id).await?;
+      let tasks = if let Some(run) = &value.run {
+        client.recovery_tasks(&run.session_id, "").await?
+      } else {
+        v1::Tasks::default()
+      };
       return Ok(json!({
         "run": value.run.as_ref().map(run_json), "owner_epoch": value.owner_epoch,
         "reason": value.reason, "pending_tools": value.pending_tools,
         "allowed_actions": value.allowed_actions.iter().map(|value| action_name(*value)).collect::<Vec<_>>(),
         "fresh_session_required": value.fresh_session_required,
         "resolution": value.resolution.as_ref().map(result_json),
+        "unresolved_tasks": tasks.tasks.iter().map(|task| json!({
+          "task_id": task.envelope.as_ref().map(|value| &value.task_id),
+          "status": task.status, "attempt_status": task.attempt_status,
+        })).collect::<Vec<_>>(),
+        "next_task_id": tasks.next_task_id,
+        "task_guidance": "Use task get/reconcile with the original paired Worker target, then cancel or explicitly accept/reject. For more pages use task list --session SESSION_ID --after NEXT_TASK_ID. Refresh run inspect afterward; the daemon checks all tasks atomically.",
       }));
     }
     RunCommand::Abandon(recovery) => (recovery, v1::RunRecoveryAction::Abandon, String::new()),

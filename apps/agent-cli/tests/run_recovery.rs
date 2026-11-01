@@ -212,3 +212,75 @@ async fn tui_inspects_and_continues_in_a_fresh_session_without_replaying_the_ori
   terminal.quit().await;
   node.close().await;
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn inspection_exposes_blocking_tasks_without_losing_empty_page_cursors() {
+  let mock = MockModelServer::start(Vec::new()).await.unwrap();
+  let node = Node::start(&mock).await;
+  let session = node
+    .client
+    .create_session(
+      "Task reconciliation",
+      node.workspace.path().to_str().unwrap(),
+    )
+    .await
+    .unwrap();
+  let (run, _) = node
+    .daemon
+    .store
+    .accept_run(&session.id, 1, "interrupted", "original")
+    .unwrap();
+  node
+    .daemon
+    .store
+    .update_run_owned(&run.id, 1, RunStatus::Uncertain, "", "unknown effects")
+    .unwrap();
+  for index in 0..101 {
+    let task = agent_core::TaskEnvelope {
+      task_id: format!("task-{index:03}"),
+      parent_run_id: run.id.clone(),
+      session_id: session.id.clone(),
+      owner_node_id: session.owner_node_id.clone(),
+      owner_epoch: 1,
+      attempt_id: format!("attempt-{index}"),
+      instructions: "synthetic task".into(),
+      capabilities: vec!["workspace.read".into()],
+      workspace: session.workspace.clone(),
+      idempotency_key: format!("task-key-{index}"),
+      deadline_ms: agent_core::now_ms() + 60_000,
+    };
+    node.daemon.store.accept_task(task.clone()).unwrap();
+    if index < 100 {
+      node
+        .daemon
+        .store
+        .mark_task_cancelled(&task.task_id, &task.attempt_id, 1)
+        .unwrap();
+    }
+  }
+  let value = run_management::execute(
+    &node.client,
+    RunCommand::Inspect {
+      run_id: run.id.clone(),
+    },
+  )
+  .await
+  .unwrap();
+  assert!(value["allowed_actions"].as_array().unwrap().is_empty());
+  assert!(value["unresolved_tasks"].as_array().unwrap().is_empty());
+  let cursor = value["next_task_id"].as_str().unwrap();
+  assert!(
+    !cursor.is_empty(),
+    "an empty filtered page is not the end of the session"
+  );
+  let page = node
+    .client
+    .recovery_tasks(&session.id, cursor)
+    .await
+    .unwrap();
+  assert_eq!(page.tasks.len(), 1);
+  assert_eq!(page.tasks[0].envelope.as_ref().unwrap().task_id, "task-100");
+  assert!(page.next_task_id.is_empty());
+  assert!(mock.requests().await.is_empty());
+  node.close().await;
+}

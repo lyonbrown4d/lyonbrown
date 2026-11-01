@@ -14,6 +14,17 @@ use gpui_kit::*;
 struct Panels(HashMap<(EntityId, String), Weak<dyn BasePanelView>>);
 impl Global for Panels {}
 
+pub(crate) fn select_tasks(area: &Entity<DockArea>, window: &mut Window, cx: &mut App) {
+  let id = cx
+    .try_global::<Panels>()
+    .and_then(|panels| panels.0.get(&(area.entity_id(), "Tasks".into())))
+    .and_then(Weak::upgrade)
+    .map(|panel| panel.panel_id(cx));
+  if let Some(id) = id {
+    area.update(cx, |area, cx| area.select_panel(id, window, cx));
+  }
+}
+
 pub(super) fn register(
   area: &Entity<DockArea>,
   navigation: &[(&'static str, PanelId)],

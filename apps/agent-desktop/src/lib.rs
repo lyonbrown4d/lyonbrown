@@ -13,6 +13,7 @@ mod panes;
 mod persistence;
 mod presentation;
 mod projection;
+mod recovery;
 mod settings;
 mod shell;
 mod tabs;
@@ -45,6 +46,7 @@ pub use composition::{
   BrowserPort, ClientPort, ComputerPort, DesktopConfiguration, DesktopModule, ExecutorPort,
 };
 use gpui_kit::*;
+pub use presentation::RecoverySnapshot;
 pub use presentation::{ComputerSnapshot, DesktopSnapshot, WorkbenchSnapshot};
 pub use shell::Desktop;
 pub use tabs::ChatTabSnapshot;

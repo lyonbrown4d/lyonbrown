@@ -91,7 +91,14 @@ impl Workbench {
               .is_none_or(|value| value.task_id != id)
           });
         }
-        self.tasks.insert(0, task);
+        if !self.recovery_tasks_only
+          || !matches!(
+            task.status.as_str(),
+            "completed" | "failed" | "cancelled" | "rejected"
+          )
+        {
+          self.tasks.insert(0, task);
+        }
         self.error = None;
       }
       Reply::TaskError(generation, error, uncertainty) => {

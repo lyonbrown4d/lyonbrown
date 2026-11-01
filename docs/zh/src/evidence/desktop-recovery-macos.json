@@ -1,0 +1,843 @@
+{
+  "platform": "macos",
+  "arch": "aarch64",
+  "version": "0.1.0",
+  "original_run": {
+    "id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+    "session_id": "01a194ed-9b78-750b-a7e9-112ed63cc4b8",
+    "status": "uncertain",
+    "prompt": "Execute the approved local command once; its file effect must never be replayed.",
+    "result": "",
+    "error": "session has an unresolved execution outcome: execute_command (call_fixture) reported an unknown outcome",
+    "created_at_ms": 1793499962256
+  },
+  "resolution": {
+    "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+    "idempotency_key": "01a194ef-d4b4-7510-9d85-b30913185fa8",
+    "requested_owner_epoch": 1,
+    "fenced_owner_epoch": 2,
+    "action": "continue_new_session",
+    "note": "已核对 effect.txt 只有一行；原命令已停止，Worker 结果已采纳。",
+    "prompt": "已核对 effect.txt 只有一行，原命令已停止，Worker 结果已采纳。只汇总这些结果，不再执行命令。",
+    "session_id": "01a194ef-d7e2-72bc-bc73-f5e1f4ee2379",
+    "replacement_run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+    "created_at_ms": 1793500108770
+  },
+  "replacement_run": {
+    "id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+    "session_id": "01a194ef-d7e2-72bc-bc73-f5e1f4ee2379",
+    "status": "completed",
+    "prompt": "已核对 effect.txt 只有一行，原命令已停止，Worker 结果已采纳。只汇总这些结果，不再执行命令。",
+    "result": "已根据人工核对记录完成汇总；没有重复执行原命令。",
+    "error": "",
+    "created_at_ms": 1793500108770
+  },
+  "approvals": [
+    {
+      "id": "01a194ed-9bb5-757e-91d1-24d306d7fb87",
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "tool": "execute_command",
+      "arguments_json": "{\"session_id\":\"01a194ed-9b78-750b-a7e9-112ed63cc4b8\",\"owner_epoch\":1,\"run_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\",\"call_id\":\"call_fixture\",\"action_id\":\"command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c\",\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\"/private/var/folders/c7/6lv8449949b0859fx6cmt5cr0000gn/T/.tmpCy93xc/master-workspace\",\"timeout_ms\":120000,\"output_limit_bytes\":4096}",
+      "status": "consumed",
+      "expires_at_ms": 1793500262293
+    }
+  ],
+  "command_receipts": [
+    {
+      "action_id": "command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c",
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "owner_epoch": 1,
+      "kind": "execute_command",
+      "status": "uncertain",
+      "intent_summary": {},
+      "result_summary": {
+        "reason": "cancelled",
+        "exit_code": null,
+        "output_truncated": false,
+        "stdout_bytes": 0,
+        "stderr_bytes": 0
+      },
+      "created_at_ms": 1793499986062,
+      "finished_at_ms": 1793499995416
+    }
+  ],
+  "master_task": {
+    "envelope": {
+      "task_id": "01a194ed-9bb9-748c-8b1d-32b94439cf29",
+      "parent_run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "session_id": "01a194ed-9b78-750b-a7e9-112ed63cc4b8",
+      "owner_node_id": "01a194ed-9b5a-73d1-aaaf-dd39b73434bf",
+      "owner_epoch": 1,
+      "attempt_id": "01a194ed-9bb9-748c-8b1d-32bac8a4313b",
+      "instructions": "Return a synthetic result for explicit Master review.",
+      "capabilities": [
+        "workspace.read"
+      ],
+      "workspace": "/var/folders/c7/6lv8449949b0859fx6cmt5cr0000gn/T/.tmpCy93xc/master-workspace",
+      "idempotency_key": "recovery-worker",
+      "deadline_ms": 1793503562297
+    },
+    "status": "completed",
+    "attempt_status": "succeeded",
+    "result": "Worker synthetic result",
+    "error": "",
+    "cursor": 4
+  },
+  "worker_task": {
+    "envelope": {
+      "task_id": "01a194ed-9bb9-748c-8b1d-32b94439cf29",
+      "parent_run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "session_id": "01a194ed-9b78-750b-a7e9-112ed63cc4b8",
+      "owner_node_id": "01a194ed-9b5a-73d1-aaaf-dd39b73434bf",
+      "owner_epoch": 1,
+      "attempt_id": "01a194ed-9bb9-748c-8b1d-32bac8a4313b",
+      "instructions": "Return a synthetic result for explicit Master review.",
+      "capabilities": [
+        "workspace.read"
+      ],
+      "workspace": "/var/folders/c7/6lv8449949b0859fx6cmt5cr0000gn/T/.tmpCy93xc/master-workspace",
+      "idempotency_key": "recovery-worker",
+      "deadline_ms": 1793503562297
+    },
+    "status": "completed",
+    "attempt_status": "succeeded",
+    "result": "Worker synthetic result",
+    "error": "",
+    "cursor": 5
+  },
+  "effect": "effect\n",
+  "main_model_requests": 2,
+  "worker_model_requests": 1,
+  "worker_dispatch_finished": true,
+  "fresh_request_has_old_command": false,
+  "original_events": [
+    {
+      "cursor": 1,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_accepted",
+      "payload_json": "{\"run_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\"}",
+      "created_at_ms": 1793499962256
+    },
+    {
+      "cursor": 2,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_running",
+      "payload_json": "{\"status\":\"running\",\"result\":\"\",\"error\":\"\"}",
+      "created_at_ms": 1793499962257
+    },
+    {
+      "cursor": 3,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "model_route_decision",
+      "payload_json": "{\"request_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\",\"status\":\"accepted\",\"output\":{\"operation\":\"route_model\",\"value\":{\"complexity\":\"medium\",\"task_domain\":\"unknown\",\"recommended_tier\":\"balanced\",\"required_capabilities\":[],\"candidate_model_keys\":[\"worker-fixture\"]}},\"provenance\":{\"policy_id\":\"default\",\"policy_revision\":\"rules-v1\",\"method\":\"rules\",\"backend_version\":null,\"index_revision\":null,\"reason_codes\":[\"PINNED_MODEL_VALIDATED\",\"RULE_MATCH\"]},\"elapsed_ms\":0}",
+      "created_at_ms": 1793499962259
+    },
+    {
+      "cursor": 4,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "execution_plan",
+      "payload_json": "{\"task_kind\":\"code\",\"model_policy\":\"general\",\"allowed_tools\":[\"read_file\",\"list_files\",\"search_files\",\"write_file\",\"execute_command\"],\"required_capabilities\":[\"file_read\",\"file_write\",\"process_execute\"],\"execution_mode\":\"local\",\"target_hint\":null,\"risk_level\":\"high\",\"confidence\":null,\"trace_id\":\"01a194ed-9b93-706e-b00a-6c7a2d5b3d4f\",\"source\":{\"kind\":\"explicit\"}}",
+      "created_at_ms": 1793499962260
+    },
+    {
+      "cursor": 5,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_started",
+      "payload_json": "{\"run_id\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\"}",
+      "created_at_ms": 1793499962265
+    },
+    {
+      "cursor": 6,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"seq\":1,\"lane\":\"main\",\"timestamp\":1793499962266,\"type\":\"operation_started\",\"sourceLeafId\":null,\"intent\":{\"kind\":\"run\",\"originalPrompt\":[{\"kind\":\"user\",\"role\":\"user\",\"content\":\"Execute the approved local command once; its file effect must never be replayed.\",\"timestamp\":1793499962265}],\"initialMessages\":[],\"systemPromptOverride\":null,\"resumeData\":null}}}",
+      "created_at_ms": 1793499962266
+    },
+    {
+      "cursor": 7,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ed-9b99-71be-9f0e-74655f8465e3\",\"seq\":2,\"parentId\":null,\"timestamp\":1793499962267,\"message\":{\"kind\":\"user\",\"role\":\"user\",\"content\":\"Execute the approved local command once; its file effect must never be replayed.\",\"timestamp\":1793499962265},\"terminate\":null}}",
+      "created_at_ms": 1793499962267
+    },
+    {
+      "cursor": 8,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9b9f-7424-aa8b-3e7b3e0418d8\",\"seq\":3,\"lane\":\"main\",\"timestamp\":1793499962273,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"start\",\"partial\":{\"timestamp\":1793499962269,\"role\":\"assistant\",\"content\":[],\"api\":\"openai-completions\",\"provider\":\"openai\",\"model\":\"worker-fixture\",\"responseModel\":null,\"responseId\":null,\"usage\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":0,\"cost\":{\"input\":0.0,\"output\":0.0,\"cacheRead\":0.0,\"cacheWrite\":0.0,\"total\":0.0}},\"stopReason\":\"pending\",\"deferred\":null,\"errorMessage\":null,\"rawStopReason\":null,\"endTurn\":null}}}}",
+      "created_at_ms": 1793499962274
+    },
+    {
+      "cursor": 9,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba0-73ff-993c-4cc0f48a3734\",\"seq\":4,\"lane\":\"main\",\"timestamp\":1793499962274,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_start\",\"contentIndex\":0,\"toolCall\":{\"type\":\"toolCall\",\"id\":\"\",\"name\":\"\",\"arguments\":{}}}}}",
+      "created_at_ms": 1793499962275
+    },
+    {
+      "cursor": 10,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba0-73ff-993c-4cc17ae507c7\",\"seq\":5,\"lane\":\"main\",\"timestamp\":1793499962275,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_delta\",\"contentIndex\":0,\"delta\":\"{\\\"executable\\\":\\\"/bin/sh\\\",\\\"arguments\\\":[\\\"-c\\\",\\\"printf 'effect\\\\\\\\n' >> effect.txt; \"}}}",
+      "created_at_ms": 1793499962276
+    },
+    {
+      "cursor": 11,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba0-73ff-993c-4cc26dc99f15\",\"seq\":6,\"lane\":\"main\",\"timestamp\":1793499962277,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_delta\",\"contentIndex\":0,\"delta\":\"exec /bin/sleep 600\\\"],\\\"cwd\\\":\\\".\\\",\\\"timeout_ms\\\":120000,\\\"output_limit_bytes\\\":4096}\"}}}",
+      "created_at_ms": 1793499962277
+    },
+    {
+      "cursor": 12,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba1-7749-a13a-da97567017ce\",\"seq\":7,\"lane\":\"main\",\"timestamp\":1793499962278,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_end\",\"contentIndex\":0,\"id\":\"call_fixture\",\"name\":\"execute_command\",\"arguments\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096}}}}",
+      "created_at_ms": 1793499962279
+    },
+    {
+      "cursor": 13,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba7-77b5-81d3-6613670c824a\",\"seq\":8,\"lane\":\"main\",\"timestamp\":1793499962280,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"commit_stream\",\"frame\":{\"entryId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\"}}}",
+      "created_at_ms": 1793499962281
+    },
+    {
+      "cursor": 14,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\",\"seq\":9,\"parentId\":\"01a194ed-9b99-71be-9f0e-74655f8465e3\",\"timestamp\":1793499962282,\"message\":{\"kind\":\"assistant\",\"role\":\"assistant\",\"content\":[{\"type\":\"toolCall\",\"id\":\"call_fixture\",\"name\":\"execute_command\",\"arguments\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096}}],\"api\":\"openai-completions\",\"provider\":\"openai\",\"model\":\"worker-fixture\",\"responseModel\":null,\"responseId\":null,\"usage\":{\"input\":7,\"output\":2,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":9,\"cost\":{\"input\":0.0,\"output\":0.0,\"cacheRead\":0.0,\"cacheWrite\":0.0,\"total\":0.0}},\"stopReason\":\"tooluse\",\"deferred\":null,\"errorMessage\":null,\"rawStopReason\":\"tool_calls\",\"endTurn\":null,\"timestamp\":1793499962269},\"terminate\":null}}",
+      "created_at_ms": 1793499962282
+    },
+    {
+      "cursor": 15,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"type\":\"step_attempt\",\"id\":\"01a194ed-9ba7-77b5-81d3-6614c1c2f72f\",\"seq\":10,\"lane\":\"main\",\"timestamp\":1793499962283,\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"step\":\"assistant\",\"attempt\":1,\"resultEntryId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\"}}",
+      "created_at_ms": 1793499962285
+    },
+    {
+      "cursor": 16,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9bad-71e2-9740-6932704710d1\",\"seq\":11,\"lane\":\"main\",\"timestamp\":1793499962285,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"clear_stream\",\"frame\":null}}",
+      "created_at_ms": 1793499962286
+    },
+    {
+      "cursor": 17,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"type\":\"tool_started\",\"id\":\"01a194ed-9baf-7329-8b97-2db2a998ac94\",\"seq\":12,\"lane\":\"main\",\"timestamp\":1793499962287,\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"assistantEntryId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\",\"toolIndex\":0,\"toolCallId\":\"call_fixture\",\"toolName\":\"execute_command\",\"effectiveArgs\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096},\"resultEntryId\":\"01a194ed-9baf-7329-8b97-2db1cb411f35\",\"replay\":\"never\"}}",
+      "created_at_ms": 1793499962287
+    },
+    {
+      "cursor": 18,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "tool_started",
+      "payload_json": "{\"arguments\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096},\"call_id\":\"call_fixture\",\"name\":\"execute_command\"}",
+      "created_at_ms": 1793499962288
+    },
+    {
+      "cursor": 19,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "approval_required",
+      "payload_json": "{\"approval_id\":\"01a194ed-9bb5-757e-91d1-24d306d7fb87\",\"tool\":\"execute_command\",\"arguments\":{\"session_id\":\"01a194ed-9b78-750b-a7e9-112ed63cc4b8\",\"owner_epoch\":1,\"run_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\",\"call_id\":\"call_fixture\",\"action_id\":\"command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c\",\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\"/private/var/folders/c7/6lv8449949b0859fx6cmt5cr0000gn/T/.tmpCy93xc/master-workspace\",\"timeout_ms\":120000,\"output_limit_bytes\":4096}}",
+      "created_at_ms": 1793499962293
+    },
+    {
+      "cursor": 20,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "approval_decided",
+      "payload_json": "{\"approval_id\":\"01a194ed-9bb5-757e-91d1-24d306d7fb87\",\"status\":\"approved\"}",
+      "created_at_ms": 1793499986061
+    },
+    {
+      "cursor": 21,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "tool_authorized",
+      "payload_json": "{\"approval_id\":\"01a194ed-9bb5-757e-91d1-24d306d7fb87\",\"tool\":\"execute_command\"}",
+      "created_at_ms": 1793499986062
+    },
+    {
+      "cursor": 22,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "operation_intent",
+      "payload_json": "{\"action_id\":\"command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c\",\"kind\":\"execute_command\"}",
+      "created_at_ms": 1793499986062
+    },
+    {
+      "cursor": 23,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_cancel_requested",
+      "payload_json": "{\"status\":\"cancel_requested\",\"result\":\"\",\"error\":\"\"}",
+      "created_at_ms": 1793499995415
+    },
+    {
+      "cursor": 24,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "operation_finished",
+      "payload_json": "{\"action_id\":\"command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c\",\"status\":\"uncertain\",\"summary\":{\"reason\":\"cancelled\",\"exit_code\":null,\"output_truncated\":false,\"stdout_bytes\":0,\"stderr_bytes\":0}}",
+      "created_at_ms": 1793499995417
+    },
+    {
+      "cursor": 25,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "tool_finished",
+      "payload_json": "{\"is_error\":true,\"call_id\":\"call_fixture\",\"name\":\"execute_command\",\"text\":\"command outcome is uncertain (Some(Cancelled)); inspect action command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c before acting again\"}",
+      "created_at_ms": 1793499995417
+    },
+    {
+      "cursor": 26,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ed-9baf-7329-8b97-2db1cb411f35\",\"seq\":13,\"parentId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\",\"timestamp\":1793499995417,\"message\":{\"kind\":\"tool_result\",\"role\":\"toolResult\",\"content\":[{\"type\":\"text\",\"text\":\"command outcome is uncertain (Some(Cancelled)); inspect action command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c before acting again\"}],\"toolCallId\":\"call_fixture\",\"toolName\":\"execute_command\",\"details\":{\"lyonbrown_uncertain\":true},\"usage\":null,\"addedToolNames\":[],\"isError\":true,\"timestamp\":1793499995417},\"terminate\":null}}",
+      "created_at_ms": 1793499995419
+    },
+    {
+      "cursor": 27,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ee-1d1c-7711-be5e-9ea265de7ff6\",\"seq\":14,\"lane\":\"main\",\"timestamp\":1793499995420,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"clear_run\",\"frame\":null}}",
+      "created_at_ms": 1793499995421
+    },
+    {
+      "cursor": 28,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"type\":\"operation_finished\",\"id\":\"01a194ee-1d1e-75c6-aa95-6547ef5ea92a\",\"seq\":15,\"lane\":\"main\",\"timestamp\":1793499995422,\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"outcome\":\"completed\"}}",
+      "created_at_ms": 1793499995423
+    },
+    {
+      "cursor": 29,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_finished",
+      "payload_json": "{\"outcome\":\"completed\",\"run_id\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\"}",
+      "created_at_ms": 1793499995424
+    },
+    {
+      "cursor": 30,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_uncertain",
+      "payload_json": "{\"status\":\"uncertain\",\"result\":\"\",\"error\":\"session has an unresolved execution outcome: execute_command (call_fixture) reported an unknown outcome\"}",
+      "created_at_ms": 1793499995425
+    },
+    {
+      "cursor": 31,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_recovery_recorded",
+      "payload_json": "{\"run_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\",\"idempotency_key\":\"01a194ef-d4b4-7510-9d85-b30913185fa8\",\"requested_owner_epoch\":1,\"fenced_owner_epoch\":2,\"action\":\"continue_new_session\",\"note\":\"已核对 effect.txt 只有一行；原命令已停止，Worker 结果已采纳。\",\"prompt\":\"已核对 effect.txt 只有一行，原命令已停止，Worker 结果已采纳。只汇总这些结果，不再执行命令。\",\"session_id\":\"01a194ef-d7e2-72bc-bc73-f5e1f4ee2379\",\"replacement_run_id\":\"01a194ef-d7e2-72bc-bc73-f5e28508650e\",\"created_at_ms\":1793500108770}",
+      "created_at_ms": 1793500108894
+    }
+  ],
+  "pending_outbox": [
+    {
+      "cursor": 1,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_accepted",
+      "payload_json": "{\"run_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\"}",
+      "created_at_ms": 1793499962256
+    },
+    {
+      "cursor": 2,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_running",
+      "payload_json": "{\"status\":\"running\",\"result\":\"\",\"error\":\"\"}",
+      "created_at_ms": 1793499962257
+    },
+    {
+      "cursor": 3,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "model_route_decision",
+      "payload_json": "{\"request_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\",\"status\":\"accepted\",\"output\":{\"operation\":\"route_model\",\"value\":{\"complexity\":\"medium\",\"task_domain\":\"unknown\",\"recommended_tier\":\"balanced\",\"required_capabilities\":[],\"candidate_model_keys\":[\"worker-fixture\"]}},\"provenance\":{\"policy_id\":\"default\",\"policy_revision\":\"rules-v1\",\"method\":\"rules\",\"backend_version\":null,\"index_revision\":null,\"reason_codes\":[\"PINNED_MODEL_VALIDATED\",\"RULE_MATCH\"]},\"elapsed_ms\":0}",
+      "created_at_ms": 1793499962259
+    },
+    {
+      "cursor": 4,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "execution_plan",
+      "payload_json": "{\"task_kind\":\"code\",\"model_policy\":\"general\",\"allowed_tools\":[\"read_file\",\"list_files\",\"search_files\",\"write_file\",\"execute_command\"],\"required_capabilities\":[\"file_read\",\"file_write\",\"process_execute\"],\"execution_mode\":\"local\",\"target_hint\":null,\"risk_level\":\"high\",\"confidence\":null,\"trace_id\":\"01a194ed-9b93-706e-b00a-6c7a2d5b3d4f\",\"source\":{\"kind\":\"explicit\"}}",
+      "created_at_ms": 1793499962260
+    },
+    {
+      "cursor": 5,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_started",
+      "payload_json": "{\"run_id\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\"}",
+      "created_at_ms": 1793499962265
+    },
+    {
+      "cursor": 6,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"seq\":1,\"lane\":\"main\",\"timestamp\":1793499962266,\"type\":\"operation_started\",\"sourceLeafId\":null,\"intent\":{\"kind\":\"run\",\"originalPrompt\":[{\"kind\":\"user\",\"role\":\"user\",\"content\":\"Execute the approved local command once; its file effect must never be replayed.\",\"timestamp\":1793499962265}],\"initialMessages\":[],\"systemPromptOverride\":null,\"resumeData\":null}}}",
+      "created_at_ms": 1793499962266
+    },
+    {
+      "cursor": 7,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ed-9b99-71be-9f0e-74655f8465e3\",\"seq\":2,\"parentId\":null,\"timestamp\":1793499962267,\"message\":{\"kind\":\"user\",\"role\":\"user\",\"content\":\"Execute the approved local command once; its file effect must never be replayed.\",\"timestamp\":1793499962265},\"terminate\":null}}",
+      "created_at_ms": 1793499962267
+    },
+    {
+      "cursor": 8,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9b9f-7424-aa8b-3e7b3e0418d8\",\"seq\":3,\"lane\":\"main\",\"timestamp\":1793499962273,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"start\",\"partial\":{\"timestamp\":1793499962269,\"role\":\"assistant\",\"content\":[],\"api\":\"openai-completions\",\"provider\":\"openai\",\"model\":\"worker-fixture\",\"responseModel\":null,\"responseId\":null,\"usage\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":0,\"cost\":{\"input\":0.0,\"output\":0.0,\"cacheRead\":0.0,\"cacheWrite\":0.0,\"total\":0.0}},\"stopReason\":\"pending\",\"deferred\":null,\"errorMessage\":null,\"rawStopReason\":null,\"endTurn\":null}}}}",
+      "created_at_ms": 1793499962274
+    },
+    {
+      "cursor": 9,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba0-73ff-993c-4cc0f48a3734\",\"seq\":4,\"lane\":\"main\",\"timestamp\":1793499962274,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_start\",\"contentIndex\":0,\"toolCall\":{\"type\":\"toolCall\",\"id\":\"\",\"name\":\"\",\"arguments\":{}}}}}",
+      "created_at_ms": 1793499962275
+    },
+    {
+      "cursor": 10,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba0-73ff-993c-4cc17ae507c7\",\"seq\":5,\"lane\":\"main\",\"timestamp\":1793499962275,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_delta\",\"contentIndex\":0,\"delta\":\"{\\\"executable\\\":\\\"/bin/sh\\\",\\\"arguments\\\":[\\\"-c\\\",\\\"printf 'effect\\\\\\\\n' >> effect.txt; \"}}}",
+      "created_at_ms": 1793499962276
+    },
+    {
+      "cursor": 11,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba0-73ff-993c-4cc26dc99f15\",\"seq\":6,\"lane\":\"main\",\"timestamp\":1793499962277,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_delta\",\"contentIndex\":0,\"delta\":\"exec /bin/sleep 600\\\"],\\\"cwd\\\":\\\".\\\",\\\"timeout_ms\\\":120000,\\\"output_limit_bytes\\\":4096}\"}}}",
+      "created_at_ms": 1793499962277
+    },
+    {
+      "cursor": 12,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba1-7749-a13a-da97567017ce\",\"seq\":7,\"lane\":\"main\",\"timestamp\":1793499962278,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"toolcall_end\",\"contentIndex\":0,\"id\":\"call_fixture\",\"name\":\"execute_command\",\"arguments\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096}}}}",
+      "created_at_ms": 1793499962279
+    },
+    {
+      "cursor": 13,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9ba7-77b5-81d3-6613670c824a\",\"seq\":8,\"lane\":\"main\",\"timestamp\":1793499962280,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"commit_stream\",\"frame\":{\"entryId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\"}}}",
+      "created_at_ms": 1793499962281
+    },
+    {
+      "cursor": 14,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\",\"seq\":9,\"parentId\":\"01a194ed-9b99-71be-9f0e-74655f8465e3\",\"timestamp\":1793499962282,\"message\":{\"kind\":\"assistant\",\"role\":\"assistant\",\"content\":[{\"type\":\"toolCall\",\"id\":\"call_fixture\",\"name\":\"execute_command\",\"arguments\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096}}],\"api\":\"openai-completions\",\"provider\":\"openai\",\"model\":\"worker-fixture\",\"responseModel\":null,\"responseId\":null,\"usage\":{\"input\":7,\"output\":2,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":9,\"cost\":{\"input\":0.0,\"output\":0.0,\"cacheRead\":0.0,\"cacheWrite\":0.0,\"total\":0.0}},\"stopReason\":\"tooluse\",\"deferred\":null,\"errorMessage\":null,\"rawStopReason\":\"tool_calls\",\"endTurn\":null,\"timestamp\":1793499962269},\"terminate\":null}}",
+      "created_at_ms": 1793499962282
+    },
+    {
+      "cursor": 15,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"type\":\"step_attempt\",\"id\":\"01a194ed-9ba7-77b5-81d3-6614c1c2f72f\",\"seq\":10,\"lane\":\"main\",\"timestamp\":1793499962283,\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"step\":\"assistant\",\"attempt\":1,\"resultEntryId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\"}}",
+      "created_at_ms": 1793499962285
+    },
+    {
+      "cursor": 16,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ed-9bad-71e2-9740-6932704710d1\",\"seq\":11,\"lane\":\"main\",\"timestamp\":1793499962285,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"clear_stream\",\"frame\":null}}",
+      "created_at_ms": 1793499962286
+    },
+    {
+      "cursor": 17,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"type\":\"tool_started\",\"id\":\"01a194ed-9baf-7329-8b97-2db2a998ac94\",\"seq\":12,\"lane\":\"main\",\"timestamp\":1793499962287,\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"assistantEntryId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\",\"toolIndex\":0,\"toolCallId\":\"call_fixture\",\"toolName\":\"execute_command\",\"effectiveArgs\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096},\"resultEntryId\":\"01a194ed-9baf-7329-8b97-2db1cb411f35\",\"replay\":\"never\"}}",
+      "created_at_ms": 1793499962287
+    },
+    {
+      "cursor": 18,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "tool_started",
+      "payload_json": "{\"arguments\":{\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\".\",\"timeout_ms\":120000,\"output_limit_bytes\":4096},\"call_id\":\"call_fixture\",\"name\":\"execute_command\"}",
+      "created_at_ms": 1793499962288
+    },
+    {
+      "cursor": 19,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "approval_required",
+      "payload_json": "{\"approval_id\":\"01a194ed-9bb5-757e-91d1-24d306d7fb87\",\"tool\":\"execute_command\",\"arguments\":{\"session_id\":\"01a194ed-9b78-750b-a7e9-112ed63cc4b8\",\"owner_epoch\":1,\"run_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\",\"call_id\":\"call_fixture\",\"action_id\":\"command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c\",\"executable\":\"/bin/sh\",\"arguments\":[\"-c\",\"printf 'effect\\\\n' >> effect.txt; exec /bin/sleep 600\"],\"cwd\":\"/private/var/folders/c7/6lv8449949b0859fx6cmt5cr0000gn/T/.tmpCy93xc/master-workspace\",\"timeout_ms\":120000,\"output_limit_bytes\":4096}}",
+      "created_at_ms": 1793499962293
+    },
+    {
+      "cursor": 20,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "approval_decided",
+      "payload_json": "{\"approval_id\":\"01a194ed-9bb5-757e-91d1-24d306d7fb87\",\"status\":\"approved\"}",
+      "created_at_ms": 1793499986061
+    },
+    {
+      "cursor": 21,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "tool_authorized",
+      "payload_json": "{\"approval_id\":\"01a194ed-9bb5-757e-91d1-24d306d7fb87\",\"tool\":\"execute_command\"}",
+      "created_at_ms": 1793499986062
+    },
+    {
+      "cursor": 22,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "operation_intent",
+      "payload_json": "{\"action_id\":\"command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c\",\"kind\":\"execute_command\"}",
+      "created_at_ms": 1793499986062
+    },
+    {
+      "cursor": 23,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_cancel_requested",
+      "payload_json": "{\"status\":\"cancel_requested\",\"result\":\"\",\"error\":\"\"}",
+      "created_at_ms": 1793499995415
+    },
+    {
+      "cursor": 24,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "operation_finished",
+      "payload_json": "{\"action_id\":\"command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c\",\"status\":\"uncertain\",\"summary\":{\"reason\":\"cancelled\",\"exit_code\":null,\"output_truncated\":false,\"stdout_bytes\":0,\"stderr_bytes\":0}}",
+      "created_at_ms": 1793499995417
+    },
+    {
+      "cursor": 25,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "tool_finished",
+      "payload_json": "{\"is_error\":true,\"call_id\":\"call_fixture\",\"name\":\"execute_command\",\"text\":\"command outcome is uncertain (Some(Cancelled)); inspect action command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c before acting again\"}",
+      "created_at_ms": 1793499995417
+    },
+    {
+      "cursor": 26,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ed-9baf-7329-8b97-2db1cb411f35\",\"seq\":13,\"parentId\":\"01a194ed-9ba1-7749-a13a-da98b39f2c0c\",\"timestamp\":1793499995417,\"message\":{\"kind\":\"tool_result\",\"role\":\"toolResult\",\"content\":[{\"type\":\"text\",\"text\":\"command outcome is uncertain (Some(Cancelled)); inspect action command-65414266a1fb7d351c23c62885156b8edd65f4f5feb2e72ae470142211fc818c before acting again\"}],\"toolCallId\":\"call_fixture\",\"toolName\":\"execute_command\",\"details\":{\"lyonbrown_uncertain\":true},\"usage\":null,\"addedToolNames\":[],\"isError\":true,\"timestamp\":1793499995417},\"terminate\":null}}",
+      "created_at_ms": 1793499995419
+    },
+    {
+      "cursor": 27,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ee-1d1c-7711-be5e-9ea265de7ff6\",\"seq\":14,\"lane\":\"main\",\"timestamp\":1793499995420,\"type\":\"assistant_frame\",\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"streamIndex\":0,\"op\":\"clear_run\",\"frame\":null}}",
+      "created_at_ms": 1793499995421
+    },
+    {
+      "cursor": 28,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"type\":\"operation_finished\",\"id\":\"01a194ee-1d1e-75c6-aa95-6547ef5ea92a\",\"seq\":15,\"lane\":\"main\",\"timestamp\":1793499995422,\"runId\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\",\"outcome\":\"completed\"}}",
+      "created_at_ms": 1793499995423
+    },
+    {
+      "cursor": 29,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_finished",
+      "payload_json": "{\"outcome\":\"completed\",\"run_id\":\"01a194ed-9b99-71be-9f0e-7464920a1d55\"}",
+      "created_at_ms": 1793499995424
+    },
+    {
+      "cursor": 30,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_uncertain",
+      "payload_json": "{\"status\":\"uncertain\",\"result\":\"\",\"error\":\"session has an unresolved execution outcome: execute_command (call_fixture) reported an unknown outcome\"}",
+      "created_at_ms": 1793499995425
+    },
+    {
+      "cursor": 31,
+      "run_id": "01a194ed-9b90-76b1-81e0-ec794c12861e",
+      "kind": "run_recovery_recorded",
+      "payload_json": "{\"run_id\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\",\"idempotency_key\":\"01a194ef-d4b4-7510-9d85-b30913185fa8\",\"requested_owner_epoch\":1,\"fenced_owner_epoch\":2,\"action\":\"continue_new_session\",\"note\":\"已核对 effect.txt 只有一行；原命令已停止，Worker 结果已采纳。\",\"prompt\":\"已核对 effect.txt 只有一行，原命令已停止，Worker 结果已采纳。只汇总这些结果，不再执行命令。\",\"session_id\":\"01a194ef-d7e2-72bc-bc73-f5e1f4ee2379\",\"replacement_run_id\":\"01a194ef-d7e2-72bc-bc73-f5e28508650e\",\"created_at_ms\":1793500108770}",
+      "created_at_ms": 1793500108894
+    },
+    {
+      "cursor": 1,
+      "run_id": "01a194ed-9bb9-748c-8b1d-32b94439cf29",
+      "kind": "task_accepted",
+      "payload_json": "{\"attempt_id\":\"01a194ed-9bb9-748c-8b1d-32bac8a4313b\",\"worker_node_id\":\"01a194ed-9b47-73a2-9afd-29d2c622b8c5\"}",
+      "created_at_ms": 1793499986097
+    },
+    {
+      "cursor": 2,
+      "run_id": "01a194ed-9bb9-748c-8b1d-32b94439cf29",
+      "kind": "task_updated",
+      "payload_json": "{\"status\":\"running\",\"attempt_status\":\"running\",\"result\":\"\",\"error\":\"\"}",
+      "created_at_ms": 1793499986098
+    },
+    {
+      "cursor": 3,
+      "run_id": "01a194ed-9bb9-748c-8b1d-32b94439cf29",
+      "kind": "task_updated",
+      "payload_json": "{\"status\":\"awaiting_acceptance\",\"attempt_status\":\"succeeded\",\"result\":\"Worker synthetic result\",\"error\":\"\"}",
+      "created_at_ms": 1793499986131
+    },
+    {
+      "cursor": 4,
+      "run_id": "01a194ed-9bb9-748c-8b1d-32b94439cf29",
+      "kind": "task_updated",
+      "payload_json": "{\"status\":\"completed\",\"attempt_status\":\"succeeded\",\"result\":\"Worker synthetic result\",\"error\":\"\"}",
+      "created_at_ms": 1793500063199
+    },
+    {
+      "cursor": 1,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "run_accepted",
+      "payload_json": "{\"run_id\":\"01a194ef-d7e2-72bc-bc73-f5e28508650e\",\"recovery_of\":\"01a194ed-9b90-76b1-81e0-ec794c12861e\"}",
+      "created_at_ms": 1793500108848
+    },
+    {
+      "cursor": 2,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "run_running",
+      "payload_json": "{\"status\":\"running\",\"result\":\"\",\"error\":\"\"}",
+      "created_at_ms": 1793500109034
+    },
+    {
+      "cursor": 3,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "model_route_decision",
+      "payload_json": "{\"request_id\":\"01a194ef-d7e2-72bc-bc73-f5e28508650e\",\"status\":\"accepted\",\"output\":{\"operation\":\"route_model\",\"value\":{\"complexity\":\"medium\",\"task_domain\":\"unknown\",\"recommended_tier\":\"balanced\",\"required_capabilities\":[],\"candidate_model_keys\":[\"worker-fixture\"]}},\"provenance\":{\"policy_id\":\"default\",\"policy_revision\":\"rules-v1\",\"method\":\"rules\",\"backend_version\":null,\"index_revision\":null,\"reason_codes\":[\"PINNED_MODEL_VALIDATED\",\"RULE_MATCH\"]},\"elapsed_ms\":10}",
+      "created_at_ms": 1793500109082
+    },
+    {
+      "cursor": 4,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "execution_plan",
+      "payload_json": "{\"task_kind\":\"code\",\"model_policy\":\"general\",\"allowed_tools\":[\"read_file\",\"list_files\",\"search_files\",\"write_file\",\"execute_command\"],\"required_capabilities\":[\"file_read\",\"file_write\",\"process_execute\"],\"execution_mode\":\"local\",\"target_hint\":null,\"risk_level\":\"high\",\"confidence\":null,\"trace_id\":\"01a194ef-d99b-7232-b9b6-d6749fffe547\",\"source\":{\"kind\":\"explicit\"}}",
+      "created_at_ms": 1793500109211
+    },
+    {
+      "cursor": 5,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "run_started",
+      "payload_json": "{\"run_id\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\"}",
+      "created_at_ms": 1793500109442
+    },
+    {
+      "cursor": 6,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"seq\":1,\"lane\":\"main\",\"timestamp\":1793500109443,\"type\":\"operation_started\",\"sourceLeafId\":null,\"intent\":{\"kind\":\"run\",\"originalPrompt\":[{\"kind\":\"user\",\"role\":\"user\",\"content\":\"已核对 effect.txt 只有一行，原命令已停止，Worker 结果已采纳。只汇总这些结果，不再执行命令。\",\"timestamp\":1793500109442}],\"initialMessages\":[],\"systemPromptOverride\":null,\"resumeData\":null}}}",
+      "created_at_ms": 1793500109447
+    },
+    {
+      "cursor": 7,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ef-da83-773c-8008-1c53fa4dad8e\",\"seq\":2,\"parentId\":null,\"timestamp\":1793500109447,\"message\":{\"kind\":\"user\",\"role\":\"user\",\"content\":\"已核对 effect.txt 只有一行，原命令已停止，Worker 结果已采纳。只汇总这些结果，不再执行命令。\",\"timestamp\":1793500109442},\"terminate\":null}}",
+      "created_at_ms": 1793500109448
+    },
+    {
+      "cursor": 8,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "text_delta",
+      "payload_json": "{\"text\":\"已根据人工核对记录完成汇总；没有重复执行原命令。\"}",
+      "created_at_ms": 1793500109535
+    },
+    {
+      "cursor": 9,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-dadf-7042-8053-0cf7c2e15822\",\"seq\":3,\"lane\":\"main\",\"timestamp\":1793500109536,\"type\":\"assistant_frame\",\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"start\",\"partial\":{\"timestamp\":1793500109498,\"role\":\"assistant\",\"content\":[],\"api\":\"openai-completions\",\"provider\":\"openai\",\"model\":\"worker-fixture\",\"responseModel\":null,\"responseId\":null,\"usage\":{\"input\":0,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":0,\"cost\":{\"input\":0.0,\"output\":0.0,\"cacheRead\":0.0,\"cacheWrite\":0.0,\"total\":0.0}},\"stopReason\":\"pending\",\"deferred\":null,\"errorMessage\":null,\"rawStopReason\":null,\"endTurn\":null}}}}",
+      "created_at_ms": 1793500109537
+    },
+    {
+      "cursor": 10,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-dadf-7042-8053-0cf87e8e7c84\",\"seq\":4,\"lane\":\"main\",\"timestamp\":1793500109538,\"type\":\"assistant_frame\",\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"text_start\",\"contentIndex\":0,\"content\":{\"type\":\"text\",\"text\":\"\"}}}}",
+      "created_at_ms": 1793500109538
+    },
+    {
+      "cursor": 11,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-dadf-7042-8053-0cf925eeb54f\",\"seq\":5,\"lane\":\"main\",\"timestamp\":1793500109539,\"type\":\"assistant_frame\",\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"已根据人工核对记录完成汇总；没有重复执行原命令。\"}}}",
+      "created_at_ms": 1793500109540
+    },
+    {
+      "cursor": 12,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-dae0-7416-8e91-b9740a92713a\",\"seq\":6,\"lane\":\"main\",\"timestamp\":1793500109540,\"type\":\"assistant_frame\",\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"streamIndex\":0,\"op\":\"append\",\"frame\":{\"type\":\"text_end\",\"contentIndex\":0,\"content\":\"已根据人工核对记录完成汇总；没有重复执行原命令。\"}}}",
+      "created_at_ms": 1793500109541
+    },
+    {
+      "cursor": 13,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-dae5-7742-a938-ed61448f8586\",\"seq\":7,\"lane\":\"main\",\"timestamp\":1793500109541,\"type\":\"assistant_frame\",\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"streamIndex\":0,\"op\":\"commit_stream\",\"frame\":{\"entryId\":\"01a194ef-dae0-7416-8e91-b9753ff9e38b\"}}}",
+      "created_at_ms": 1793500109542
+    },
+    {
+      "cursor": 14,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "entry_appended",
+      "payload_json": "{\"lane\":\"main\",\"entry\":{\"type\":\"message\",\"id\":\"01a194ef-dae0-7416-8e91-b9753ff9e38b\",\"seq\":8,\"parentId\":\"01a194ef-da83-773c-8008-1c53fa4dad8e\",\"timestamp\":1793500109543,\"message\":{\"kind\":\"assistant\",\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"已根据人工核对记录完成汇总；没有重复执行原命令。\"}],\"api\":\"openai-completions\",\"provider\":\"openai\",\"model\":\"worker-fixture\",\"responseModel\":null,\"responseId\":null,\"usage\":{\"input\":11,\"output\":3,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":14,\"cost\":{\"input\":0.0,\"output\":0.0,\"cacheRead\":0.0,\"cacheWrite\":0.0,\"total\":0.0}},\"stopReason\":\"stop\",\"deferred\":null,\"errorMessage\":null,\"rawStopReason\":\"stop\",\"endTurn\":null,\"timestamp\":1793500109498},\"terminate\":null}}",
+      "created_at_ms": 1793500109544
+    },
+    {
+      "cursor": 15,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-dae9-75df-83d7-c8ff9676d1ad\",\"seq\":9,\"lane\":\"main\",\"timestamp\":1793500109545,\"type\":\"assistant_frame\",\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"streamIndex\":0,\"op\":\"clear_stream\",\"frame\":null}}",
+      "created_at_ms": 1793500109546
+    },
+    {
+      "cursor": 16,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"id\":\"01a194ef-daee-73b4-9fb7-b93b6f921b5b\",\"seq\":10,\"lane\":\"main\",\"timestamp\":1793500109550,\"type\":\"assistant_frame\",\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"streamIndex\":0,\"op\":\"clear_run\",\"frame\":null}}",
+      "created_at_ms": 1793500109551
+    },
+    {
+      "cursor": 17,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "record_appended",
+      "payload_json": "{\"record\":{\"type\":\"operation_finished\",\"id\":\"01a194ef-daf0-7750-a46e-3c7fd91631ec\",\"seq\":11,\"lane\":\"main\",\"timestamp\":1793500109552,\"runId\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\",\"outcome\":\"completed\"}}",
+      "created_at_ms": 1793500109553
+    },
+    {
+      "cursor": 18,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "run_finished",
+      "payload_json": "{\"outcome\":\"completed\",\"run_id\":\"01a194ef-da82-7141-86ab-4f5cb6cf411f\"}",
+      "created_at_ms": 1793500109554
+    },
+    {
+      "cursor": 19,
+      "run_id": "01a194ef-d7e2-72bc-bc73-f5e28508650e",
+      "kind": "run_completed",
+      "payload_json": "{\"status\":\"completed\",\"result\":\"已根据人工核对记录完成汇总；没有重复执行原命令。\",\"error\":\"\"}",
+      "created_at_ms": 1793500109555
+    },
+    {
+      "cursor": 1,
+      "run_id": "peer:01a194ed-9b47-73a2-9afd-29d2c622b8c5",
+      "kind": "peer_trust_changed",
+      "payload_json": "{\"revoked\":false,\"capabilities\":[\"tasks.submit\",\"tasks.read\",\"tasks.cancel\",\"tasks.accept\",\"workspace.read\",\"workspace.write.approval\"]}",
+      "created_at_ms": 1793499962230
+    }
+  ],
+  "scope": "visible native GPUI, authenticated daemon and paired mTLS Worker, loopback synthetic models; Unix command cancellation after file append; no CEF, real model, other-platform, installation or public-network acceptance",
+  "capture": {
+    "date": "2026-11-01",
+    "os": "macOS 27.2 (26B123)",
+    "arch": "arm64",
+    "gpui_kit": "0.8.1",
+    "version": "0.1.0",
+    "distribution": "unsigned local debug acceptance app bundle",
+    "base_commit": "027f7616c7e34ec1d3d0b5575386a63c7fad0ddd",
+    "uncommitted_working_tree": true,
+    "binary_sha256": "47ab6969b594d0fa772951e911c0aee95b02b5776bf2087515df3dde8810205d",
+    "sources_sha256": {
+      "Cargo.lock": "1ad53173e3a51adb3c3a3e357b4b267a3aa6efa4a058992c78deec4836a5f94e",
+      "Cargo.toml": "519a0823f56bb3c57f383c78de5982d350401720d71bf0a7c0825bb629e528c2",
+      "apps/agent-desktop/Cargo.toml": "6bc4b16a8600d223869a62997f73e7196e8c8c3d1cedb0b538d866acb253e6f5",
+      "apps/agent-desktop/build.rs": "b72e6cba86e3aab146a833a0722e66e3505b180c8d49e308d80969b8a27a263e",
+      "apps/agent-desktop/examples/computer_acceptance.rs": "489568451202683a185ac9d11e602c0888bf28fd858875cd35fd646526b8bf2f",
+      "apps/agent-desktop/examples/computer_target.rs": "048600734e1a14e4685959cfb0778ba39aef5bd33b951fab33bd0ad514e85b35",
+      "apps/agent-desktop/examples/native_acceptance.rs": "2e8b30c7e559d69ed0c77e07502bb12136d506470e87fa14243970c83a20a169",
+      "apps/agent-desktop/examples/recovery_acceptance.rs": "0c9b21ca5e384eba1901bc92e452c8b5b6bbb5d20fdf6207917b7e561b4d5229",
+      "apps/agent-desktop/src/chrome.rs": "de36afc0b37bf24279c45b6e53392cc409c4c74755f2bec359cc94a966b3a417",
+      "apps/agent-desktop/src/completion.rs": "e4100e4d8ef452b284d7e8b16e0a2f33dea35983c73c92223f4aadd829ff2efe",
+      "apps/agent-desktop/src/composition.rs": "b553b354862c601f5a1d914044ea6b310490c70b7f0db96cd8bc6613b54cbf55",
+      "apps/agent-desktop/src/computer.rs": "969207740fd06708fc1b998e16c2a2498a4e31ab544f2351d2eb48aef91b45ed",
+      "apps/agent-desktop/src/computer/lifecycle.rs": "4b8844720bf2f81d624bd00afd8b9eeaef06cd44005624da7922b58c8a852ef6",
+      "apps/agent-desktop/src/computer/view.rs": "181e00284426210cae9db4fa9577ece37b5d21cf20da566bc621cda5ec7760bf",
+      "apps/agent-desktop/src/connection.rs": "c3b695c770e87cd0b5e1977fcd3702ccb44c6ccea7c1ebf4aa51c30eb671679b",
+      "apps/agent-desktop/src/lib.rs": "4cf2894fb60f85412a54d15bdac87f3f4424452f4cbcd4c678c0e6a12ac45081",
+      "apps/agent-desktop/src/local_state.rs": "1a3afcc81c5cb6faf66c631cc92db3c6b8510facc03f9ae33d1f245c48224720",
+      "apps/agent-desktop/src/main.rs": "5e0694087233be0c939601d892e0911bbb78b5d2cfb8e86fa6d8ba0e3690b481",
+      "apps/agent-desktop/src/message.rs": "7f0c768af343b368b0a505d4be4c4639536e77149eda7a137f0f2d6966da9e75",
+      "apps/agent-desktop/src/operations.rs": "075bd41cf3aed9eb877289a3c3a4a455206988ea0fd969209be7ac6612168795",
+      "apps/agent-desktop/src/panes.rs": "434baa5363a9f9a71d14ded6d84e9243f7076bb66e8baf2bb23749f1d51930a6",
+      "apps/agent-desktop/src/persistence.rs": "c53368bb71b3ed1feea4dd8131ac932c621463112c66acc42c94f9dca4632fcd",
+      "apps/agent-desktop/src/persistence/layout.rs": "f0e4ce3b26a747562fe79dbe53464cdf991bf2abd7a314259767c7e2922d5f62",
+      "apps/agent-desktop/src/persistence/snapshot.rs": "a2208c8790587ecad5fc0282f13b17fc952e9cea1293ee7d07fdb540b0d2b0b7",
+      "apps/agent-desktop/src/persistence/worker.rs": "7d0ca023489196f0d72b2e1ceadf948ade8db5bb115d8bba3644cf7e765a8301",
+      "apps/agent-desktop/src/persistence/worker_tests.rs": "904d60dfda9530c63965d641bcd4740d86383f9707387b1888dae5953d1d9f79",
+      "apps/agent-desktop/src/presentation.rs": "9ccdd589d83ec25f83e3091af44f90030a5c24317eed814920685f37b4fed3ac",
+      "apps/agent-desktop/src/projection.rs": "b996f7c8c7a0aeaff1674397e8e3f2d7083e5258f3f6e2cbd968f52ca19f649b",
+      "apps/agent-desktop/src/recovery.rs": "19d4efa4fc2649b097f292a58bebde82f8db0c7b3a286e31098bc4ec6c2d9c65",
+      "apps/agent-desktop/src/recovery/view.rs": "c0d24fcc348ec9d6d44e741a0b79e740d4366e41c23e9f0926fee2655cdfde7e",
+      "apps/agent-desktop/src/settings.rs": "50636b9d831f27ee5c1ba6b85ba53a46420cf0a124b497de19c064935e6f7070",
+      "apps/agent-desktop/src/shell.rs": "4e2da49d8832f6fc1f6780e7abc1c5b12ba04f5187634f069d422a34684ee389",
+      "apps/agent-desktop/src/tabs.rs": "e5030055c240d54348fa437ed9523ff6845551bf30836e586f9bb198a689409e",
+      "apps/agent-desktop/src/tabs/delivery.rs": "2aa40785bf46e6d6ab0e942a18967a88b0a3dc54bf3822b6d1b30dbb8174e695",
+      "apps/agent-desktop/src/tabs/state.rs": "cdb7dab72dd708744563c2393d51216e436aa781c02afa749341ad99e515c6ff",
+      "apps/agent-desktop/src/tabs/view.rs": "7ec4b24cd9ce045d786a46b4570067bdc93f25c425e71022d21d200953fa0edb",
+      "apps/agent-desktop/src/theme.rs": "b88a63c2ad72559d05b354d709909f24203e24cc71f4d6ec8162fb82dfcdbe97",
+      "apps/agent-desktop/src/view_model.rs": "01c555f7c0cb98537ba8d77bbd930d08a2c437629cf2dba0d708331562cbac1e",
+      "apps/agent-desktop/src/views/approval.rs": "c0da20df6333355a64468fa80295e62045fe2e7c9d7e257c30be9169cf8e698f",
+      "apps/agent-desktop/src/views/composer.rs": "f3d91bf2b35cfde51f152926cb0931b87d73d202aa9c3e568a690ac468d931ac",
+      "apps/agent-desktop/src/views/conversation.rs": "44ec489a179a2b29a97d2f57bd0edf50dbbe4926142f0b61f158ff8cb9905131",
+      "apps/agent-desktop/src/views/message.rs": "a69d34ff590e950d2a367547c1cff979060743be90fd3150c2ca8226d19e6515",
+      "apps/agent-desktop/src/views/mod.rs": "55e07a6bbf204014c012f5a68bd7b209f3049eec7f64ab3ab101919de369d668",
+      "apps/agent-desktop/src/workbench.rs": "80c8ae6dd27383ce718aac4854b4629c14fa2406483a6762b194b4d3bc772878",
+      "apps/agent-desktop/src/workbench/browser.rs": "645d40c36d1207f33dbbb6dd15d8b1ac72cfee51e760a5d0745f71c4f014d537",
+      "apps/agent-desktop/src/workbench/drafts.rs": "b2e21a61e83dc745e2775ce8f0666ef08d616f5dc766f8ee4c0c586573be84ab",
+      "apps/agent-desktop/src/workbench/files.rs": "4b4b844d379f240c019514f874860407cec2db67400c1e0dcdaa250e60575bb9",
+      "apps/agent-desktop/src/workbench/frames.rs": "c1d8e0dce4a0e8db160ba0de814b227939d99173e335544de81f1324eb9a646d",
+      "apps/agent-desktop/src/workbench/ime.rs": "a5f2f1c4bc5931ab99f6014a830ef10afa6373c39d9297df5a4d836b0e19a35b",
+      "apps/agent-desktop/src/workbench/input.rs": "2c8edd9d603b1ee111125062fb153286dbcef698e03b19ec585f0c9fa00956ff",
+      "apps/agent-desktop/src/workbench/layout.rs": "3ff09cd88dac1fac86f1b87a84291a5cc4f18eca4d1a33757e4aff4c6f580044",
+      "apps/agent-desktop/src/workbench/replies.rs": "475ba0a7997da5e53ef8a8213d0e93ec386b0b760a2b9a1e4406dc9d550175ce",
+      "apps/agent-desktop/src/workbench/state.rs": "677ad30556fd0ba1ea5d72f4a1941a5c5dd6573546c6d55b98aa2b11c15012b7",
+      "apps/agent-desktop/src/workbench/tasks.rs": "d9fe978eb31da97492443406635b03471aec73fa556cb39f75c548fd3c1a4a19",
+      "apps/agent-desktop/src/workbench/tasks/operations.rs": "2de0b1b54286caf4ec9a1e6eb15575899b45411dfa63049f8bf6dffa58d4e59f",
+      "apps/agent-desktop/src/workbench/tasks/view.rs": "6b1852dba8c926439756ce89c8f4107ee1e7689c772be6eeb3ee643e2f1f6f9b",
+      "apps/agent-desktop/src/workbench/watch.rs": "866a12efdaf1294acf59c953ae00a36bc5e855be4b03c4ef8e61ef8207ec7c72",
+      "apps/agent-desktop/tests/browser.rs": "2c330e9e379faf938f977f6b533f1693031b0bf5970928f0c5d332bcd75a329c",
+      "apps/agent-desktop/tests/chat.rs": "c20f7eb7b64fc33722c7552a345fca3f47a8ede40e9f517b6ffc39aab1313483",
+      "apps/agent-desktop/tests/computer.rs": "17cbeb3136365a0ae7bc8baec64023796d3fb512d130d0766cca81311647c981",
+      "apps/agent-desktop/tests/internal/completion_delivery.rs": "26c87fb02e68282cf0dd601fe4a0633683a8bb73edc40bc20dbb1dfb46dcbf6b",
+      "apps/agent-desktop/tests/internal/composer_submission.rs": "61a4d54bba44fbe7bb38774c27e3c314b8d51a83c68abd5b634395b74b4dbcc7",
+      "apps/agent-desktop/tests/internal/computer_generation.rs": "b8f6e45a4a14c1aa519f4d09e6c9408d93f9ba68c37297d9cca04ecd49b901f1",
+      "apps/agent-desktop/tests/internal/frame_generation.rs": "e19e6c7b88d4297d08c4add5fbe2bef4657685badcc4d662803b05b782960ec6",
+      "apps/agent-desktop/tests/internal/run_recovery.rs": "fd98eb4f87387d3cbff81ec1b0638d2beb08a59a3b81f6948fde856fd9945dc7",
+      "apps/agent-desktop/tests/layout.rs": "07837590a76fec47f6d2c7bf7887cf01339bc6e723253b901c100c39a2d1e5d7",
+      "apps/agent-desktop/tests/recovery_support/mod.rs": "1ff692c2d8de25c95749381c6b2f9dc0ca3b3bd6ffe1d0436d59ba90ba8b3d16",
+      "apps/agent-desktop/tests/recovery_tasks.rs": "b005a84651ac843633162d1828c979c3a22a38cf9bb91f7062a3f2fa5532e356",
+      "apps/agent-desktop/tests/restoration.rs": "5d3412b65b0af4020c2b2c18d8c062dc49763c08b5f75bc227bc8e379ed41cb1",
+      "apps/agent-desktop/tests/session_tabs.rs": "8a0a71dd742ed6940823586d8114f657473bff135fc2f327d1bac5479bc23975",
+      "apps/agent-desktop/tests/support/computer.rs": "348af623a090e61ca12a1f22452c51bb503ef10d8a0c57a8fdc99d8f4a60b50f",
+      "apps/agent-desktop/tests/support/mod.rs": "6467581ba7cf33a2be199c5fef23e5716bfe3ebce61af61643ad7e4bd22c7fab",
+      "apps/agent-desktop/tests/support/tasks.rs": "c37bcb6ef35ceef6e6f73f221bec3f7c2f01d80f35fc54b4463eb48c54e65212",
+      "apps/agent-desktop/tests/support/workspace.rs": "a2b88779cba1ea00ccd0116fbb03315f89f1f26f382b65adf6c59c9dfbf82127",
+      "apps/agent-desktop/tests/tasks.rs": "22eb6670430ae07d763cd6ab59b02e4858a72fd2bce7c9dbbcd4f290a946acb0",
+      "apps/agent-desktop/tests/workspace.rs": "be379e8c19515631d251da0ddb0fcd9ce033ec8e48aa8b26476424480f30607b",
+      "apps/agentd/tests/peer_support/mod.rs": "1b10e808a9e04750d03ffd771b91553fbe454301c92ffc163813064685d61a1c",
+      "apps/agentd/tests/remote_support/mod.rs": "75707beae5740d2e035458a11fde1ef1063e01cac474037e32fc4f4e9986afac",
+      "crates/agent-client/Cargo.toml": "efbce8faf608001bff41ff35abee1aee7ce90c115b831828316afd3e782d1d08",
+      "crates/agent-client/src/browser.rs": "2b435aa31573d3d2810eada72429667ba2eea832efeb1878794a27d10feae908",
+      "crates/agent-client/src/computer.rs": "351d2d22530c761151cc122dc0d37e1ccccc4afd36d65328870ed5aca98ecb8f",
+      "crates/agent-client/src/development.rs": "ec05f1ad88869f41b1098e763cb263afcb6d385c0b0af26be36c501848c75415",
+      "crates/agent-client/src/lib.rs": "4360f4b32ff2f633a2f40f613205dd7bea6c25632362273e8d07dcfbd86ca504",
+      "crates/agent-client/src/local_state.rs": "2118238238a877a75612d94e73bb0f450de549b5d39fcbe8bb80c775420f5c73",
+      "crates/agent-client/src/local_state/identity.rs": "baf9a5b8af645477959c89497b2cc5623ae78eada2fe8d9a294ec0fccaa21495",
+      "crates/agent-client/src/orchestration.rs": "d54006df8b5c1fe6108efb5abd6ec019c95aa94b06d248fcd7ae2885587d54c1",
+      "crates/agent-client/src/recovery.rs": "0c0444f0ba309164371ed6500a93e60fa475268359d4984a086850bc457dbe7f",
+      "crates/agent-client/src/workspace.rs": "f58d8ac05f668397a8bf86e7d05ebc2ff7b5b7bc331a885a5157d4924779e10f",
+      "crates/agent-client/tests/local_state.rs": "7cdb3216627f0531dc175757f3971f8277ce945ed362b434caa5103e303449ef",
+      "crates/agent-protocol/Cargo.toml": "ca2c07a60cccafc2c424c23d1d2df8878d26dfa195db01fa1f4193e7521374a0",
+      "crates/agent-protocol/build.rs": "cd5f11b169ce8e7cc58f312d32c344c08ea07b3c8901d632914a979dabba0fdf",
+      "crates/agent-protocol/src/lib.rs": "bfd422760723503449cd4355d661811b101cfca7f8c07d13a160c380678fc0ae",
+      "crates/agent-protocol/src/mapping.rs": "fbe677753f13684614bd5602d3f328566c4ed1063fb01630105c647a3e0d649f"
+    },
+    "screenshots": {
+      "desktop-recovery-blocked-macos.png": {
+        "sha256": "226641e3b33595abe89b1190b4d1af929a0b9037ea79b43e5e717f5c34aab547",
+        "width": 4718592,
+        "height": 4292935744
+      },
+      "desktop-recovery-tasks-macos.png": {
+        "sha256": "dc073f28c43dd024d7d76747fad0489e8d161c720a3a708c8b15fea50153ac40",
+        "width": 4718592,
+        "height": 4292935744
+      },
+      "desktop-recovery-continued-macos.png": {
+        "sha256": "ef8cb393012bf6dc3c7e3f779b31621561be66a5793591a94f0e7a79fefc86d8",
+        "width": 4718592,
+        "height": 4292935744
+      }
+    }
+  }
+}

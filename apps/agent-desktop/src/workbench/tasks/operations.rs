@@ -10,7 +10,7 @@ impl Workbench {
     self.task_generation
   }
 
-  pub(super) fn refresh_tasks(&mut self, after: String) {
+  pub(crate) fn refresh_tasks(&mut self, after: String) {
     if self.task_pending {
       return;
     }
@@ -24,8 +24,14 @@ impl Workbench {
     let generation = self.begin_task_request();
     let workbench_generation = self.generation;
     let sender = self.sender.clone();
+    let unresolved_only = self.recovery_tasks_only;
     self.runtime.spawn(async move {
-      let reply = match client.list_tasks(&session, &after, 100).await {
+      let result = if unresolved_only {
+        client.recovery_tasks(&session, &after).await
+      } else {
+        client.list_tasks(&session, &after, 100).await
+      };
+      let reply = match result {
         Ok(page) => Reply::Tasks(generation, page.tasks, page.next_task_id),
         Err(error) => Reply::TaskError(generation, format!("Unable to load tasks: {error}"), None),
       };

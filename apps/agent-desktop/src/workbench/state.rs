@@ -67,6 +67,7 @@ pub struct Workbench {
   pub(crate) tasks: Vec<AgentTask>,
   pub(crate) task_cursor: String,
   pub(crate) task_pending: bool,
+  pub(crate) recovery_tasks_only: bool,
   pub(crate) task_generation: u64,
   pub(crate) dispatch_intent: Option<DispatchIntent>,
   pub(crate) dispatch_history: Vec<DispatchIntent>,
@@ -205,6 +206,7 @@ impl Workbench {
       tasks: Vec::new(),
       task_cursor: String::new(),
       task_pending: false,
+      recovery_tasks_only: false,
       task_generation: 0,
       dispatch_intent: None,
       dispatch_history: Vec::new(),
@@ -286,6 +288,7 @@ impl Workbench {
       }
       self.task_generation = self.task_generation.saturating_add(1);
       self.task_pending = false;
+      self.recovery_tasks_only = false;
       self.tasks.clear();
       self.task_cursor.clear();
       if connected_changed {

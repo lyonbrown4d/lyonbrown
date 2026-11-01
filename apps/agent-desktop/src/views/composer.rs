@@ -33,6 +33,9 @@ impl Desktop {
   }
 
   pub(crate) fn composer_view(&self, cx: &mut Context<Self>) -> AnyElement {
+    if self.recovery.as_ref().is_some_and(|state| state.visible) {
+      return self.recovery_view(cx);
+    }
     let colors = DesktopColors::get(cx);
     let running = self.vm.active_run.is_some();
     div()
@@ -40,6 +43,23 @@ impl Desktop {
       .min_w_0()
       .flex()
       .flex_col()
+      .children(
+        self
+          .vm
+          .runs
+          .iter()
+          .filter(|run| run.status == "uncertain")
+          .map(|run| {
+            let id = run.id.clone();
+            Button::new(SharedString::from(format!("recover-{}", run.id)))
+              .small()
+              .label(format!("核对异常运行 {}", run.id))
+              .disabled(self.navigation.connecting || self.persistence_loading || self.vm.busy)
+              .on_click(
+                cx.listener(move |this, _, window, cx| this.open_recovery(id.clone(), window, cx)),
+              )
+          }),
+      )
       .when(
         self
           .navigation

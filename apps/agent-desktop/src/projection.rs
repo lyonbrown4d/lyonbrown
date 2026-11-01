@@ -10,6 +10,14 @@ impl Desktop {
     foreground: bool,
   ) {
     match update {
+      Update::Recovery(id, report) => self.apply_recovery(id, *report, cx),
+      Update::RecoveryError(id, error) => {
+        if let Some(state) = self.recovery.as_mut().filter(|state| state.run_id == id) {
+          state.pending = false;
+          state.inspected = false;
+          state.error = Some(error);
+        }
+      }
       Update::Connected {
         client,
         sessions,
@@ -28,6 +36,9 @@ impl Desktop {
           .as_deref()
           .is_some_and(|scope| self.persistence_scope.as_deref() == Some(scope));
         if same_identity {
+          if let Some(state) = &mut self.recovery {
+            state.inspected = false;
+          }
           let client = *client;
           let known = sessions
             .iter()
@@ -95,6 +106,7 @@ impl Desktop {
         if let Some(task) = self.watch_task.take() {
           task.abort();
         }
+        self.recovery = None;
         self.vm.active_run = None;
         self.vm.cursor = 0;
         self.vm.error = None;

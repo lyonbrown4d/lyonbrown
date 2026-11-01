@@ -16,7 +16,10 @@ pub struct Remote {
 
 impl Remote {
   pub async fn open(mock: &MockModelServer, protocol: StandardProtocol) -> Self {
-    let mut pair = Pair::open(mock, protocol).await;
+    Self::from_pair(Pair::open(mock, protocol).await).await
+  }
+
+  pub async fn from_pair(mut pair: Pair) -> Self {
     pair.serve().await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
@@ -24,7 +27,9 @@ impl Remote {
     let server = tokio::spawn(async move {
       tonic::transport::Server::builder()
         .add_service(agentd::client_service(daemon.clone()))
-        .add_service(agentd::orchestration_service(daemon))
+        .add_service(agentd::orchestration_service(daemon.clone()))
+        .add_service(agentd::workspace_service(daemon.clone()))
+        .add_service(agentd::browser_service(daemon))
         .serve_with_incoming(TcpListenerStream::new(listener))
         .await
         .unwrap();

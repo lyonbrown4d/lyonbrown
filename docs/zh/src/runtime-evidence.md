@@ -1,8 +1,26 @@
 # 运行截图与验收范围
 
-桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；工作区锁定的 CEF 版本为 154.0.34（Rust crate `cef` 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。[原生截图记录](evidence/desktop-native-capture.json)保存了对应程序、源文件与图片摘要、两次已持久化为 `completed` 的 Run，以及状态为 `consumed` 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见[客户端文档](clients.md)。
+本页早期桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；该组截图对应的 CEF 版本为 154.0.34（Rust crate `cef` 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。[原生截图记录](evidence/desktop-native-capture.json)保存了对应程序、源文件与图片摘要、两次已持久化为 `completed` 的 Run，以及状态为 `consumed` 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见[客户端文档](clients.md)。
 
 浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。
+
+## Desktop 异常恢复与未终结 Task 核对
+
+2026 年 11 月 1 日在 macOS 27.2（26B123）、arm64 上运行 0.1.0 原生验收程序，使用 GPUI Kit 0.8.1、真实认证 agentd、已配对的 mTLS Worker 和本地 Chat Completions 合成模型。程序复用产品视图与恢复操作；本次构建来自未提交工作区，属于本地调试应用包。[运行记录](evidence/desktop-recovery-macos.json)包含对应程序、源码和三张截图的摘要，以及实际持久化状态。复现方式见[开发与验证](development.md)。
+
+![未终结 Task 阻止原运行恢复](images/desktop-recovery-blocked-macos.png)
+
+单次批准的原生命令向 `effect.txt` 追加一行后等待；在窗口中停止运行后，原 Run 与命令回执均进入 `uncertain`，回执原因是 `cancelled`。Worker 已返回结果，但 Master 尚未采纳，恢复按钮保持禁用。
+
+![从恢复入口核对待采纳 Task](images/desktop-recovery-tasks-macos.png)
+
+“核对未终结 Task”直接打开原会话的 Tasks 面板并启用筛选。填写原配对 Worker 身份和地址，执行 Reconcile，再明确采纳结果；Master 与 Worker 的 Task 最终均为 `completed`。返回恢复面板刷新后，填写核对记录和包含核对事实的新输入，再选择继续。
+
+![核对后在独立新会话完成汇总](images/desktop-recovery-continued-macos.png)
+
+新会话已完成，原标签页保留。实际文件内容始终只有 `effect\n`；主模型收到两次请求，Worker 模型收到一次请求，新会话请求不含原命令。原 Run 仍为 `uncertain`，恢复决定将原会话的 `owner_epoch` 从 1 增至 2，使旧所有者失效，并写入匹配的事件与 Outbox。截图中的回复为合成内容；文件、回执、Task、事件和 Outbox 由退出时的数据库核对确认。
+
+本次验收覆盖 macOS 上的原生窗口恢复与本机双 daemon 流程，不代表真实推理、CEF、Computer SDK、Windows、Linux、公网或安装生命周期验收。Task 面板部分操作通过实际画面定位完成，不据此声明辅助功能定位已稳定。
 
 ## 产品窗口异步回复与聊天草稿
 

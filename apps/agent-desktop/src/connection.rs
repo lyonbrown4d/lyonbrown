@@ -14,6 +14,8 @@ pub enum Update {
   Event(Event),
   Run(Run),
   Approvals(Vec<Approval>),
+  Recovery(String, Box<agent_protocol::v1::RunRecovery>),
+  RecoveryError(String, String),
   Error(String),
 }
 

@@ -1,8 +1,26 @@
 # Runtime screenshots and acceptance scope
 
-Desktop client screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. The workspace locks CEF 154.0.34 (`cef` Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The [native capture record](evidence/desktop-native-capture.json) stores the executable, source and image digests, two Runs persisted as `completed`, and the exact file-write approval persisted as `consumed`. See [the client documentation](clients.md) for Settings, chat tabs and panel toggles.
+The earlier Desktop client screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. That capture used CEF 154.0.34 (`cef` Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The [native capture record](evidence/desktop-native-capture.json) stores the executable, source and image digests, two Runs persisted as `completed`, and the exact file-write approval persisted as `consumed`. See [the client documentation](clients.md) for Settings, chat tabs and panel toggles.
 
 The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.
+
+## Desktop recovery and unresolved Task inspection
+
+On November 1, 2026, the 0.1.0 native acceptance example ran on macOS 27.2 (26B123), arm64, with GPUI Kit 0.8.1, an authenticated real agentd, a paired mTLS Worker and local synthetic Chat Completions models. It reuses the product views and recovery operations. This build is an unsigned local debug application bundle from an uncommitted working tree. The [runtime record](evidence/desktop-recovery-macos.json) contains executable, source and screenshot digests alongside actual persisted state. See [development and verification](development.md) to reproduce it.
+
+![An unresolved Task blocks recovery of the original Run](images/desktop-recovery-blocked-macos.png)
+
+An approved native command appended one line to `effect.txt` and waited. Stopping it in the window left both the original Run and command receipt `uncertain`, with receipt reason `cancelled`. The Worker had returned its result, but the Master had not accepted it, so recovery actions stayed disabled.
+
+![Inspecting the Task awaiting acceptance from the recovery entry](images/desktop-recovery-tasks-macos.png)
+
+The unresolved-Task entry opened the original session’s Tasks panel with filtering enabled. The original paired Worker identity and address were supplied, Reconcile was exercised, and the result was explicitly accepted. The Master and Worker Tasks both ended as `completed`. After returning to recovery and refreshing, the operator entered an audit note and a new prompt containing the verified facts, then chose to continue.
+
+![A separate continuation session completes the summary](images/desktop-recovery-continued-macos.png)
+
+The new session completed while the original tab remained available. The file contained exactly `effect\n`; the main model received two requests and the Worker model one. The fresh request contained no original command. The original Run remained `uncertain`. The recovery decision fenced `owner_epoch` from 1 to 2 and produced matching event and Outbox records. The visible response is synthetic; the file, receipt, Tasks, events and Outbox were verified from persisted state during application shutdown.
+
+This acceptance covers the native macOS window and two local daemons. It does not establish real inference, CEF, Computer SDK, Windows, Linux, public-network or installation-lifecycle acceptance. Some Tasks-panel operations used screenshot coordinates, so this run does not establish stable accessibility targeting.
 
 ## Product-window asynchronous replies and chat drafts
 

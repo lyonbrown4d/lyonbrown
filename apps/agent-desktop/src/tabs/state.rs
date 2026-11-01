@@ -52,6 +52,7 @@ pub(crate) struct ChatState {
   status: String,
   conversation: Vec<ChatMessage>,
   pub approvals: Vec<Approval>,
+  recovery: Option<crate::recovery::RecoveryState>,
   pub(super) composer: Entity<TextareaState>,
   pub(super) workspace: Entity<InputState>,
   _persistence_watch: [Subscription; 2],
@@ -94,6 +95,7 @@ impl ChatState {
       .into(),
       conversation: Vec::new(),
       approvals: Vec::new(),
+      recovery: None,
       watch_task: None,
       composer,
       workspace,
@@ -111,12 +113,16 @@ impl ChatState {
     std::mem::swap(&mut self.status, &mut desktop.vm.status);
     std::mem::swap(&mut self.conversation, &mut desktop.vm.conversation);
     std::mem::swap(&mut self.approvals, &mut desktop.vm.approvals);
+    std::mem::swap(&mut self.recovery, &mut desktop.recovery);
     std::mem::swap(&mut self.composer, &mut desktop.composer);
     std::mem::swap(&mut self.workspace, &mut desktop.workspace);
     std::mem::swap(&mut self.watch_task, &mut desktop.watch_task);
   }
 
   pub fn reset_connection_preserving_session(&mut self) {
+    if let Some(state) = &mut self.recovery {
+      state.inspected = false;
+    }
     self.runs.clear();
     self.active_run = None;
     self.cursor = 0;

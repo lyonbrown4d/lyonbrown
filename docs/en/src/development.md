@@ -177,6 +177,19 @@ LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test
 
 The test uses disjoint calibration and replay fixtures to check real loading, dimensions, thresholds and Unknown behavior. Its small sample is not a production multilingual accuracy benchmark. See [Reusable decision engine](decision-engine.md) for APIs and [AI Gateway](gateway.md) for startup, keys and Swagger.
 
+## Interrupted Run recovery acceptance
+
+```sh
+cargo test --locked -p agent-desktop --test recovery_tasks
+cargo test --locked -p agent-desktop --lib recovery::tests
+cargo test --locked -p agent-cli --test run_recovery
+cargo run --locked -p agent-desktop --example recovery_acceptance -- --evidence-dir .local/acceptance/desktop-recovery
+```
+
+The visible example and `recovery_tasks` require Unix `/bin/sh`. They use isolated temporary data, synthetic loopback models and a paired mTLS Worker, without installing a service, paid model calls or weight loading. Connect and select `master`, inspect and approve the temporary command once. It appends one line to the isolated workspace's `effect.txt` and waits. The visible example gives the command a 120-second total budget, including approval waiting. After verifying the file effect and Worker response, select Stop in the chat to leave the Run `Uncertain`. The component test uses a five-second budget to verify timeout instead. After the approved command starts, the fixture dispatches a read-only Worker Task whose successful result awaits Master acceptance.
+
+Open recovery, reconcile and explicitly accept/reject the Worker result through Tasks, then refresh the recovery report. The output directory's `fixture.json` supplies the Worker ID and loopback HTTPS endpoint. Verify the actual file, enter a note and explicit fresh input, then continue. Normal window closure writes `runtime.json` with the original/replacement Runs, decision, both Task records, events, Outbox, actual file content and model request counts. Capture screenshots separately from the real window. These records and tests do not establish real-model, other-platform, public-network or installation lifecycle acceptance.
+
 ## Native service acceptance
 
 The following macOS test registers a real launchd service. Use a test account with no Lyonbrown service registration and an unused `127.0.0.1:7447`. Build the product daemon, then provide its absolute path:
