@@ -36,6 +36,31 @@ The Agent embeds the reusable core by default, pins the configured main model an
 
 Each run receives an execution plan from `agent-decision` before `agent-runtime` opens `rpi-harness`. A classifier returns advice. It executes no tools and cannot grant permissions.
 
+## Model installation and execution binding
+
+agentd owns catalog queries, installation and loading, without requiring a chat first. Model selection binds a specific session. Artifact verification, backend loading and inference-quality acceptance are separate checks.
+
+```mermaid
+flowchart TD
+    A["Client requests search / inspect"] --> B["agentd inspects repository / pins commit and file set"]
+    B --> C["Generate plan_id / size, hashes and runtime"]
+    C --> D["User confirms exact plan"]
+    D --> E["SQLite persists install intent, events and Outbox first"]
+    E --> F["agentd background download job"]
+    F --> G{"Size and SHA256 checks pass?"}
+    G -->|Yes| H["installed_unverified / files available but not loaded"]
+    G -->|No| I["Failed / do not activate files"]
+    F -->|Cancel| J["cancelled / preserve resumable data"]
+    F -->|Restart without terminal state| U["uncertain / inspect original Job ID before explicit action"]
+    H --> L{"Explicit load / SDK and model compatible?"}
+    L -->|No| H
+    L -->|Yes| R["Backend loaded / execution binding selectable"]
+    R --> S["SelectModel / check Session and owner_epoch"]
+    S --> T["StartRun / atomically persist immutable model binding"]
+```
+
+Source references: [apps/agentd/src/model_hub.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/model_hub.rs), [apps/agentd/src/model_jobs.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/model_jobs.rs), [apps/agentd/src/model_catalog.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/model_catalog.rs).
+
 ## How the plan controls execution
 
 Without `decision.model`, the daemon uses an explicit workspace rule: the general model policy, `read_file`, `list_files`, `search_files`, and revision-checked `write_file`, with MCP, browser and trusted-command tools selected by configuration and available runtime capabilities. Configured, actively paired delegation targets can enable distributed execution and `delegate_task`. Workspace path restrictions and per-operation mutation approval still apply. This rule comes from daemon policy; prompt text cannot supply authorization.

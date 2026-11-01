@@ -20,7 +20,7 @@ flowchart TB
         Desktop --> Browser
     end
     subgraph Agentd[Local agentd / FluxDI composition]
-        API[Client / Workspace / Browser / ComputerRuntime / Orchestration services]
+        API[Client / Model / Skill / Workspace / Runtime / Orchestration services]
         Decision[agent-decision / Agent tool and node policy]
         Run[Run lifecycle / concurrency / cancellation / recovery]
         Harness[agent-runtime / sole rpi-harness loop]
@@ -92,28 +92,51 @@ The control directory, Noise links and TaskService are separate protocol boundar
 
 ## Runs and side effects
 
+A request can involve several model generations and tool calls, while the same daemon-owned Harness manages history and the loop. The model adapter can use a standard API or local inference backend; clients receive domain events only.
+
 ```mermaid
 sequenceDiagram
     participant C as CLI / Desktop
     participant D as agentd
-    participant S as SQLite
-    participant H as Sole Harness
-    participant T as Tool adapter
-    C->>D: StartRun / Session / epoch / idempotency_key
-    D->>S: Atomic Run, event and Outbox commit
-    D->>D: Decide and restrict tools, models and targets
-    D->>S: Persist effective execution plan
-    D->>H: Execute / stream domain events
-    H->>T: ToolCall / call_id
-    T->>S: Request exact-action approval
-    D-->>C: Approval / arguments and expiry
-    C->>D: Allow once or deny
-    T->>S: Consume matching approval / persist intent
-    T->>T: Authorized side effect / cancellation and deadline
-    T->>S: Persist receipt / Uncertain
-    H->>S: Persist Harness session semantics
-    D-->>C: Domain events / cursor recovery
+    participant S as Local SQLite
+    participant H as Sole rpi-harness
+    participant P as Model adapter
+    participant T as Host tool adapter
+    C->>D: StartRun / Session / epoch / idempotency key
+    D->>S: Atomically save Run, binding, events and Outbox
+    D-->>C: Accepted Run ID
+    D->>D: Restrict model, tool and node authority
+    D->>S: Persist effective execution_plan
+    D->>H: Open session and execute prompt
+    loop Further model generation is needed
+        H->>P: Message history and permitted tool schemas
+        P-->>H: Text or structured tool_calls
+        opt Response contains tool calls
+            H->>T: Tool name, call_id and arguments
+            T->>T: Check tool, arguments, workspace and cancellation
+            opt Action requires human approval
+                T->>S: Persist pending approval
+                D-->>C: Approval event / exact arguments and expiry
+                C->>D: Allow once or deny
+            end
+            alt Authorization and validation pass
+                opt Durable command, browser or computer action
+                    T->>S: Consume matching approval and persist intent
+                end
+                T->>T: Execute permitted operation
+                T-->>H: Tool result or execution error
+            else Denied, expired or mismatched arguments
+                T-->>H: Denial result without executing the action
+            end
+        end
+        H->>S: Persist messages, tool records and related events
+        D-->>C: WatchRun / text, tool and approval events
+    end
+    D->>S: Persist terminal Run, events and Outbox
+    D-->>C: Run result and event cursor
 ```
+
+Source references: [apps/agentd/src/execution.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/execution.rs), [crates/agent-runtime/src/runtime.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-runtime/src/runtime.rs), [crates/agent-runtime/src/tools.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-runtime/src/tools.rs).
 
 Approval cannot broaden the execution plan. Command, browser and computer actions record intent and outcome under stable action identifiers. A disconnect, cancellation or process exit that leaves an unknown outcome produces `Uncertain`; reconciliation uses the same identity without automatic replay. File writes, MCP and other tools follow their own adapter authorization and error contracts; one tool's receipt guarantees do not apply to every tool.
 

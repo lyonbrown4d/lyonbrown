@@ -20,7 +20,7 @@ flowchart TB
         Desktop --> Browser
     end
     subgraph Agentd[本机 agentd / FluxDI 组合根]
-        API[Client / Workspace / Browser / ComputerRuntime / Orchestration 服务]
+        API[Client / Model / Skill / Workspace / Runtime / Orchestration 服务]
         Decision[agent-decision / Agent 工具与节点策略]
         Run[Run 生命周期 / 并发限制 / 取消与恢复]
         Harness[agent-runtime / 唯一 rpi-harness Loop]
@@ -92,28 +92,51 @@ flowchart TB
 
 ## Run 与副作用
 
+一次请求可以经历多轮模型生成和工具调用，但只有 daemon 中的同一个 Harness 管理消息历史与循环。下图中的模型适配器可连接标准 API 或本地推理后端；客户端只接收领域事件。
+
 ```mermaid
 sequenceDiagram
     participant C as CLI / Desktop
     participant D as agentd
-    participant S as SQLite
-    participant H as 唯一 Harness
-    participant T as 工具适配器
-    C->>D: StartRun / Session / epoch / idempotency_key
-    D->>S: 原子写入 Run、事件和 Outbox
-    D->>D: 决策并收敛工具、模型和节点权限
-    D->>S: 保存有效执行计划
-    D->>H: 执行 / 流式领域事件
-    H->>T: ToolCall / call_id
-    T->>S: 请求精确动作审批
-    D-->>C: Approval / 参数与期限
-    C->>D: 单次允许或拒绝
-    T->>S: 消费匹配审批 / 保存操作意图
-    T->>T: 授权副作用 / 取消与截止时间
-    T->>S: 保存回执 / Uncertain
-    H->>S: 保存 Harness 会话语义
-    D-->>C: 领域事件 / 游标恢复
+    participant S as 本机 SQLite
+    participant H as 唯一 rpi-harness
+    participant P as 模型适配器
+    participant T as 主机工具适配器
+    C->>D: StartRun / Session / epoch / 幂等键
+    D->>S: 原子保存 Run、模型绑定、事件与 Outbox
+    D-->>C: 已接受的 Run ID
+    D->>D: 收敛模型、工具和节点权限
+    D->>S: 保存有效 execution_plan
+    D->>H: 打开会话并执行 prompt
+    loop 模型需要继续生成时
+        H->>P: 消息历史与允许的工具 schema
+        P-->>H: 文本或结构化 tool_calls
+        opt 返回工具调用
+            H->>T: 工具名、call_id 与参数
+            T->>T: 校验工具、参数、工作区与取消状态
+            opt 此动作需要人工审批
+                T->>S: 保存待审批动作
+                D-->>C: 审批事件 / 完整参数与期限
+                C->>D: 单次允许或拒绝
+            end
+            alt 授权与校验通过
+                opt 命令、浏览器、计算机等持久动作
+                    T->>S: 消费匹配审批并保存动作意图
+                end
+                T->>T: 执行获准操作
+                T-->>H: 工具结果或执行错误
+            else 拒绝、过期或参数不匹配
+                T-->>H: 拒绝结果，不执行该动作
+            end
+        end
+        H->>S: 保存会话消息、工具记录及对应事件
+        D-->>C: WatchRun / 文本、工具与审批事件
+    end
+    D->>S: 保存 Run 终态、事件与 Outbox
+    D-->>C: 运行结果与事件游标
 ```
+
+源码核对: [apps/agentd/src/execution.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/execution.rs), [crates/agent-runtime/src/runtime.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-runtime/src/runtime.rs), [crates/agent-runtime/src/tools.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-runtime/src/tools.rs).
 
 审批不能扩大执行计划。命令、浏览器和计算机动作使用稳定动作标识记录意图和结果；连接丢失、取消或进程退出造成结果未知时，状态进入 `Uncertain`，按原标识核对，不自动重新执行。文件写入、MCP 和其他工具各自遵循适配器的授权及错误契约，不能将一种工具的回执能力推断到所有工具。
 

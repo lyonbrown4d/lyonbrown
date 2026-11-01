@@ -50,6 +50,29 @@ The same recovery transaction changes the run's `pending` approvals to `cancelle
 
 An `uncertain` run remains unresolved. Starting another run in the same session cannot bypass it. Preserve the database, events and external operation evidence, then reconcile the actual outcome before choosing the next action. The current protocol has no general-purpose endpoint for manually changing terminal state.
 
+## Choosing the next action after reconnecting
+
+Reconnection restores queries and event subscriptions only. Recovery actions follow the server-provided `allowed_actions`; closed approvals or restored transport do not authorize execution replay.
+
+```mermaid
+flowchart TD
+    A["Client reconnects"] --> B["Query original Session / Run ID"]
+    B --> C{"Server Run status"}
+    C -->|Terminal| D["Display durable result and events"]
+    C -->|Executing or waiting| E["Continue WatchRun / after_cursor"]
+    C -->|uncertain| F["InspectRunRecovery / inspect tools and Tasks"]
+    F --> G{"Server allows recovery actions?"}
+    G -->|No| H["Show reason / reconcile unresolved Tasks and other blockers"]
+    H --> F
+    G -->|Yes| I{"Explicit user decision"}
+    I -->|Abandon| J["Persist abandonment / no model or tool execution"]
+    I -->|ContinueNewSession| K["Create new Session and Run / submit new input only"]
+    J --> L["Preserve original uncertain Run and evidence"]
+    K --> L
+```
+
+Source references: [apps/agentd/src/recovery.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/recovery.rs), [crates/agent-storage/src/runs.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-storage/src/runs.rs).
+
 ## Approvals
 
 An approval records the tool, arguments, owning run and expiry. `decide_approval` accepts only unexpired requests whose run is still awaiting approval. Consumption rechecks the run, tool and arguments and changes the approval to `consumed`, preventing reuse of the same authorization.

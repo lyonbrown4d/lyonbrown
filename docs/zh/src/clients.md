@@ -2,6 +2,30 @@
 
 两个客户端均使用 `agent-client` 访问 daemon。界面中的会话、运行结果和审批来自服务端；客户端不内置另一套 Agent Loop。
 
+## 客户端呈现、路由与 daemon 的分工
+
+两端复用导航类型，但分别持有当前路由、返回栈和展示状态。导航不会创建另一套 Agent Loop，也不会转移 Session 或原生宿主的控制权。
+
+```mermaid
+flowchart LR
+    subgraph Client["每个交互客户端 / Desktop 每窗口独立实例"]
+        V["View / Layout / 成熟组件"] -->|输入事件| A["命令与连接适配层"]
+        A -->|纯导航| N["共享 Navigation 类型 / 位置、历史与版本号"]
+        N --> VM["ViewModel / 路由、草稿、滚动与焦点展示状态"]
+        VM -->|渲染| V
+        A --> RPC["agent-client / 认证 RPC"]
+        RPC -->|异步回复与事件| G["连接、会话与导航版本检查"]
+        N -->|当前展示意图| G
+        G -->|仅应用仍有效的回复| VM
+    end
+    RPC <-->|请求 / 领域事件| D["agentd / Session、Run、模型、Skill、Tools、审批"]
+    D --> S[("daemon 本地 SQLite")]
+```
+
+过期展示回复被丢弃，不代表 daemon 已接受的工作被取消。Provider 凭据的读取和显式上传留在命令适配层，值不进入 ViewModel。
+
+源码核对: [crates/agent-client/src/navigation.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-client/src/navigation.rs), [apps/agent-cli/src/update.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-cli/src/update.rs), [apps/agent-desktop/src/resources/state.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-desktop/src/resources/state.rs).
+
 ## macOS 安装入口
 
 PKG 将应用文件放在 `/Library/Application Support/Lyonbrown/Clients/{cli|desktop}/{version}-{完整目录哈希}/`，每份内容使用独立的组件收据。资源或 Helper 改变时，即使主程序和产品版本相同，也会选择不同的目录与组件标识。`/usr/local/bin/agent` 和 `/Applications/Lyonbrown.app` 分别由独立组件管理，仅作为指向所选内容的符号链接。打包器校验复制后的目录，禁止 Installer 重定位各级 bundle，不清理旧内容组件或收据。

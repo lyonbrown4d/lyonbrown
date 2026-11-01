@@ -50,6 +50,29 @@ Harness 快照保留原始消息内容。`entry_appended` 和 `record_appended` 
 
 `uncertain` 仍属于未解决的运行，不能通过创建同会话的新运行绕过。应保留数据库、事件和对应外部操作证据，核对实际结果后再决定后续操作。当前协议没有通用的人工修改终态接口。
 
+## 重连后如何决定下一步
+
+重连只恢复查询和事件订阅。恢复动作以服务端返回的 `allowed_actions` 为准；旧审批关闭或传输恢复都不构成重新执行的授权。
+
+```mermaid
+flowchart TD
+    A["客户端重连"] --> B["按原 Session / Run ID 查询"]
+    B --> C{"服务端运行状态"}
+    C -->|已结束| D["显示持久结果与事件"]
+    C -->|仍在执行或等待| E["WatchRun / after_cursor 继续订阅"]
+    C -->|uncertain| F["InspectRunRecovery / 核对工具与 Task"]
+    F --> G{"服务端允许恢复动作？"}
+    G -->|否| H["显示原因 / 先核对未解决 Task 等阻塞项"]
+    H --> F
+    G -->|是| I{"用户显式决定"}
+    I -->|Abandon| J["保存放弃记录 / 不执行模型或工具"]
+    I -->|ContinueNewSession| K["创建新 Session 与新 Run / 仅提交新的输入"]
+    J --> L["保留原 Run 的 uncertain 状态与证据"]
+    K --> L
+```
+
+源码核对: [apps/agentd/src/recovery.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/recovery.rs), [crates/agent-storage/src/runs.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-storage/src/runs.rs).
+
 ## 审批
 
 审批保存工具名、参数、所属运行和过期时间。`decide_approval` 只接受尚未过期且仍处于等待审批的请求。消费审批时再次核对运行、工具和参数，并将审批状态改为 `consumed`，防止同一授权被重复使用。

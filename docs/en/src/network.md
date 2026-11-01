@@ -2,6 +2,41 @@
 
 This page is for operators configuring a Master, Worker and self-hosted `agent-control`. Direct connections and Relay use the same `PeerService`, `TaskService`, pairing and durable task rules. Clients connect to their local Master; daemons establish connections between nodes. See [Components and calls](architecture.md).
 
+## Distributed deployment and trust boundaries
+
+Clients connect to the Master. Daemons dispatch cross-node tasks within paired identity and capability scopes, using separate models, credentials and data directories.
+
+```mermaid
+flowchart TB
+    C["CLI / Desktop"] -->|Authenticated gRPC| API
+    subgraph Master["Master node / agentd"]
+        API["Client services"] --> D["Dispatcher / task identity and authorization"]
+        H["Node Harness / models and tools"] -->|delegate_task| D
+        D --> MS[("Master SQLite / Session, Task, Event, Outbox")]
+        D --> R{"Explicit route configuration"}
+        R -->|Direct| Direct["PeerManager / mTLS"]
+        R -->|Relay| MR["Master RelayTransport / Noise + inner mTLS"]
+    end
+    subgraph Control["Independent agent-control"]
+        Trust["Paired identities / directional authorization"] --> Relay["Opaque forwarding / bounded queue"]
+        Dir["Leased directory / explicit Register and Resolve"]
+    end
+    subgraph Worker["Worker node / agentd"]
+        WR["Worker RelayTransport / Noise + inner mTLS"] --> W["PeerService / TaskService"]
+        W --> WH["Isolated Harness Session / Worker models and tools"]
+        W --> WS[("Worker SQLite")]
+        WH --> WS
+        WH --> FS["Workspace isolated by Task and Attempt"]
+    end
+    Direct -->|Paired identity / TaskEnvelope| W
+    MR <-->|Outbound mTLS connection / bidirectional ciphertext| Relay
+    WR <-->|Outbound mTLS connection / bidirectional ciphertext| Relay
+```
+
+Master and Worker commit separate local SQLite transactions; they share no Session database. Control executes no models or tools and stores no task plaintext. Direct and Relay paths are configured alternatives, not automatic failover channels. Directory APIs are separate; the daemon Relay runtime does not register or renew directory leases automatically.
+
+Source references: [crates/agent-distributed/src/peers.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/peers.rs), [crates/agent-distributed/src/relay_transport/mod.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/relay_transport/mod.rs), [apps/agent-control/src/](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-control/src/).
+
 ## Verify identities and permissions
 
 Each daemon has its own data directory and node identity. Its public identity contains a node ID, TLS certificate and Noise public key. Private keys stay in its local `peers/peer-identity.json`. Control has a separate data directory: `identity/peer-identity.json` holds its private identity, while `control.sqlite3` holds trust, directory records and allowed links. Exchange only public JSON exported by the identity commands below; do not copy private identity files.
@@ -146,6 +181,40 @@ cargo run -p agent-cli -- --data-dir /path/to/master task accept '<task-uuid>' \
 `task list --session <session-id>` pages through Master's records. `task cancel` takes the same target arguments as `reconcile`. Reject results with `task accept … --accepted false`.
 
 After disconnects, timeouts or lost cancellation responses, retain the original Task, Attempt, key and target. Use `get` for local state and `reconcile` to check that same remote attempt. The Master persists unknown attempt outcomes as `uncertain`. Relay reconnection restores transport without automatically reconciling business state or replaying requests. Do not dispatch fresh identities to bypass an unknown outcome. On restart, the Worker also marks unfinished attempts uncertain without re-executing them. See [Sessions, tasks and recovery](persistence.md).
+
+## Task dispatch, Attempt completion and result acceptance
+
+Execution success and result acceptance are stored separately. A transport receipt, Worker Attempt result and final Master decision establish different facts.
+
+```mermaid
+sequenceDiagram
+    participant C as Master client
+    participant M as Master Dispatcher
+    participant MS as Master SQLite
+    participant W as Worker TaskService
+    participant WS as Worker SQLite
+    C->>M: Dispatch / Task ID / Attempt ID / epoch / parent Run
+    M->>M: Check pairing, capabilities, session and active parent Run
+    M->>MS: Persist target and stable task identity
+    M->>W: SubmitTask / chosen direct or Relay route
+    W->>WS: Persist Attempt and isolated session binding
+    W-->>M: Accepted task receipt
+    M-->>C: Receipt does not establish execution completion
+    W->>W: Execute with own model, tools and isolated workspace
+    W->>WS: Attempt succeeded / Task awaiting_acceptance
+    C->>M: Reconcile original Task
+    M->>W: GetTask / original Task ID
+    W-->>M: Result of original Attempt
+    M->>MS: Verify full identity and persist awaiting_acceptance
+    C->>M: AcceptResult / explicitly accept or reject
+    M->>MS: Persist Master decision first / completed or rejected
+    M->>W: Synchronize acceptance decision
+    Note over M,W: Missing Worker acknowledgement does not undo the durable Master decision
+```
+
+This trace shows a task that reached the Worker. If submission or cancellation acknowledgement is lost, the Master retains the original Task, Attempt and target, records an unknown outcome as `uncertain`, and reconciles the same attempt without automatic execution replay. Worker writes still require Worker-local approval; Master acceptance does not replace it.
+
+Source references: [crates/agent-distributed/src/dispatcher.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/dispatcher.rs), [crates/agent-distributed/src/worker.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/worker.rs), [crates/agent-distributed/src/worker_run.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/worker_run.rs).
 
 ## Revoke access and investigate failures
 

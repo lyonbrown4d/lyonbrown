@@ -36,6 +36,31 @@ Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 `mod
 
 每次运行先由 `agent-decision` 生成执行计划，再由 `agent-runtime` 打开 `rpi-harness`。分类器只返回建议，不执行工具，也不能授予权限。
 
+## 模型安装与运行绑定流程
+
+目录查询、安装和加载均由 agentd 处理，不要求先创建聊天。只有选择模型时才绑定具体会话。文件校验成功、后端加载成功和模型质量验收是三件不同的事。
+
+```mermaid
+flowchart TD
+    A["客户端请求 search / inspect"] --> B["agentd 检查仓库 / 固定 commit 与文件集合"]
+    B --> C["生成 plan_id / 大小、哈希与运行后端"]
+    C --> D["用户确认精确计划"]
+    D --> E["SQLite 先保存安装意图、事件与 Outbox"]
+    E --> F["agentd 后台下载作业"]
+    F --> G{"大小与 SHA256 校验通过？"}
+    G -->|是| H["installed_unverified / 文件可用但尚未加载"]
+    G -->|否| I["失败 / 不激活文件"]
+    F -->|取消| J["cancelled / 保留可续传数据"]
+    F -->|重启时无终态| U["uncertain / 查询原 Job ID 后显式处理"]
+    H --> L{"显式 load / SDK 与模型兼容？"}
+    L -->|否| H
+    L -->|是| R["后端已加载 / 执行方式可选择"]
+    R --> S["SelectModel / 校验 Session 与 owner_epoch"]
+    S --> T["StartRun / 原子保存不可变模型绑定"]
+```
+
+源码核对: [apps/agentd/src/model_hub.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/model_hub.rs), [apps/agentd/src/model_jobs.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/model_jobs.rs), [apps/agentd/src/model_catalog.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agentd/src/model_catalog.rs).
+
 ## 执行计划如何生效
 
 未配置 `decision.model` 时，daemon 使用显式工作区规则：通用模型、允许 `read_file`、`list_files`、`search_files` 和带版本校验的 `write_file`，并按配置及运行时能力提供 MCP、浏览器和受信任命令工具。配置且已配对的委派目标可启用分布式执行与 `delegate_task`。文件路径仍受工作区限制，变更操作仍须逐次审批。规则来自 daemon 配置，不从 prompt 中提取授权。

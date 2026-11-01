@@ -2,6 +2,30 @@
 
 Both clients access the daemon through `agent-client`. Sessions, run results and approvals come from the service; neither client embeds another agent loop.
 
+## Client presentation, navigation and daemon ownership
+
+Both clients reuse a navigation type while owning separate locations, history and presentation state. Navigation creates no additional Agent Loop and transfers no Session or native-host authority.
+
+```mermaid
+flowchart LR
+    subgraph Client["Interactive client / separate instance per Desktop window"]
+        V["View / Layout / library components"] -->|Input events| A["Command and connection adapters"]
+        A -->|Presentation navigation| N["Shared Navigation type / location, history, revision"]
+        N --> VM["ViewModel / route, draft, scroll and focus presentation"]
+        VM -->|Render| V
+        A --> RPC["agent-client / authenticated RPC"]
+        RPC -->|Async replies and events| G["Connection, session and navigation revision checks"]
+        N -->|Current presentation intent| G
+        G -->|Apply only current replies| VM
+    end
+    RPC <-->|Requests / domain events| D["agentd / Session, Run, models, Skills, Tools, approvals"]
+    D --> S[("Daemon SQLite")]
+```
+
+Discarding a stale presentation reply does not cancel work already accepted by the daemon. Provider credential reads and explicit uploads remain in command adapters; values never enter the ViewModel.
+
+Source references: [crates/agent-client/src/navigation.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-client/src/navigation.rs), [apps/agent-cli/src/update.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-cli/src/update.rs), [apps/agent-desktop/src/resources/state.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-desktop/src/resources/state.rs).
+
 ## macOS installed entry points
 
 PKGs place each app under `/Library/Application Support/Lyonbrown/Clients/{cli|desktop}/{version}-{full-tree-hash}/` with a separate content-component receipt. Resource or Helper changes select a different directory and component identifier even when the main executable and product version are unchanged. Separate components own `/usr/local/bin/agent` and `/Applications/Lyonbrown.app`; each contains only a symlink to its selected content. The packager verifies the copied tree, disables Installer relocation for every nested bundle, and does not prune old content components or receipts.
