@@ -70,6 +70,70 @@ fn handle_key(
     }
   } else {
     match key.code {
+      KeyCode::Esc if app.panel == ContextPanel::Commands => {
+        app.panel = ContextPanel::Closed;
+      }
+      KeyCode::Up if app.panel == ContextPanel::Commands => {
+        app.command_selected = app.command_selected.saturating_sub(1);
+      }
+      KeyCode::Up if app.panel == ContextPanel::Sessions => {
+        app.sessions_cursor = app.sessions_cursor.saturating_sub(1);
+      }
+      KeyCode::Down if app.panel == ContextPanel::Commands => {
+        let query = app.input.text();
+        let query = query.split_whitespace().next().unwrap_or("/");
+        let count = crate::slash_command::filter(query).len();
+        if count > 0 {
+          app.command_selected = (app.command_selected + 1).min(count - 1);
+        }
+      }
+      KeyCode::Down if app.panel == ContextPanel::Sessions => {
+        app.sessions_cursor = (app.sessions_cursor + 1).min(app.sessions.len().saturating_sub(1));
+      }
+      KeyCode::Tab if app.panel == ContextPanel::Commands => {
+        let query = app.input.text();
+        let query = query.split_whitespace().next().unwrap_or("/");
+        if let Some(command) = crate::slash_command::filter(query).get(app.command_selected) {
+          app.input = crate::composer::Composer::from(format!("/{} ", command.name).as_str());
+          app.panel = ContextPanel::Closed;
+        }
+      }
+      KeyCode::Enter if app.panel == ContextPanel::Commands => {
+        let text = app.input.text();
+        let token = text.split_whitespace().next().unwrap_or("/");
+        let command = token.trim_start_matches('/');
+        if text.trim() == "/" || crate::slash_command::find(command).is_none() {
+          let query = text.split_whitespace().next().unwrap_or("/");
+          if let Some(command) = crate::slash_command::filter(query).get(app.command_selected) {
+            app.input = crate::composer::Composer::from(format!("/{} ", command.name).as_str());
+            app.panel = ContextPanel::Closed;
+          } else {
+            app.notice = format!("未知命令 {token}。输入 /help 查看可用命令。");
+            app.input.clear();
+            app.panel = ContextPanel::Closed;
+          }
+        } else {
+          app.panel = ContextPanel::Closed;
+          crate::local_command::submit(app, actions)?;
+        }
+      }
+      KeyCode::Enter if app.panel == ContextPanel::Sessions => {
+        if let Some(session) = app
+          .sessions
+          .get(app.sessions_cursor)
+          .map(|session| session.id.clone())
+        {
+          app.select_session(app.sessions_cursor);
+          send(
+            actions,
+            Action::Select {
+              session,
+              generation: app.generation,
+            },
+          )?;
+          app.panel = ContextPanel::Closed;
+        }
+      }
       KeyCode::F(number @ 1..=5) => {
         let panel = match number {
           1 => ContextPanel::Help,
@@ -83,6 +147,9 @@ fn handle_key(
         } else {
           panel
         };
+        if number == 2 && app.panel == ContextPanel::Sessions {
+          app.sessions_cursor = app.selected;
+        }
         if number == 3 && app.panel == ContextPanel::Tasks {
           crate::local_command::request_task_page(app, actions, "")?;
         }
@@ -124,6 +191,7 @@ fn handle_key(
       KeyCode::Enter => crate::local_command::submit(app, actions)?,
       KeyCode::Tab => {
         app.next_session();
+        app.sessions_cursor = app.selected;
         if let Some(session) = app.selected_session() {
           send(
             actions,
@@ -163,6 +231,20 @@ fn handle_key(
       }
       KeyCode::PageDown => app.scroll = app.scroll.saturating_sub(5),
       KeyCode::PageUp => app.scroll = app.scroll.saturating_add(5),
+      KeyCode::Char('/') if app.input.is_empty() => {
+        app.input.key(key);
+        app.panel = ContextPanel::Commands;
+        app.command_selected = 0;
+      }
+      KeyCode::Char(_) | KeyCode::Backspace if app.panel == ContextPanel::Commands => {
+        app.input.key(key);
+        let text = app.input.text();
+        if text.split_whitespace().count() > 1 {
+          app.panel = ContextPanel::Closed;
+        } else {
+          app.command_selected = 0;
+        }
+      }
       _ => app.input.key(key),
     }
   }

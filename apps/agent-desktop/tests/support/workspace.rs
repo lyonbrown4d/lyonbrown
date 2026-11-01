@@ -45,6 +45,13 @@ impl WorkspaceService for WorkspaceProxy {
     self.daemon.get_diff(request).await
   }
 
+  async fn get_git_status(
+    &self,
+    request: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::GitStatus>, Status> {
+    self.daemon.get_git_status(request).await
+  }
+
   type WatchFilesStream = <agentd::Daemon as WorkspaceService>::WatchFilesStream;
 
   async fn watch_files(

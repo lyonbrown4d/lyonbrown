@@ -33,6 +33,8 @@ pub enum ContextPanel {
   Computer,
   Approval,
   Drafts,
+  Commands,
+  Resource,
 }
 
 #[derive(Debug)]
@@ -65,6 +67,10 @@ pub struct App {
   pub generation: u64,
   pub draft_detail: String,
   pub recovered_draft_from: Option<String>,
+  pub command_selected: usize,
+  pub resource_title: String,
+  pub resource_detail: String,
+  pub sessions_cursor: usize,
 }
 
 impl Default for App {
@@ -102,6 +108,10 @@ impl Default for App {
       generation: 0,
       draft_detail: String::new(),
       recovered_draft_from: None,
+      command_selected: 0,
+      resource_title: String::new(),
+      resource_detail: String::new(),
+      sessions_cursor: 0,
     }
   }
 }
@@ -113,21 +123,31 @@ impl App {
 
   pub fn next_session(&mut self) {
     if !self.sessions.is_empty() {
-      self.save_current_draft();
-      self.generation = self.generation.saturating_add(1);
-      self.selected = (self.selected + 1) % self.sessions.len();
-      self.restore_current_draft();
-      self.messages.clear();
-      self.tasks.clear();
-      self.active_run = None;
-      self.streaming = None;
-      self.approvals.clear();
-      self.task_rows.clear();
-      self.task_cursor.clear();
-      self.task_selected = 0;
-      self.task_detail.clear();
-      self.scroll = 0;
+      let next = (self.selected + 1) % self.sessions.len();
+      self.select_session(next);
     }
+  }
+
+  pub fn select_session(&mut self, index: usize) -> bool {
+    if index >= self.sessions.len() {
+      return false;
+    }
+    self.save_current_draft();
+    self.generation = self.generation.saturating_add(1);
+    self.selected = index;
+    self.sessions_cursor = index;
+    self.restore_current_draft();
+    self.messages.clear();
+    self.tasks.clear();
+    self.active_run = None;
+    self.streaming = None;
+    self.approvals.clear();
+    self.task_rows.clear();
+    self.task_cursor.clear();
+    self.task_selected = 0;
+    self.task_detail.clear();
+    self.scroll = 0;
+    true
   }
 
   pub fn save_current_draft(&mut self) {

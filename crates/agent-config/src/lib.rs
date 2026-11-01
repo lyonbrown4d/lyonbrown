@@ -5,6 +5,7 @@ mod load;
 mod mcp;
 mod models;
 mod peer;
+mod providers;
 mod relay;
 mod settings;
 
@@ -14,6 +15,11 @@ pub use load::{load, load_with_environment};
 pub use mcp::{McpSettings, McpTransportSettings, validate_mcp};
 pub use models::{LocalModelBackend, LocalModelFormat, LocalModelSettings, validate_local_models};
 pub use peer::PeerSettings;
+pub use providers::{
+  ConfiguredProviderModel, CredentialSource, CredentialState, PROVIDER_CATALOG,
+  ProviderCredentialStatus, ProviderDefinition, ProviderProtocol, ProviderStatus,
+  detect_provider_credentials, detect_provider_environment, provider_definition,
+};
 pub use relay::RelaySettings;
 pub use settings::{DecisionSettings, Settings};
 

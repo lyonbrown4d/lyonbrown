@@ -17,6 +17,11 @@ pub struct TaskListView {
   pub selected: usize,
 }
 
+pub struct CommandPaletteView {
+  pub items: Vec<(String, String)>,
+  pub selected: usize,
+}
+
 pub struct ViewModel<'a> {
   pub connection: &'static str,
   pub connected: bool,
@@ -32,6 +37,7 @@ pub struct ViewModel<'a> {
   pub notice: String,
   pub scroll: u16,
   pub context_scroll: u16,
+  pub command_palette: Option<CommandPaletteView>,
 }
 
 impl<'a> ViewModel<'a> {
@@ -103,13 +109,26 @@ impl<'a> ViewModel<'a> {
             .collect(),
           selected: app.task_selected,
         });
+    let command_palette = (app.panel == ContextPanel::Commands).then(|| {
+      let query = app.input.text();
+      let query = query.split_whitespace().next().unwrap_or("/");
+      let commands = crate::slash_command::filter(query);
+      CommandPaletteView {
+        items: commands
+          .iter()
+          .map(|spec| (format!("/{}", spec.name), spec.summary.to_owned()))
+          .collect(),
+        selected: app.command_selected.min(commands.len().saturating_sub(1)),
+      }
+    });
     let context = match app.panel {
       ContextPanel::Closed => None,
       ContextPanel::Help => Some((
         "快捷键 · F1 关闭",
-        Text::from(
-          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\n\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 关闭面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/run inspect RUN_ID\n/run abandon RUN_ID --idempotency-key KEY --note \'核对记录\'\n/run continue RUN_ID --idempotency-key KEY --note \'核对记录\' --prompt \'新的输入\'\n恢复保留原 Run 的不确定状态；继续会创建新会话，用 Tab 切换查看。\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n管理命令由本机解析，格式错误不会作为模型提示发送。草稿属于客户端状态；原会话不可用时用 /draft list 查看并显式恢复。远程结果不确定时保留原 task/attempt/idempotency 身份，用 get/reconcile 查证；不要创建新身份重放。",
-        ),
+        Text::from(format!(
+          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 关闭面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/run inspect RUN_ID\n/run abandon RUN_ID --idempotency-key KEY --note '核对记录'\n/run continue RUN_ID --idempotency-key KEY --note '核对记录' --prompt '新的输入'\n恢复保留原 Run 的不确定状态；继续会创建新会话，用 Tab 切换查看。\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n\n{}\n\n管理命令由 CLI 本地解析，格式错误不会作为提示发送给模型。",
+          crate::slash_command::help_text(None)
+        )),
       )),
       ContextPanel::Sessions => Some((
         "会话 · Tab 切换",
@@ -121,7 +140,11 @@ impl<'a> ViewModel<'a> {
             .map(|(index, session)| {
               Line::from(format!(
                 "{} {}",
-                if index == app.selected { "›" } else { " " },
+                if index == app.sessions_cursor {
+                  "›"
+                } else {
+                  " "
+                },
                 safe_text(&session.title)
               ))
             })
@@ -145,6 +168,14 @@ impl<'a> ViewModel<'a> {
         } else {
           safe_text(&app.draft_detail)
         }),
+      )),
+      ContextPanel::Commands => Some((
+        "命令 · ↑/↓ 选择 · Tab 补全 · Enter 补全 · Esc 关闭",
+        Text::from("输入命令名称以筛选。所有 / 命令均由 CLI 本地解析。"),
+      )),
+      ContextPanel::Resource => Some((
+        "资源详情 · Esc 关闭",
+        Text::from(safe_text(&app.resource_detail)),
       )),
       ContextPanel::Approval => Some((
         "审批详情 · PgUp/PgDn 滚动",
@@ -203,6 +234,7 @@ impl<'a> ViewModel<'a> {
       notice: safe_text(&notice),
       scroll: app.scroll,
       context_scroll: app.computer_scroll,
+      command_palette,
     }
   }
 }

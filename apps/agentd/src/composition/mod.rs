@@ -71,6 +71,12 @@ fn daemon(
   models: Shared<crate::models::Models>,
   mcp: Shared<crate::mcp::Connections>,
 ) -> Result<Shared<Daemon>, Error> {
+  let secret_root = config
+    .data_path()
+    .map_err(|error| Error::factory_failed("SecretStore", &error.to_string()))?
+    .join("provider-secrets");
+  let provider_secrets = agent_secrets::SecretStore::open(secret_root)
+    .map_err(|error| Error::factory_failed("SecretStore", &error.to_string()))?;
   Ok(Shared::new(Daemon {
     config: (*config).clone(),
     store: (*store).clone(),
@@ -80,6 +86,7 @@ fn daemon(
     decision,
     models,
     mcp,
+    provider_secrets: std::sync::Arc::new(provider_secrets),
     _lease: local.lease.clone(),
   }))
 }

@@ -13,6 +13,27 @@ pub fn apply(app: &mut App, update: Update) {
     } => {
       crate::recovery_update::apply(app, session, generation, source, value);
     }
+    Update::ResourceDetail {
+      session,
+      generation,
+      source,
+      title,
+      detail,
+    } => {
+      if generation != app.generation
+        || session.as_deref() != app.selected_session().map(|value| value.id.as_str())
+      {
+        return;
+      }
+      app.resource_title = title.clone();
+      app.resource_detail = format!("{title}\n\n{detail}");
+      app.panel = crate::model::ContextPanel::Resource;
+      app.computer_scroll = 0;
+      if app.input.text() == source {
+        app.input.clear();
+        app.save_current_draft();
+      }
+    }
     Update::Computer { status, detail } => {
       app.computer = status;
       app.computer_detail = detail;
@@ -33,6 +54,7 @@ pub fn apply(app: &mut App, update: Update) {
       app.selected = selected
         .and_then(|id| app.sessions.iter().position(|session| session.id == id))
         .unwrap_or(0);
+      app.sessions_cursor = app.selected;
     }
     Update::LocalState {
       node_id,
@@ -75,6 +97,7 @@ pub fn apply(app: &mut App, update: Update) {
         title: session.title,
       });
       app.selected = app.sessions.len().saturating_sub(1);
+      app.sessions_cursor = app.selected;
       app.messages.clear();
       app.tasks.clear();
       app.task_rows.clear();

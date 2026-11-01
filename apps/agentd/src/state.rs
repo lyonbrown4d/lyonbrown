@@ -18,6 +18,7 @@ pub struct Daemon {
   pub(crate) decision: fluxdi::Shared<agent_decision::DecisionEngine>,
   pub(crate) models: fluxdi::Shared<crate::models::Models>,
   pub(crate) mcp: fluxdi::Shared<crate::mcp::Connections>,
+  pub(crate) provider_secrets: Arc<agent_secrets::SecretStore>,
   pub(crate) _lease: Arc<NodeLease>,
 }
 impl Daemon {

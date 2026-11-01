@@ -16,6 +16,137 @@ fn session(id: &str) -> Session {
 }
 
 #[test]
+fn slash_palette_filters_completes_and_keeps_unknown_commands_local() {
+  let mut app = App::default();
+  let (actions, mut receiver) = mpsc::channel(2);
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("open slash palette");
+  assert_eq!(app.panel, ContextPanel::Commands);
+  assert_eq!(app.input.text(), "/");
+
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("filter slash commands");
+  assert_eq!(app.input.text(), "/t");
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("complete selected command");
+  assert_eq!(app.input.text(), "/task ");
+  assert_eq!(app.panel, ContextPanel::Closed);
+
+  app.input = "/not-a-command run this".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("reject unknown slash command locally");
+  assert!(app.notice.contains("未知命令"));
+  assert!(
+    receiver.try_recv().is_err(),
+    "unknown slash text is never submitted"
+  );
+}
+
+#[test]
+fn p0_resource_commands_dispatch_only_metadata_and_open_sessions_panel() {
+  let mut app = App {
+    sessions: vec![session("one"), session("two")],
+    ..App::default()
+  };
+  let (actions, mut receiver) = mpsc::channel(8);
+
+  app.input = "/status".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("dispatch status query");
+  assert!(matches!(
+    receiver.try_recv(),
+    Ok(Action::Resource {
+      command: agent_cli::resource_command::ResourceCommand::Status,
+      ..
+    })
+  ));
+
+  app.input = "/git".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("dispatch Git status query");
+  assert!(matches!(
+    receiver.try_recv(),
+    Ok(Action::Resource {
+      command: agent_cli::resource_command::ResourceCommand::Git,
+      ..
+    })
+  ));
+
+  app.input = "/skills list workspace".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("dispatch Skill listing in workspace scope");
+  assert!(matches!(
+    receiver.try_recv(),
+    Ok(Action::Resource {
+      command: agent_cli::resource_command::ResourceCommand::SkillsList { scope },
+      ..
+    }) if scope == "workspace"
+  ));
+
+  app.input = "/providers upload openai OPENAI_API_KEY".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("dispatch explicit provider upload by allowlisted name");
+  let dispatched = receiver.try_recv().expect("provider action");
+  assert!(matches!(
+    &dispatched,
+    Action::Resource {
+      command: agent_cli::resource_command::ResourceCommand::ProviderUpload {
+        provider,
+        environment,
+      },
+      ..
+    } if provider == "openai" && environment == "OPENAI_API_KEY"
+  ));
+  if let Action::Resource { command, .. } = dispatched {
+    assert!(!format!("{command:?}").contains("test-secret"));
+  } else {
+    panic!("provider upload must dispatch a resource command");
+  }
+
+  app.input = "/sessions".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("open session browser");
+  assert_eq!(app.panel, ContextPanel::Sessions);
+  assert!(receiver.try_recv().is_err());
+}
+
+#[test]
 fn saved_drafts_restore_known_sessions_and_preserve_orphans_for_explicit_recovery() {
   let mut app = App {
     sessions: vec![session("known-a"), session("known-b")],

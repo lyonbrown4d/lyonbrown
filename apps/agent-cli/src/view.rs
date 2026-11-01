@@ -3,7 +3,7 @@ use ratatui::{
   layout::{Constraint, Layout, Margin, Rect},
   style::{Modifier, Style},
   text::{Line, Span},
-  widgets::{Block, Borders, Paragraph, Wrap},
+  widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 
 use crate::{model::App, theme::Theme, view_model::ViewModel};
@@ -85,6 +85,41 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
     );
   }
   composer(frame, model, rows[3], theme, compact);
+  if let Some(palette) = &model.command_palette
+    && !palette.items.is_empty()
+  {
+    let height = (palette.items.len() as u16 + 2).min(rows[1].height.saturating_sub(1));
+    let width = rows[1].width.min(72);
+    let popup = Rect::new(
+      rows[1].x,
+      rows[1].y + rows[1].height.saturating_sub(height),
+      width,
+      height,
+    );
+    frame.render_widget(Clear, popup);
+    let block = Block::default()
+      .title(" 命令 · Tab 补全 · Esc 关闭 ")
+      .borders(Borders::ALL)
+      .border_style(Style::default().fg(theme.accent));
+    let inner = block.inner(popup);
+    frame.render_widget(block, popup);
+    let items = palette
+      .items
+      .iter()
+      .map(|(name, summary)| ListItem::new(format!("{name:<14} {summary}")))
+      .collect::<Vec<_>>();
+    let mut state = ListState::default();
+    state.select(Some(palette.selected.min(items.len().saturating_sub(1))));
+    frame.render_stateful_widget(
+      List::new(items).highlight_symbol("› ").highlight_style(
+        Style::default()
+          .fg(theme.accent)
+          .add_modifier(Modifier::BOLD),
+      ),
+      inner,
+      &mut state,
+    );
+  }
   if !compact {
     let execution = if model.active {
       "Ctrl+X 取消执行 · "

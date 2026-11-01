@@ -30,6 +30,8 @@ agent-core = { path = "../../crates/agent-core" }
 agent-protocol = { path = "../../crates/agent-protocol" }
 agent-runtime = { path = "../../crates/agent-runtime" }
 agent-security = { path = "../../crates/agent-security" }
+agent-secrets = { path = "../../crates/agent-secrets" }
+agent-skills = { package = "lyonbrown-skills", path = "../../crates/agent-skills" }
 agent-storage = { path = "../../crates/agent-storage" }
 agent-workspace = { path = "../../crates/agent-workspace" }
 anyhow.workspace = true
@@ -47,6 +49,7 @@ tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 async-stream = "0.3.6"
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
 
 [dev-dependencies]
 agent-test-support = { path = "../../crates/agent-test-support" }

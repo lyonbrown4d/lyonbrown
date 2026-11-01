@@ -83,4 +83,16 @@ impl AgentClient {
         .patch,
     )
   }
+  pub async fn git_status(&self, session_id: &str) -> Result<v1::GitStatus> {
+    Ok(
+      self
+        .workspace
+        .clone()
+        .get_git_status(v1::SessionRequest {
+          session_id: session_id.into(),
+        })
+        .await?
+        .into_inner(),
+    )
+  }
 }

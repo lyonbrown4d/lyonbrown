@@ -45,6 +45,8 @@ pub struct Settings {
   pub relay: Option<crate::RelaySettings>,
   #[serde(skip)]
   pub(crate) credentials: Credentials,
+  #[serde(skip)]
+  pub(crate) provider_credentials: BTreeMap<String, crate::ProviderCredentialStatus>,
 }
 
 fn computer_lease_secs() -> u64 {
@@ -76,7 +78,7 @@ impl Settings {
       .0
       .get(provider)
       .map(|value| value.expose_secret())
-      .filter(|value| !value.trim().is_empty())
+      .filter(|value| !value.trim().is_empty() && !value.contains('\0'))
       .map(str::to_owned)
   }
 

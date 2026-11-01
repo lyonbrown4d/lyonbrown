@@ -91,6 +91,24 @@ pub(crate) async fn execute(
         })
         .await;
     }
+    Action::Resource {
+      session,
+      generation,
+      source,
+      command,
+    } => {
+      let (title, detail) =
+        crate::resource_backend::execute(client, session.as_deref(), command).await?;
+      let _ = updates
+        .send(Update::ResourceDetail {
+          session,
+          generation,
+          source,
+          title,
+          detail,
+        })
+        .await;
+    }
     Action::SaveState { .. } => {}
     Action::Run {
       session,

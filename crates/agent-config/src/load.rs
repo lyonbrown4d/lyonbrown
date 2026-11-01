@@ -52,7 +52,9 @@ pub fn load_with_environment(
   let default_path = data_dir.join("config.toml");
   let path = config_path.unwrap_or(&default_path);
   let dotenv_path = path.parent().unwrap_or(data_dir).join(".env");
-  let mut merged = read_dotenv(&dotenv_path)?;
+  let dotenv = read_dotenv(&dotenv_path)?;
+  let provider_credentials = crate::providers::detect_provider_credentials(&dotenv, environment);
+  let mut merged = dotenv;
   merged.extend(
     environment
       .iter()
@@ -86,6 +88,7 @@ pub fn load_with_environment(
   let mut settings: Settings = config
     .try_deserialize()
     .map_err(|_| anyhow::anyhow!("configuration has unknown fields or invalid value types"))?;
+  settings.provider_credentials = provider_credentials;
   if settings.log_directory.is_relative() {
     settings.log_directory = data_dir.join(&settings.log_directory);
   }

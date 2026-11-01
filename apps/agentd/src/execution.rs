@@ -188,6 +188,10 @@ impl Daemon {
     });
     let mut tools =
       crate::tools::workspace_tools(self.clone(), run, &session.workspace, session.owner_epoch)?;
+    let (skill_prompt, skill_tool) = crate::skill_runtime::prepare(self, run, session).await?;
+    if let Some(tool) = skill_tool {
+      tools.push(tool);
+    }
     if let Some(tool) = self.mcp.tool(self.clone(), run, session.owner_epoch) {
       tools.push(tool);
     }
@@ -224,14 +228,30 @@ impl Daemon {
       ));
     }
     tools.retain(|tool| {
-      permitted_tools.is_none_or(|permitted| permitted.contains(&tool.definition().name))
-        && plan
-          .allowed_tools
-          .iter()
-          .any(|allowed| allowed.name() == tool.definition().name)
+      tool.definition().name == "load_skill"
+        || permitted_tools.is_none_or(|permitted| permitted.contains(&tool.definition().name))
+          && plan
+            .allowed_tools
+            .iter()
+            .any(|allowed| allowed.name() == tool.definition().name)
     });
     let mut runtime_config = self.config.runtime(session);
+    if runtime_config.api_key.is_empty()
+      && let Some(secret) = self
+        .provider_secrets
+        .get(&format!("provider-{}", self.config.provider))
+        .map_err(|_| anyhow::anyhow!("provider credential store unavailable"))?
+    {
+      use agent_secrets::ExposeSecret;
+      runtime_config.api_key = secret.expose_secret().to_owned();
+    }
     crate::repository_instructions::apply(&mut runtime_config, &session.workspace).await?;
+    if !skill_prompt.is_empty() {
+      runtime_config
+        .system_prompt
+        .get_or_insert_default()
+        .push_str(&skill_prompt);
+    }
     let runtime = if let Some(backend) = backend {
       let info = self.models.info(&self.config.model)?;
       runtime_config.context_window = info.context_window;

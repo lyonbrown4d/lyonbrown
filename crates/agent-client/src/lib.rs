@@ -5,6 +5,7 @@ mod development;
 pub mod local_state;
 mod orchestration;
 mod recovery;
+mod skills;
 mod workspace;
 use agent_protocol::v1::{self, client_service_client::ClientServiceClient};
 use anyhow::{Context, Result, ensure};
@@ -29,6 +30,7 @@ pub struct AgentClient {
   workspace: v1::workspace_service_client::WorkspaceServiceClient<
     InterceptedService<Channel, Authentication>,
   >,
+  skills: v1::skill_service_client::SkillServiceClient<InterceptedService<Channel, Authentication>>,
   browser:
     v1::browser_service_client::BrowserServiceClient<InterceptedService<Channel, Authentication>>,
   browser_runtime: v1::browser_runtime_service_client::BrowserRuntimeServiceClient<
@@ -100,6 +102,10 @@ impl AgentClient {
         channel.clone(),
         auth.clone(),
       ),
+      skills: v1::skill_service_client::SkillServiceClient::with_interceptor(
+        channel.clone(),
+        auth.clone(),
+      ),
       browser: v1::browser_service_client::BrowserServiceClient::with_interceptor(
         channel.clone(),
         auth.clone(),
@@ -164,6 +170,58 @@ impl AgentClient {
         .await?
         .into_inner()
         .sessions,
+    )
+  }
+  pub async fn runtime_status(&self, session_id: &str) -> Result<v1::RuntimeStatus> {
+    Ok(
+      self
+        .inner
+        .clone()
+        .get_runtime_status(v1::SessionRequest {
+          session_id: session_id.into(),
+        })
+        .await?
+        .into_inner(),
+    )
+  }
+  pub async fn list_providers(&self) -> Result<Vec<v1::Provider>> {
+    Ok(
+      self
+        .inner
+        .clone()
+        .list_providers(v1::Empty {})
+        .await?
+        .into_inner()
+        .providers,
+    )
+  }
+  pub async fn put_provider_credential(
+    &self,
+    provider_id: &str,
+    credential: Vec<u8>,
+  ) -> Result<v1::Provider> {
+    Ok(
+      self
+        .inner
+        .clone()
+        .put_provider_credential(v1::PutProviderCredentialRequest {
+          provider_id: provider_id.into(),
+          credential,
+        })
+        .await?
+        .into_inner(),
+    )
+  }
+  pub async fn remove_provider_credential(&self, provider_id: &str) -> Result<v1::Provider> {
+    Ok(
+      self
+        .inner
+        .clone()
+        .remove_provider_credential(v1::RemoveProviderCredentialRequest {
+          provider_id: provider_id.into(),
+        })
+        .await?
+        .into_inner(),
     )
   }
   pub async fn create_session(&self, title: &str, workspace: &str) -> Result<v1::Session> {

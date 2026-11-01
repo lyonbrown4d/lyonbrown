@@ -1,0 +1,21 @@
+[package]
+name = "lyonbrown-skills"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+agent-skills = "=0.2.0"
+flate2 = "=1.1.10"
+fs2.workspace = true
+hex.workspace = true
+percent-encoding = "2.3"
+pulldown-cmark = { version = "=0.13.5", default-features = false }
+serde.workspace = true
+sha2.workspace = true
+tar = "=0.4.46"
+tempfile.workspace = true
+thiserror.workspace = true
+url = { version = "2.5", features = ["serde"] }
+zip = { version = "=9.2.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+

@@ -139,6 +139,27 @@ impl ClientService for Service {
       sessions: vec![self.session.clone()],
     }))
   }
+  async fn get_runtime_status(
+    &self,
+    _: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::RuntimeStatus>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn list_providers(&self, _: Request<v1::Empty>) -> Result<Response<v1::Providers>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn put_provider_credential(
+    &self,
+    _: Request<v1::PutProviderCredentialRequest>,
+  ) -> Result<Response<v1::Provider>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn remove_provider_credential(
+    &self,
+    _: Request<v1::RemoveProviderCredentialRequest>,
+  ) -> Result<Response<v1::Provider>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
   async fn prepare_upgrade(&self, _: Request<v1::Empty>) -> Result<Response<v1::Node>, Status> {
     Err(Status::unimplemented("fixture"))
   }

@@ -78,6 +78,112 @@ impl ClientService for Daemon {
         .collect(),
     }))
   }
+  async fn get_runtime_status(
+    &self,
+    request: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::RuntimeStatus>, Status> {
+    let session = self
+      .store
+      .session(&request.into_inner().session_id)
+      .map_err(db_error)?
+      .ok_or_else(|| Status::not_found("session not found"))?;
+    let runs = self.store.runs(&session.id).map_err(db_error)?;
+    let active = runs.iter().find(|run| {
+      matches!(
+        run.status.as_str(),
+        "accepted" | "running" | "awaiting_approval" | "cancel_requested"
+      )
+    });
+    let pending_approvals = match active {
+      Some(run) => self
+        .store
+        .approvals(&run.id)
+        .map_err(db_error)?
+        .into_iter()
+        .filter(|approval| approval.status == "pending")
+        .count() as u32,
+      None => 0,
+    };
+    let node = self
+      .get_node(Request::new(v1::Empty {}))
+      .await?
+      .into_inner();
+    Ok(Response::new(v1::RuntimeStatus {
+      node: Some(node),
+      session: Some(session.into()),
+      active_run: active.cloned().map(Into::into),
+      provider: self.config.provider.clone(),
+      model: self.config.model.clone(),
+      pending_approvals,
+      tools: 4 + u32::from(self.config.browser_tools) + u32::from(self.config.computer_tools),
+      mcp_servers: self.config.mcp.len() as u32,
+    }))
+  }
+  async fn list_providers(&self, _: Request<v1::Empty>) -> Result<Response<v1::Providers>, Status> {
+    let uploaded = self
+      .provider_secrets
+      .list()
+      .map_err(|_| Status::failed_precondition("provider credential store unavailable"))?;
+    Ok(Response::new(v1::Providers {
+      providers: self
+        .config
+        .provider_inventory
+        .iter()
+        .map(|status| {
+          provider_status(
+            status,
+            uploaded
+              .iter()
+              .any(|item| item.id == secret_id(status.definition.id)),
+          )
+        })
+        .collect(),
+    }))
+  }
+  async fn put_provider_credential(
+    &self,
+    request: Request<v1::PutProviderCredentialRequest>,
+  ) -> Result<Response<v1::Provider>, Status> {
+    let mut input = request.into_inner();
+    let definition = agent_config::provider_definition(&input.provider_id)
+      .filter(|definition| {
+        definition.runtime_supported && !definition.credential_env_names.is_empty()
+      })
+      .ok_or_else(|| Status::invalid_argument("provider does not accept uploaded credentials"))?;
+    let value = String::from_utf8(std::mem::take(&mut input.credential))
+      .map_err(|_| Status::invalid_argument("provider credential must be UTF-8"))?;
+    let secret = agent_secrets::SecretString::from(value);
+    self
+      .provider_secrets
+      .put(&secret_id(definition.id), &secret)
+      .map_err(|_| Status::failed_precondition("provider credential could not be stored"))?;
+    let status = self
+      .config
+      .provider_inventory
+      .iter()
+      .find(|status| status.definition.id == definition.id)
+      .ok_or_else(|| Status::internal("provider inventory unavailable"))?;
+    Ok(Response::new(provider_status(status, true)))
+  }
+  async fn remove_provider_credential(
+    &self,
+    request: Request<v1::RemoveProviderCredentialRequest>,
+  ) -> Result<Response<v1::Provider>, Status> {
+    let input = request.into_inner();
+    let definition = agent_config::provider_definition(&input.provider_id)
+      .ok_or_else(|| Status::invalid_argument("unknown provider"))?;
+    self
+      .provider_secrets
+      .remove(&secret_id(definition.id))
+      .map_err(|_| Status::failed_precondition("provider credential could not be removed"))?;
+    let status = self
+      .config
+      .provider_inventory
+      .iter()
+      .find(|status| status.definition.id == definition.id)
+      .ok_or_else(|| Status::internal("provider inventory unavailable"))?;
+    Ok(Response::new(provider_status(status, false)))
+  }
   async fn create_session(
     &self,
     request: Request<v1::CreateSessionRequest>,
@@ -243,4 +349,70 @@ impl ClientService for Daemon {
     self.events.notify_waiters();
     Ok(Response::new(value.into()))
   }
+}
+
+fn provider_status(status: &agent_config::ProviderStatus, uploaded: bool) -> v1::Provider {
+  use agent_config::{CredentialSource, CredentialState, ProviderProtocol};
+  v1::Provider {
+    id: status.definition.id.into(),
+    name: status.definition.name.into(),
+    protocols: status
+      .definition
+      .protocols
+      .iter()
+      .map(|protocol| {
+        match protocol {
+          ProviderProtocol::OpenaiResponses => "openai_responses",
+          ProviderProtocol::OpenaiCompletions => "openai_completions",
+          ProviderProtocol::AnthropicMessages => "anthropic_messages",
+          ProviderProtocol::Local => "local",
+        }
+        .into()
+      })
+      .collect(),
+    runtime_supported: status.definition.runtime_supported,
+    selected: status.selected,
+    credential_state: if uploaded {
+      "detected"
+    } else {
+      match status.credential.state {
+        CredentialState::Missing => "missing",
+        CredentialState::Detected => "detected",
+        CredentialState::Invalid => "invalid",
+        CredentialState::NotRequired => "not_required",
+      }
+    }
+    .into(),
+    credential_source: if uploaded {
+      "uploaded_encrypted"
+    } else {
+      status
+        .credential
+        .source
+        .map(|source| match source {
+          CredentialSource::DaemonEnvironment => "daemon_environment",
+          CredentialSource::ClientEnvironment => "client_environment",
+          CredentialSource::Dotenv => "dotenv",
+        })
+        .unwrap_or_default()
+    }
+    .into(),
+    credential_environment: status
+      .credential
+      .environment_name
+      .clone()
+      .unwrap_or_default(),
+    models: status
+      .configured_models
+      .iter()
+      .map(|model| v1::ProviderModel {
+        id: model.id.clone(),
+        selected: model.selected,
+      })
+      .collect(),
+  }
+}
+
+fn secret_id(provider: &str) -> String {
+  format!("provider-{provider}")
 }

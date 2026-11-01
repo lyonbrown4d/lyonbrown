@@ -15,6 +15,8 @@ pub struct Config {
   #[arg(skip)]
   pub local_models: Vec<agent_config::LocalModelSettings>,
   #[arg(skip)]
+  pub provider_inventory: Vec<agent_config::ProviderStatus>,
+  #[arg(skip)]
   pub mcp: Vec<agent_mcp::McpServerConfig>,
   #[arg(skip)]
   pub commands: agent_config::CommandSettings,
@@ -98,6 +100,7 @@ impl Config {
       settings.run_timeout_secs = cli.run_timeout_secs;
     }
     settings.validate()?;
+    cli.provider_inventory = settings.provider_inventory();
     cli.provider_api_key = settings.credential(if settings.provider == "anthropic" {
       "anthropic"
     } else {

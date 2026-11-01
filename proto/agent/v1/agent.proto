@@ -6,6 +6,10 @@ service ClientService {
   rpc PrepareUpgrade(Empty) returns (Node);
   rpc ResumeAccepting(Empty) returns (Node);
   rpc ListSessions(Empty) returns (Sessions);
+  rpc GetRuntimeStatus(SessionRequest) returns (RuntimeStatus);
+  rpc ListProviders(Empty) returns (Providers);
+  rpc PutProviderCredential(PutProviderCredentialRequest) returns (Provider);
+  rpc RemoveProviderCredential(RemoveProviderCredentialRequest) returns (Provider);
   rpc CreateSession(CreateSessionRequest) returns (Session);
   rpc GetSession(SessionRequest) returns (Session);
   rpc StartRun(StartRunRequest) returns (Run);
@@ -22,8 +26,15 @@ service WorkspaceService {
   rpc ListFiles(ListFilesRequest) returns (WorkspaceFiles);
   rpc ReadFile(ReadFileRequest) returns (WorkspaceFile);
   rpc WriteFile(WriteFileRequest) returns (WorkspaceFile);
+  rpc GetGitStatus(SessionRequest) returns (GitStatus);
   rpc GetDiff(DiffRequest) returns (WorkspaceDiff);
   rpc WatchFiles(SessionRequest) returns (stream WorkspaceChange);
+}
+service SkillService {
+  rpc ListSkills(ListSkillsRequest) returns (Skills);
+  rpc InspectSkill(InspectSkillRequest) returns (SkillInspection);
+  rpc InstallSkill(InstallSkillRequest) returns (Skill);
+  rpc RemoveSkill(RemoveSkillRequest) returns (Skill);
 }
 service TaskService {
   rpc SubmitTask(TaskEnvelope) returns (Task);
@@ -81,6 +92,12 @@ message Node { string id = 1; string name = 2; string os = 3; string endpoint = 
 message Nodes { repeated Node nodes = 1; }
 message Session { string id = 1; string title = 2; string workspace = 3; string owner_node_id = 4; uint64 owner_epoch = 5; int64 created_at_ms = 6; }
 message Sessions { repeated Session sessions = 1; }
+message RuntimeStatus { Node node = 1; Session session = 2; Run active_run = 3; string provider = 4; string model = 5; uint32 pending_approvals = 6; uint32 tools = 7; uint32 mcp_servers = 8; }
+message ProviderModel { string id = 1; bool selected = 2; }
+message Provider { string id = 1; string name = 2; repeated string protocols = 3; bool runtime_supported = 4; bool selected = 5; string credential_state = 6; string credential_source = 7; string credential_environment = 8; repeated ProviderModel models = 9; }
+message Providers { repeated Provider providers = 1; }
+message PutProviderCredentialRequest { string provider_id = 1; bytes credential = 2; }
+message RemoveProviderCredentialRequest { string provider_id = 1; }
 message CreateSessionRequest { string title = 1; string workspace = 2; }
 message SessionRequest { string session_id = 1; }
 message StartRunRequest { string session_id = 1; string prompt = 2; string idempotency_key = 3; uint64 owner_epoch = 4; }
@@ -161,6 +178,16 @@ message WorkspaceFile { string path = 1; string content = 2; string revision = 3
 message WriteFileRequest { string session_id = 1; string path = 2; string content = 3; string expected_revision = 4; }
 message DiffRequest { string session_id = 1; string path = 2; }
 message WorkspaceDiff { string patch = 1; }
+message GitEntry { string path = 1; string index_status = 2; string worktree_status = 3; string original_path = 4; }
+message GitStatus { bool repository = 1; string branch = 2; string head = 3; string upstream = 4; int32 ahead = 5; int32 behind = 6; repeated GitEntry entries = 7; }
+message Skill { string name = 1; string description = 2; string compatibility = 3; string content_sha256 = 4; uint64 total_bytes = 5; uint32 files = 6; string scope = 7; bool enabled = 8; }
+message Skills { repeated Skill skills = 1; }
+message ListSkillsRequest { string scope = 1; string session_id = 2; }
+message InspectSkillRequest { string source = 1; string scope = 2; string session_id = 3; }
+message SkillFile { string path = 1; uint64 bytes = 2; string sha256 = 3; }
+message SkillInspection { Skill skill = 1; repeated SkillFile files = 2; }
+message InstallSkillRequest { string source = 1; string scope = 2; string session_id = 3; string expected_sha256 = 4; }
+message RemoveSkillRequest { string name = 1; string scope = 2; string session_id = 3; string expected_sha256 = 4; }
 message WorkspaceChange { string kind = 1; repeated string paths = 2; }
 message FrameRequest { string tab_id = 1; uint64 after_sequence = 2; }
 message BrowserFrame { string tab_id = 1; uint64 revision = 2; uint64 sequence = 3; uint32 width = 4; uint32 height = 5; uint32 stride = 6; bytes bgra8 = 7; }
