@@ -99,13 +99,13 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
     tool_reply(
       protocol,
       "write_file",
-      json!({"path":"approved.txt","content":"批准 🦀"}),
+      json!({"path":"approved.txt","content":"批准 🦀","expected_revision":""}),
     ),
     text_reply(protocol, "approved operation finished"),
     tool_reply(
       protocol,
       "write_file",
-      json!({"path":"denied.txt","content":"must not exist"}),
+      json!({"path":"denied.txt","content":"must not exist","expected_revision":""}),
     ),
     text_reply(protocol, "denied operation finished"),
     // Cross the real protocol adapter's delta batching threshold before holding the stream.

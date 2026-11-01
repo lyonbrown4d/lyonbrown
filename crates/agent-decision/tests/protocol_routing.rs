@@ -11,7 +11,11 @@ async fn each_protocol_routes_every_task_kind_without_executing_tools() {
   for protocol in StandardProtocol::ALL {
     for (kind, names, expected) in [
       ("chat", vec![], TaskKind::Chat),
-      ("code", vec!["read_file", "write_file"], TaskKind::Code),
+      (
+        "code",
+        vec!["read_file", "list_files", "search_files", "write_file"],
+        TaskKind::Code,
+      ),
       (
         "browser",
         vec!["browser_observe", "browser_act"],
@@ -102,7 +106,14 @@ async fn model_cannot_escalate_tools_models_targets_or_distribution() {
   for protocol in StandardProtocol::ALL {
     let mut response = candidate(
       "code",
-      &["read_file", "write_file", "execute_command", "computer_act"],
+      &[
+        "read_file",
+        "list_files",
+        "search_files",
+        "write_file",
+        "execute_command",
+        "computer_act",
+      ],
     );
     response["execution_mode"] = json!("distributed_allowed");
     response["target_hint"] = json!("unpaired-attacker");

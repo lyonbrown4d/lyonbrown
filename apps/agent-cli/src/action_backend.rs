@@ -92,6 +92,22 @@ pub(crate) async fn execute(
         .await;
     }
     Action::SaveState { .. } => {}
+    Action::Run {
+      session,
+      generation,
+      source,
+      command,
+    } => {
+      let value = crate::run_management::execute(client, command).await?;
+      let _ = updates
+        .send(Update::RecoveryResult {
+          session,
+          generation,
+          source,
+          value,
+        })
+        .await;
+    }
     Action::Approve { id, approved } => {
       client.approve(&id, approved).await?;
       let _ = updates.send(Update::ApprovalDecided(id)).await;

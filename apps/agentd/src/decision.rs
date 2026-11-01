@@ -48,9 +48,14 @@ pub(crate) fn build(
       supports_images: false,
     })) as Arc<dyn agent_decision::DecisionBackend>
   });
-  let mut authorized_tools = [Tool::ReadFile, Tool::WriteFile]
-    .into_iter()
-    .collect::<std::collections::BTreeSet<_>>();
+  let mut authorized_tools = [
+    Tool::ReadFile,
+    Tool::ListFiles,
+    Tool::SearchFiles,
+    Tool::WriteFile,
+  ]
+  .into_iter()
+  .collect::<std::collections::BTreeSet<_>>();
   let mut available_capabilities = [Capability::FileRead, Capability::FileWrite]
     .into_iter()
     .collect::<std::collections::BTreeSet<_>>();
@@ -107,9 +112,14 @@ pub(crate) fn workspace_rule(
   delegation: bool,
   computer: bool,
 ) -> ExplicitRoute {
-  let mut tools = [Tool::ReadFile, Tool::WriteFile]
-    .into_iter()
-    .collect::<std::collections::BTreeSet<_>>();
+  let mut tools = [
+    Tool::ReadFile,
+    Tool::ListFiles,
+    Tool::SearchFiles,
+    Tool::WriteFile,
+  ]
+  .into_iter()
+  .collect::<std::collections::BTreeSet<_>>();
   if mcp {
     tools.insert(Tool::McpCall);
   }

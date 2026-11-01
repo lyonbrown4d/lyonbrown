@@ -77,10 +77,11 @@ impl WorkspaceService for Daemon {
   ) -> Result<Response<v1::WorkspaceFile>, Status> {
     let input = request.into_inner();
     let path = self.workspace_path(&input.session_id)?;
-    let _write = self.workspace_writes.lock().await;
+    let write = self.workspace_writes.clone().lock_owned().await;
     let file = input.path.clone();
     let content = input.content.clone();
     let revision = tokio::task::spawn_blocking(move || {
+      let _write = write;
       Workspace::open(path)?.write_revision(&input.path, &input.content, &input.expected_revision)
     })
     .await

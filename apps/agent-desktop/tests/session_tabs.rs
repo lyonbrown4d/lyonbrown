@@ -83,7 +83,7 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
       tool_reply(
         StandardProtocol::ChatCompletions,
         "write_file",
-        json!({"path":"tab-a.txt","content":"approved in A"}),
+        json!({"path":"tab-a.txt","content":"approved in A","expected_revision":""}),
       ),
       text_reply(StandardProtocol::ChatCompletions, "Only chat A completed."),
       ScriptedReply::stall(),

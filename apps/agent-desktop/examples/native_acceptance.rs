@@ -58,7 +58,7 @@ fn main() -> anyhow::Result<std::process::ExitCode> {
     let protocol=StandardProtocol::ChatCompletions;
     let model=MockModelServer::start(vec![
       text_reply(protocol,"## Native conversation\n\nThis response streamed through the authenticated daemon into the **GPUI Markdown view**.\n\n- Sessions and jobs remain in agentd.\n- The composer and keyboard focus are native.\n\nAsk for a workspace note next to inspect a real tool approval."),
-      tool_reply(protocol,"write_file",serde_json::json!({"path":"notes.txt","content":"Created by a real daemon tool after native approval.\n"})),
+      tool_reply(protocol,"write_file",serde_json::json!({"path":"notes.txt","content":"Created by a real daemon tool after native approval.\n","expected_revision":""})),
       text_reply(protocol,"The workspace note was written after your approval. Open **Files** to read or edit `notes.txt`; the **Diff** tab shows the tracked README change."),
       text_reply(protocol,"The native acceptance fixture has completed its scripted model replies. Files and the actual CEF browser remain available."),
     ]).await?;

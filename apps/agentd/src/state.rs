@@ -129,7 +129,7 @@ impl Daemon {
 pub struct RuntimeServices {
   pub(crate) browser: Arc<crate::browser::BrowserRouter>,
   pub(crate) computer: Arc<crate::computer::ComputerRouter>,
-  pub(crate) workspace_writes: Mutex<()>,
+  pub(crate) workspace_writes: Arc<Mutex<()>>,
   pub(crate) events: Arc<Notify>,
   pub(crate) approvals: Arc<Notify>,
   pub(crate) active: Arc<Mutex<HashMap<String, CancellationToken>>>,
@@ -145,7 +145,7 @@ impl RuntimeServices {
     Self {
       browser: Arc::new(Default::default()),
       computer: Arc::new(Default::default()),
-      workspace_writes: Mutex::new(()),
+      workspace_writes: Arc::new(Mutex::new(())),
       events: Arc::new(Notify::new()),
       approvals: Arc::new(Notify::new()),
       active: Arc::new(Mutex::new(HashMap::new())),

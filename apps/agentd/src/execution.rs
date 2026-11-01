@@ -34,7 +34,7 @@ impl Daemon {
       {
         let status = if matches!(
           error.downcast_ref::<RuntimeError>(),
-          Some(RuntimeError::Uncertain(_))
+          Some(RuntimeError::Uncertain(_) | RuntimeError::Persistence(_))
         ) {
           RunStatus::Uncertain
         } else {
@@ -205,11 +205,15 @@ impl Daemon {
         .collect();
       let scoped_capabilities = [
         (agent_decision::Tool::ReadFile, "workspace.read"),
+        (agent_decision::Tool::ListFiles, "workspace.read"),
+        (agent_decision::Tool::SearchFiles, "workspace.read"),
         (agent_decision::Tool::WriteFile, "workspace.write.approval"),
       ]
       .into_iter()
       .filter(|(tool, _)| plan.allowed_tools.contains(tool))
       .map(|(_, capability)| capability.to_owned())
+      .collect::<std::collections::BTreeSet<_>>()
+      .into_iter()
       .collect();
       tools.extend(crate::delegation::tools(
         self.clone(),
@@ -227,6 +231,7 @@ impl Daemon {
           .any(|allowed| allowed.name() == tool.definition().name)
     });
     let mut runtime_config = self.config.runtime(session);
+    crate::repository_instructions::apply(&mut runtime_config, &session.workspace).await?;
     let runtime = if let Some(backend) = backend {
       let info = self.models.info(&self.config.model)?;
       runtime_config.context_window = info.context_window;

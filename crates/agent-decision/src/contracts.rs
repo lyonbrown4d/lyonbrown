@@ -42,6 +42,8 @@ choices!(
   #[strum(serialize_all = "snake_case")]
   Tool {
     ReadFile,
+    ListFiles,
+    SearchFiles,
     WriteFile,
     ExecuteCommand,
     BrowserObserve,
@@ -56,7 +58,7 @@ choices!(
 impl Tool {
   pub fn capability(self) -> Capability {
     match self {
-      Self::ReadFile => Capability::FileRead,
+      Self::ReadFile | Self::ListFiles | Self::SearchFiles => Capability::FileRead,
       Self::WriteFile => Capability::FileWrite,
       Self::ExecuteCommand => Capability::ProcessExecute,
       Self::BrowserObserve | Self::BrowserAct => Capability::Browser,

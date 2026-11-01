@@ -169,6 +169,18 @@ impl ClientService for Service {
   async fn cancel_run(&self, _: Request<v1::RunRequest>) -> Result<Response<v1::Run>, Status> {
     Err(Status::unimplemented("fixture"))
   }
+  async fn get_run_recovery(
+    &self,
+    _: Request<v1::RunRequest>,
+  ) -> Result<Response<v1::RunRecovery>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn recover_run(
+    &self,
+    _: Request<v1::RecoverRunRequest>,
+  ) -> Result<Response<v1::RunRecoveryResult>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
   async fn list_approvals(
     &self,
     _: Request<v1::RunRequest>,

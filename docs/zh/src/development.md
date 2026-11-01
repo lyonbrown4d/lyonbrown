@@ -91,6 +91,8 @@ cargo run -p agent-desktop --features native-computer
 
 在仓库根目录执行：
 
+Unix 上先在当前终端执行 `umask 077`，让测试创建的数据库父目录仅对当前用户开放。网关持久化会拒绝组或其他用户可写的父目录；默认掩码允许组写入时，测试也会被该检查拒绝，不应为通过测试放宽持久化检查。
+
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings

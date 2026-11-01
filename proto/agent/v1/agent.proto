@@ -13,6 +13,8 @@ service ClientService {
   rpc GetRun(RunRequest) returns (Run);
   rpc WatchRun(WatchRequest) returns (stream Event);
   rpc CancelRun(RunRequest) returns (Run);
+  rpc GetRunRecovery(RunRequest) returns (RunRecovery);
+  rpc RecoverRun(RecoverRunRequest) returns (RunRecoveryResult);
   rpc ListApprovals(RunRequest) returns (Approvals);
   rpc ApproveAction(ApproveRequest) returns (Approval);
 }
@@ -85,6 +87,41 @@ message StartRunRequest { string session_id = 1; string prompt = 2; string idemp
 message Run { string id = 1; string session_id = 2; string status = 3; string prompt = 4; string result = 5; string error = 6; int64 created_at_ms = 7; }
 message Runs { repeated Run runs = 1; }
 message RunRequest { string run_id = 1; }
+// Recovery never replays the original prompt or acknowledges an unknown effect as success.
+enum RunRecoveryAction {
+  RUN_RECOVERY_ACTION_UNSPECIFIED = 0;
+  RUN_RECOVERY_ACTION_ABANDON = 1;
+  RUN_RECOVERY_ACTION_CONTINUE_NEW_SESSION = 2;
+}
+message RunRecovery {
+  Run run = 1;
+  uint64 owner_epoch = 2;
+  string reason = 3;
+  repeated string pending_tools = 4;
+  repeated RunRecoveryAction allowed_actions = 5;
+  RunRecoveryResult resolution = 6;
+  bool fresh_session_required = 7;
+}
+message RecoverRunRequest {
+  string run_id = 1;
+  uint64 owner_epoch = 2;
+  RunRecoveryAction action = 3;
+  string idempotency_key = 4;
+  // Human verification record; cannot grant tool/model/node authority.
+  string note = 5;
+  // Explicit fresh input, required only for CONTINUE_NEW_SESSION.
+  string prompt = 6;
+}
+message RunRecoveryResult {
+  Run original_run = 1;
+  Session session = 2;
+  Run run = 3;
+  RunRecoveryAction action = 4;
+  string note = 5;
+  // Epoch and identity of the original recovery request, preserved for exact retries.
+  uint64 owner_epoch = 6;
+  string idempotency_key = 7;
+}
 message WatchRequest { string run_id = 1; uint64 after_cursor = 2; }
 message Event { uint64 cursor = 1; string run_id = 2; string kind = 3; string payload_json = 4; int64 created_at_ms = 5; }
 message Approval { string id = 1; string run_id = 2; string tool = 3; string arguments_json = 4; string status = 5; int64 expires_at_ms = 6; }

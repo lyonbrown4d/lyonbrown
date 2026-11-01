@@ -5,6 +5,14 @@ use crate::{
 
 pub fn apply(app: &mut App, update: Update) {
   match update {
+    Update::RecoveryResult {
+      session,
+      generation,
+      source,
+      value,
+    } => {
+      crate::recovery_update::apply(app, session, generation, source, value);
+    }
     Update::Computer { status, detail } => {
       app.computer = status;
       app.computer_detail = detail;
@@ -116,6 +124,15 @@ pub fn apply(app: &mut App, update: Update) {
           app.messages.push(Message {
             role: "Error".into(),
             content: run.error,
+          });
+        }
+        if run.status == "uncertain" {
+          app.messages.push(Message {
+            role: "Recovery".into(),
+            content: format!(
+              "运行结果未知，原请求不会自动重放。先用 /run inspect {} 查看记录，再核对实际副作用。",
+              run.id
+            ),
           });
         }
         if matches!(

@@ -14,6 +14,8 @@ mod mcp_config;
 mod model_routing;
 mod models;
 mod orchestration;
+mod recovery;
+mod repository_instructions;
 pub use orchestration::orchestration_service;
 pub mod peers;
 mod service;

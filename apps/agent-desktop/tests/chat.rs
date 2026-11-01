@@ -128,7 +128,8 @@ async fn real_keyboard_submission_streams_markdown_and_loads_sidebar_history(
 
 #[gpui_kit::test]
 async fn approval_click_uses_exact_tool_arguments_before_real_file_effect(cx: &mut TestAppContext) {
-  let arguments = json!({"path":"approved.txt","content":"approved fixture"});
+  let arguments =
+    json!({"path":"approved.txt","content":"approved fixture","expected_revision":""});
   let harness = Harness::new(
     cx,
     vec![

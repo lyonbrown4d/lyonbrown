@@ -1,12 +1,18 @@
 //! Workspace-relative file access and content-addressed artifacts.
 mod artifact;
+mod discovery;
 mod files;
+mod instructions;
 pub mod process;
 mod watch;
 use anyhow::{Context, Result};
 pub use artifact::ArtifactStore;
 use cap_std::fs::Dir;
-pub use files::FileEntry;
+pub use discovery::{ContentMatch, DiscoveryReport, FileListing, FileSearch};
+pub use files::{FileEntry, RevisionConflict};
+pub use instructions::{
+  RepositoryInstruction, load_repository_instructions, load_repository_instructions_for_paths,
+};
 use std::{
   io::Read,
   path::{Component, Path},

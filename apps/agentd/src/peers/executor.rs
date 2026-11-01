@@ -31,10 +31,14 @@ impl WorkerExecutor for HarnessWorker {
       .task
       .capabilities
       .iter()
-      .filter_map(|cap| match cap.as_str() {
-        "workspace.read" => Some("read_file".to_owned()),
-        "workspace.write.approval" => Some("write_file".to_owned()),
-        _ => None,
+      .flat_map(|cap| match cap.as_str() {
+        "workspace.read" => vec![
+          "read_file".to_owned(),
+          "list_files".to_owned(),
+          "search_files".to_owned(),
+        ],
+        "workspace.write.approval" => vec!["write_file".to_owned()],
+        _ => vec![],
       })
       .collect::<BTreeSet<_>>();
     let (run, created) = daemon.store.accept_run(

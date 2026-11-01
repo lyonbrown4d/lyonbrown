@@ -58,3 +58,29 @@ fn symlink_outside_workspace_is_not_readable_or_listed() {
     "outside"
   );
 }
+
+#[test]
+fn revisions_reject_malformed_tokens_and_missing_existing_files_without_creating() {
+  let root = tempfile::tempdir().unwrap();
+  let workspace = Workspace::open(root.path()).unwrap();
+  let revision = workspace.write_revision("file", "original", "").unwrap();
+  for malformed in ["not-a-revision", &"A".repeat(64)] {
+    assert!(workspace.write_revision("file", "bad", malformed).is_err());
+    assert!(
+      workspace
+        .write_revision("new-file", "bad", malformed)
+        .is_err()
+    );
+  }
+  std::fs::remove_file(root.path().join("file")).unwrap();
+  let conflict = workspace
+    .write_revision("file", "unexpected recreation", &revision)
+    .unwrap_err();
+  assert!(
+    conflict
+      .downcast_ref::<agent_workspace::RevisionConflict>()
+      .is_some()
+  );
+  assert!(!root.path().join("file").exists());
+  assert!(!root.path().join("new-file").exists());
+}

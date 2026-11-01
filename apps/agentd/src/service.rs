@@ -27,6 +27,7 @@ impl ClientService for Daemon {
       capabilities: vec![
         "sessions".into(),
         "runs".into(),
+        "runs.recover".into(),
         "workspace.read".into(),
         "workspace.write.approval".into(),
         "workspace.watch".into(),
@@ -152,6 +153,24 @@ impl ClientService for Daemon {
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("run not found"))?;
     Ok(Response::new(value.into()))
+  }
+  async fn get_run_recovery(
+    &self,
+    request: Request<v1::RunRequest>,
+  ) -> Result<Response<v1::RunRecovery>, Status> {
+    self
+      .inspect_run_recovery(&request.into_inner().run_id)
+      .await
+      .map(Response::new)
+  }
+  async fn recover_run(
+    &self,
+    request: Request<v1::RecoverRunRequest>,
+  ) -> Result<Response<v1::RunRecoveryResult>, Status> {
+    self
+      .resolve_run_recovery(request.into_inner())
+      .await
+      .map(Response::new)
   }
   type WatchRunStream = EventStream;
   async fn watch_run(

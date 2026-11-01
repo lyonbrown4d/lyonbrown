@@ -2,6 +2,14 @@
 
 agentd assembles model tools; clients display calls, approvals and results. Tool results, page content and process output cannot grant additional authority. A remote session's native commands execute on the daemon host.
 
+## File revisions, search and repository guidance
+
+`read_file` returns JSON containing `content`, a SHA-256 `revision`, and applicable `repository_instructions`. `write_file` requires `path`, `content`, and `expected_revision`; use an empty revision only to create an absent file. Approval binds all arguments. After approval, the daemon checks the revision under its shared write lock and rejects conflicts without overwriting content. This lock serializes daemon writes; it is not an operating-system atomic compare-and-replace against external editors, which can still change a file between the check and replacement.
+
+`list_files` accepts `path`, optional `max_depth` and `max_results`; `search_files` additionally requires a single-line literal `query` and performs case-sensitive UTF-8 line matching, returning paths and line numbers. Use an empty path or `.` for the root. Depth defaults to 4 (range 1–8), results to 200 (range 1–200). Each traversal checks at most 2000 entries; search reads at most 1 MiB per file and 8 MiB total, with a 256 KiB discovery output budget. Symlinks and directories such as `.git`, `target`, and `node_modules` are skipped. `report` identifies omissions and truncation, so an empty result does not prove absence across the whole repository. These tools require only workspace read capability.
+
+Before calling the main model, each Run loads `AGENTS.md` from the authorized workspace root, never its parents. Read, list and search results include guidance from relevant ancestor directories with source paths; nested guidance applies only to its subtree. Limits are 32 KiB per file and 64 KiB total. Missing files are allowed; unreadable, non-UTF-8, oversized or symlinked guidance reports an error. Repository guidance is context below product safety requirements and cannot change permissions, tool scope or approval requirements.
+
 ## Enable trusted commands
 
 `execute_command` is disabled by default. An operator explicitly lists absolute executable paths in the daemon's `config.toml`; restart the daemon to expose the tool. This macOS example allows `/usr/bin/printf` and passes only the selected environment reference to the child:

@@ -60,14 +60,27 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
         .payload_json,
     )
     .unwrap();
-    assert_eq!(plan["allowed_tools"], json!(["read_file"]));
+    assert_eq!(
+      plan["allowed_tools"],
+      json!(["read_file", "list_files", "search_files"])
+    );
     let requests = mock.requests().await;
     assert_eq!(requests.len(), 2);
     assert_eq!(requests[0].path, protocol.path());
     assert_eq!(requests[0].body["model"], "worker-fixture");
-    assert_eq!(requests[0].body["tools"].as_array().unwrap().len(), 1);
-    assert!(requests[0].body["tools"].to_string().contains("read_file"));
-    assert!(!requests[0].body["tools"].to_string().contains("write_file"));
+    assert_eq!(requests[0].body["tools"].as_array().unwrap().len(), 3);
+    let mut names = requests[0].body["tools"]
+      .as_array()
+      .unwrap()
+      .iter()
+      .map(|tool| {
+        tool.get("function").unwrap_or(tool)["name"]
+          .as_str()
+          .unwrap()
+      })
+      .collect::<Vec<_>>();
+    names.sort_unstable();
+    assert_eq!(names, ["list_files", "read_file", "search_files"]);
     assert!(
       !requests[1]
         .body

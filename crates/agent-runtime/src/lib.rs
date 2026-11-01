@@ -11,9 +11,11 @@ mod local_provider;
 mod local_stream;
 mod persistence;
 mod provider;
+mod recovery;
 mod runtime;
 mod tools;
 
 pub use classification::{CLASSIFICATION_OUTPUT_LIMIT, classify_json};
 pub use contracts::*;
+pub use recovery::{RecoveryReport, inspect_recovery};
 pub use runtime::Runtime;

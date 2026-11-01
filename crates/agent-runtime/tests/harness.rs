@@ -178,6 +178,15 @@ async fn interrupted_tool_is_uncertain_and_never_replayed() {
   let snapshot = store.snapshot.lock().unwrap().clone();
   execution.abort();
   let _ = execution.await;
+  let mutation_count = store.mutations.lock().unwrap().len();
+  let report = agent_runtime::inspect_recovery("session", 1, store.clone())
+    .await
+    .unwrap();
+  assert_eq!(report.pending_tools.len(), 1);
+  assert!(report.pending_tools[0].starts_with("inspect ("));
+  assert!(report.uncertainty.is_some());
+  assert_eq!(store.snapshot.lock().unwrap().clone(), snapshot);
+  assert_eq!(store.mutations.lock().unwrap().len(), mutation_count);
   let restarted = shared();
   *restarted.snapshot.lock().unwrap() = snapshot;
   let reopened = Runtime::open(

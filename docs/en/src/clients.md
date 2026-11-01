@@ -152,6 +152,19 @@ Starting a Connect attempt revokes the old host and clears the catalog even if a
 
 Native window startup depends on the target platform's graphical environment and dependencies. Compilation does not replace runtime checks for window creation, input, theme switching and connection to a real daemon, or establish acceptance on Windows, macOS and Linux.
 
+## Inspect and recover interrupted Runs
+
+The TUI parses `/run` commands locally, rather than sending them as model input. Use `/run inspect RUN_ID` to inspect the original run, uncertainty reason, pending tools and recorded resolution. Verify actual file, command or external effects before choosing:
+
+```text
+/run abandon RUN_ID --idempotency-key KEY --note 'Verified effects; leave this run stopped'
+/run continue RUN_ID --idempotency-key KEY --note 'Verified files and external state' --prompt 'Explicit fresh input based on the verified result'
+```
+
+CLI subcommands use the same arguments without `/`, for example `agent-cli run inspect RUN_ID`. Recovery requires a stopped `uncertain` run owned by the local Master and a valid owner epoch. Durable Tasks in the original session must first reach a terminal state through reconciliation, cancellation or explicit adoption/rejection, so the epoch fence cannot orphan Worker management. The decision, epoch increment, events, Outbox and optional fresh session/run are committed in one SQLite transaction, fencing late state commits from the old epoch. This does not undo actions already dispatched to the operating system or external services; verify their actual state before recovery.
+
+`abandon` records the decision to leave the run stopped. `continue` creates a new session and Run from the explicit fresh prompt, without copying Harness snapshots, approvals or native handles. The original Run stays `uncertain` and its session remains closed to new execution; a human note is not evidence of successful execution. The new session appears in the TUI session list; use `Tab` to follow progress and approvals. Only one resolution is allowed per original run. After a lost response, inspect first; retries must retain the original key, action, note and prompt. In-place Harness continuation and automatic verification of external effects are not provided.
+
 ## Local recovery files
 
 Recovery files live under `client-state/` in the configured data directory. `agent-client::local_state` isolates them by client kind, canonical daemon endpoint and authenticated node identity. An exclusive lock prevents a second client instance from overwriting the same identity's file. Writes atomically replace the file using a temporary file in the same directory, with a 4 MiB size limit. On Unix, directory and file permissions are `0700` and `0600` respectively.

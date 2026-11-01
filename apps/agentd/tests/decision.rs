@@ -120,7 +120,7 @@ async fn high_confidence_classifier_cannot_bypass_real_write_approval() {
       tool_reply(
         protocol,
         "write_file",
-        json!({"path":"approved.txt","content":"fixture"}),
+        json!({"path":"approved.txt","content":"fixture","expected_revision":""}),
       ),
       text_reply(protocol, "finished"),
     ])

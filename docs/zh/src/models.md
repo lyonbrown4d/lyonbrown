@@ -6,7 +6,7 @@ Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 `mod
 
 ## 执行计划如何生效
 
-未配置 `decision.model` 时，daemon 使用显式工作区规则：通用模型、允许 `read_file` 和 `write_file`，并按配置及运行时能力提供 MCP、浏览器和受信任命令工具。配置且已配对的委派目标可启用分布式执行与 `delegate_task`。文件路径仍受工作区限制，变更操作仍须逐次审批。规则来自 daemon 配置，不从 prompt 中提取授权。
+未配置 `decision.model` 时，daemon 使用显式工作区规则：通用模型、允许 `read_file`、`list_files`、`search_files` 和带版本校验的 `write_file`，并按配置及运行时能力提供 MCP、浏览器和受信任命令工具。配置且已配对的委派目标可启用分布式执行与 `delegate_task`。文件路径仍受工作区限制，变更操作仍须逐次审批。规则来自 daemon 配置，不从 prompt 中提取授权。
 
 配置分类器后，daemon 将用户输入作为待分类数据发送。返回值必须是单个 JSON 对象，包含 `task_kind`、`model_policy`、`allowed_tools`、`execution_mode`、`target_hint`、`risk_level` 和 `confidence`。额外字段、无效枚举、错误类型或超出范围的置信度均被拒绝。
 

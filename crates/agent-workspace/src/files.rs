@@ -8,6 +8,15 @@ pub struct FileEntry {
   pub directory: bool,
   pub size: u64,
 }
+/// A known pre-write failure: no replacement was attempted.
+#[derive(Debug)]
+pub struct RevisionConflict;
+impl std::fmt::Display for RevisionConflict {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str("file revision conflict: file changed since it was read; reload before saving")
+  }
+}
+impl std::error::Error for RevisionConflict {}
 impl Workspace {
   pub fn list(&self, directory: &str) -> Result<Vec<FileEntry>> {
     let path = if directory.is_empty() { "." } else { directory };
@@ -32,7 +41,7 @@ impl Workspace {
         Path::new(path)
           .join(name)
           .to_string_lossy()
-          .replace('\\', "/")
+          .replace(std::path::MAIN_SEPARATOR, "/")
       };
       entries.push(FileEntry {
         path,
@@ -57,17 +66,30 @@ impl Workspace {
     Ok((content, revision))
   }
   pub fn write_revision(&self, path: &str, content: &str, expected: &str) -> Result<String> {
+    self.check_revision(path, expected)?;
+    self.write(path, content)?;
+    Ok(hex::encode(Sha256::digest(content.as_bytes())))
+  }
+  /// Check under the caller's write lock immediately before replacing content.
+  /// External editors do not participate in that lock; this is not an OS CAS.
+  pub fn check_revision(&self, path: &str, expected: &str) -> Result<()> {
     validate_path(path)?;
+    anyhow::ensure!(
+      expected.is_empty()
+        || (expected.len() == 64
+          && expected
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))),
+      "expected_revision must be a lowercase SHA-256 revision, or empty for creation"
+    );
     let current = match self.dir.metadata(path) {
       Ok(_) => self.read_revision(path)?.1,
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
       Err(error) => return Err(error.into()),
     };
-    anyhow::ensure!(
-      current == expected,
-      "file changed since it was read; reload before saving"
-    );
-    self.write(path, content)?;
-    Ok(hex::encode(Sha256::digest(content.as_bytes())))
+    if current != expected {
+      return Err(RevisionConflict.into());
+    }
+    Ok(())
   }
 }

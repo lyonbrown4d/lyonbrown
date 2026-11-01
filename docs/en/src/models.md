@@ -6,7 +6,7 @@ Each run receives an execution plan from `agent-decision` before `agent-runtime`
 
 ## How the plan controls execution
 
-Without `decision.model`, the daemon uses an explicit workspace rule: the general model policy, `read_file` and `write_file`, with MCP, browser and trusted-command tools selected by configuration and available runtime capabilities. Configured, actively paired delegation targets can enable distributed execution and `delegate_task`. Workspace path restrictions and per-operation mutation approval still apply. This rule comes from daemon policy; prompt text cannot supply authorization.
+Without `decision.model`, the daemon uses an explicit workspace rule: the general model policy, `read_file`, `list_files`, `search_files`, and revision-checked `write_file`, with MCP, browser and trusted-command tools selected by configuration and available runtime capabilities. Configured, actively paired delegation targets can enable distributed execution and `delegate_task`. Workspace path restrictions and per-operation mutation approval still apply. This rule comes from daemon policy; prompt text cannot supply authorization.
 
 When configured, the classifier receives the user request as data. It must return one JSON object containing `task_kind`, `model_policy`, `allowed_tools`, `execution_mode`, `target_hint`, `risk_level` and `confidence`. Unknown fields, invalid enums, wrong types and confidence outside the allowed range are rejected.
 

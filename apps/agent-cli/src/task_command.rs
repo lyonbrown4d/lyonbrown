@@ -3,6 +3,11 @@ use clap::{Args, Subcommand};
 
 #[derive(Subcommand)]
 pub enum Command {
+  /// Inspect or explicitly recover an uncertain Run without replaying it.
+  Run {
+    #[command(subcommand)]
+    command: crate::run_command::RunCommand,
+  },
   /// Attach this interactive client to an explicitly selected native desktop target.
   Computer {
     #[command(subcommand)]

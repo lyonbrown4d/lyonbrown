@@ -42,6 +42,12 @@ pub enum Action {
     append: bool,
     command: crate::task_command::TaskCommand,
   },
+  Run {
+    session: Option<String>,
+    generation: u64,
+    source: String,
+    command: crate::run_command::RunCommand,
+  },
   SaveState {
     node_id: String,
     state: crate::local_state::ClientState,
@@ -82,6 +88,12 @@ pub enum Update {
     generation: u64,
     source: Option<String>,
     append: bool,
+    value: serde_json::Value,
+  },
+  RecoveryResult {
+    session: Option<String>,
+    generation: u64,
+    source: String,
     value: serde_json::Value,
   },
   LocalState {
@@ -221,6 +233,7 @@ pub fn spawn_with_computer_factory(
                   Action::Cancel(_) => "run.cancel",
                   Action::Approve { .. } => "approval.decide",
                   Action::Task { .. } => "task.manage",
+                  Action::Run { .. } => "run.recover",
                   Action::SaveState { .. } => "client.state.save",
               };
               let session_id = match &action {

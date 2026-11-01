@@ -108,7 +108,7 @@ impl<'a> ViewModel<'a> {
       ContextPanel::Help => Some((
         "快捷键 · F1 关闭",
         Text::from(
-          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\n\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 关闭面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n管理命令由本机解析，格式错误不会作为模型提示发送。草稿属于客户端状态；原会话不可用时用 /draft list 查看并显式恢复。远程结果不确定时保留原 task/attempt/idempotency 身份，用 get/reconcile 查证；不要创建新身份重放。",
+          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\n\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 关闭面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/run inspect RUN_ID\n/run abandon RUN_ID --idempotency-key KEY --note \'核对记录\'\n/run continue RUN_ID --idempotency-key KEY --note \'核对记录\' --prompt \'新的输入\'\n恢复保留原 Run 的不确定状态；继续会创建新会话，用 Tab 切换查看。\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n管理命令由本机解析，格式错误不会作为模型提示发送。草稿属于客户端状态；原会话不可用时用 /draft list 查看并显式恢复。远程结果不确定时保留原 task/attempt/idempotency 身份，用 get/reconcile 查证；不要创建新身份重放。",
         ),
       )),
       ContextPanel::Sessions => Some((
@@ -133,9 +133,9 @@ impl<'a> ViewModel<'a> {
         Text::from(if task_list.is_some() {
           String::new()
         } else if !app.task_detail.is_empty() {
-          app.task_detail.clone()
+          safe_text(&app.task_detail)
         } else {
-          "当前会话没有已返回的持久任务。输入 /task list 查看，命令失败或返回不确定状态时先 get/reconcile，保留原始身份。".to_owned()
+          "当前会话没有已返回的持久任务。输入 /task list 查看。Run 异常使用 /run inspect RUN_ID 核对，保留原始身份。".to_owned()
         }),
       )),
       ContextPanel::Drafts => Some((

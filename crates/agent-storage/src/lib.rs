@@ -8,6 +8,7 @@ mod control;
 mod dispatch;
 mod operations;
 mod persistence;
+mod recovery;
 mod runs;
 mod schema;
 mod sessions;
@@ -18,6 +19,7 @@ pub use approved_browser_action::{ApprovedBrowserAction, BrowserActionAuthorizat
 pub use approved_operation::{ApprovedOperation, OperationAuthorization};
 use diesel::{connection::SimpleConnection, prelude::*};
 pub use operations::{OperationRecord, OperationStatus};
+pub use recovery::{RecoverRun, RecoveryAction, RunRecovery};
 use schema::{events, harness_sessions, outbox, runs as run_rows, sessions as session_rows};
 
 #[derive(Insertable)]
@@ -55,6 +57,7 @@ impl Store {
     connection.batch_execute(include_str!("schema.sql"))?;
     browser_actions::initialize(&mut connection)?;
     operations::initialize(&mut connection)?;
+    recovery::initialize(&mut connection)?;
     Ok(Self {
       connection: Arc::new(Mutex::new(connection)),
     })

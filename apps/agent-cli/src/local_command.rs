@@ -14,10 +14,39 @@ struct TaskLine {
   command: crate::task_command::TaskCommand,
 }
 
+#[derive(Parser)]
+#[command(name = "run")]
+struct RunLine {
+  #[command(subcommand)]
+  command: crate::run_command::RunCommand,
+}
+
 pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
   let prompt = app.input.text();
   if prompt.trim_start() == "/draft" || prompt.trim_start().starts_with("/draft ") {
     run_draft_command(app, &prompt);
+  } else if prompt.trim_start() == "/run" || prompt.trim_start().starts_with("/run ") {
+    app.panel = ContextPanel::Tasks;
+    match shell_words::split(&prompt) {
+      Ok(mut words) => {
+        if let Some(first) = words.first_mut() {
+          *first = "run".into();
+        }
+        match RunLine::try_parse_from(words) {
+          Ok(parsed) => send(
+            actions,
+            Action::Run {
+              session: app.selected_session().map(|session| session.id.clone()),
+              generation: app.generation,
+              source: prompt,
+              command: parsed.command,
+            },
+          )?,
+          Err(error) => app.task_detail = error.to_string(),
+        }
+      }
+      Err(error) => app.task_detail = format!("Invalid run command quoting: {error}"),
+    }
   } else if prompt.trim_start() == "/task" || prompt.trim_start().starts_with("/task ") {
     app.panel = ContextPanel::Tasks;
     match shell_words::split(&prompt) {

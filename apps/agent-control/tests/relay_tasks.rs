@@ -57,7 +57,10 @@ async fn outbound_daemons_execute_and_accept_harness_tasks_over_relay_for_every_
         .payload_json,
     )
     .unwrap();
-    assert_eq!(plan["allowed_tools"], json!(["read_file"]));
+    assert_eq!(
+      plan["allowed_tools"],
+      json!(["read_file", "list_files", "search_files"])
+    );
     let requests = model.requests().await;
     assert_eq!(requests.len(), 2);
     assert!(

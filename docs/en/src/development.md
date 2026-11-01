@@ -91,6 +91,8 @@ Compilation establishes only that the code builds on the selected host. Native d
 
 Run from the repository root:
 
+On Unix, first run `umask 077` in the current shell so database parent directories created by tests are private to the current user. Gateway storage rejects group- or other-writable parents; a group-writable default mask can therefore fail tests. Keep the storage check intact.
+
 ```sh
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings

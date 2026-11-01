@@ -8,6 +8,8 @@ pub fn policy() -> DecisionPolicy {
   DecisionPolicy {
     authorized_tools: [
       Tool::ReadFile,
+      Tool::ListFiles,
+      Tool::SearchFiles,
       Tool::WriteFile,
       Tool::BrowserObserve,
       Tool::BrowserAct,
