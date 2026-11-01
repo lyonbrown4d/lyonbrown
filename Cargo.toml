@@ -17,7 +17,7 @@ cookie = "=0.18.2"
 diesel_migrations = "=2.3.2"
 governor = { version = "=0.10.4", default-features = false, features = ["std"] }
 nonzero_ext = "=0.3.0"
-ratatui-textarea = { version = "=0.9.3", default-features = false, features = ["crossterm"] }
+ratatui-textarea = { version = "=0.9.4", default-features = false, features = ["crossterm"] }
 secrecy = { version = "=0.10.3", features = ["serde"] }
 strum = { version = "=0.28.0", features = ["derive"] }
 utoipa-axum = "=0.3.0"

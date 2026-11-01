@@ -10,7 +10,7 @@ ssr = ["gateway-web/ssr"]
 
 [dependencies]
 gateway-validation = { path = "../../crates/gateway-validation" }
-leptos = { version = "=0.8.22", default-features = false, features = ["ssr", "nonce"] }
+leptos = { version = "=0.8.23", default-features = false, features = ["ssr", "nonce"] }
 gateway-storage = { path = "../../crates/gateway-storage" }
 gateway-web = { path = "../../crates/gateway-web", default-features = false }
 sha2.workspace = true

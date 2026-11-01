@@ -27,7 +27,7 @@ decision-core = { path = "../decision-core", optional = true }
 gateway-core = { path = "../gateway-core", optional = true }
 gateway-storage = { path = "../gateway-storage", optional = true }
 html-escape = "0.3.0"
-leptos = { version = "=0.8.22", default-features = false }
+leptos = { version = "=0.8.23", default-features = false }
 leptos_axum = { version = "=0.8.10", optional = true }
 leptos_meta = { version = "=0.8.7", default-features = false }
 leptos_router = { version = "=0.8.17", default-features = false }
