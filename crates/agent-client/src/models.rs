@@ -11,6 +11,8 @@ impl AgentClient {
         .json,
     )
   }
+  /// Empty session returns the authenticated global catalog without a selection.
+  /// Non-empty session must exist and includes its current model selection.
   pub async fn list_models(&self, session: &str) -> anyhow::Result<Vec<v1::ModelCandidate>> {
     Ok(
       self

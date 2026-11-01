@@ -25,7 +25,7 @@ fn slash_palette_filters_completes_and_keeps_unknown_commands_local() {
     &actions,
   )
   .expect("open slash palette");
-  assert_eq!(app.panel, ContextPanel::Commands);
+  assert_eq!(app.router.current(), ContextPanel::Commands);
   assert_eq!(app.input.text(), "/");
 
   input::handle(
@@ -42,7 +42,7 @@ fn slash_palette_filters_completes_and_keeps_unknown_commands_local() {
   )
   .expect("complete selected command");
   assert_eq!(app.input.text(), "/task ");
-  assert_eq!(app.panel, ContextPanel::Closed);
+  assert_eq!(app.router.current(), ContextPanel::Closed);
 
   app.input = "/not-a-command run this".into();
   input::handle(
@@ -142,7 +142,7 @@ fn p0_resource_commands_dispatch_only_metadata_and_open_sessions_panel() {
     &actions,
   )
   .expect("open session browser");
-  assert_eq!(app.panel, ContextPanel::Sessions);
+  assert_eq!(app.router.current(), ContextPanel::Sessions);
   assert!(receiver.try_recv().is_err());
 }
 
@@ -223,8 +223,8 @@ fn saved_drafts_restore_known_sessions_and_preserve_orphans_for_explicit_recover
     app.drafts.get("removed-session").map(String::as_str),
     Some("must not leak")
   );
-  assert_eq!(app.panel, ContextPanel::Tasks);
-  assert_eq!((app.scroll, app.computer_scroll), (13, 7));
+  assert_eq!(app.router.current(), ContextPanel::Tasks);
+  assert_eq!((app.scroll, app.router.scroll()), (13, 7));
 
   app.next_session();
   assert_eq!(app.input.text(), "draft A");
@@ -424,7 +424,7 @@ async fn task_panel_gets_selected_persistent_task_and_requests_next_page() {
     connection: agent_cli::model::Connection::Connected,
     state_loaded: true,
     sessions: vec![session("one")],
-    panel: ContextPanel::Tasks,
+    router: ContextPanel::Tasks.into(),
     generation: 3,
     ..App::default()
   };

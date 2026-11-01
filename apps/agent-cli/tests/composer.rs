@@ -267,7 +267,7 @@ fn context_shortcuts_keep_editor_draft_and_existing_daemon_authority() {
     (5, ContextPanel::Approval),
   ] {
     key(&mut app, &actions, KeyCode::F(number), KeyModifiers::NONE);
-    assert_eq!(app.panel, panel);
+    assert_eq!(app.router.current(), panel);
     assert_eq!(app.input.text(), "keep draft");
     if number == 3 {
       assert!(matches!(requests.try_recv(), Ok(Action::Task { .. })));
@@ -275,7 +275,7 @@ fn context_shortcuts_keep_editor_draft_and_existing_daemon_authority() {
       assert!(requests.try_recv().is_err());
     }
     key(&mut app, &actions, KeyCode::Esc, KeyModifiers::NONE);
-    assert_eq!(app.panel, ContextPanel::Closed);
+    assert_eq!(app.router.current(), ContextPanel::Closed);
   }
   app.approvals.push(Approval {
     id: "pending".into(),

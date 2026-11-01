@@ -12,7 +12,7 @@ use gpui_kit::{prelude::FluentBuilder as _, *};
 impl Desktop {
   pub(super) fn chrome(&self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
     let colors = DesktopColors::get(cx);
-    let title = if self.show_settings {
+    let title = if self.router.is_settings() {
       "设置".to_string()
     } else {
       self
@@ -24,14 +24,14 @@ impl Desktop {
         .filter(|title| !title.trim().is_empty())
         .unwrap_or_else(|| "Lyonbrown".into())
     };
-    let sidebar_space = if self.show_sidebar && !self.show_settings {
+    let sidebar_space = if self.show_sidebar && !self.router.is_settings() {
       SIDEBAR_WIDTH - if cfg!(target_os = "macos") { 80. } else { 12. }
     } else {
       40.
     };
     TitleBar::new()
       .h(px(40.))
-      .bg(if self.show_sidebar && !self.show_settings {
+      .bg(if self.show_sidebar && !self.router.is_settings() {
         colors.sidebar
       } else {
         colors.canvas
@@ -44,7 +44,7 @@ impl Desktop {
           .h_full()
           .w(px(sidebar_space))
           .flex_shrink_0()
-          .when(!self.show_settings, |row| {
+          .when(!self.router.is_settings(), |row| {
             row.child(
               Button::new("toggle-sidebar")
                 .ghost()
@@ -82,7 +82,7 @@ impl Desktop {
               .child(title),
           )
           .child(div().flex_1())
-          .when(!self.show_settings, |row| {
+          .when(!self.router.is_settings(), |row| {
             row.child(
               Button::new("toggle-workbench")
                 .ghost()
@@ -105,10 +105,24 @@ impl Desktop {
               .ghost()
               .small()
               .icon(IconName::Settings)
-              .accessibility_label("设置")
-              .tooltip("设置")
-              .selected(self.show_settings)
-              .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+              .accessibility_label(if self.router.is_settings() {
+                "返回聊天"
+              } else {
+                "设置"
+              })
+              .tooltip(if self.router.is_settings() {
+                "返回聊天"
+              } else {
+                "设置"
+              })
+              .selected(self.router.is_settings())
+              .on_click(cx.listener(|this, _, window, cx| {
+                if this.router.is_settings() {
+                  this.close_settings(window, cx);
+                } else {
+                  this.open_settings(window, cx);
+                }
+              })),
           ),
       )
       .into_any_element()

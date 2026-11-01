@@ -2,6 +2,7 @@ mod browser;
 mod drafts;
 pub(crate) mod files;
 mod frames;
+mod git;
 mod ime;
 mod input;
 mod layout;
@@ -28,6 +29,7 @@ enum Kind {
   Editor,
   Diff,
   Tasks,
+  Git,
 }
 
 struct WorkbenchPanel {
@@ -108,6 +110,7 @@ impl Render for WorkbenchPanel {
       Kind::Editor => state.editor_view(cx),
       Kind::Diff => state.diff_view(cx),
       Kind::Tasks => state.tasks_view(window, cx),
+      Kind::Git => state.git.clone().into_any_element(),
     });
     div()
       .size_full()
@@ -133,6 +136,7 @@ pub fn build(
     ("Diff", Kind::Diff),
     ("Tasks", Kind::Tasks),
     ("Computer", Kind::Computer),
+    ("Git", Kind::Git),
   ];
   let panels: Vec<_> = panels
     .into_iter()

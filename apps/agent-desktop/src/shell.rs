@@ -4,9 +4,8 @@ use gpui_kit::component::{
   ActiveTheme,
   dock::DockArea,
   input::{InputState, TextareaState},
-  resizable::{h_resizable, resizable_panel},
 };
-use gpui_kit::{TestSupportExt as _, prelude::FluentBuilder as _, *};
+use gpui_kit::{TestSupportExt as _, *};
 use std::sync::Arc;
 
 actions!(
@@ -19,6 +18,8 @@ actions!(
     ToggleWorkbench,
     OpenSettings,
     CloseSettings,
+    NavigateBack,
+    NavigateForward,
     NewChatTab,
     CloseChatTab
   ]
@@ -41,7 +42,9 @@ pub struct Desktop {
   pub(super) tasks: Entity<workbench::Workbench>,
   pub(super) show_sidebar: bool,
   pub(super) show_workbench: bool,
-  pub(super) show_settings: bool,
+  pub(super) router: crate::router::Router,
+  pub(super) settings_focus: FocusHandle,
+  pub(super) resources: crate::resources::ResourcePanels,
   pub(super) navigation: crate::tabs::Navigation,
   pub(super) persistence_sender: Option<tokio::sync::mpsc::Sender<crate::persistence::Command>>,
   pub(super) persistence_scope: Option<String>,
@@ -104,6 +107,7 @@ impl Desktop {
     // Bound queued presentation events; async producers wait without blocking either executor.
     let (sender, receiver) = crate::completion::channel(256);
     let (dock, tasks) = workbench::build(runtime.clone(), browser, computer, window, cx);
+    let resources = crate::resources::ResourcePanels::new(runtime.clone(), window, cx);
     let workspace = cx.new(|cx| {
       InputState::new(window, cx)
         .default_value(
@@ -211,7 +215,9 @@ impl Desktop {
       tasks,
       show_sidebar: true,
       show_workbench: false,
-      show_settings: false,
+      router: crate::router::Router::default(),
+      settings_focus: cx.focus_handle(),
+      resources,
       navigation: crate::tabs::Navigation::default(),
       persistence_sender: None,
       persistence_scope: None,
@@ -257,9 +263,7 @@ impl Render for Desktop {
       .key_context("Desktop")
       .on_action(cx.listener(|this, _: &SendPrompt, window, cx| this.send(window, cx)))
       .on_action(cx.listener(|this, _: &FocusComposer, window, cx| {
-        this.show_settings = false;
-        this.composer.read(cx).focus_handle(cx).focus(window, cx);
-        cx.notify();
+        this.close_settings(window, cx);
       }))
       .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
         if !this.persistence_loading && !this.navigation.connecting {
@@ -275,16 +279,22 @@ impl Render for Desktop {
       }))
       .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)))
       .on_action(cx.listener(|this, _: &CloseSettings, window, cx| {
-        this.show_settings = false;
-        this.composer.read(cx).focus_handle(cx).focus(window, cx);
-        cx.notify();
+        this.close_settings(window, cx);
+      }))
+      .on_action(cx.listener(|this, _: &NavigateBack, window, cx| {
+        if this.router.back() {
+          this.focus_route(window, cx);
+        }
+      }))
+      .on_action(cx.listener(|this, _: &NavigateForward, window, cx| {
+        if this.router.forward() {
+          this.focus_route(window, cx);
+        }
       }))
       .on_action(cx.listener(|this, _: &NewChatTab, window, cx| this.new_chat_tab(window, cx)))
       .on_action(cx.listener(|this, _: &CloseChatTab, window, cx| {
-        if this.show_settings {
-          this.show_settings = false;
-          this.composer.read(cx).focus_handle(cx).focus(window, cx);
-          cx.notify();
+        if this.router.is_settings() {
+          this.close_settings(window, cx);
         } else {
           this.close_active_chat_tab(window, cx);
         }
@@ -296,45 +306,6 @@ impl Render for Desktop {
       .text_color(cx.theme().foreground)
       .text_sm()
       .child(self.chrome(window, cx))
-      .when(self.show_settings, |this| {
-        this.child(self.settings_view(cx))
-      })
-      .when(!self.show_settings, |this| {
-        this.child(
-          div().flex_1().min_h_0().child(
-            h_resizable("desktop-layout")
-              .with_state(&self.main_layout)
-              .when(self.show_sidebar, |this| {
-                this.child(
-                  resizable_panel()
-                    .size(px(crate::theme::SIDEBAR_WIDTH))
-                    .size_range(px(240.)..px(380.))
-                    .child(self.sidebar(cx)),
-                )
-              })
-              .when(!self.show_sidebar, |layout| {
-                layout.child(
-                  resizable_panel()
-                    .size(px(crate::theme::RAIL_WIDTH))
-                    .size_range(px(crate::theme::RAIL_WIDTH)..px(crate::theme::RAIL_WIDTH))
-                    .child(self.sidebar_rail(cx)),
-                )
-              })
-              .child(
-                resizable_panel()
-                  .size_range(px(360.)..px(2000.))
-                  .child(self.conversation(window, cx)),
-              )
-              .when(self.show_workbench, |this| {
-                this.child(
-                  resizable_panel()
-                    .size(px(460.))
-                    .size_range(px(260.)..px(1600.))
-                    .child(self.dock.clone()),
-                )
-              }),
-          ),
-        )
-      })
+      .child(self.route_layout(window, cx))
   }
 }

@@ -15,12 +15,12 @@ cargo run -p agent-cli -- --help
 cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/lyonbrown-data
 ```
 
-The workbench shows the conversation and composer by default. Sessions, tasks, computer details and help open in an on-demand context panel rather than persistent empty panels. Pending approvals show the tool, arguments and approve/deny controls above the composer. Wide terminals place context beside the conversation; narrow terminals replace the conversation area with context. `Esc` closes the panel. Failed connections display `Disconnected` without simulated model replies. Failed submissions preserve the draft and are not replayed automatically. The matching draft is cleared only after the service confirms acceptance.
+The workbench shows the conversation and composer by default. Sessions, tasks, computer details and help open in an on-demand context panel rather than persistent empty panels. Pending approvals show the tool, arguments and approve/deny controls above the composer. Wide terminals place context beside the conversation; narrow terminals replace the conversation area with context. `Esc` returns to the previous context, or to the conversation without history. Failed connections display `Disconnected` without simulated model replies. Failed submissions preserve the draft and are not replayed automatically. The matching draft is cleared only after the service confirms acceptance.
 
 | Key | Action |
 | --- | --- |
 | `F1` / `F2` / `F3` / `F4` / `F5` | Toggle help / sessions / tasks / computer / full approval context |
-| `Esc` | Close the context panel |
+| `Esc` | Return to the previous context, or the conversation without history |
 | `Ctrl+N` | Create a session using the current working directory |
 | `Tab` | Select the next session and load its runs |
 | `Enter` | Submit input to the selected session |
@@ -39,6 +39,8 @@ The approval area displays the tool and arguments. Compact layouts retain only t
 The UI uses warm dark or warm light solid terminal backgrounds, text and accents. `--theme auto` uses `COLORFGBG` to choose the palette, falling back to dark without a hint. Select `--theme light` or `--theme dark` explicitly when needed. Model replies render Markdown through fixed `tui-markdown` 0.3.12, adapting the theme through its public `StyleSheet` interface. Default features are disabled, omitting code syntax-highlighting dependencies.
 
 The TUI separates presentation through MVVM: `view_model.rs` projects client `App` state into a read-only `ViewModel` containing connection labels, messages, approvals and current context. `view.rs` renders that data and the composer through Ratatui. Input actions and background updates remain in `input.rs`, `backend.rs` and `update.rs`; presentation never dispatches daemon operations.
+
+The TUI `Router` owns the context page, bounded back stack and page scroll position. `Esc` returns to the previous page, including the context behind the command palette. Session or connection changes clear old history and transient resource pages. `AppLayout` and `BodyLayout` compose Ratatui constraints for wide and narrow screens, approvals and command overlays; routes hold no daemon execution authority.
 
 ## Native computer attachment
 
@@ -96,13 +98,21 @@ Desktop presentation follows MVVM: `DesktopViewModel` holds the active session s
 
 Background results use bounded `async-channel` 2.5.0 queues; producers await capacity when a queue is full. GPUI applies results on its main thread and discards replies for obsolete tabs or generations. Browser frames retain an independent 160 ms refresh timer, and Computer hosts retain an independent 80 ms health timer. Closing a window cleans up local subscriptions and hosts; daemon jobs retain their independent lifetime.
 
-The ellipsis menu in the workbench tab bar lists all six panels: Browser, Files, Editor, Diff, Tasks and Computer. Use it to switch panels when a narrow window hides a tab. The component library still does not expose proper tab names in its accessibility tree; the menu does not resolve that tab accessibility limitation.
+The ellipsis menu lists Browser, Files, Editor, Diff, Tasks, Computer and Git. Use it when a narrow window hides a tab. Git queries branches, upstream, ahead/behind counts and file states through the daemon and renders patches with the library Diff component; the client does not execute Git. The component library still does not expose proper tab names in its accessibility tree; the menu does not resolve that limitation.
 
 Tasks reads durable daemon Tasks and provides first/next pages, details, reconciliation, cancellation and explicit acceptance/rejection. Dispatch requires a selected session with an active Run, a paired Worker node ID, its HTTPS endpoint and instructions. Workspace access defaults to read-only; the read/write choice still requires approval for writes, and the daemon checks paired capabilities. Desktop generates the Task UUID, Attempt UUID and idempotency key before sending, with a one-hour deadline. Unknown outcomes retain the original identity for inspection and reconciliation without automatic resubmission. A successful Worker Attempt still awaits Master acceptance.
 
+Git previews tracked file differences only. Untracked entries explicitly direct users to Files rather than presenting an empty patch as unchanged content.
+
 ### Settings and connection
 
-The title bar's Settings button opens a dedicated page. The daemon address and access token are edited only there; Workspace path selects the daemon-side folder for new chats in the current tab. The endpoint, token and workspace must match the daemon. A workspace for a remote daemon refers to that daemon's filesystem. Appearance offers manual Light and Dark choices. Back to chats and `Esc` return to the chat while preserving panel visibility and chat drafts.
+Settings uses a left navigation column and right content pane for Connection, Models, Providers, Skills, Status and Appearance. The return control sits outside scrolling content. Back to chats, `Esc`, or clicking the title bar Settings button again returns to the chat while preserving drafts and panel visibility. Connection edits the daemon endpoint and access token; Workspace path chooses the daemon-side folder for new chats in the current tab. Appearance offers Light and Dark choices.
+
+Models presents built-in, configured and installed models together; agentd persists the selection for the current session. Hugging Face search, inspection, pinned installation plans, job inspection/cancellation and model load/unload all execute in agentd. An original Job ID can be inspected after reconnecting without replaying work. Providers displays client environment metadata and variable names; only explicit upload transfers a value to the daemon's encrypted credential store, keeping secrets out of UI state. Skills supports daemon-user and session-workspace scopes, with file/hash inspection before installation; changing source or scope invalidates that inspection. Status displays daemon and session state.
+
+The model catalog and Hub management work before creating a chat; only “Use in session” requires a selected session. Creating or switching chats retains Hub plans and known download jobs for the same daemon; changing connections clears that presentation state.
+
+Both clients reuse `agent-client::navigation::Navigation` for typed locations, bounded history, back/forward and navigation revisions, adapting scroll and focus locally. Each desktop window has an independent route context, with `Alt+Left/Right` back/forward navigation. Routes change presentation without transferring chat or session authority. `layout.rs` composes library Sidebar and resizable panels.
 
 Connect is unavailable while a run is active, a request is pending, or file edits are unsaved. Saving unchanged text also blocks reconnection until that save request finishes. The unsaved-edit check covers both the current Editor and cached file drafts for other sessions. While a connection request is pending, the old Editor remains read-only to prevent writes through the connection being replaced.
 

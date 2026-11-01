@@ -222,7 +222,7 @@ fn durable_run_results_and_approvals_belong_to_selected_session() {
 fn narrow_task_list_keeps_the_last_selected_task_visible() {
   use agent_cli::model::ContextPanel;
   let app = App {
-    panel: ContextPanel::Tasks,
+    router: ContextPanel::Tasks.into(),
     task_rows: (0..12)
       .map(|index| {
         serde_json::json!({

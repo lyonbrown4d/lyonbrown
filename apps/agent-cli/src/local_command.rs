@@ -32,7 +32,7 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
       }
       Ok(P0Command::Sessions) => {
         app.sessions_cursor = app.selected;
-        app.panel = ContextPanel::Sessions;
+        app.router.navigate(ContextPanel::Sessions);
         app.input.clear();
         app.save_current_draft();
       }
@@ -59,11 +59,13 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
         {
           app.notice = "请先创建或选择一个会话。".into();
         } else {
+          let navigation_revision = app.router.begin_request();
           send(
             actions,
             Action::Resource {
               session: app.selected_session().map(|session| session.id.clone()),
               generation: app.generation,
+              navigation_revision,
               source: prompt,
               command,
             },
@@ -75,12 +77,12 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
   } else if prompt.trim_start() == "/help" || prompt.trim_start().starts_with("/help ") {
     let command = prompt.split_whitespace().nth(1);
     app.task_detail = crate::slash_command::help_text(command);
-    app.panel = ContextPanel::Help;
+    app.router.navigate(ContextPanel::Help);
     app.input.clear();
   } else if prompt.trim_start() == "/draft" || prompt.trim_start().starts_with("/draft ") {
     run_draft_command(app, &prompt);
   } else if prompt.trim_start() == "/run" || prompt.trim_start().starts_with("/run ") {
-    app.panel = ContextPanel::Tasks;
+    app.router.navigate(ContextPanel::Tasks);
     match shell_words::split(&prompt) {
       Ok(mut words) => {
         if let Some(first) = words.first_mut() {
@@ -102,7 +104,7 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
       Err(error) => app.task_detail = format!("Invalid run command quoting: {error}"),
     }
   } else if prompt.trim_start() == "/task" || prompt.trim_start().starts_with("/task ") {
-    app.panel = ContextPanel::Tasks;
+    app.router.navigate(ContextPanel::Tasks);
     match shell_words::split(&prompt) {
       Ok(mut words) => {
         if let Some(command) = words.first_mut() {
@@ -132,7 +134,7 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
       Err(error) => app.task_detail = format!("Invalid task command quoting: {error}"),
     }
   } else if let Some(command) = crate::computer::parse_local(&prompt) {
-    app.panel = ContextPanel::Computer;
+    app.router.navigate(ContextPanel::Computer);
     match command {
       Ok(command) => {
         send(
@@ -294,7 +296,7 @@ fn run_draft_command(app: &mut App, prompt: &str) {
     Ok(words) => words,
     Err(error) => {
       app.draft_detail = format!("Invalid draft command quoting: {error}");
-      app.panel = ContextPanel::Drafts;
+      app.router.navigate(ContextPanel::Drafts);
       return;
     }
   };
@@ -349,7 +351,7 @@ fn run_draft_command(app: &mut App, prompt: &str) {
       app.draft_detail = "用法：/draft list · /draft recover SESSION_ID".into();
     }
   }
-  app.panel = ContextPanel::Drafts;
+  app.router.navigate(ContextPanel::Drafts);
 }
 
 pub(crate) fn request_task_page(

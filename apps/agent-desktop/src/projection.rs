@@ -24,6 +24,10 @@ impl Desktop {
         endpoint,
         node_id,
       } => {
+        self.resources.invalidate(cx);
+        self.tasks.update(cx, |tasks, cx| {
+          tasks.reset_git(cx);
+        });
         tracing::info!(
           operation = "client.connect",
           outcome = "authenticated",
@@ -91,6 +95,7 @@ impl Desktop {
           self.vm.busy = false;
           self.refresh_restored_session(cx);
           self.start_persistence(&endpoint, &node_id, window, cx);
+          self.bind_active_chat(window, cx);
           return;
         }
         self.tasks.update(cx, |state, cx| {

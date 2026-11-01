@@ -27,6 +27,7 @@ pub struct DesktopSnapshot {
 
 #[derive(Clone, Debug)]
 pub struct WorkbenchSnapshot {
+  pub git: GitSnapshot,
   pub task_pending: bool,
   pub recovery_tasks_only: bool,
   pub tasks: Vec<(String, String, String)>,
@@ -57,7 +58,7 @@ impl Desktop {
     DesktopSnapshot {
       sidebar_expanded: self.show_sidebar,
       workbench_expanded: self.show_workbench,
-      settings_open: self.show_settings,
+      settings_open: self.router.is_settings(),
       local_state_loading: self.persistence_loading,
       local_state_loaded: self.persistence_loaded,
       layout_sizes: self
@@ -133,6 +134,7 @@ impl Desktop {
       workbench: {
         let state = self.tasks.read(cx);
         WorkbenchSnapshot {
+          git: state.git.read(cx).snapshot(cx),
           task_pending: state.task_pending,
           recovery_tasks_only: state.recovery_tasks_only,
           tasks: state
@@ -173,6 +175,17 @@ impl Desktop {
       },
     }
   }
+}
+
+#[derive(Clone, Debug)]
+pub struct GitSnapshot {
+  pub session: Option<String>,
+  pub status: Option<agent_protocol::v1::GitStatus>,
+  pub path: String,
+  pub patch: String,
+  pub rendered_files: usize,
+  pub busy: bool,
+  pub error: Option<String>,
 }
 
 #[derive(Clone, Debug)]

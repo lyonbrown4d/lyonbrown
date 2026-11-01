@@ -39,11 +39,10 @@ pub enum ContextPanel {
 
 #[derive(Debug)]
 pub struct App {
-  pub panel: ContextPanel,
+  pub router: crate::router::Router,
   pub connection: Connection,
   pub computer: crate::computer::ComputerStatus,
   pub computer_detail: String,
-  pub computer_scroll: u16,
   pub sessions: Vec<Session>,
   pub selected: usize,
   pub messages: Vec<Message>,
@@ -76,7 +75,7 @@ pub struct App {
 impl Default for App {
   fn default() -> Self {
     Self {
-      panel: ContextPanel::Closed,
+      router: crate::router::Router::default(),
       connection: Connection::Disconnected("Not connected".into()),
       computer: if cfg!(feature = "native-computer") {
         crate::computer::ComputerStatus::Detached
@@ -84,7 +83,6 @@ impl Default for App {
         crate::computer::ComputerStatus::Unavailable
       },
       computer_detail: String::new(),
-      computer_scroll: 0,
       sessions: Vec::new(),
       selected: 0,
       messages: Vec::new(),
@@ -133,6 +131,7 @@ impl App {
       return false;
     }
     self.save_current_draft();
+    self.router.rebind();
     self.generation = self.generation.saturating_add(1);
     self.selected = index;
     self.sessions_cursor = index;
@@ -180,9 +179,9 @@ impl App {
       selected_session: self.selected_session().map(|session| session.id.clone()),
       drafts: self.drafts.clone(),
       unbound_draft: self.unbound_draft.clone(),
-      panel: self.panel.into(),
+      panel: self.router.current().into(),
       transcript_scroll: self.scroll,
-      context_scroll: self.computer_scroll,
+      context_scroll: self.router.scroll(),
     }
   }
 }

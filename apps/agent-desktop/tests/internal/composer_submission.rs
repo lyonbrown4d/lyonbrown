@@ -5,6 +5,52 @@ use gpui_kit::{
 };
 
 #[gpui_kit::test]
+async fn settings_reject_direct_send_action_and_preserve_the_chat_draft(cx: &mut TestAppContext) {
+  let harness = support::Harness::new(cx, Vec::new());
+  harness.connect(cx);
+  harness
+    .wait(cx, |state| state.status.starts_with("Connected"))
+    .await;
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.press(&support::shortcut("t"), cx);
+  })
+  .expect("create a session before opening settings");
+  let ready = harness
+    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .await;
+  let session = ready.selected_session.expect("daemon session");
+  let draft = "Keep this draft while configuring the daemon";
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.press(&support::shortcut("l"), cx);
+    window.input(draft, cx);
+    window.click("open-settings", cx);
+    window.click("endpoint", cx);
+    window.dispatch_action(Box::new(crate::shell::SendPrompt), cx);
+  })
+  .expect("dispatch SendPrompt while a settings input has focus");
+  cx.run_until_parked();
+  let after = harness.snapshot(cx);
+  assert!(after.settings_open);
+  assert!(!after.busy);
+  assert!(after.active_run.is_none());
+  assert_eq!(after.draft, draft);
+  assert_eq!(after.selected_session.as_deref(), Some(session.as_str()));
+  assert!(
+    harness
+      .runtime
+      .block_on(harness.client.list_runs(&session))
+      .expect("persisted runs remain empty")
+      .is_empty()
+  );
+  assert!(
+    harness
+      .runtime
+      .block_on(harness.model.requests())
+      .is_empty()
+  );
+}
+
+#[gpui_kit::test]
 async fn native_enter_sends_shift_enter_edits_and_ime_composition_never_submits(
   cx: &mut TestAppContext,
 ) {

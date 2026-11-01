@@ -55,6 +55,7 @@ pub(crate) struct TaskDispatchContext {
 }
 
 pub struct Workbench {
+  pub(crate) git: Entity<super::git::GitPane>,
   pub(crate) computer: Entity<crate::computer::ComputerPane>,
   pub(crate) runtime: Arc<tokio::runtime::Runtime>,
   pub(crate) browser: fluxdi::Shared<crate::composition::BrowserPort>,
@@ -117,6 +118,10 @@ pub struct Workbench {
 }
 
 impl Workbench {
+  pub(crate) fn reset_git(&mut self, cx: &mut Context<Self>) {
+    self.git.update(cx, |git, cx| git.bind(None, None, cx));
+  }
+
   pub(crate) fn new(
     runtime: Arc<tokio::runtime::Runtime>,
     browser: fluxdi::Shared<crate::composition::BrowserPort>,
@@ -194,6 +199,7 @@ impl Workbench {
     let computer =
       cx.new(|cx| crate::computer::ComputerPane::new(runtime.clone(), computer, window, cx));
     Self {
+      git: cx.new(|cx| super::git::GitPane::new(runtime.clone(), window, cx)),
       computer,
       runtime,
       browser,
@@ -267,6 +273,9 @@ impl Workbench {
     window: &mut Window,
     cx: &mut Context<Self>,
   ) {
+    self
+      .git
+      .update(cx, |git, cx| git.bind(client.clone(), session.clone(), cx));
     self.computer.update(cx, |computer, cx| {
       computer.bind(client.clone(), session.clone(), window, cx)
     });

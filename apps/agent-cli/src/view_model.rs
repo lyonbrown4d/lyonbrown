@@ -79,37 +79,38 @@ impl<'a> ViewModel<'a> {
       lines.push(Line::from("● Lyonbrown · 正在回复"));
       lines.extend(crate::markdown::render(&safe_text(content), theme).lines);
     }
-    let task_list =
-      (app.panel == ContextPanel::Tasks && app.task_detail.is_empty() && !app.task_rows.is_empty())
-        .then(|| TaskListView {
-          items: app
-            .task_rows
-            .iter()
-            .map(|task| {
-              let envelope = task.get("envelope");
-              let id = envelope
-                .and_then(|value| value.get("task_id"))
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("未知 ID");
-              let status = task
-                .get("status")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("未知");
-              let attempt = task
-                .get("attempt_status")
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or("attempt 未知");
-              format!(
-                "{} · {} · {}",
-                safe_text(id),
-                safe_text(status),
-                safe_text(attempt)
-              )
-            })
-            .collect(),
-          selected: app.task_selected,
-        });
-    let command_palette = (app.panel == ContextPanel::Commands).then(|| {
+    let task_list = (app.router.current() == ContextPanel::Tasks
+      && app.task_detail.is_empty()
+      && !app.task_rows.is_empty())
+    .then(|| TaskListView {
+      items: app
+        .task_rows
+        .iter()
+        .map(|task| {
+          let envelope = task.get("envelope");
+          let id = envelope
+            .and_then(|value| value.get("task_id"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("未知 ID");
+          let status = task
+            .get("status")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("未知");
+          let attempt = task
+            .get("attempt_status")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("attempt 未知");
+          format!(
+            "{} · {} · {}",
+            safe_text(id),
+            safe_text(status),
+            safe_text(attempt)
+          )
+        })
+        .collect(),
+      selected: app.task_selected,
+    });
+    let command_palette = (app.router.current() == ContextPanel::Commands).then(|| {
       let query = app.input.text();
       let query = query.split_whitespace().next().unwrap_or("/");
       let commands = crate::slash_command::filter(query);
@@ -121,12 +122,12 @@ impl<'a> ViewModel<'a> {
         selected: app.command_selected.min(commands.len().saturating_sub(1)),
       }
     });
-    let context = match app.panel {
+    let context = match app.router.current() {
       ContextPanel::Closed => None,
       ContextPanel::Help => Some((
         "快捷键 · F1 关闭",
         Text::from(format!(
-          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 关闭面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/run inspect RUN_ID\n/run abandon RUN_ID --idempotency-key KEY --note '核对记录'\n/run continue RUN_ID --idempotency-key KEY --note '核对记录' --prompt '新的输入'\n恢复保留原 Run 的不确定状态；继续会创建新会话，用 Tab 切换查看。\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n\n{}\n\n管理命令由 CLI 本地解析，格式错误不会作为提示发送给模型。",
+          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 返回面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/run inspect RUN_ID\n/run abandon RUN_ID --idempotency-key KEY --note '核对记录'\n/run continue RUN_ID --idempotency-key KEY --note '核对记录' --prompt '新的输入'\n恢复保留原 Run 的不确定状态；继续会创建新会话，用 Tab 切换查看。\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n\n{}\n\n管理命令由 CLI 本地解析，格式错误不会作为提示发送给模型。",
           crate::slash_command::help_text(None)
         )),
       )),
@@ -170,11 +171,11 @@ impl<'a> ViewModel<'a> {
         }),
       )),
       ContextPanel::Commands => Some((
-        "命令 · ↑/↓ 选择 · Tab 补全 · Enter 补全 · Esc 关闭",
+        "命令 · ↑/↓ 选择 · Tab 补全 · Enter 补全 · Esc 返回",
         Text::from("输入命令名称以筛选。所有 / 命令均由 CLI 本地解析。"),
       )),
       ContextPanel::Resource => Some((
-        "资源详情 · Esc 关闭",
+        "资源详情 · Esc 返回",
         Text::from(safe_text(&app.resource_detail)),
       )),
       ContextPanel::Approval => Some((
@@ -233,7 +234,7 @@ impl<'a> ViewModel<'a> {
       active: app.active_run.is_some(),
       notice: safe_text(&notice),
       scroll: app.scroll,
-      context_scroll: app.computer_scroll,
+      context_scroll: app.router.scroll(),
       command_palette,
     }
   }

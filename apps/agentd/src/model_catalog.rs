@@ -168,15 +168,20 @@ impl ModelService for Daemon {
     request: Request<v1::SessionRequest>,
   ) -> Result<Response<v1::Models>, Status> {
     let id = request.into_inner().session_id;
-    self
-      .store
-      .session(&id)
-      .map_err(crate::service::db_error)?
-      .ok_or_else(|| Status::not_found("session not found"))?;
-    let selected = self
-      .store
-      .model_binding(&id)
-      .map_err(crate::service::db_error)?;
+    let session_scoped = !id.is_empty();
+    let selected = if session_scoped {
+      self
+        .store
+        .session(&id)
+        .map_err(crate::service::db_error)?
+        .ok_or_else(|| Status::not_found("session not found"))?;
+      self
+        .store
+        .model_binding(&id)
+        .map_err(crate::service::db_error)?
+    } else {
+      None
+    };
     let mut models = Vec::new();
     for (id, name, vendor, binding) in self.model_bindings() {
       let ready = if binding.provider == "local" {
@@ -205,11 +210,12 @@ impl ModelService for Daemon {
         }
         .into(),
         state: state.into(),
-        selected: selected
-          .as_ref()
-          .map_or(binding.execution_id == "configured", |value| {
-            value.execution_id == binding.execution_id
-          }),
+        selected: session_scoped
+          && selected
+            .as_ref()
+            .map_or(binding.execution_id == "configured", |value| {
+              value.execution_id == binding.execution_id
+            }),
         executions: vec![v1::ModelExecution {
           id: binding.execution_id,
           label: if binding.provider == "local" {

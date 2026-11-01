@@ -60,7 +60,7 @@ fn assert_surface(buffer: &ratatui::buffer::Buffer, theme: Theme) {
 #[test]
 fn selected_task_remains_visible_in_a_short_narrow_terminal() {
   let app = App {
-    panel: agent_cli::model::ContextPanel::Tasks,
+    router: agent_cli::model::ContextPanel::Tasks.into(),
     task_rows: (0..50)
       .map(|index| {
         serde_json::json!({
@@ -172,7 +172,7 @@ fn computer_context_names_the_binding_owner_without_identifiers() {
   };
   use agent_computer_runtime::DesktopScope;
   let mut app = App {
-    panel: ContextPanel::Computer,
+    router: ContextPanel::Computer.into(),
     computer: ComputerStatus::Attached {
       session: "private-owner".into(),
       scope: DesktopScope::Window(7),

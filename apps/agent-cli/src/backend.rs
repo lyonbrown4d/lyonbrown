@@ -51,6 +51,7 @@ pub enum Action {
   Resource {
     session: Option<String>,
     generation: u64,
+    navigation_revision: u64,
     source: String,
     command: crate::resource_command::ResourceCommand,
   },
@@ -99,6 +100,7 @@ pub enum Update {
   ResourceDetail {
     session: Option<String>,
     generation: u64,
+    navigation_revision: u64,
     source: String,
     title: String,
     detail: String,

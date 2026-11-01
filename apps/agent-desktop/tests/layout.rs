@@ -1,6 +1,7 @@
 mod support;
 use gpui_kit::{
-  AppContext as _, TestAppContext, component::ActiveTheme as _, px, size, test::TestWindowExt as _,
+  AppContext as _, ScrollDelta, TestAppContext, component::ActiveTheme as _, point, px, size,
+  test::TestWindowExt as _,
 };
 use support::Harness;
 
@@ -98,6 +99,10 @@ async fn settings_are_separate_and_both_panels_can_be_restored(cx: &mut TestAppC
       None,
       "token remains masked"
     );
+    assert!(window.try_find("theme-light").is_none());
+    window.within("settings-sidebar").click("0-5", cx);
+    assert!(window.find("appearance-settings").visible());
+    assert!(window.try_find("endpoint").is_none());
     let was_dark = cx.theme().is_dark();
     window.click(
       if was_dark {
@@ -126,4 +131,88 @@ async fn settings_are_separate_and_both_panels_can_be_restored(cx: &mut TestAppC
     assert!(window.find("toggle-workbench").visible());
   })
   .expect("both panels remain user-controlled at the minimum window size");
+}
+
+#[gpui_kit::test]
+async fn settings_return_remains_reachable_after_scroll_and_input_focus(cx: &mut TestAppContext) {
+  let harness = Harness::new(cx, Vec::new());
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.press(&support::shortcut("l"), cx);
+    window.input("Retain this draft through every settings return path", cx);
+  })
+  .expect("type draft");
+  let before = harness.snapshot(cx);
+  cx.simulate_window_resize(harness.window.into(), size(px(960.), px(420.)));
+  harness.click("open-settings", cx);
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.render_frame(cx);
+    assert!(window.find("settings-sidebar").visible());
+    assert!(
+      window.find("connection-settings").bounds().left()
+        > window.find("settings-sidebar").bounds().left()
+    );
+    let back_top = window.find("close-settings").bounds().top();
+    window.scroll(
+      "settings-page-scroll",
+      ScrollDelta::Pixels(point(px(0.), px(-600.))),
+      cx,
+    );
+    window.render_frame(cx);
+    assert!(window.find("close-settings").visible());
+    assert_eq!(window.find("close-settings").bounds().top(), back_top);
+    window.click("close-settings", cx);
+  })
+  .expect("persistent return survives short window and content scrolling");
+  let returned = harness.snapshot(cx);
+  assert!(!returned.settings_open);
+  assert_eq!(returned.draft, before.draft);
+  assert_eq!(returned.selected_session, before.selected_session);
+  assert_eq!(returned.sidebar_expanded, before.sidebar_expanded);
+  assert_eq!(returned.workbench_expanded, before.workbench_expanded);
+
+  harness.click("open-settings", cx);
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.render_frame(cx);
+    window.within("settings-sidebar").click("0-0", cx);
+    window.click("endpoint", cx);
+    window.press("escape", cx);
+  })
+  .expect("Escape returns while connection input owns focus");
+  assert!(!harness.snapshot(cx).settings_open);
+  assert_eq!(harness.snapshot(cx).draft, before.draft);
+
+  harness.click("open-settings", cx);
+  assert!(harness.snapshot(cx).settings_open);
+  harness.click("open-settings", cx);
+  let returned = harness.snapshot(cx);
+  assert!(!returned.settings_open);
+  assert_eq!(returned.draft, before.draft);
+}
+
+#[gpui_kit::test]
+async fn settings_categories_follow_window_navigation_history(cx: &mut TestAppContext) {
+  let harness = Harness::new(cx, Vec::new());
+  let other_window = Harness::new(cx, Vec::new());
+  harness.click("open-settings", cx);
+  assert!(!other_window.snapshot(cx).settings_open);
+  cx.update_window(harness.window.into(), |_, window, cx| {
+    window.within("settings-sidebar").click("0-5", cx);
+    window.render_frame(cx);
+    assert!(window.find("appearance-settings").visible());
+    assert!(window.try_find("endpoint").is_none());
+    window.press("alt-left", cx);
+    window.render_frame(cx);
+    assert!(window.find("connection-settings").visible());
+    window.press("alt-right", cx);
+    window.render_frame(cx);
+    assert!(window.find("appearance-settings").visible());
+    window.press("alt-left", cx);
+    window.press("alt-left", cx);
+    window.render_frame(cx);
+    assert!(window.try_find("settings-view").is_none());
+    assert!(window.find("composer").visible());
+  })
+  .expect("category history and chat return are driven by the same window router");
+  assert!(!harness.snapshot(cx).settings_open);
+  assert!(!other_window.snapshot(cx).settings_open);
 }

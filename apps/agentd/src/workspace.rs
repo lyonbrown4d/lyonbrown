@@ -270,10 +270,11 @@ async fn diff(workspace: String, path: String) -> anyhow::Result<String> {
   let check = root.clone();
   let file = path.clone();
   if !file.is_empty() {
-    tokio::task::spawn_blocking(move || check.read(&file)).await??;
+    tokio::task::spawn_blocking(move || check.validate_diff_path(&file)).await??;
   }
   let mut command = git_command(&workspace);
   command.args([
+    "--literal-pathspecs",
     "-c",
     "diff.external=",
     "diff",

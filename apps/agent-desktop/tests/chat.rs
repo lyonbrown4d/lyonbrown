@@ -101,6 +101,7 @@ async fn real_keyboard_submission_streams_markdown_and_loads_sidebar_history(
     );
     let before = cx.theme().is_dark();
     window.click("open-settings", cx);
+    window.within("settings-sidebar").click("0-5", cx);
     window.click(if before { "theme-light" } else { "theme-dark" }, cx);
     window.click("close-settings", cx);
     assert_ne!(cx.theme().is_dark(), before);

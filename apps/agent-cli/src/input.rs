@@ -70,16 +70,16 @@ fn handle_key(
     }
   } else {
     match key.code {
-      KeyCode::Esc if app.panel == ContextPanel::Commands => {
-        app.panel = ContextPanel::Closed;
+      KeyCode::Esc if app.router.current() == ContextPanel::Commands => {
+        app.router.back();
       }
-      KeyCode::Up if app.panel == ContextPanel::Commands => {
+      KeyCode::Up if app.router.current() == ContextPanel::Commands => {
         app.command_selected = app.command_selected.saturating_sub(1);
       }
-      KeyCode::Up if app.panel == ContextPanel::Sessions => {
+      KeyCode::Up if app.router.current() == ContextPanel::Sessions => {
         app.sessions_cursor = app.sessions_cursor.saturating_sub(1);
       }
-      KeyCode::Down if app.panel == ContextPanel::Commands => {
+      KeyCode::Down if app.router.current() == ContextPanel::Commands => {
         let query = app.input.text();
         let query = query.split_whitespace().next().unwrap_or("/");
         let count = crate::slash_command::filter(query).len();
@@ -87,18 +87,18 @@ fn handle_key(
           app.command_selected = (app.command_selected + 1).min(count - 1);
         }
       }
-      KeyCode::Down if app.panel == ContextPanel::Sessions => {
+      KeyCode::Down if app.router.current() == ContextPanel::Sessions => {
         app.sessions_cursor = (app.sessions_cursor + 1).min(app.sessions.len().saturating_sub(1));
       }
-      KeyCode::Tab if app.panel == ContextPanel::Commands => {
+      KeyCode::Tab if app.router.current() == ContextPanel::Commands => {
         let query = app.input.text();
         let query = query.split_whitespace().next().unwrap_or("/");
         if let Some(command) = crate::slash_command::filter(query).get(app.command_selected) {
           app.input = crate::composer::Composer::from(format!("/{} ", command.name).as_str());
-          app.panel = ContextPanel::Closed;
+          app.router.back();
         }
       }
-      KeyCode::Enter if app.panel == ContextPanel::Commands => {
+      KeyCode::Enter if app.router.current() == ContextPanel::Commands => {
         let text = app.input.text();
         let token = text.split_whitespace().next().unwrap_or("/");
         let command = token.trim_start_matches('/');
@@ -106,18 +106,18 @@ fn handle_key(
           let query = text.split_whitespace().next().unwrap_or("/");
           if let Some(command) = crate::slash_command::filter(query).get(app.command_selected) {
             app.input = crate::composer::Composer::from(format!("/{} ", command.name).as_str());
-            app.panel = ContextPanel::Closed;
+            app.router.back();
           } else {
             app.notice = format!("未知命令 {token}。输入 /help 查看可用命令。");
             app.input.clear();
-            app.panel = ContextPanel::Closed;
+            app.router.back();
           }
         } else {
-          app.panel = ContextPanel::Closed;
+          app.router.back();
           crate::local_command::submit(app, actions)?;
         }
       }
-      KeyCode::Enter if app.panel == ContextPanel::Sessions => {
+      KeyCode::Enter if app.router.current() == ContextPanel::Sessions => {
         if let Some(session) = app
           .sessions
           .get(app.sessions_cursor)
@@ -131,7 +131,7 @@ fn handle_key(
               generation: app.generation,
             },
           )?;
-          app.panel = ContextPanel::Closed;
+          app.router.back();
         }
       }
       KeyCode::F(number @ 1..=5) => {
@@ -142,19 +142,15 @@ fn handle_key(
           4 => ContextPanel::Computer,
           _ => ContextPanel::Approval,
         };
-        app.panel = if app.panel == panel {
-          ContextPanel::Closed
-        } else {
-          panel
-        };
-        if number == 2 && app.panel == ContextPanel::Sessions {
+        app.router.toggle(panel);
+        if number == 2 && app.router.current() == ContextPanel::Sessions {
           app.sessions_cursor = app.selected;
         }
-        if number == 3 && app.panel == ContextPanel::Tasks {
+        if number == 3 && app.router.current() == ContextPanel::Tasks {
           crate::local_command::request_task_page(app, actions, "")?;
         }
       }
-      KeyCode::Esc => app.panel = ContextPanel::Closed,
+      KeyCode::Esc => app.router.back(),
       KeyCode::Enter
         if key
           .modifiers
@@ -163,7 +159,7 @@ fn handle_key(
         app.input.newline();
       }
       KeyCode::Enter
-        if app.panel == ContextPanel::Tasks
+        if app.router.current() == ContextPanel::Tasks
           && app.input.is_empty()
           && !app.task_rows.is_empty() =>
       {
@@ -201,46 +197,48 @@ fn handle_key(
             },
           )?;
         }
-        if app.panel == ContextPanel::Tasks {
+        if app.router.current() == ContextPanel::Tasks {
           crate::local_command::request_task_page(app, actions, "")?;
         }
       }
       KeyCode::PageDown if key.modifiers.contains(KeyModifiers::ALT) => {
-        app.panel = ContextPanel::Computer;
-        app.computer_scroll = app.computer_scroll.saturating_add(3);
+        app.router.navigate(ContextPanel::Computer);
+        app.router.set_scroll(app.router.scroll().saturating_add(3));
       }
       KeyCode::PageUp if key.modifiers.contains(KeyModifiers::ALT) => {
-        app.panel = ContextPanel::Computer;
-        app.computer_scroll = app.computer_scroll.saturating_sub(3);
+        app.router.navigate(ContextPanel::Computer);
+        app.router.set_scroll(app.router.scroll().saturating_sub(3));
       }
-      KeyCode::PageDown if app.panel == ContextPanel::Tasks && !app.task_cursor.is_empty() => {
+      KeyCode::PageDown
+        if app.router.current() == ContextPanel::Tasks && !app.task_cursor.is_empty() =>
+      {
         let cursor = app.task_cursor.clone();
         crate::local_command::request_task_page(app, actions, &cursor)?;
       }
-      KeyCode::Down if app.panel == ContextPanel::Tasks && !app.task_rows.is_empty() => {
+      KeyCode::Down if app.router.current() == ContextPanel::Tasks && !app.task_rows.is_empty() => {
         app.task_selected = (app.task_selected + 1).min(app.task_rows.len().saturating_sub(1));
       }
-      KeyCode::Up if app.panel == ContextPanel::Tasks => {
+      KeyCode::Up if app.router.current() == ContextPanel::Tasks => {
         app.task_selected = app.task_selected.saturating_sub(1);
       }
-      KeyCode::PageDown if app.panel != ContextPanel::Closed => {
-        app.computer_scroll = app.computer_scroll.saturating_add(5);
+      KeyCode::PageDown if app.router.current() != ContextPanel::Closed => {
+        app.router.set_scroll(app.router.scroll().saturating_add(5));
       }
-      KeyCode::PageUp if app.panel != ContextPanel::Closed => {
-        app.computer_scroll = app.computer_scroll.saturating_sub(5);
+      KeyCode::PageUp if app.router.current() != ContextPanel::Closed => {
+        app.router.set_scroll(app.router.scroll().saturating_sub(5));
       }
       KeyCode::PageDown => app.scroll = app.scroll.saturating_sub(5),
       KeyCode::PageUp => app.scroll = app.scroll.saturating_add(5),
       KeyCode::Char('/') if app.input.is_empty() => {
         app.input.key(key);
-        app.panel = ContextPanel::Commands;
+        app.router.navigate(ContextPanel::Commands);
         app.command_selected = 0;
       }
-      KeyCode::Char(_) | KeyCode::Backspace if app.panel == ContextPanel::Commands => {
+      KeyCode::Char(_) | KeyCode::Backspace if app.router.current() == ContextPanel::Commands => {
         app.input.key(key);
         let text = app.input.text();
         if text.split_whitespace().count() > 1 {
-          app.panel = ContextPanel::Closed;
+          app.router.back();
         } else {
           app.command_selected = 0;
         }

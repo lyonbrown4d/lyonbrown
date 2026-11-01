@@ -32,7 +32,7 @@ pub struct Harness {
 
 impl Harness {
   pub fn new(cx: &mut TestAppContext, replies: Vec<ScriptedReply>) -> Self {
-    Self::with_optional_write_gate(cx, replies, None, None)
+    Self::with_optional_write_gate(cx, replies, None, None, None)
   }
 
   pub fn with_write_gate(
@@ -40,14 +40,18 @@ impl Harness {
     replies: Vec<ScriptedReply>,
     gate: Arc<tokio::sync::Semaphore>,
   ) -> Self {
-    Self::with_optional_write_gate(cx, replies, Some(gate), None)
+    Self::with_optional_write_gate(cx, replies, Some(gate), None, None)
   }
 
   pub fn with_computer(
     cx: &mut TestAppContext,
     factory: Arc<dyn agent_computer_runtime::ComputerHostFactory>,
   ) -> Self {
-    Self::with_optional_write_gate(cx, Vec::new(), None, Some(factory))
+    Self::with_optional_write_gate(cx, Vec::new(), None, Some(factory), None)
+  }
+
+  pub fn with_hub_endpoint(cx: &mut TestAppContext, endpoint: String) -> Self {
+    Self::with_optional_write_gate(cx, Vec::new(), None, None, Some(endpoint))
   }
 
   fn with_optional_write_gate(
@@ -55,6 +59,7 @@ impl Harness {
     replies: Vec<ScriptedReply>,
     write_gate: Option<Arc<tokio::sync::Semaphore>>,
     computer: Option<Arc<dyn agent_computer_runtime::ComputerHostFactory>>,
+    hub_endpoint: Option<String>,
   ) -> Self {
     let runtime = Arc::new(
       tokio::runtime::Builder::new_multi_thread()
@@ -102,6 +107,9 @@ impl Harness {
       ])
       .expect("real daemon configuration");
       config.provider_api_key = Some("synthetic-model-key".into());
+      if let Some(endpoint) = hub_endpoint {
+        config.hub_endpoint = endpoint;
+      }
       let daemon = agentd::Daemon::open(config)
         .await
         .expect("real authenticated daemon");
@@ -131,10 +139,14 @@ impl Harness {
       let runtime_service = agentd::runtime_service(daemon.clone());
       let computer_service = agentd::computer_runtime_service(daemon.clone());
       let orchestration = agentd::orchestration_service(daemon.clone());
+      let models = agentd::model_service(daemon.clone());
+      let skills = agentd::skill_service(daemon.clone());
       tokio::spawn(async move {
         tonic::transport::Server::builder()
           .add_service(service)
           .add_service(orchestration)
+          .add_service(models)
+          .add_service(skills)
           .add_service(workspace_service)
           .add_service(browser_service)
           .add_service(runtime_service)

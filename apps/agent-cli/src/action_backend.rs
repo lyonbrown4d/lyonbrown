@@ -94,6 +94,7 @@ pub(crate) async fn execute(
     Action::Resource {
       session,
       generation,
+      navigation_revision,
       source,
       command,
     } => {
@@ -103,6 +104,7 @@ pub(crate) async fn execute(
         .send(Update::ResourceDetail {
           session,
           generation,
+          navigation_revision,
           source,
           title,
           detail,

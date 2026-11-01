@@ -18,6 +18,28 @@ impl std::fmt::Display for RevisionConflict {
 }
 impl std::error::Error for RevisionConflict {}
 impl Workspace {
+  /// Validate a Git path without reading its content or requiring a deleted file to exist.
+  /// Existing ancestors must resolve inside the capability directory.
+  pub fn validate_diff_path(&self, path: &str) -> Result<()> {
+    validate_path(path)?;
+    let mut candidate = Path::new(path);
+    loop {
+      match self.dir.metadata(candidate) {
+        Ok(_) => return Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+          if candidate == Path::new(".") {
+            return Err(error.into());
+          }
+          candidate = candidate
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        }
+        Err(error) => return Err(error.into()),
+      }
+    }
+  }
+
   pub fn list(&self, directory: &str) -> Result<Vec<FileEntry>> {
     let path = if directory.is_empty() { "." } else { directory };
     validate_path(path)?;

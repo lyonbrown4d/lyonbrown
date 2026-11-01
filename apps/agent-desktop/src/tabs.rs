@@ -209,7 +209,7 @@ impl Desktop {
     if !self.can_change_chat(cx) {
       return;
     }
-    self.show_settings = false;
+    self.router.return_to_chat();
     if !self.add_blank_chat(window, cx) {
       return;
     }
@@ -282,6 +282,9 @@ impl Desktop {
   }
 
   pub(super) fn bind_active_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    self
+      .resources
+      .bind(self.client.clone(), self.vm.selected.clone(), cx);
     self.tasks.update(cx, |tasks, cx| {
       tasks.bind(
         self.client.clone(),

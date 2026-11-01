@@ -1,6 +1,6 @@
 use ratatui::{
   Frame,
-  layout::{Constraint, Layout, Margin, Rect},
+  layout::{Constraint, Layout, Rect},
   style::{Modifier, Style},
   text::{Line, Span},
   widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
@@ -20,37 +20,22 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
   if area.is_empty() {
     return;
   }
-  let compact = area.width < 70 || area.height < 16;
-  let inset = if area.width >= 70 { 2 } else { 0 };
-  let area = area.inner(Margin::new(inset, 0));
-  let approval_height = model
-    .approval
-    .as_ref()
-    .map_or(0, |approval| {
-      if compact {
-        4
-      } else {
-        (approval.description.lines().count() as u16 + 4).clamp(6, 10)
-      }
-    })
-    .min(area.height.saturating_sub(5));
-  let composer_height = if compact { 3 } else { 4 };
-  let rows = Layout::vertical([
-    Constraint::Length(if compact { 2 } else { 3 }),
-    Constraint::Min(0),
-    Constraint::Length(approval_height),
-    Constraint::Length(composer_height),
-    Constraint::Length(if compact { 0 } else { 2 }),
-  ])
-  .split(area);
-  header(frame, model, rows[0], theme, compact);
-  body(frame, model, rows[1], theme);
+  let layout = crate::layout::AppLayout::new(
+    area,
+    model
+      .approval
+      .as_ref()
+      .map(|approval| approval.description.lines().count()),
+  );
+  let compact = layout.compact;
+  header(frame, model, layout.header, theme, compact);
+  body(frame, model, layout.body, theme);
   if let Some(approval) = &model.approval {
     let block = Block::default()
       .borders(Borders::TOP | Borders::BOTTOM)
       .border_style(Style::default().fg(theme.warning));
-    let inner = block.inner(rows[2]);
-    frame.render_widget(block, rows[2]);
+    let inner = block.inner(layout.approval);
+    frame.render_widget(block, layout.approval);
     let parts = Layout::vertical([
       Constraint::Length(1),
       Constraint::Min(0),
@@ -84,21 +69,14 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
       parts[2],
     );
   }
-  composer(frame, model, rows[3], theme, compact);
+  composer(frame, model, layout.composer, theme, compact);
   if let Some(palette) = &model.command_palette
     && !palette.items.is_empty()
   {
-    let height = (palette.items.len() as u16 + 2).min(rows[1].height.saturating_sub(1));
-    let width = rows[1].width.min(72);
-    let popup = Rect::new(
-      rows[1].x,
-      rows[1].y + rows[1].height.saturating_sub(height),
-      width,
-      height,
-    );
+    let popup = layout.palette(palette.items.len());
     frame.render_widget(Clear, popup);
     let block = Block::default()
-      .title(" 命令 · Tab 补全 · Esc 关闭 ")
+      .title(" 命令 · Tab 补全 · Esc 返回 ")
       .borders(Borders::ALL)
       .border_style(Style::default().fg(theme.accent));
     let inner = block.inner(popup);
@@ -138,7 +116,7 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
       ])
       .style(Style::default().fg(theme.muted))
       .wrap(Wrap { trim: false }),
-      rows[4],
+      layout.footer,
     );
   }
 }
@@ -190,33 +168,23 @@ fn header(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, co
 }
 
 fn body(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
-  if let Some((title, content)) = &model.context {
+  let layout = crate::layout::BodyLayout::new(area, model.context.is_some());
+  if let Some(transcript_area) = layout.transcript {
+    transcript(frame, model, transcript_area, theme);
+  }
+  if let (Some(context_area), Some((title, content))) = (layout.context, &model.context) {
     if let Some(task_list) = &model.task_list {
-      if area.width >= 95 {
-        let columns = Layout::horizontal([Constraint::Min(30), Constraint::Length(34)]).split(area);
-        transcript(frame, model, columns[0], theme);
-        crate::context_view::render_task_list(frame, title, task_list, columns[1], theme);
-      } else {
-        crate::context_view::render_task_list(frame, title, task_list, area, theme);
-      }
-      return;
-    }
-    if area.width >= 95 {
-      let columns = Layout::horizontal([Constraint::Min(30), Constraint::Length(34)]).split(area);
-      transcript(frame, model, columns[0], theme);
+      crate::context_view::render_task_list(frame, title, task_list, context_area, theme);
+    } else {
       crate::context_view::render_text(
         frame,
         title,
         content,
         model.context_scroll,
-        columns[1],
+        context_area,
         theme,
       );
-    } else {
-      crate::context_view::render_text(frame, title, content, model.context_scroll, area, theme);
     }
-  } else {
-    transcript(frame, model, area, theme);
   }
 }
 

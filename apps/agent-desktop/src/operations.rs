@@ -21,10 +21,14 @@ impl Desktop {
       cx.notify();
       return;
     }
-    if self.any_active_work() || self.tasks.read(cx).blocks_connection(cx) {
+    if self.any_active_work()
+      || self.tasks.read(cx).blocks_connection(cx)
+      || self.resources.blocks_connection(cx)
+    {
       return;
     }
     self.navigation.connecting = true;
+    self.resources.invalidate(cx);
     self.tasks.update(cx, |tasks, cx| {
       tasks.connection_pending = true;
       tasks.computer.update(cx, |computer, cx| {
@@ -121,6 +125,9 @@ impl Desktop {
   }
 
   pub(super) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    if self.router.is_settings() {
+      return;
+    }
     if self
       .navigation
       .unbound

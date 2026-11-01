@@ -6,6 +6,7 @@ mod completion;
 mod composition;
 mod computer;
 mod connection;
+mod layout;
 mod local_state;
 mod message;
 mod operations;
@@ -14,6 +15,8 @@ mod persistence;
 mod presentation;
 mod projection;
 mod recovery;
+mod resources;
+pub mod router;
 mod settings;
 mod shell;
 mod tabs;
@@ -47,7 +50,7 @@ pub use composition::{
 };
 use gpui_kit::*;
 pub use presentation::RecoverySnapshot;
-pub use presentation::{ComputerSnapshot, DesktopSnapshot, WorkbenchSnapshot};
+pub use presentation::{ComputerSnapshot, DesktopSnapshot, GitSnapshot, WorkbenchSnapshot};
 pub use shell::Desktop;
 pub use tabs::ChatTabSnapshot;
 
@@ -75,6 +78,10 @@ pub fn init(cx: &mut App) {
     KeyBinding::new("cmd-w", shell::CloseChatTab, Some("Desktop")),
     KeyBinding::new("ctrl-w", shell::CloseChatTab, Some("Desktop")),
     KeyBinding::new("escape", shell::CloseSettings, Some("DesktopSettings")),
+    KeyBinding::new("alt-left", shell::NavigateBack, Some("Desktop")),
+    KeyBinding::new("alt-right", shell::NavigateForward, Some("Desktop")),
+    KeyBinding::new("cmd-[", shell::NavigateBack, Some("Desktop")),
+    KeyBinding::new("cmd-]", shell::NavigateForward, Some("Desktop")),
     KeyBinding::new("cmd-q", shell::Quit, None),
     KeyBinding::new("alt-f4", shell::Quit, None),
   ]);

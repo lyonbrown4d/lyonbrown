@@ -73,7 +73,7 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
                 if let Some(session) = app.selected_session() {
                     send(&actions, Action::Select { session: session.id.clone(), generation: app.generation })?;
                 }
-                if app.panel == crate::model::ContextPanel::Tasks {
+                if app.router.current() == crate::model::ContextPanel::Tasks {
                     crate::local_command::load_tasks(&app, &actions)?;
                 }
             }

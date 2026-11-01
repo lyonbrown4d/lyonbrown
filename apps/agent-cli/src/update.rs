@@ -16,6 +16,7 @@ pub fn apply(app: &mut App, update: Update) {
     Update::ResourceDetail {
       session,
       generation,
+      navigation_revision,
       source,
       title,
       detail,
@@ -25,21 +26,30 @@ pub fn apply(app: &mut App, update: Update) {
       {
         return;
       }
-      app.resource_title = title.clone();
-      app.resource_detail = format!("{title}\n\n{detail}");
-      app.panel = crate::model::ContextPanel::Resource;
-      app.computer_scroll = 0;
-      if app.input.text() == source {
-        app.input.clear();
-        app.save_current_draft();
+      // Navigation after submission supersedes an asynchronous presentation request.
+      // Never replace another resource page or reopen a page the user dismissed.
+      if navigation_revision == app.router.revision() {
+        app.resource_title = title.clone();
+        app.resource_detail = format!("{title}\n\n{detail}");
+        app.router.navigate(crate::model::ContextPanel::Resource);
+        app.router.set_scroll(0);
+        if app.input.text() == source {
+          app.input.clear();
+          app.save_current_draft();
+        }
+      } else {
+        app.notice = format!("{title} completed; current page retained.");
       }
     }
     Update::Computer { status, detail } => {
       app.computer = status;
       app.computer_detail = detail;
-      app.computer_scroll = 0;
+      app
+        .router
+        .reset_scroll(crate::model::ContextPanel::Computer);
     }
     Update::Connected(sessions) => {
+      app.router.rebind();
       app.generation = app.generation.saturating_add(1);
       let selected = app.selected_session().map(|session| session.id.clone());
       app.connection = Connection::Connected;
@@ -78,9 +88,9 @@ pub fn apply(app: &mut App, update: Update) {
         {
           app.selected = index;
         }
-        app.panel = state.panel.into();
+        app.router.restore(state.panel.into());
         app.scroll = state.transcript_scroll;
-        app.computer_scroll = state.context_scroll;
+        app.router.set_scroll(state.context_scroll);
         app.restore_current_draft();
       } else {
         app.drafts.clear();
@@ -90,6 +100,7 @@ pub fn apply(app: &mut App, update: Update) {
     }
     Update::Disconnected(reason) => app.connection = Connection::Disconnected(reason),
     Update::Selected(session) => {
+      app.router.rebind();
       app.generation = app.generation.saturating_add(1);
       app.save_current_draft();
       app.sessions.push(Session {

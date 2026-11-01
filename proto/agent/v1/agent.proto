@@ -2,6 +2,8 @@ syntax = "proto3";
 package agent.v1;
 
 service ModelService {
+  // Empty session_id returns the authenticated global catalog with no selection.
+  // A non-empty session_id must exist and includes that session's selection.
   rpc ListModels(SessionRequest) returns (Models);
   rpc SelectModel(SelectModelRequest) returns (ModelSelection);
   rpc HubOperation(HubRequest) returns (HubResponse);

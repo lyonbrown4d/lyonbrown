@@ -4,6 +4,7 @@ mod computer;
 mod development;
 pub mod local_state;
 mod models;
+pub mod navigation;
 mod orchestration;
 mod recovery;
 mod skills;
