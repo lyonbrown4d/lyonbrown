@@ -48,6 +48,10 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 | `Ctrl+N` | 以当前工作目录创建会话 |
 | `Tab` | 切换到下一个会话并加载运行记录 |
 | `Enter` | 向已选会话提交输入 |
+
+本地命令的结果不占用上下文面板。需要选择时（`/model`、`/models`）在输入区上方浮出可选项，`↑↓` 选择、`Enter` 确认、`Esc` 取消；只读结果（`/status`、`/git`、`/providers`、`/skills` 与各类操作回执）直接追加到对话记录，以 `· 本地` 标记并且不按 Markdown 渲染。命令提交时立即清空输入区，后到的结果不会覆盖等待期间新输入的文字。
+
+`/diff` 打开全屏 diff 视图：默认 unified，`Tab` 切换 side-by-side，`j`／`k` 或方向键滚动，`n`／`p` 切换文件，`h`／`l` 横向滚动，`g`／`G` 跳到首尾，`Esc` 关闭。视图只展开改动块与其上下文，语法高亮使用 tree-sitter（Rust、Python、JavaScript、TypeScript、JSON、TOML、Bash、Markdown）；着色只影响呈现，不改变发送给 daemon 的文本。
 | `Shift+Enter` / `Alt+Enter` | 在输入区换行 |
 | 方向键、`Home` / `End`、`Delete` | 移动光标或编辑光标处文本 |
 | `Ctrl+R` | 重新连接 daemon |

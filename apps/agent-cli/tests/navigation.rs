@@ -73,15 +73,18 @@ fn session_change_discards_transient_route_history_but_preserves_the_previous_dr
     ..App::default()
   };
   app.router.navigate(ContextPanel::Help);
-  app.router.navigate(ContextPanel::Resource);
   app.router.set_scroll(19);
   assert!(app.select_session(1));
-  assert_eq!(app.router.current(), ContextPanel::Closed);
+  assert_eq!(
+    app.router.current(),
+    ContextPanel::Help,
+    "the open page survives a session switch"
+  );
   app.router.back();
   assert_eq!(
     app.router.current(),
     ContextPanel::Closed,
-    "no stale route from session A"
+    "no stale return stack from session A"
   );
   assert_eq!(app.router.scroll(), 0);
   assert!(app.input.is_empty());
@@ -91,7 +94,7 @@ fn session_change_discards_transient_route_history_but_preserves_the_previous_dr
 }
 
 #[test]
-fn delayed_resource_result_cannot_reopen_a_dismissed_page_or_replace_a_new_resource() {
+fn delayed_resource_result_lands_in_the_transcript_without_moving_the_user() {
   use agent_cli::{backend::Update, update};
   let mut app = App {
     connection: Connection::Connected,
@@ -111,8 +114,7 @@ fn delayed_resource_result_cannot_reopen_a_dismissed_page_or_replace_a_new_resou
     panic!("expected resource request");
   };
   key(&mut app, &actions, KeyCode::F(1), KeyModifiers::NONE);
-  app.router.navigate(ContextPanel::Resource);
-  app.resource_detail = "newer resource".into();
+  assert_eq!(app.router.current(), ContextPanel::Help);
   app.router.set_scroll(8);
   update::apply(
     &mut app,
@@ -125,15 +127,15 @@ fn delayed_resource_result_cannot_reopen_a_dismissed_page_or_replace_a_new_resou
       detail: "older result".into(),
     },
   );
-  assert_eq!(app.resource_detail, "newer resource");
-  assert_eq!(app.router.scroll(), 8);
-  app.router.back();
   assert_eq!(
     app.router.current(),
     ContextPanel::Help,
-    "no extra return frame from delayed result"
+    "command output never navigates"
   );
-  assert!(app.notice.contains("completed"));
+  assert_eq!(app.router.scroll(), 8);
+  let last = app.messages.last().expect("transcript message");
+  assert_eq!(last.role, "Local");
+  assert!(last.content.contains("older result"));
 }
 
 #[test]
@@ -230,9 +232,9 @@ fn responsive_regions_stay_inside_tiny_and_wide_terminal_bounds() {
 }
 
 #[test]
-fn queued_resource_commands_keep_the_latest_intent_from_chat_and_resource_pages() {
+fn queued_resource_commands_append_in_order_without_touching_newer_typing() {
   use agent_cli::{backend::Update, update};
-  for initial in [ContextPanel::Closed, ContextPanel::Resource] {
+  for initial in [ContextPanel::Closed, ContextPanel::Tasks] {
     let mut app = App {
       connection: Connection::Connected,
       router: initial.into(),
@@ -253,6 +255,10 @@ fn queued_resource_commands_keep_the_latest_intent_from_chat_and_resource_pages(
       else {
         panic!("expected resource request");
       };
+      assert!(
+        app.input.is_empty(),
+        "submission clears the composer immediately"
+      );
       replies.push(Update::ResourceDetail {
         session,
         generation,
@@ -262,22 +268,23 @@ fn queued_resource_commands_keep_the_latest_intent_from_chat_and_resource_pages(
         detail: detail.into(),
       });
     }
-    // The backend processes queued commands sequentially. An older result must not
-    // advance navigation and accidentally invalidate the later queued command.
     update::apply(&mut app, replies.remove(0));
     assert_eq!(app.router.current(), initial);
-    assert!(app.resource_detail.is_empty());
-    assert_eq!(
-      app.input.text(),
-      "/providers",
-      "old completion cannot clear the new command draft"
+    assert!(
+      app
+        .messages
+        .last()
+        .is_some_and(|message| message.content.contains("older result"))
     );
     app.input = "retain text typed while waiting".into();
     update::apply(&mut app, replies.remove(0));
-    assert_eq!(app.router.current(), ContextPanel::Resource);
-    assert!(app.resource_detail.contains("latest result"));
+    assert_eq!(app.router.current(), initial, "results never move the user");
+    assert!(
+      app
+        .messages
+        .last()
+        .is_some_and(|message| message.content.contains("latest result"))
+    );
     assert_eq!(app.input.text(), "retain text typed while waiting");
-    app.router.back();
-    assert_eq!(app.router.current(), ContextPanel::Closed);
   }
 }

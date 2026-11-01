@@ -13,6 +13,16 @@ tokio.workspace = true
 ratatui = { version = "0.30.2", features = ["unstable-rendered-line-info"] }
 tui-markdown.workspace = true
 ratatui-textarea.workspace = true
+ratatui-interact.workspace = true
+tree-sitter.workspace = true
+tree-sitter-rust.workspace = true
+tree-sitter-python.workspace = true
+tree-sitter-javascript.workspace = true
+tree-sitter-typescript.workspace = true
+tree-sitter-json.workspace = true
+tree-sitter-toml-ng.workspace = true
+tree-sitter-bash.workspace = true
+tree-sitter-md.workspace = true
 crossterm = { version = "0.29", features = ["event-stream"] }
 agent-client = { path = "../../crates/agent-client" }
 agent-protocol = { path = "../../crates/agent-protocol" }

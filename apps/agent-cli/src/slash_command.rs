@@ -30,8 +30,8 @@ pub const COMMANDS: &[CommandSpec] = &[
   },
   CommandSpec {
     name: "diff",
-    usage: "/diff",
-    summary: "Inspect workspace changes",
+    usage: "/diff [path]",
+    summary: "Open the diff view for workspace changes",
   },
   CommandSpec {
     name: "git",
@@ -45,8 +45,8 @@ pub const COMMANDS: &[CommandSpec] = &[
   },
   CommandSpec {
     name: "models",
-    usage: "/models [list|select MODEL EXECUTION]",
-    summary: "Browse and select configured models",
+    usage: "/models [list|search|install|...]",
+    summary: "Choose a model, or manage the model catalog",
   },
   CommandSpec {
     name: "mcp",
@@ -55,8 +55,8 @@ pub const COMMANDS: &[CommandSpec] = &[
   },
   CommandSpec {
     name: "model",
-    usage: "/model [list|select MODEL EXECUTION]",
-    summary: "Inspect and select the model",
+    usage: "/model",
+    summary: "Choose the model for this session",
   },
   CommandSpec {
     name: "new",

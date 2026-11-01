@@ -26,19 +26,48 @@ pub fn apply(app: &mut App, update: Update) {
       {
         return;
       }
-      // Navigation after submission supersedes an asynchronous presentation request.
-      // Never replace another resource page or reopen a page the user dismissed.
-      if navigation_revision == app.router.revision() {
-        app.resource_title = title.clone();
-        app.resource_detail = format!("{title}\n\n{detail}");
-        app.router.navigate(crate::model::ContextPanel::Resource);
-        app.router.set_scroll(0);
-        if app.input.text() == source {
-          app.input.clear();
-          app.save_current_draft();
-        }
+      // Command output belongs in the transcript; a side page would hide the conversation.
+      // The composer was cleared at submission, so a result never touches newer typing.
+      let _ = (navigation_revision, source);
+      app.push_local(format!("{title}\n{detail}"));
+    }
+    Update::ModelCatalog {
+      session,
+      generation,
+      models,
+    } => {
+      if generation != app.generation
+        || session.as_deref() != app.selected_session().map(|value| value.id.as_str())
+      {
+        return;
+      }
+      let picker = crate::picker::Picker::models().with_models(&models);
+      if picker.is_empty() {
+        app.push_local("Models\n\nagentd 没有返回可用的模型。");
       } else {
-        app.notice = format!("{title} completed; current page retained.");
+        app.open_picker(picker);
+      }
+    }
+    Update::WorkspaceDiffText {
+      session,
+      generation,
+      path,
+      text,
+    } => {
+      if generation != app.generation
+        || Some(session.as_str()) != app.selected_session().map(|value| value.id.as_str())
+      {
+        return;
+      }
+      let document = crate::diff::document::parse(&text);
+      if document.is_empty() {
+        app.push_local(if path.is_empty() {
+          "Git diff\n\n工作区没有未提交的改动。".to_owned()
+        } else {
+          format!("Git diff · {path}\n\n该文件没有改动。")
+        });
+      } else {
+        app.open_diff(path, document);
       }
     }
     Update::Computer { status, detail } => {

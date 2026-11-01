@@ -59,17 +59,52 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
         {
           app.notice = "请先创建或选择一个会话。".into();
         } else {
-          let navigation_revision = app.router.begin_request();
-          send(
-            actions,
-            Action::Resource {
-              session: app.selected_session().map(|session| session.id.clone()),
-              generation: app.generation,
-              navigation_revision,
-              source: prompt,
-              command,
-            },
-          )?;
+          let session = app.selected_session().map(|session| session.id.clone());
+          match command {
+            // A model choice is a picker, not a text page.
+            crate::resource_command::ResourceCommand::Models => {
+              send(
+                actions,
+                Action::ModelCatalog {
+                  session,
+                  generation: app.generation,
+                },
+              )?;
+              app.open_picker(crate::picker::Picker::models());
+              app.input.clear();
+              app.save_current_draft();
+            }
+            // Diffs open a full screen reading surface instead of a side column.
+            crate::resource_command::ResourceCommand::Diff { path } => {
+              send(
+                actions,
+                Action::WorkspaceDiff {
+                  session: session.unwrap_or_default(),
+                  generation: app.generation,
+                  path,
+                },
+              )?;
+              app.notice = "正在读取工作区改动…".into();
+              app.input.clear();
+              app.save_current_draft();
+            }
+            command => {
+              let navigation_revision = app.router.begin_request();
+              send(
+                actions,
+                Action::Resource {
+                  session,
+                  generation: app.generation,
+                  navigation_revision,
+                  source: prompt,
+                  command,
+                },
+              )?;
+              // Clearing at submission keeps late output from erasing newer typing.
+              app.input.clear();
+              app.save_current_draft();
+            }
+          }
         }
       }
       Err(error) => app.notice = error,
@@ -380,4 +415,39 @@ pub(crate) fn request_task_page(
 
 pub(crate) fn load_tasks(app: &App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
   request_task_page(app, actions, "")
+}
+
+/// Confirming a picker row only dispatches a daemon action; it never applies state locally.
+pub(crate) fn confirm_picker(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
+  let Some(value) = app
+    .picker
+    .as_ref()
+    .and_then(|picker| picker.selected_value().cloned())
+  else {
+    app.notice = "没有可用的选项。".into();
+    app.close_picker();
+    return Ok(());
+  };
+  app.close_picker();
+  match value {
+    crate::picker::PickerValue::Model { model, execution } => {
+      let Some(session) = app.selected_session().map(|session| session.id.clone()) else {
+        app.notice = "请先创建或选择一个会话。".into();
+        return Ok(());
+      };
+      let navigation_revision = app.router.begin_request();
+      send(
+        actions,
+        Action::Resource {
+          session: Some(session),
+          generation: app.generation,
+          navigation_revision,
+          source: String::new(),
+          command: crate::resource_command::ResourceCommand::ModelSelect { model, execution },
+        },
+      )?;
+      app.notice = "正在切换模型…".into();
+    }
+  }
+  Ok(())
 }

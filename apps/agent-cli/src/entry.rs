@@ -58,7 +58,8 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
   let mut save_state = tokio::time::interval(std::time::Duration::from_millis(300));
   let mut last_saved = None;
   loop {
-    terminal.draw(|frame| view::render(frame, &app, theme))?;
+    let completed = terminal.draw(|frame| view::render(frame, &app, theme))?;
+    app.viewport = completed.area.height;
     tokio::select! {
         _ = &mut stop => break,
         update = updates.recv() => {

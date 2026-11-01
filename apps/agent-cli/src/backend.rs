@@ -55,6 +55,17 @@ pub enum Action {
     source: String,
     command: crate::resource_command::ResourceCommand,
   },
+  /// Structured model catalog: a picker renders it instead of a text page.
+  ModelCatalog {
+    session: Option<String>,
+    generation: u64,
+  },
+  /// Full-screen diff reading surface; the daemon already owns the change computation.
+  WorkspaceDiff {
+    session: String,
+    generation: u64,
+    path: String,
+  },
   SaveState {
     node_id: String,
     state: crate::local_state::ClientState,
@@ -110,6 +121,17 @@ pub enum Update {
     generation: u64,
     source: String,
     value: serde_json::Value,
+  },
+  ModelCatalog {
+    session: Option<String>,
+    generation: u64,
+    models: Vec<agent_protocol::v1::ModelCandidate>,
+  },
+  WorkspaceDiffText {
+    session: String,
+    generation: u64,
+    path: String,
+    text: String,
   },
   LocalState {
     node_id: Option<String>,
@@ -250,6 +272,8 @@ pub fn spawn_with_computer_factory(
                   Action::Task { .. } => "task.manage",
                   Action::Run { .. } => "run.recover",
                   Action::Resource { .. } => "resource.inspect_or_manage",
+                  Action::ModelCatalog { .. } => "model.catalog",
+                  Action::WorkspaceDiff { .. } => "workspace.diff",
                   Action::SaveState { .. } => "client.state.save",
               };
               let session_id = match &action {

@@ -38,7 +38,6 @@ impl From<ContextPanel> for PersistedPanel {
       ContextPanel::Computer => Self::Computer,
       ContextPanel::Approval => Self::Approval,
       ContextPanel::Drafts => Self::Drafts,
-      ContextPanel::Resource => Self::Closed,
     }
   }
 }

@@ -48,6 +48,10 @@ The workbench shows the conversation and composer by default. Sessions, tasks, c
 | `Ctrl+N` | Create a session using the current working directory |
 | `Tab` | Select the next session and load its runs |
 | `Enter` | Submit input to the selected session |
+
+Local command results never take over a context panel. A command that needs a choice (`/model`, `/models`) floats candidates above the composer: `↑↓` moves, `Enter` confirms, `Esc` cancels. Read-only output (`/status`, `/git`, `/providers`, `/skills` and every operation receipt) is appended to the transcript as a `· 本地` line that is not rendered as Markdown. Submission clears the composer immediately, so a late result never overwrites text typed while waiting.
+
+`/diff` opens a full-screen diff view: unified by default, `Tab` switches to side-by-side, `j`/`k` or the arrow keys scroll, `n`/`p` move between files, `h`/`l` scroll horizontally, `g`/`G` jump to the ends and `Esc` closes. Only changed blocks and their context are expanded. Syntax highlighting uses tree-sitter (Rust, Python, JavaScript, TypeScript, JSON, TOML, Bash, Markdown) and affects presentation only; the text sent to the daemon is unchanged.
 | `Shift+Enter` / `Alt+Enter` | Insert a newline in the composer |
 | Arrow keys, `Home` / `End`, `Delete` | Move the cursor or edit text at the cursor |
 | `Ctrl+R` | Reconnect to the daemon |

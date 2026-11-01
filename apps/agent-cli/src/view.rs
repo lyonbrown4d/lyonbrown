@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::{
+  diff::model::DiffView,
   layout::PaletteLayout,
   model::App,
   theme::Theme,
@@ -20,6 +21,10 @@ pub fn render(frame: &mut Frame, app: &App, theme: Theme) {
 /// Rendering consumes presentation data only; it never dispatches daemon actions.
 pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
   let area = frame.area();
+  if let Some(view) = model.diff {
+    diff_screen(frame, view, area, theme);
+    return;
+  }
   let base = Style::default().fg(theme.text).bg(theme.background);
   frame.render_widget(Block::default().style(base), area);
   if area.is_empty() {
@@ -79,6 +84,10 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
     && !palette.items.is_empty()
   {
     command_palette(frame, palette, layout.palette(palette.items.len()), theme);
+  }
+  if let Some(picker) = model.picker {
+    let popup = picker_overlay(&layout, picker.visible_rows());
+    crate::picker::render(frame, popup, picker, theme);
   }
   if !compact {
     let execution = if model.active {
@@ -257,6 +266,77 @@ fn command_palette(
       Rect::new(inner.x, inner.y + inner.height - 1, inner.width, 1),
     );
   }
+}
+
+/// Selection overlays sit above the composer, matching the completion popup column.
+fn picker_overlay(layout: &crate::layout::AppLayout, rows: usize) -> Rect {
+  let chrome = 4;
+  let height = (rows.saturating_add(chrome) as u16)
+    .min(layout.composer.y.saturating_sub(layout.body.y))
+    .max(3);
+  Rect::new(
+    layout.composer.x.saturating_add(2),
+    layout.composer.y.saturating_sub(height),
+    layout.composer.width.saturating_sub(2).min(72),
+    height,
+  )
+}
+
+/// The diff owns the whole screen: a title bar, the body, and a key hint line.
+fn diff_screen(frame: &mut Frame, view: &DiffView, area: Rect, theme: Theme) {
+  let base = Style::default().fg(theme.text).bg(theme.background);
+  frame.render_widget(Block::default().style(base), area);
+  if area.is_empty() {
+    return;
+  }
+  let [title_area, body_area, status_area] = Layout::vertical([
+    Constraint::Length(1),
+    Constraint::Min(0),
+    Constraint::Length(1),
+  ])
+  .areas(area);
+  let stats = view.document.stats();
+  let mode = match view.state.mode {
+    crate::diff::model::DiffMode::Unified => "unified",
+    crate::diff::model::DiffMode::SideBySide => "side-by-side",
+  };
+  let path = if view.path.is_empty() {
+    "工作区改动".to_owned()
+  } else {
+    view.path.clone()
+  };
+  let position = if stats.files == 0 {
+    String::new()
+  } else {
+    format!(
+      " · {}/{} 文件",
+      view.state.file.min(stats.files - 1) + 1,
+      stats.files
+    )
+  };
+  frame.render_widget(
+    Paragraph::new(vec![Line::from(vec![
+      Span::styled(
+        path,
+        Style::default()
+          .fg(theme.accent)
+          .add_modifier(Modifier::BOLD),
+      ),
+      Span::styled(
+        format!("  {mode} · +{} −{}{position}", stats.added, stats.removed),
+        Style::default().fg(theme.muted),
+      ),
+    ])]),
+    title_area,
+  );
+  crate::diff::render::render(frame, body_area, &view.document, &view.state, theme);
+  frame.render_widget(
+    Paragraph::new(Line::styled(
+      "j/k 滚动 · n/p 文件 · Tab 并排 · h/l 横向 · g/G 首尾 · Esc 关闭",
+      Style::default().fg(theme.muted),
+    )),
+    status_area,
+  );
 }
 
 fn composer(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, compact: bool) {

@@ -42,6 +42,15 @@ fn handle_key(
   key: KeyEvent,
   actions: &mpsc::Sender<Action>,
 ) -> anyhow::Result<bool> {
+  // A full-screen diff and a picker own the keyboard while they are open.
+  if app.diff.is_some() {
+    handle_diff_key(app, key);
+    return Ok(false);
+  }
+  if app.picker.is_some() {
+    handle_picker_key(app, key, actions)?;
+    return Ok(false);
+  }
   if key.modifiers.contains(KeyModifiers::CONTROL) {
     app.close_command_menu();
     match key.code {
@@ -241,6 +250,40 @@ fn handle_key(
     }
   }
   Ok(false)
+}
+
+fn handle_diff_key(app: &mut App, key: KeyEvent) {
+  if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
+    app.close_diff();
+    return;
+  }
+  let viewport = app.viewport.saturating_sub(2).max(3);
+  if let Some(view) = app.diff.as_mut() {
+    crate::diff::input::handle(&mut view.state, &view.document, key, viewport);
+  }
+}
+
+fn handle_picker_key(
+  app: &mut App,
+  key: KeyEvent,
+  actions: &mpsc::Sender<Action>,
+) -> anyhow::Result<()> {
+  match key.code {
+    KeyCode::Esc => app.close_picker(),
+    KeyCode::Up | KeyCode::Char('k') => {
+      if let Some(picker) = app.picker.as_mut() {
+        picker.previous();
+      }
+    }
+    KeyCode::Down | KeyCode::Char('j') => {
+      if let Some(picker) = app.picker.as_mut() {
+        picker.next();
+      }
+    }
+    KeyCode::Enter => crate::local_command::confirm_picker(app, actions)?,
+    _ => {}
+  }
+  Ok(())
 }
 
 /// Writes the highlighted command into the composer and closes completion.

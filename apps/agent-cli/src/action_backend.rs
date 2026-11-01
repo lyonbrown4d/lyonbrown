@@ -111,6 +111,36 @@ pub(crate) async fn execute(
         })
         .await;
     }
+    Action::ModelCatalog {
+      session,
+      generation,
+    } => {
+      let models = client
+        .list_models(session.as_deref().unwrap_or_default())
+        .await?;
+      let _ = updates
+        .send(Update::ModelCatalog {
+          session,
+          generation,
+          models,
+        })
+        .await;
+    }
+    Action::WorkspaceDiff {
+      session,
+      generation,
+      path,
+    } => {
+      let text = client.workspace_diff(&session, &path).await?;
+      let _ = updates
+        .send(Update::WorkspaceDiffText {
+          session,
+          generation,
+          path,
+          text,
+        })
+        .await;
+    }
     Action::SaveState { .. } => {}
     Action::Run {
       session,

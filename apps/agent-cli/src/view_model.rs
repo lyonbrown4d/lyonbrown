@@ -38,6 +38,9 @@ pub struct ViewModel<'a> {
   pub scroll: u16,
   pub context_scroll: u16,
   pub command_palette: Option<CommandPaletteView>,
+  pub picker: Option<&'a crate::picker::Picker>,
+  pub diff: Option<&'a crate::diff::model::DiffView>,
+  pub viewport: u16,
 }
 
 impl<'a> ViewModel<'a> {
@@ -64,6 +67,7 @@ impl<'a> ViewModel<'a> {
       let role = match message.role.as_str() {
         "You" => "❯ 你",
         "Error" => "! 错误",
+        "Local" => "· 本地",
         _ => "● Lyonbrown",
       };
       lines.push(Line::from(role));
@@ -169,10 +173,6 @@ impl<'a> ViewModel<'a> {
           safe_text(&app.draft_detail)
         }),
       )),
-      ContextPanel::Resource => Some((
-        "资源详情 · Esc 返回",
-        Text::from(safe_text(&app.resource_detail)),
-      )),
       ContextPanel::Approval => Some((
         "审批详情 · PgUp/PgDn 滚动",
         Text::from(
@@ -231,6 +231,9 @@ impl<'a> ViewModel<'a> {
       scroll: app.scroll,
       context_scroll: app.router.scroll(),
       command_palette,
+      picker: app.picker.as_ref(),
+      diff: app.diff.as_ref(),
+      viewport: app.viewport,
     }
   }
 }

@@ -33,7 +33,6 @@ pub enum ContextPanel {
   Computer,
   Approval,
   Drafts,
-  Resource,
 }
 
 #[derive(Debug)]
@@ -67,9 +66,13 @@ pub struct App {
   pub recovered_draft_from: Option<String>,
   /// Transient slash-command completion; never a navigation route.
   pub command_menu_open: bool,
+  /// Overlay selector for results that need a choice, such as the model catalog.
+  pub picker: Option<crate::picker::Picker>,
+  /// Full-screen diff reading surface.
+  pub diff: Option<crate::diff::model::DiffView>,
+  /// Last painted terminal height, so overlay scrolling can clamp without a frame handle.
+  pub viewport: u16,
   pub command_selected: usize,
-  pub resource_title: String,
-  pub resource_detail: String,
   pub sessions_cursor: usize,
 }
 
@@ -108,9 +111,10 @@ impl Default for App {
       draft_detail: String::new(),
       recovered_draft_from: None,
       command_menu_open: false,
+      picker: None,
+      diff: None,
+      viewport: 24,
       command_selected: 0,
-      resource_title: String::new(),
-      resource_detail: String::new(),
       sessions_cursor: 0,
     }
   }
@@ -184,6 +188,43 @@ impl App {
   pub fn close_command_menu(&mut self) {
     self.command_menu_open = false;
     self.command_selected = 0;
+  }
+
+  /// Opening an overlay dismisses completion so only one surface owns the keyboard.
+  pub fn open_picker(&mut self, picker: crate::picker::Picker) {
+    self.close_command_menu();
+    self.picker = Some(picker);
+  }
+
+  pub fn close_picker(&mut self) {
+    self.picker = None;
+  }
+
+  pub fn open_diff(&mut self, path: String, document: crate::diff::model::DiffDocument) {
+    self.close_command_menu();
+    self.picker = None;
+    self.diff = Some(crate::diff::model::DiffView {
+      path,
+      document,
+      state: crate::diff::model::DiffViewState::default(),
+    });
+  }
+
+  pub fn close_diff(&mut self) {
+    self.diff = None;
+  }
+
+  pub fn overlay_open(&self) -> bool {
+    self.picker.is_some() || self.diff.is_some()
+  }
+
+  /// Local command output belongs in the transcript, not in a side panel.
+  pub fn push_local(&mut self, content: impl Into<String>) {
+    self.messages.push(Message {
+      role: "Local".into(),
+      content: content.into(),
+    });
+    self.scroll = 0;
   }
 
   /// Completion survives only while the composer holds a bare `/token` with no argument yet.
