@@ -45,7 +45,7 @@ pub const COMMANDS: &[CommandSpec] = &[
   },
   CommandSpec {
     name: "models",
-    usage: "/models",
+    usage: "/models [list|select MODEL EXECUTION]",
     summary: "Browse and select configured models",
   },
   CommandSpec {
@@ -55,7 +55,7 @@ pub const COMMANDS: &[CommandSpec] = &[
   },
   CommandSpec {
     name: "model",
-    usage: "/model",
+    usage: "/model [list|select MODEL EXECUTION]",
     summary: "Inspect and select the model",
   },
   CommandSpec {

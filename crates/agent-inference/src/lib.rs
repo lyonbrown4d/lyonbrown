@@ -7,6 +7,16 @@ mod llama;
 mod mistral;
 #[cfg(feature = "mistral")]
 mod mistral_load;
+#[cfg(feature = "mistral")]
+mod mistral_request;
+#[cfg(all(test, feature = "mistral"))]
+#[path = "../tests/support/mistral_request.rs"]
+mod mistral_request_tests;
+#[cfg(feature = "mistral")]
+mod mistral_stream;
+#[cfg(all(test, feature = "mistral"))]
+#[path = "../tests/support/mistral_stream.rs"]
+mod mistral_stream_tests;
 mod registry;
 pub use contracts::*;
 #[cfg(feature = "llama")]

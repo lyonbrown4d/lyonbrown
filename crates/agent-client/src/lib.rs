@@ -3,6 +3,7 @@ mod browser;
 mod computer;
 mod development;
 pub mod local_state;
+mod models;
 mod orchestration;
 mod recovery;
 mod skills;
@@ -26,6 +27,7 @@ impl Interceptor for Authentication {
 
 #[derive(Clone)]
 pub struct AgentClient {
+  models: v1::model_service_client::ModelServiceClient<InterceptedService<Channel, Authentication>>,
   inner: ClientServiceClient<InterceptedService<Channel, Authentication>>,
   workspace: v1::workspace_service_client::WorkspaceServiceClient<
     InterceptedService<Channel, Authentication>,
@@ -93,6 +95,10 @@ impl AgentClient {
     bearer.set_sensitive(true);
     let auth = Authentication(bearer);
     let client = Self {
+      models: v1::model_service_client::ModelServiceClient::with_interceptor(
+        channel.clone(),
+        auth.clone(),
+      ),
       orchestration: v1::orchestration_service_client::OrchestrationServiceClient::with_interceptor(
         channel.clone(),
         auth.clone(),

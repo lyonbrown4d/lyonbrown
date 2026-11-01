@@ -29,6 +29,16 @@ impl Terminal {
   }
 
   pub fn start_with(endpoint: &str, token: &str, data_dir: &Path, workspace: &Path) -> Self {
+    Self::start_with_environment(endpoint, token, data_dir, workspace, &[])
+  }
+
+  pub fn start_with_environment(
+    endpoint: &str,
+    token: &str,
+    data_dir: &Path,
+    workspace: &Path,
+    environment: &[(&str, &str)],
+  ) -> Self {
     let pair = native_pty_system()
       .openpty(PtySize {
         rows: 36,
@@ -53,6 +63,9 @@ impl Terminal {
     // test runner's own plain-log preference. Product NO_COLOR remains intact.
     command.env_remove("NO_COLOR");
     command.env("RUST_LOG", "warn");
+    for (name, value) in environment {
+      command.env(name, value);
+    }
     command.cwd(workspace);
     for variable in [
       "HTTP_PROXY",

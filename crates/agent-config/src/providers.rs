@@ -75,8 +75,8 @@ pub const PROVIDER_CATALOG: &[ProviderDefinition] = &[
     name: "DeepSeek",
     aliases: &[],
     credential_env_names: &["DEEPSEEK_API_KEY"],
-    protocols: &[],
-    runtime_supported: false,
+    protocols: &[ProviderProtocol::OpenaiCompletions],
+    runtime_supported: true,
   },
   ProviderDefinition {
     id: "mistral",

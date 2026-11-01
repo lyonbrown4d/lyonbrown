@@ -1,9 +1,9 @@
 use crate::{
-  FinishReason, GenerationRequest, GenerationSummary, InferenceBackend, InferenceChunk,
-  InferenceError, InputContent, MessageRole, ModelInfo, Result, ToolCall,
+  GenerationRequest, GenerationSummary, InferenceBackend, InferenceChunk, InferenceError,
+  InputContent, MessageRole, ModelInfo, Result,
 };
 use async_trait::async_trait;
-use mistralrs::{Model, RequestBuilder, Response, TextMessageRole};
+use mistralrs::{Model, RequestBuilder, TextMessageRole};
 use std::{collections::BTreeMap, path::Path};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -21,6 +21,7 @@ impl MistralBackend {
     supports_tools: bool,
     supports_images: bool,
     force_cpu: bool,
+    chat_template: Option<&Path>,
   ) -> Result<Self> {
     let (model, info) = crate::mistral_load::directory(
       id,
@@ -29,6 +30,7 @@ impl MistralBackend {
       supports_tools,
       supports_images,
       force_cpu,
+      chat_template,
     )
     .await?;
     Ok(Self { model, info })
@@ -40,10 +42,17 @@ impl MistralBackend {
     context_window: u32,
     supports_tools: bool,
     force_cpu: bool,
+    chat_template: Option<&Path>,
   ) -> Result<Self> {
-    let (model, info) =
-      crate::mistral_load::gguf(id, path.as_ref(), context_window, supports_tools, force_cpu)
-        .await?;
+    let (model, info) = crate::mistral_load::gguf(
+      id,
+      path.as_ref(),
+      context_window,
+      supports_tools,
+      force_cpu,
+      chat_template,
+    )
+    .await?;
     Ok(Self { model, info })
   }
 }
@@ -60,98 +69,13 @@ impl InferenceBackend for MistralBackend {
   ) -> Result<GenerationSummary> {
     crate::contracts::validate(&self.info, &request)?;
     let builder = build_request(request)?;
-    let mut stream = tokio::select! {biased;_=cancellation.cancelled()=>return Err(InferenceError::Cancelled),stream=self.model.stream_chat_request(builder)=>stream.map_err(backend_error)?};
-    let mut summary = GenerationSummary {
-      reason: FinishReason::Stop,
-      input_tokens: 0,
-      output_tokens: 0,
-    };
-    let mut calls: BTreeMap<usize, (String, String, String)> = BTreeMap::new();
-    let mut terminal = false;
-    loop {
-      let response = tokio::select! {biased;_=cancellation.cancelled()=>return Err(InferenceError::Cancelled),response=stream.next()=>response};
-      match response {
-        Some(Response::Chunk(chunk)) => {
-          if let Some(usage) = chunk.usage {
-            summary.input_tokens = usage.prompt_tokens as u64;
-            summary.output_tokens = usage.completion_tokens as u64;
-          }
-          for choice in chunk.choices {
-            if choice.index != 0 {
-              continue;
-            }
-            if let Some(text) = choice.delta.content {
-              crate::contracts::emit(&output, &cancellation, InferenceChunk::Text { text }).await?;
-            }
-            if let Some(text) = choice.delta.reasoning_content {
-              crate::contracts::emit(&output, &cancellation, InferenceChunk::Thinking { text })
-                .await?;
-            }
-            for call in choice.delta.tool_calls.unwrap_or_default() {
-              let entry = calls.entry(call.index).or_default();
-              if !call.id.is_empty() {
-                entry.0 = call.id;
-              }
-              if entry.1 != call.function.name {
-                entry.1.push_str(&call.function.name);
-              }
-              entry.2.push_str(&call.function.arguments);
-            }
-            if let Some(reason) = choice.finish_reason {
-              terminal = true;
-              summary.reason = match reason.as_str() {
-                "tool_calls" => FinishReason::ToolCalls,
-                "length" => FinishReason::Length,
-                _ => FinishReason::Stop,
-              };
-            }
-          }
-        }
-        Some(Response::InternalError(error) | Response::ValidationError(error)) => {
-          return Err(backend_error(error));
-        }
-        Some(Response::ModelError(error, _)) => return Err(backend_error(error)),
-        Some(Response::Done(response)) => {
-          terminal = true;
-          summary.input_tokens = response.usage.prompt_tokens as u64;
-          summary.output_tokens = response.usage.completion_tokens as u64;
-          break;
-        }
-        None => break,
-        _ => {
-          return Err(InferenceError::Backend(
-            "unexpected response from chat inference".into(),
-          ));
-        }
-      }
-    }
-    if !terminal {
-      return Err(InferenceError::Backend(
-        "model stream ended without a terminal response".into(),
-      ));
-    }
-    if !calls.is_empty() {
-      summary.reason = FinishReason::ToolCalls;
-    }
-    for (_, (id, name, arguments)) in calls {
-      let arguments = serde_json::from_str(&arguments).map_err(backend_error)?;
-      crate::contracts::emit(
-        &output,
-        &cancellation,
-        InferenceChunk::ToolCall {
-          call: ToolCall {
-            id,
-            name,
-            arguments,
-          },
-        },
-      )
-      .await?;
-    }
-    Ok(summary)
+    let stream = tokio::select! {biased;_=cancellation.cancelled()=>return Err(InferenceError::Cancelled),stream=self.model.stream_chat_request(builder)=>stream.map_err(backend_error)?};
+    crate::mistral_stream::collect(stream, cancellation, output).await
   }
 }
-fn build_request(request: GenerationRequest) -> Result<RequestBuilder> {
+pub(crate) fn build_request(
+  request: GenerationRequest,
+) -> Result<crate::mistral_request::NativeRequest> {
   if request.seed != 0 && request.temperature.is_some_and(|value| value > 0.0) {
     return Err(InferenceError::InvalidRequest(
       "mistral.rs SDK does not expose a per-request stochastic seed".into(),
@@ -168,7 +92,11 @@ fn build_request(request: GenerationRequest) -> Result<RequestBuilder> {
   if let Some(temperature) = request.temperature.filter(|value| *value > 0.0) {
     builder = builder.set_sampler_temperature(temperature);
   }
-  for message in request.messages {
+  let mut tool_history = BTreeMap::new();
+  for (index, mut message) in request.messages.into_iter().enumerate() {
+    if !message.tool_calls.is_empty() {
+      tool_history.insert(index, std::mem::take(&mut message.tool_calls));
+    }
     let role = match message.role {
       MessageRole::System => TextMessageRole::System,
       MessageRole::User => TextMessageRole::User,
@@ -194,22 +122,6 @@ fn build_request(request: GenerationRequest) -> Result<RequestBuilder> {
           .tool_call_id
           .ok_or_else(|| InferenceError::InvalidRequest("tool result id is required".into()))?,
       );
-    } else if !message.tool_calls.is_empty() {
-      let calls = message
-        .tool_calls
-        .into_iter()
-        .enumerate()
-        .map(|(index, call)| mistralrs::ToolCallResponse {
-          index,
-          id: call.id,
-          tp: mistralrs::ToolCallType::Function,
-          function: mistralrs::CalledFunction {
-            name: call.name,
-            arguments: call.arguments.to_string(),
-          },
-        })
-        .collect();
-      builder = builder.add_message_with_tool_call(role, text, calls);
     } else {
       builder = builder.add_message(role, text);
     }
@@ -218,7 +130,10 @@ fn build_request(request: GenerationRequest) -> Result<RequestBuilder> {
     let tools=request.tools.into_iter().map(|tool|serde_json::from_value(serde_json::json!({"type":"function","function":{"name":tool.name,"description":tool.description,"parameters":tool.parameters}})).map_err(backend_error)).collect::<Result<Vec<mistralrs::Tool>>>()?;
     builder = builder.set_tools(tools);
   }
-  Ok(builder)
+  Ok(crate::mistral_request::NativeRequest::new(
+    builder,
+    tool_history,
+  ))
 }
 fn decode_image(mime: &str, data: &str) -> Result<image::DynamicImage> {
   use base64::Engine;

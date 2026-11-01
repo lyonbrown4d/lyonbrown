@@ -63,6 +63,18 @@ impl Daemon {
     cancel: CancellationToken,
     permitted_tools: Option<&std::collections::BTreeSet<String>>,
   ) -> Result<()> {
+    let configured = self.configured_for_run(&run.id)?;
+    configured
+      .execute_selected_run(run, session, cancel, permitted_tools)
+      .await
+  }
+  async fn execute_selected_run(
+    &self,
+    run: &Run,
+    session: &agent_core::Session,
+    cancel: CancellationToken,
+    permitted_tools: Option<&std::collections::BTreeSet<String>>,
+  ) -> Result<()> {
     self
       .store
       .update_run_owned(&run.id, session.owner_epoch, RunStatus::Running, "", "")?;
@@ -239,7 +251,11 @@ impl Daemon {
     if runtime_config.api_key.is_empty()
       && let Some(secret) = self
         .provider_secrets
-        .get(&format!("provider-{}", self.config.provider))
+        .get(&format!(
+          "provider-{}",
+          agent_config::provider_definition(&self.config.provider)
+            .map_or(self.config.provider.as_str(), |entry| entry.id)
+        ))
         .map_err(|_| anyhow::anyhow!("provider credential store unavailable"))?
     {
       use agent_secrets::ExposeSecret;

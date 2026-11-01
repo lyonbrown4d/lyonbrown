@@ -1,0 +1,33 @@
+{
+  "platform": "Linux x86_64 CPU",
+  "version": "0.1.0 working tree",
+  "runtime": "mistral.rs 0.8.1",
+  "profile": "native-acceptance",
+  "model": {
+    "repository": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+    "revision": "9217f5db79a29953eb74d5343926648285ec7e67",
+    "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "bytes": 491400032,
+    "sha256": "74a4da8c9fdbcd15bd1f6d01d621410d31c6fc00986f5eb687824e7b93d7a9db"
+  },
+  "template": {
+    "repository": "Qwen/Qwen2.5-0.5B-Instruct",
+    "revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+    "source_sha256": "5b5d4f65d0acd3b2d56a35b56d374a36cbc1c8fa5cf3b3febbbfabf22f359583",
+    "jinja_sha256": "cd8e9439f0570856fd70470bf8889ebd8b5d1107207f67a5efb46e342330527f"
+  },
+  "turns": [
+    {"run_id": "01a19610-19d7-7261-a774-66fcdd5746bb", "status": "completed", "actual_read_file": true},
+    {"run_id": "01a19611-a59e-7509-9a54-8f7d053cac5c", "status": "completed", "marker_returned": true, "read_file_called_again": true},
+    {"run_id": "01a19612-3c9e-76de-9170-3f1de4169bee", "status": "completed", "actual_list_files_success": false, "invalid_query_field_rejected": true},
+    {"run_id": "01a19612-e344-73b5-9de8-aa12fc60e2f6", "status": "completed", "arithmetic_result": "4"}
+  ],
+  "strict_four_turn_acceptance": "failed",
+  "history_only_recall_verified": false,
+  "limits": [
+    "The second turn reread the file; it does not prove history-only recall.",
+    "The 0.5B model repeatedly added an invalid query field; schema enforcement remained enabled.",
+    "Native mutation approval, GPU and cross-platform acceptance are not covered.",
+    "Larger-model inference acceptance was deferred by the user; its download may continue without inference."
+  ]
+}

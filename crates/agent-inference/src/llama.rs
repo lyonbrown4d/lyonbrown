@@ -7,7 +7,7 @@ use llama_cpp_2::{
   context::params::LlamaContextParams,
   llama_backend::LlamaBackend,
   llama_batch::LlamaBatch,
-  model::{AddBos, LlamaChatMessage, LlamaModel, params::LlamaModelParams},
+  model::{LlamaChatMessage, LlamaModel, params::LlamaModelParams},
   sampling::LlamaSampler,
 };
 use std::{
@@ -142,9 +142,8 @@ fn generate(
   let prompt = model
     .apply_chat_template(&template, &chat, true)
     .map_err(backend_error)?;
-  let tokens = model
-    .str_to_token(&prompt, AddBos::Always)
-    .map_err(backend_error)?;
+  let vocab = model.vocab();
+  let tokens = vocab.tokenize(prompt.as_bytes(), true, true);
   let input = tokens.len();
   if input == 0 || input + request.max_tokens as usize > context_window as usize {
     return Err(InferenceError::InvalidRequest(
@@ -194,13 +193,18 @@ fn generate(
     }
     let token = sampler.sample(&context, batch.n_tokens() - 1);
     sampler.accept(token);
-    if model.is_eog_token(token) {
+    if vocab.is_eog(token) {
       reason = FinishReason::Stop;
       break;
     }
-    let text = model
-      .token_to_piece(token, &mut decoder, false, None)
-      .map_err(backend_error)?;
+    let piece = vocab.token_to_piece(token, false, None);
+    let mut text = String::with_capacity(piece.len().saturating_mul(3).saturating_add(4));
+    let (result, read, malformed) = decoder.decode_to_string(&piece, &mut text, false);
+    if result == encoding_rs::CoderResult::OutputFull || read != piece.len() || malformed {
+      return Err(InferenceError::Backend(
+        "invalid UTF-8 model token output".into(),
+      ));
+    }
     runtime.block_on(crate::contracts::emit(
       &output,
       &cancellation,

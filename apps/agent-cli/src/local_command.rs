@@ -203,9 +203,7 @@ fn parse_p0(prompt: &str) -> Option<Result<P0Command, String>> {
       crate::resource_command::ResourceCommand::Status,
     )),
     "/providers" => parse_providers(args),
-    "/models" | "/model" if args.is_empty() => Ok(P0Command::Resource(
-      crate::resource_command::ResourceCommand::Models,
-    )),
+    "/models" | "/model" => crate::model_command::parse(args).map(P0Command::Resource),
     "/git" if args.is_empty() => Ok(P0Command::Resource(
       crate::resource_command::ResourceCommand::Git,
     )),

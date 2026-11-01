@@ -26,6 +26,10 @@ pub struct LocalModelSettings {
   pub context_window: u32,
   pub max_output_tokens: u32,
   pub parallel_requests: usize,
+  /// Explicit operator opt-in; the inference adapter must support tool schemas.
+  pub supports_tools: bool,
+  /// Explicit local Jinja template override for the mistral.rs adapter.
+  pub chat_template: Option<PathBuf>,
   /// Upper bound on the input files; this is not an estimate of runtime RAM.
   pub max_model_bytes: u64,
 }
@@ -39,6 +43,8 @@ impl Default for LocalModelSettings {
       context_window: 4096,
       max_output_tokens: 512,
       parallel_requests: 1,
+      supports_tools: false,
+      chat_template: None,
       max_model_bytes: 8 * 1024 * 1024 * 1024,
     }
   }
@@ -75,6 +81,28 @@ impl LocalModelSettings {
       self.backend != LocalModelBackend::Llama || self.format == LocalModelFormat::Gguf,
       "llama backend requires GGUF format"
     );
+    ensure!(
+      self.backend != LocalModelBackend::Llama || !self.supports_tools,
+      "llama adapter does not expose tool calling"
+    );
+    if let Some(path) = &self.chat_template {
+      ensure!(
+        self.backend == LocalModelBackend::Mistral,
+        "chat template override requires mistral backend"
+      );
+      ensure!(
+        path.is_absolute() && path.extension().is_some_and(|value| value == "jinja"),
+        "chat template must be an absolute .jinja path"
+      );
+      let metadata = std::fs::symlink_metadata(path)?;
+      ensure!(
+        !metadata.file_type().is_symlink()
+          && metadata.is_file()
+          && (1..=1024 * 1024).contains(&metadata.len()),
+        "chat template must be a regular file of 1..1048576 bytes without symlinks"
+      );
+      std::fs::read_to_string(path)?;
+    }
     Ok(())
   }
 }

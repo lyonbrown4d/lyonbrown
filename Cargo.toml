@@ -57,6 +57,15 @@ dotenvy = "0.15.7"
 lto = "thin"
 strip = "debuginfo"
 
+# Real CPU inference requires optimized Rust kernels; avoid release LTO during acceptance.
+[profile.native-acceptance]
+inherits = "dev"
+opt-level = 3
+debug = 0
+incremental = false
+lto = false
+codegen-units = 16
+
 [[workspace.metadata.leptos]]
 name = "gateway"
 bin-package = "ai-gateway"

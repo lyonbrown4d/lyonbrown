@@ -51,6 +51,7 @@ impl Daemon {
     let browser_uncertain = self.store.recover_browser_actions()?;
     tracing::info!(browser_uncertain, "reconciled interrupted browser actions");
     let interrupted = self.store.recover_interrupted()?;
+    self.store.recover_model_jobs()?;
     tracing::info!(uncertain = interrupted.len(), "reconciled interrupted runs");
     for run in self.store.pending_runs()? {
       if run.session_id.starts_with("worker:") {
@@ -84,7 +85,7 @@ impl Daemon {
         let notify = self.events.notified();
         tokio::pin!(notify);
         notify.as_mut().enable();
-        if self.active.lock().await.is_empty() {
+        if self.active.lock().await.is_empty() && self.model_jobs.lock().await.is_empty() {
           break;
         }
         notify.await;
@@ -128,6 +129,7 @@ impl Daemon {
 
 #[doc(hidden)]
 pub struct RuntimeServices {
+  pub(crate) model_jobs: Mutex<HashMap<String, CancellationToken>>,
   pub(crate) browser: Arc<crate::browser::BrowserRouter>,
   pub(crate) computer: Arc<crate::computer::ComputerRouter>,
   pub(crate) workspace_writes: Arc<Mutex<()>>,
@@ -144,6 +146,7 @@ pub struct RuntimeServices {
 impl RuntimeServices {
   pub(crate) fn new(max_runs: usize) -> Self {
     Self {
+      model_jobs: Mutex::new(HashMap::new()),
       browser: Arc::new(Default::default()),
       computer: Arc::new(Default::default()),
       workspace_writes: Arc::new(Mutex::new(())),

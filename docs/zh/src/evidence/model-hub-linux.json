@@ -1,0 +1,21 @@
+{
+  "platform": "Linux x86_64 CPU",
+  "version": "0.1.0 working tree",
+  "date": "2026-11-01",
+  "test": "apps/agentd/tests/model_hub_native.rs",
+  "repository": "QuantFactory/SmolLM2-135M-Instruct-GGUF",
+  "revision": "476854d00ede130660aba430d15f9347ad2e7d0e",
+  "file": "SmolLM2-135M-Instruct.Q4_K_M.gguf",
+  "bytes": 105454144,
+  "sha256": "8030f04528538d47bda434f6f0bdf3952c40a58123e4d5e755332f23731a8684",
+  "run_id": "01a1957e-3bd2-7449-b848-080addad26dd",
+  "status": "completed",
+  "result": "Hello!",
+  "verified": ["authenticated RPC", "official Hub download", "artifact digest", "llama.cpp CPU load", "session selection", "Harness inference", "SQLite result"],
+  "additional_checks": {
+    "multiturn_instruction_following": "failed: subsequent remember/recall turns produced Hello!",
+    "independent_backend_instruction_following": "failed: the model did not repeat violet or answer arithmetic correctly; independent prompts produced different outputs",
+    "conclusion": "single-turn pipeline passed; this 135M quantized model is not accepted for multi-turn instruction following or tools"
+  },
+  "limits": ["one small GGUF", "no mistral.rs real inference acceptance", "no GPU or cross-platform acceptance", "not a model quality or performance benchmark"]
+}

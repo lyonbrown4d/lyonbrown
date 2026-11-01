@@ -12,6 +12,7 @@ mod local_command;
 pub mod local_state;
 mod markdown;
 pub mod model;
+mod model_command;
 mod recovery_update;
 mod resource_backend;
 pub mod resource_command;

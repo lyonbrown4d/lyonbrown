@@ -13,3 +13,5 @@ CREATE TABLE IF NOT EXISTS peers(node_id TEXT PRIMARY KEY, record TEXT NOT NULL)
 CREATE TABLE IF NOT EXISTS control_directory(node_id TEXT PRIMARY KEY, record TEXT NOT NULL, expires_at_ms INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS control_links(source TEXT NOT NULL, target TEXT NOT NULL, PRIMARY KEY(source,target));
 PRAGMA user_version=1;
+CREATE TABLE IF NOT EXISTS model_bindings(scope_id TEXT PRIMARY KEY, record TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS model_jobs(id TEXT PRIMARY KEY, record TEXT NOT NULL);

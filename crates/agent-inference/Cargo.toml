@@ -17,10 +17,12 @@ llama-cpp-2 = { version = "=0.1.160", default-features = false, optional = true 
 encoding_rs = { version = "0.8", optional = true }
 base64 = { version = "0.23", optional = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"], optional = true }
+either = { version = "=1.19.0", optional = true }
+indexmap = { version = "=2.14.2", optional = true }
 
 [features]
 default = []
-mistral = ["dep:mistralrs", "dep:base64", "dep:image"]
+mistral = ["dep:mistralrs", "dep:base64", "dep:image", "dep:either", "dep:indexmap"]
 llama = ["dep:llama-cpp-2", "dep:encoding_rs"]
 mistral-metal = ["mistral", "mistralrs/metal"]
 mistral-cuda = ["mistral", "mistralrs/cuda"]

@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 pub(crate) struct Models {
   registry: Arc<ModelRegistry>,
-  metadata: BTreeMap<String, ModelInfo>,
+  metadata: std::sync::RwLock<BTreeMap<String, ModelInfo>>,
 }
 impl Models {
   pub(crate) async fn load(config: &crate::config::Config) -> Result<Self> {
@@ -65,19 +65,58 @@ impl Models {
         "selected local model context is unusable"
       );
     }
-    Ok(Self { registry, metadata })
+    Ok(Self {
+      registry,
+      metadata: std::sync::RwLock::new(metadata),
+    })
   }
-  pub(crate) fn info(&self, id: &str) -> Result<&ModelInfo> {
+  pub(crate) fn info(&self, id: &str) -> Result<ModelInfo> {
     self
       .metadata
+      .read()
+      .map_err(|_| anyhow::anyhow!("model metadata unavailable"))?
       .get(id)
+      .cloned()
       .ok_or_else(|| anyhow::anyhow!("local model is not loaded"))
   }
   pub(crate) fn all(&self) -> Vec<ModelInfo> {
-    self.metadata.values().cloned().collect()
+    self
+      .metadata
+      .read()
+      .map(|values| values.values().cloned().collect())
+      .unwrap_or_default()
+  }
+  pub(crate) async fn install(
+    &self,
+    profile: &agent_config::LocalModelSettings,
+  ) -> Result<ModelInfo> {
+    load::validate(profile)?;
+    let backend = load::backend(profile).await?;
+    let info = backend.info();
+    self
+      .registry
+      .register(backend, profile.parallel_requests)
+      .await?;
+    self
+      .metadata
+      .write()
+      .map_err(|_| anyhow::anyhow!("model metadata unavailable"))?
+      .insert(info.id.clone(), info.clone());
+    Ok(info)
   }
   pub(crate) async fn backend(&self, id: &str) -> Result<Arc<dyn InferenceBackend>> {
     Ok(self.registry.backend(id).await?)
+  }
+  pub(crate) async fn unload(&self, id: &str) -> Result<bool> {
+    let removed = self.registry.remove(id).await;
+    if removed {
+      self
+        .metadata
+        .write()
+        .map_err(|_| anyhow::anyhow!("model metadata unavailable"))?
+        .remove(id);
+    }
+    Ok(removed)
   }
 }
 

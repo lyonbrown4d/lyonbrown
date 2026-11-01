@@ -24,10 +24,48 @@ pub(crate) async fn execute(
       ))
     }
     ResourceCommand::Models => {
-      let providers = client.list_providers().await?;
+      let models = client.list_models(session.unwrap_or_default()).await?;
+      Ok(("Models".into(), crate::model_command::catalog(&models)))
+    }
+    ResourceCommand::ModelSelect { model, execution } => {
+      let session_id = required_session(session)?;
+      let session = client
+        .list_sessions()
+        .await?
+        .into_iter()
+        .find(|session| session.id == session_id)
+        .ok_or_else(|| anyhow::anyhow!("Session is no longer available"))?;
+      client
+        .select_model(session_id, session.owner_epoch, &model, &execution)
+        .await?;
+      let models = client.list_models(session_id).await?;
       Ok((
-        "Models".into(),
-        crate::resource_command::format_provider_models(&providers),
+        "Session model selected".into(),
+        crate::model_command::catalog(&models),
+      ))
+    }
+    ResourceCommand::ModelHub {
+      action,
+      repository,
+      revision,
+      file,
+      runtime,
+      id,
+    } => {
+      let result = client
+        .hub_operation(agent_protocol::v1::HubRequest {
+          action: action.clone(),
+          repository,
+          revision,
+          file,
+          runtime,
+          id,
+        })
+        .await?;
+      let value: serde_json::Value = serde_json::from_str(&result)?;
+      Ok((
+        format!("Models · {action}"),
+        serde_json::to_string_pretty(&value)?,
       ))
     }
     ResourceCommand::Git => {

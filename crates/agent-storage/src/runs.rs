@@ -43,6 +43,20 @@ impl Store {
         error: String::new(),
         created_at_ms: now_ms(),
       };
+      use crate::schema::model_bindings;
+      if let Some(record) = model_bindings::table
+        .find(session)
+        .select(model_bindings::record)
+        .first::<String>(connection)
+        .optional()?
+      {
+        diesel::insert_into(model_bindings::table)
+          .values((
+            model_bindings::scope_id.eq(&run.id),
+            model_bindings::record.eq(record),
+          ))
+          .execute(connection)?;
+      }
       diesel::insert_into(runs::table)
         .values((
           runs::id.eq(&run.id),

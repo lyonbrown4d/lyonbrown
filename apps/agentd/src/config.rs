@@ -3,6 +3,16 @@ use std::{net::SocketAddr, path::PathBuf};
 #[derive(Parser, Clone)]
 #[command(version, about = "Lyonbrown Rust agent daemon")]
 pub struct Config {
+  /// Explicit local model capability opt-in; daemon tool authorization still applies.
+  #[arg(long, default_value_t = false)]
+  pub local_model_tools: bool,
+  /// Explicit .jinja override for Hub-loaded mistral.rs models.
+  #[arg(long)]
+  pub local_model_chat_template: Option<PathBuf>,
+  #[arg(long, env = "HF_ENDPOINT", default_value = "https://huggingface.co")]
+  pub hub_endpoint: String,
+  #[arg(skip)]
+  pub hub_token: Option<String>,
   #[cfg(windows)]
   #[arg(long, hide = true)]
   pub windows_service: Option<String>,
@@ -39,6 +49,8 @@ pub struct Config {
   pub config_file: Option<PathBuf>,
   #[arg(skip)]
   pub provider_api_key: Option<String>,
+  #[arg(skip)]
+  pub catalog_credentials: std::collections::BTreeMap<String, String>,
   #[arg(skip)]
   pub decision_api_key: Option<String>,
   #[arg(skip)]
@@ -100,7 +112,14 @@ impl Config {
       settings.run_timeout_secs = cli.run_timeout_secs;
     }
     settings.validate()?;
+    cli.hub_token = std::env::var("HF_TOKEN")
+      .ok()
+      .filter(|value| !value.is_empty());
     cli.provider_inventory = settings.provider_inventory();
+    cli.catalog_credentials = ["openai", "anthropic", "deepseek"]
+      .into_iter()
+      .filter_map(|id| settings.credential(id).map(|value| (id.to_owned(), value)))
+      .collect();
     cli.provider_api_key = settings.credential(if settings.provider == "anthropic" {
       "anthropic"
     } else {

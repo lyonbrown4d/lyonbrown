@@ -96,6 +96,7 @@ pub fn load_with_environment(
     [
       ("openai", "OPENAI_API_KEY"),
       ("anthropic", "ANTHROPIC_API_KEY"),
+      ("deepseek", "DEEPSEEK_API_KEY"),
       ("daemon", "LYONBROWN_TOKEN"),
     ]
     .into_iter()

@@ -116,15 +116,17 @@ async fn llama(_: &LocalModelSettings) -> Result<Arc<dyn InferenceBackend>> {
 }
 #[cfg(feature = "local-mistral")]
 async fn mistral(profile: &LocalModelSettings) -> Result<Arc<dyn InferenceBackend>> {
-  // Native tool/image support must have model-specific acceptance before exposing it.
+  // Tools require an explicit operator declaration for a verified model/template.
+  // Image input stays disabled until its separate native acceptance is available.
   let backend = match profile.format {
     LocalModelFormat::Gguf => {
       agent_inference::MistralBackend::load_gguf(
         profile.id.clone(),
         &profile.path,
         profile.context_window,
-        false,
+        profile.supports_tools,
         true,
+        profile.chat_template.as_deref(),
       )
       .await?
     }
@@ -133,9 +135,10 @@ async fn mistral(profile: &LocalModelSettings) -> Result<Arc<dyn InferenceBacken
         profile.id.clone(),
         &profile.path,
         profile.context_window,
-        false,
+        profile.supports_tools,
         false,
         true,
+        profile.chat_template.as_deref(),
       )
       .await?
     }

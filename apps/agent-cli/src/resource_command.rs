@@ -8,6 +8,18 @@ pub enum ResourceCommand {
     client_candidates: Vec<ClientProviderCandidate>,
   },
   Models,
+  ModelSelect {
+    model: String,
+    execution: String,
+  },
+  ModelHub {
+    action: String,
+    repository: String,
+    revision: String,
+    file: String,
+    runtime: String,
+    id: String,
+  },
   Git,
   Diff {
     path: String,

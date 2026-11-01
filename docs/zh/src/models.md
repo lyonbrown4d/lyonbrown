@@ -1,5 +1,37 @@
 # 模型与执行决策
 
+## 终端模型目录与安装
+
+`/models` 通过认证协议读取 agentd 的统一目录，包含内置 API 模型、配置模型和 Hugging Face 已安装权重。目录中的 `configurable`、`installed_unverified` 和 `ready` 分别表示需要凭据、文件已安装但未加载、执行方式已具备；API 凭据存在不代表已完成联网推理验证。模型与执行方式分别有稳定 ID，使用 `/models select MODEL EXECUTION` 选择。agentd 校验会话归属和 `owner_epoch`，有活动或结果未知的 Run 时拒绝切换。选择写入 SQLite，Run 接受时在同一事务复制执行绑定，后续选择不改写原 Run。
+
+```text
+/models search "SmolLM2"
+/models inspect OWNER/REPO REVISION
+/models plan OWNER/REPO REVISION FILE llama_cpp
+/models install OWNER/REPO REVISION FILE llama_cpp PLAN_ID
+/models status PLAN_ID
+/models cancel PLAN_ID
+/models installed
+/models load PLAN_ID
+/models select PLAN_ID local:PLAN_ID
+/models unload PLAN_ID
+/models remove PLAN_ID
+```
+
+运行后端参数为 `llama_cpp` 或 `mistral_rs`。计划固定 commit 和文件集合；安装前必须确认计划 ID。GGUF 下载选定文件，safetensors 计划包含配置、tokenizer 和权重分片，不执行仓库代码。agentd 使用官方 Rust `hf-hub` 下载、校验大小及 SHA256，再激活安装目录。取消保留下载文件；固定版本且有预期哈希的部分文件可通过 Range 续传，其他部分文件重新下载。续传后仍校验完整 SHA256，服务器忽略 Range 或文件损坏时拒绝激活。移除将文件移入隔离目录，可由管理员恢复。
+
+安装作业先在 SQLite 记录意图、事件和 Outbox，再下载；`status` 查询持久进度。daemon 重启后未终结作业进入 `uncertain`，须检查后显式恢复安装。下载完成为 `installed_unverified`；`load` 调用实际推理后端，加载成功才可选用。agentd 必须启用对应的 `local-llama` 或 `local-mistral` feature。`HF_ENDPOINT` / `--hub-endpoint` 配置 Hub 地址，`HF_TOKEN` 由 agentd 读取，TUI 不下载或加载权重。
+
+当前加载使用 CPU 配置；尚无自动硬件推荐、空闲卸载、更新回滚或重启后自动重新加载。GGUF/safetensors 文件格式符合不代表架构兼容，加载错误会原样体现为不可用状态。终端 Hub 操作目前显示 JSON，进度通过 `status` 查询。
+
+本机模型的工具能力默认关闭。配置 Profile 的 `supports_tools = true` 或以 `--local-model-tools` 启动 agentd 后执行 Hub `load`，可显式要求 mistral.rs 使用模型的工具模板与解析器；仍须针对具体模型验收。llama 适配器目前不提供工具调用，配置时声明该能力会被拒绝。能力声明不授予工具或绕过审批，实际工具范围继续由 agentd 的执行计划决定。
+
+mistral.rs 可通过 Profile 的 `chat_template` 或 daemon 的 `--local-model-chat-template` 指定绝对路径的 UTF-8 `.jinja` 文件，大小为 1 字节至 1 MiB，拒绝符号链接；llama 适配器拒绝此覆盖。它使用 SDK 的显式模板接口，适用于权重内嵌模板存在问题的情况。工具消息通过公开 `RequestLike` 传递标准 `tool_calls`，相关上游问题见 [mistral.rs #2528](https://github.com/EricLBuehler/mistral.rs/issues/2528)。
+
+Linux CPU 的 [真实工具验收记录](evidence/model-tools-linux.json) 确认了实际文件读取及跨轮返回结果，但 0.5B 模型列目录时反复添加非法字段，严格四轮验收失败。第二轮重新读取了文件，不能据此声称纯历史记忆通过。较大模型推理验收已延期；这些记录不证明所有模型均能正确调用所有工具。
+
+真实 CPU 推理验收使用 `cargo test --profile native-acceptance -p agentd --features local-mistral --test model_native_tools -- --ignored --nocapture`。该配置优化 Rust 推理内核并关闭 LTO，不使用未优化 debug 构建衡量本地模型响应能力。测试显式下载固定版本权重，校验真实工作区工具事件和多轮结果；Mock 通过不能替代该验收。
+
 Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 `model_route_decision`，再生成 Agent 专属的工具计划。通用库与可选后端见[可复用决策引擎](decision-engine.md)；独立网关见 [AI Gateway](gateway.md)。
 
 每次运行先由 `agent-decision` 生成执行计划，再由 `agent-runtime` 打开 `rpi-harness`。分类器只返回建议，不执行工具，也不能授予权限。

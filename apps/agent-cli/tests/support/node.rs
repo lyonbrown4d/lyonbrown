@@ -78,6 +78,9 @@ impl Node {
     tokio::spawn(async move {
       tonic::transport::Server::builder()
         .add_service(agentd::client_service(daemon.clone()))
+        .add_service(agentd::workspace_service(daemon.clone()))
+        .add_service(agentd::skill_service(daemon.clone()))
+        .add_service(agentd::model_service(daemon.clone()))
         .add_service(agentd::computer_runtime_service(daemon.clone()))
         .add_service(agentd::orchestration_service(daemon))
         .serve_with_incoming(TcpListenerStream::new(listener))

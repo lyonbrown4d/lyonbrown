@@ -1,4 +1,6 @@
 diesel::table! { sessions (id) { id -> Text, owner_epoch -> BigInt, record -> Text, } }
+diesel::table! { model_bindings (scope_id) { scope_id -> Text, record -> Text, } }
+diesel::table! { model_jobs (id) { id -> Text, record -> Text, } }
 diesel::table! { harness_sessions (session_id) { session_id -> Text, snapshot -> Binary, } }
 diesel::table! { runs (id) { id -> Text, session_id -> Text, idempotency_key -> Text, status -> Text, created_at_ms -> BigInt, record -> Text, } }
 diesel::table! { events (run_id, cursor) { run_id -> Text, cursor -> BigInt, record -> Text, } }

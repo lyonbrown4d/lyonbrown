@@ -22,7 +22,29 @@ static_module! {
     external models: crate::models::Models;
   }
 }
-pub fn build(config: Config, models: crate::models::Models) -> anyhow::Result<Daemon> {
+pub fn build(mut config: Config, models: crate::models::Models) -> anyhow::Result<Daemon> {
+  if config.provider_inventory.is_empty() {
+    let selected = agent_config::provider_definition(&config.provider);
+    config.provider_inventory = agent_config::PROVIDER_CATALOG
+      .iter()
+      .map(|definition| {
+        let active = selected.is_some_and(|value| value.id == definition.id);
+        agent_config::ProviderStatus {
+          definition: *definition,
+          selected: active,
+          credential: agent_config::ProviderCredentialStatus::default(),
+          configured_models: if active {
+            vec![agent_config::ConfiguredProviderModel {
+              id: config.model.clone(),
+              selected: true,
+            }]
+          } else {
+            Vec::new()
+          },
+        }
+      })
+      .collect();
+  }
   crate::commands::validate(&config)?;
   anyhow::ensure!(
     (10..=300).contains(&config.computer_lease_secs),

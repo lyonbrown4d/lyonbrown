@@ -53,6 +53,6 @@ async fn llama_real_model_generates() -> std::result::Result<(), Box<dyn std::er
 async fn mistral_real_model_generates() -> std::result::Result<(), Box<dyn std::error::Error>> {
   let path = std::env::var("LYONBROWN_TEST_GGUF")?;
   let backend =
-    MistralBackend::load_gguf("acceptance-mistral".into(), path, 2048, false, true).await?;
+    MistralBackend::load_gguf("acceptance-mistral".into(), path, 2048, false, true, None).await?;
   generate(&backend).await
 }

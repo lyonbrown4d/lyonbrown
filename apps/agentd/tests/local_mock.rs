@@ -1,4 +1,5 @@
 use agent_inference::{ModelInfo, ModelRegistry};
+use agent_protocol::v1::model_service_server::ModelService;
 use agent_protocol::v1::{self, client_service_server::ClientService};
 use agent_test_support::{MockGeneration, MockInferenceBackend};
 use clap::Parser;
@@ -42,6 +43,39 @@ async fn shared_mock_local_backend_runs_through_harness_and_persists_routing() {
     .await
     .unwrap()
     .into_inner();
+  let catalog = daemon
+    .list_models(Request::new(v1::SessionRequest {
+      session_id: session.id.clone(),
+    }))
+    .await
+    .unwrap()
+    .into_inner();
+  assert!(
+    catalog
+      .models
+      .iter()
+      .any(|model| model.id == "deepseek-chat")
+  );
+  assert!(
+    daemon
+      .select_model(Request::new(v1::SelectModelRequest {
+        session_id: session.id.clone(),
+        owner_epoch: session.owner_epoch + 1,
+        model_id: "mock-local".into(),
+        execution_id: "configured".into()
+      }))
+      .await
+      .is_err()
+  );
+  daemon
+    .select_model(Request::new(v1::SelectModelRequest {
+      session_id: session.id.clone(),
+      owner_epoch: session.owner_epoch,
+      model_id: "mock-local".into(),
+      execution_id: "configured".into(),
+    }))
+    .await
+    .unwrap();
   let run = daemon
     .start_run(Request::new(v1::StartRunRequest {
       session_id: session.id,
@@ -74,6 +108,15 @@ async fn shared_mock_local_backend_runs_through_harness_and_persists_routing() {
     .into_inner();
   assert_eq!(result.status, "completed", "{}", result.error);
   assert_eq!(result.result, "synthetic local result");
+  assert_eq!(
+    daemon
+      .store
+      .model_binding(&run.id)
+      .unwrap()
+      .unwrap()
+      .model_id,
+    "mock-local"
+  );
   let events = daemon.store.events(&run.id, 0, 1000).unwrap();
   let route = events
     .iter()

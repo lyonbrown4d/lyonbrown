@@ -147,6 +147,46 @@ fn p0_resource_commands_dispatch_only_metadata_and_open_sessions_panel() {
 }
 
 #[test]
+fn unified_model_selection_dispatches_identifiers_and_invalid_syntax_stays_local() {
+  let mut app = App {
+    sessions: vec![session("one")],
+    ..App::default()
+  };
+  let (actions, mut receiver) = mpsc::channel(2);
+  app.input = "/models select deepseek-chat builtin:deepseek-chat".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("dispatch model selection");
+  assert!(matches!(receiver.try_recv(), Ok(Action::Resource {
+    command: agent_cli::resource_command::ResourceCommand::ModelSelect { model, execution }, ..
+  }) if model == "deepseek-chat" && execution == "builtin:deepseek-chat"));
+  app.input = "/models select deepseek-chat".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("reject missing binding");
+  assert!(app.notice.contains("Usage: /models"));
+  assert!(receiver.try_recv().is_err());
+  assert_eq!(app.input.text(), "/models select deepseek-chat");
+
+  app.input = "/models plan org/model deadbeef weights.gguf llama_cpp".into();
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("dispatch pinned model install plan");
+  assert!(matches!(receiver.try_recv(), Ok(Action::Resource {
+    command: agent_cli::resource_command::ResourceCommand::ModelHub { action, repository, revision, file, runtime, id }, ..
+  }) if action == "plan" && repository == "org/model" && revision == "deadbeef" && file == "weights.gguf" && runtime == "llama_cpp" && id.is_empty()));
+}
+
+#[test]
 fn saved_drafts_restore_known_sessions_and_preserve_orphans_for_explicit_recovery() {
   let mut app = App {
     sessions: vec![session("known-a"), session("known-b")],

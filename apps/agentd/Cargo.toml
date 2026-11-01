@@ -31,6 +31,7 @@ agent-protocol = { path = "../../crates/agent-protocol" }
 agent-runtime = { path = "../../crates/agent-runtime" }
 agent-security = { path = "../../crates/agent-security" }
 agent-secrets = { path = "../../crates/agent-secrets" }
+agent-model-hub = { path = "../../crates/agent-model-hub" }
 agent-skills = { package = "lyonbrown-skills", path = "../../crates/agent-skills" }
 agent-storage = { path = "../../crates/agent-storage" }
 agent-workspace = { path = "../../crates/agent-workspace" }

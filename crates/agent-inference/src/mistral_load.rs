@@ -9,6 +9,7 @@ pub(crate) async fn directory(
   supports_tools: bool,
   supports_images: bool,
   force_cpu: bool,
+  chat_template: Option<&Path>,
 ) -> Result<(Model, ModelInfo)> {
   let path = std::fs::canonicalize(path).map_err(backend_error)?;
   if !path.is_dir() || !path.join("config.json").is_file() || !path.join("tokenizer.json").is_file()
@@ -20,6 +21,9 @@ pub(crate) async fn directory(
   let mut builder = ModelBuilder::new(path.to_string_lossy())
     .with_token_source(TokenSource::None)
     .with_max_num_seqs(1);
+  if let Some(template) = template_override(chat_template)? {
+    builder = builder.with_jinja_explicit(template);
+  }
   if force_cpu {
     // An explicitly selected CPU does not need automatic device placement.
     // Keep loading usable when host memory introspection is unavailable.
@@ -37,6 +41,7 @@ pub(crate) async fn gguf(
   context_window: u32,
   supports_tools: bool,
   force_cpu: bool,
+  chat_template: Option<&Path>,
 ) -> Result<(Model, ModelInfo)> {
   let path = std::fs::canonicalize(path).map_err(backend_error)?;
   if !path.is_file() {
@@ -53,6 +58,9 @@ pub(crate) async fn gguf(
   let mut builder = GgufModelBuilder::new(parent.to_string_lossy(), vec![file.to_string_lossy()])
     .with_token_source(TokenSource::None)
     .with_max_num_seqs(1);
+  if let Some(template) = template_override(chat_template)? {
+    builder = builder.with_jinja_explicit(template);
+  }
   if force_cpu {
     // An explicitly selected CPU does not need automatic device placement.
     // Keep loading usable when host memory introspection is unavailable.
@@ -101,4 +109,24 @@ fn finish(
 }
 fn backend_error(error: impl std::fmt::Display) -> InferenceError {
   InferenceError::Backend(error.to_string())
+}
+
+fn template_override(path: Option<&Path>) -> Result<Option<String>> {
+  path
+    .map(|path| {
+      let metadata = std::fs::symlink_metadata(path).map_err(backend_error)?;
+      if !path.is_absolute()
+        || path.extension().is_none_or(|value| value != "jinja")
+        || metadata.file_type().is_symlink()
+        || !metadata.is_file()
+        || !(1..=1024 * 1024).contains(&metadata.len())
+      {
+        return Err(InferenceError::InvalidRequest(
+          "chat template requires a bounded regular absolute .jinja file".into(),
+        ));
+      }
+      std::fs::read_to_string(path).map_err(backend_error)?;
+      Ok(path.to_string_lossy().into_owned())
+    })
+    .transpose()
 }

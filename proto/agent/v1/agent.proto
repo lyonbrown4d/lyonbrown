@@ -1,6 +1,19 @@
 syntax = "proto3";
 package agent.v1;
 
+service ModelService {
+  rpc ListModels(SessionRequest) returns (Models);
+  rpc SelectModel(SelectModelRequest) returns (ModelSelection);
+  rpc HubOperation(HubRequest) returns (HubResponse);
+}
+message HubRequest { string action = 1; string repository = 2; string revision = 3; string file = 4; string runtime = 5; string id = 6; }
+message HubResponse { string json = 1; }
+message Models { repeated ModelCandidate models = 1; }
+message ModelCandidate { string id = 1; string display_name = 2; string vendor = 3; string source = 4; string state = 5; bool selected = 6; repeated ModelExecution executions = 7; }
+message ModelExecution { string id = 1; string label = 2; string transport = 3; string state = 4; string reason = 5; }
+message SelectModelRequest { string session_id = 1; uint64 owner_epoch = 2; string model_id = 3; string execution_id = 4; }
+message ModelSelection { string model_id = 1; string execution_id = 2; }
+
 service ClientService {
   rpc GetNode(Empty) returns (Node);
   rpc PrepareUpgrade(Empty) returns (Node);
