@@ -5,7 +5,7 @@
 
 use std::sync::OnceLock;
 
-use tree_sitter::{Language, Parser, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{Language, Node, Parser, Query, QueryCursor, StreamingIterator};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Syntax {
@@ -91,8 +91,61 @@ pub fn highlight_lines(syntax: Syntax, lines: &[&str]) -> Vec<Vec<HighlightSpan>
 
   let starts = line_starts(lines);
   let mut candidates: Vec<Vec<Candidate>> = vec![Vec::new(); lines.len()];
+  collect(
+    grammar,
+    tree.root_node(),
+    &text,
+    0,
+    &starts,
+    lines,
+    &mut candidates,
+  );
+
+  // Markdown: the block tree only marks headings, fences and link targets, so each inline node
+  // is parsed again with the inline grammar to colour emphasis, code spans and links.
+  if let Some(inline) = &grammar.inline {
+    let mut ranges = Vec::new();
+    collect_inline_ranges(tree.root_node(), &mut ranges);
+    let mut inline_parser = Parser::new();
+    if inline_parser.set_language(&inline.language).is_ok() {
+      for (start, end) in ranges {
+        let Some(slice) = text.get(start..end) else {
+          continue;
+        };
+        let Some(subtree) = inline_parser.parse(slice, None) else {
+          continue;
+        };
+        collect(
+          inline,
+          subtree.root_node(),
+          slice,
+          start,
+          &starts,
+          lines,
+          &mut candidates,
+        );
+      }
+    }
+  }
+
+  for (target, found) in highlighted.iter_mut().zip(candidates.iter_mut()) {
+    *target = resolve(found);
+  }
+  highlighted
+}
+
+/// Runs one compiled query over `source`, shifting match offsets by `offset`.
+fn collect(
+  grammar: &Grammar,
+  root: Node<'_>,
+  source: &str,
+  offset: usize,
+  starts: &[usize],
+  lines: &[&str],
+  candidates: &mut [Vec<Candidate>],
+) {
   let mut cursor = QueryCursor::new();
-  let mut matches = cursor.matches(&grammar.query, tree.root_node(), text.as_bytes());
+  let mut matches = cursor.matches(&grammar.query, root, source.as_bytes());
   while let Some(matched) = matches.next() {
     for capture in matched.captures {
       let Some(mapped) = grammar
@@ -105,20 +158,29 @@ pub fn highlight_lines(syntax: Syntax, lines: &[&str]) -> Vec<Vec<HighlightSpan>
       };
       let node = capture.node;
       push_candidate(
-        &mut candidates,
-        &starts,
+        candidates,
+        starts,
         lines,
-        node.start_byte(),
-        node.end_byte(),
+        offset.saturating_add(node.start_byte()),
+        offset.saturating_add(node.end_byte()),
         mapped,
       );
     }
   }
+}
 
-  for (target, found) in highlighted.iter_mut().zip(candidates.iter_mut()) {
-    *target = resolve(found);
+/// Collects the byte ranges of every `inline` node; an explicit stack keeps deep files safe.
+fn collect_inline_ranges(root: Node<'_>, ranges: &mut Vec<(usize, usize)>) {
+  let mut stack = vec![root];
+  while let Some(node) = stack.pop() {
+    if node.kind() == "inline" {
+      ranges.push((node.start_byte(), node.end_byte()));
+      continue;
+    }
+    let mut cursor = node.walk();
+    let children: Vec<Node<'_>> = node.children(&mut cursor).collect();
+    stack.extend(children);
   }
-  highlighted
 }
 
 /// A compiled query plus the capture-id table derived from it; built once per language.
@@ -127,6 +189,8 @@ struct Grammar {
   query: Query,
   /// Indexed like `query.capture_names()`; `None` means the capture is not rendered.
   captures: Vec<Option<Mapped>>,
+  /// Markdown only: `tree_sitter_md` keeps block and inline syntax in separate grammars.
+  inline: Option<Box<Grammar>>,
 }
 
 /// A capture the renderer knows about, with the specificity used to resolve overlaps.
@@ -148,7 +212,7 @@ impl Grammar {
       .map(|name| {
         map_capture(name).map(|capture| Mapped {
           capture,
-          priority: u8::try_from(name.len()).unwrap_or(u8::MAX),
+          priority: capture_priority(name),
         })
       })
       .collect();
@@ -156,7 +220,18 @@ impl Grammar {
       language,
       query,
       captures,
+      inline: None,
     })
+  }
+}
+
+/// Markdown wraps a whole span in `text.*` while the delimiters inside it are `punctuation.*`,
+/// so name length alone would let the delimiter win and leave the words uncoloured.
+fn capture_priority(name: &str) -> u8 {
+  if name.starts_with("text.") {
+    u8::MAX
+  } else {
+    u8::try_from(name.len()).unwrap_or(u8::MAX)
   }
 }
 
@@ -181,6 +256,18 @@ const CAPTURE_NAMES: &[(&str, Capture)] = &[
 ];
 
 fn map_capture(name: &str) -> Option<Capture> {
+  // Markdown routes everything through `text.*`, so the second segment carries the meaning.
+  if let Some(rest) = name.strip_prefix("text.") {
+    return match rest.split('.').next().unwrap_or(rest) {
+      "title" => Some(Capture::Keyword),
+      "literal" => Some(Capture::String),
+      "uri" => Some(Capture::Property),
+      "reference" => Some(Capture::Function),
+      "emphasis" | "strong" => Some(Capture::Type),
+      "escape" => Some(Capture::Constant),
+      _ => None,
+    };
+  }
   // `keyword.function` -> `keyword`, `punctuation.bracket` -> `punctuation`, and so on.
   let head = name.split('.').next().unwrap_or(name);
   CAPTURE_NAMES
@@ -229,6 +316,26 @@ cached_grammar!(
 );
 cached_grammar!(bash_grammar, tree_sitter_bash, LANGUAGE, HIGHLIGHT_QUERY);
 
+/// Markdown needs both halves: the block tree marks headings, fences and link targets, and each
+/// inline node is parsed again so emphasis, code spans and links are coloured.
+fn markdown_grammar() -> Option<&'static Grammar> {
+  static CACHE: OnceLock<Option<Grammar>> = OnceLock::new();
+  CACHE
+    .get_or_init(|| {
+      let mut grammar = Grammar::compile(
+        tree_sitter_md::LANGUAGE.into(),
+        tree_sitter_md::HIGHLIGHT_QUERY_BLOCK,
+      )?;
+      grammar.inline = Grammar::compile(
+        tree_sitter_md::INLINE_LANGUAGE.into(),
+        tree_sitter_md::HIGHLIGHT_QUERY_INLINE,
+      )
+      .map(Box::new);
+      Some(grammar)
+    })
+    .as_ref()
+}
+
 fn grammar(syntax: Syntax) -> Option<&'static Grammar> {
   match syntax {
     Syntax::Rust => rust_grammar(),
@@ -238,10 +345,8 @@ fn grammar(syntax: Syntax) -> Option<&'static Grammar> {
     Syntax::Json => json_grammar(),
     Syntax::Toml => toml_grammar(),
     Syntax::Bash => bash_grammar(),
-    // `tree_sitter_md` splits markdown into a block grammar and an inline grammar that only
-    // share `markup`/`text` captures, none of which map onto our palette, and wiring the inline
-    // pass in would need a second tree per document. Markdown therefore stays unhighlighted.
-    Syntax::Markdown | Syntax::Plain => None,
+    Syntax::Markdown => markdown_grammar(),
+    Syntax::Plain => None,
   }
 }
 
@@ -401,6 +506,67 @@ mod tests {
       string.contains(&("\"héllo 世界\"", Capture::String)),
       "{string:?}"
     );
+  }
+
+  #[test]
+  fn markdown_colours_headings_emphasis_and_links() {
+    // Markdown needs the block grammar for headings and fences plus the inline grammar for
+    // emphasis and links; a single pass would leave the words uncoloured.
+    let lines = [
+      "# 标题",
+      "普通 **粗体** 和 [链接](https://example.com)。",
+      "```",
+      "fn main() {}",
+      "```",
+    ];
+    let spans = highlight_lines(Syntax::Markdown, &lines);
+    assert_eq!(spans.len(), lines.len());
+    assert!(
+      spans[0].iter().any(|span| span.capture == Capture::Keyword),
+      "heading text is a title capture"
+    );
+    assert!(
+      spans[0]
+        .iter()
+        .any(|span| span.capture == Capture::Punctuation),
+      "the leading # stays punctuation"
+    );
+    assert!(
+      spans[1].iter().any(|span| span.capture == Capture::Type),
+      "strong emphasis colours its words"
+    );
+    assert!(
+      spans[1]
+        .iter()
+        .any(|span| span.capture == Capture::Function),
+      "link text is a reference"
+    );
+    assert!(
+      spans[1]
+        .iter()
+        .any(|span| span.capture == Capture::Property),
+      "link destination is a uri"
+    );
+    assert!(
+      spans[2].iter().any(|span| span.capture == Capture::String),
+      "a fence opens a literal block"
+    );
+    for (line, found) in lines.iter().zip(&spans) {
+      for span in found {
+        assert!(span.start < span.end, "spans are never empty");
+        assert!(span.end <= line.len(), "spans stay inside their line");
+        assert!(
+          line.is_char_boundary(span.start) && line.is_char_boundary(span.end),
+          "spans land on character boundaries"
+        );
+      }
+    }
+  }
+
+  #[test]
+  fn plain_markdown_without_markup_produces_no_spans() {
+    let spans = highlight_lines(Syntax::Markdown, &["just words", "", "and more"]);
+    assert!(spans.iter().all(Vec::is_empty));
   }
 
   #[test]
