@@ -98,7 +98,11 @@ fn delayed_resource_result_lands_in_the_transcript_without_moving_the_user() {
   use agent_cli::{backend::Update, update};
   let mut app = App {
     connection: Connection::Connected,
-    input: "/providers".into(),
+    sessions: vec![Session {
+      id: "s1".into(),
+      title: "S".into(),
+    }],
+    input: "/status".into(),
     ..App::default()
   };
   let (actions, mut requests) = mpsc::channel(8);
@@ -170,7 +174,11 @@ fn restored_panel_escape_returns_to_chat_and_root_escape_revokes_pending_present
   let mut app = App {
     connection: Connection::Connected,
     router: ContextPanel::Help.into(),
-    input: "/providers".into(),
+    sessions: vec![Session {
+      id: "s1".into(),
+      title: "S".into(),
+    }],
+    input: "/status".into(),
     ..App::default()
   };
   let (actions, mut requests) = mpsc::channel(8);
@@ -238,12 +246,16 @@ fn queued_resource_commands_append_in_order_without_touching_newer_typing() {
     let mut app = App {
       connection: Connection::Connected,
       router: initial.into(),
+      sessions: vec![Session {
+        id: "s1".into(),
+        title: "S".into(),
+      }],
       ..App::default()
     };
     let (actions, mut requests) = mpsc::channel(8);
     let mut replies = Vec::new();
     for detail in ["older result", "latest result"] {
-      app.input = "/providers".into();
+      app.input = "/status".into();
       key(&mut app, &actions, KeyCode::Enter, KeyModifiers::NONE);
       let Action::Resource {
         session,

@@ -8,8 +8,8 @@ use ratatui::{
   Frame,
   layout::Rect,
   style::{Modifier, Style},
-  text::{Line, Span},
-  widgets::Clear,
+  text::{Line, Span, Text},
+  widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 use ratatui_interact::components::{ListPicker, ListPickerState, ListPickerStyle};
 
@@ -18,7 +18,22 @@ use crate::theme::Theme;
 /// What confirming the highlighted row dispatches.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PickerValue {
-  Model { model: String, execution: String },
+  Model {
+    model: String,
+    execution: String,
+  },
+  Session {
+    id: String,
+  },
+  /// Confirming uploads the detected credential environment for this provider.
+  Provider {
+    provider: String,
+    environment: String,
+  },
+  Skill {
+    name: String,
+    scope: String,
+  },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,8 +61,13 @@ pub struct Picker {
 
 impl Picker {
   pub fn models() -> Self {
+    Self::loading("选择模型 · ↑↓ 选择 · Enter 确认 · Esc 取消")
+  }
+
+  /// Shown while the daemon catalog request is in flight.
+  pub fn loading(title: impl Into<String>) -> Self {
     Self {
-      title: "选择模型 · ↑↓ 选择 · Enter 确认 · Esc 取消".into(),
+      title: title.into(),
       items: Vec::new(),
       selected: 0,
       loading: true,
@@ -92,6 +112,112 @@ impl Picker {
     self
   }
 
+  /// Session switching keeps the F2 panel for browsing; this picker stays a quick jump.
+  pub fn sessions(sessions: &[crate::model::Session], current: Option<&str>) -> Self {
+    Self {
+      title: "切换会话 · ↑↓ 选择 · Enter 确认 · Esc 取消".into(),
+      items: sessions
+        .iter()
+        .map(|session| PickerItem {
+          label: session.title.clone(),
+          detail: if current == Some(session.id.as_str()) {
+            "当前".to_owned()
+          } else {
+            String::new()
+          },
+          value: PickerValue::Session {
+            id: session.id.clone(),
+          },
+        })
+        .collect(),
+      selected: sessions
+        .iter()
+        .position(|session| current == Some(session.id.as_str()))
+        .unwrap_or(0),
+      loading: false,
+      error: String::new(),
+    }
+  }
+
+  /// One row per provider; only a provider with a detected variable is worth confirming.
+  pub fn providers(
+    providers: &[agent_protocol::v1::Provider],
+    candidates: &[crate::resource_command::ClientProviderCandidate],
+  ) -> Self {
+    Self {
+      title: "选择提供方 · ↑↓ 选择 · Enter 上传凭据 · Esc 取消".into(),
+      items: providers
+        .iter()
+        .map(|provider| {
+          // Only an allowlisted variable that this client actually detects can be uploaded.
+          let environment = agent_config::provider_definition(&provider.id)
+            .and_then(|definition| {
+              definition
+                .credential_env_names
+                .iter()
+                .find(|name| {
+                  candidates
+                    .iter()
+                    .any(|candidate| candidate.environment == **name)
+                })
+                .map(|name| (*name).to_owned())
+            })
+            .or_else(|| {
+              (!provider.credential_environment.is_empty())
+                .then(|| provider.credential_environment.clone())
+            })
+            .unwrap_or_default();
+          PickerItem {
+            label: provider.name.clone(),
+            detail: if provider.credential_state == "configured" {
+              format!("已配置 · {}", provider.credential_state)
+            } else if environment.is_empty() {
+              "未检测到凭据环境变量".to_owned()
+            } else {
+              format!("可上传 {environment}")
+            },
+            value: PickerValue::Provider {
+              provider: provider.id.clone(),
+              environment,
+            },
+          }
+        })
+        .collect(),
+      selected: 0,
+      loading: false,
+      error: String::new(),
+    }
+  }
+
+  pub fn skills(skills: &[agent_protocol::v1::Skill]) -> Self {
+    Self {
+      title: "选择技能 · ↑↓ 选择 · Enter 查看 · Esc 取消".into(),
+      items: skills
+        .iter()
+        .map(|skill| PickerItem {
+          label: skill.name.clone(),
+          detail: format!(
+            "{} · {} 文件 · {}",
+            skill.scope,
+            skill.files,
+            if skill.enabled {
+              "已启用"
+            } else {
+              "未启用"
+            }
+          ),
+          value: PickerValue::Skill {
+            name: skill.name.clone(),
+            scope: skill.scope.clone(),
+          },
+        })
+        .collect(),
+      selected: 0,
+      loading: false,
+      error: String::new(),
+    }
+  }
+
   pub fn is_empty(&self) -> bool {
     self.items.is_empty()
   }
@@ -127,6 +253,32 @@ fn model_state(state: &str, reason: &str) -> String {
 
 pub fn render(frame: &mut Frame, area: Rect, picker: &Picker, theme: Theme) {
   frame.render_widget(Clear, area);
+  if picker.items.is_empty() {
+    let message = if picker.loading {
+      "加载中…"
+    } else {
+      "没有可选项"
+    };
+    frame.render_widget(
+      Paragraph::new(Text::from(vec![
+        Line::from(Span::styled(
+          picker.title.clone(),
+          Style::default()
+            .fg(theme.accent)
+            .add_modifier(Modifier::BOLD),
+        )),
+        Line::from(Span::styled(message, Style::default().fg(theme.muted))),
+      ]))
+      .block(
+        Block::default()
+          .borders(Borders::ALL)
+          .border_style(Style::default().fg(theme.accent)),
+      )
+      .wrap(Wrap { trim: false }),
+      area,
+    );
+    return;
+  }
   let style = ListPickerStyle {
     selected_style: Style::default()
       .fg(theme.accent)
@@ -192,6 +344,68 @@ mod tests {
         execution: "builtin:deepseek-chat".into(),
       }
     );
+  }
+
+  #[test]
+  fn sessions_picker_marks_the_current_session() {
+    let sessions = vec![
+      crate::model::Session {
+        id: "a".into(),
+        title: "A".into(),
+      },
+      crate::model::Session {
+        id: "b".into(),
+        title: "B".into(),
+      },
+    ];
+    let picker = Picker::sessions(&sessions, Some("b"));
+    assert_eq!(picker.selected, 1);
+    assert_eq!(picker.items[1].detail, "当前");
+    assert_eq!(picker.items[0].detail, "");
+    assert_eq!(
+      picker.items[0].value,
+      PickerValue::Session { id: "a".into() }
+    );
+  }
+
+  #[test]
+  fn provider_picker_reports_a_uploadable_environment() {
+    use crate::resource_command::ClientProviderCandidate;
+    let providers = vec![agent_protocol::v1::Provider {
+      id: "openai".into(),
+      name: "OpenAI".into(),
+      credential_state: "missing".into(),
+      ..Default::default()
+    }];
+    let candidates = vec![ClientProviderCandidate {
+      environment: "OPENAI_API_KEY".into(),
+      state: "detected".into(),
+    }];
+    let picker = Picker::providers(&providers, &candidates);
+    assert_eq!(picker.items[0].label, "OpenAI");
+    assert_eq!(picker.items[0].detail, "可上传 OPENAI_API_KEY");
+    assert_eq!(
+      picker.items[0].value,
+      PickerValue::Provider {
+        provider: "openai".into(),
+        environment: "OPENAI_API_KEY".into()
+      }
+    );
+  }
+
+  #[test]
+  fn skill_picker_reports_scope_and_enabled_state() {
+    let skills = vec![agent_protocol::v1::Skill {
+      name: "review".into(),
+      scope: "daemon_user".into(),
+      files: 3,
+      enabled: true,
+      ..Default::default()
+    }];
+    let picker = Picker::skills(&skills);
+    assert_eq!(picker.items[0].label, "review");
+    assert!(picker.items[0].detail.contains("daemon_user"));
+    assert!(picker.items[0].detail.contains("已启用"));
   }
 
   #[test]

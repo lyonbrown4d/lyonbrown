@@ -126,6 +126,32 @@ pub(crate) async fn execute(
         })
         .await;
     }
+    Action::ProviderCatalog { generation } => {
+      let providers = client.list_providers().await?;
+      let _ = updates
+        .send(Update::ProviderCatalog {
+          generation,
+          providers,
+        })
+        .await;
+    }
+    Action::SkillsCatalog {
+      session,
+      generation,
+      scope,
+    } => {
+      let skills = client
+        .list_skills(&scope, session.as_deref().unwrap_or_default())
+        .await?;
+      let _ = updates
+        .send(Update::SkillsCatalog {
+          session,
+          generation,
+          scope,
+          skills,
+        })
+        .await;
+    }
     Action::WorkspaceDiff {
       session,
       generation,

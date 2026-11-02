@@ -111,11 +111,17 @@ fn p0_resource_commands_dispatch_only_metadata_and_open_sessions_panel() {
   .expect("dispatch Skill listing in workspace scope");
   assert!(matches!(
     receiver.try_recv(),
-    Ok(Action::Resource {
-      command: agent_cli::resource_command::ResourceCommand::SkillsList { scope },
-      ..
-    }) if scope == "workspace"
+    Ok(Action::SkillsCatalog { scope, .. }) if scope == "workspace"
   ));
+  assert!(app.picker.is_some(), "the skill list opens a picker");
+  // A picker owns the keyboard until it is dismissed.
+  input::handle(
+    &mut app,
+    Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+    &actions,
+  )
+  .expect("close the skill picker");
+  assert!(app.picker.is_none());
 
   app.input = "/providers upload openai OPENAI_API_KEY".into();
   input::handle(
@@ -147,9 +153,18 @@ fn p0_resource_commands_dispatch_only_metadata_and_open_sessions_panel() {
     Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
     &actions,
   )
-  .expect("open session browser");
-  assert_eq!(app.router.current(), ContextPanel::Sessions);
-  assert!(receiver.try_recv().is_err());
+  .expect("open session picker");
+  let picker = app.picker.as_ref().expect("session picker");
+  assert_eq!(picker.items.len(), app.sessions.len());
+  assert!(
+    receiver.try_recv().is_err(),
+    "switching sessions is local until confirmed"
+  );
+  assert_eq!(
+    app.router.current(),
+    ContextPanel::Closed,
+    "the picker never opens the F2 panel"
+  );
 }
 
 #[test]

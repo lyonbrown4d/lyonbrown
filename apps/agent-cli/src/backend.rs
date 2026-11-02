@@ -55,6 +55,16 @@ pub enum Action {
     source: String,
     command: crate::resource_command::ResourceCommand,
   },
+  /// Structured provider inventory: a picker renders it instead of a text page.
+  ProviderCatalog {
+    generation: u64,
+  },
+  /// Structured skill list for the picker; the scope stays explicit.
+  SkillsCatalog {
+    session: Option<String>,
+    generation: u64,
+    scope: String,
+  },
   /// Structured model catalog: a picker renders it instead of a text page.
   ModelCatalog {
     session: Option<String>,
@@ -126,6 +136,16 @@ pub enum Update {
     session: Option<String>,
     generation: u64,
     models: Vec<agent_protocol::v1::ModelCandidate>,
+  },
+  ProviderCatalog {
+    generation: u64,
+    providers: Vec<agent_protocol::v1::Provider>,
+  },
+  SkillsCatalog {
+    session: Option<String>,
+    generation: u64,
+    scope: String,
+    skills: Vec<agent_protocol::v1::Skill>,
   },
   WorkspaceDiffText {
     session: String,
@@ -273,6 +293,8 @@ pub fn spawn_with_computer_factory(
                   Action::Run { .. } => "run.recover",
                   Action::Resource { .. } => "resource.inspect_or_manage",
                   Action::ModelCatalog { .. } => "model.catalog",
+                  Action::ProviderCatalog { .. } => "provider.catalog",
+                  Action::SkillsCatalog { .. } => "skill.catalog",
                   Action::WorkspaceDiff { .. } => "workspace.diff",
                   Action::SaveState { .. } => "client.state.save",
               };

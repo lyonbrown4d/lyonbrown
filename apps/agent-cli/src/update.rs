@@ -48,6 +48,39 @@ pub fn apply(app: &mut App, update: Update) {
         app.open_picker(picker);
       }
     }
+    Update::ProviderCatalog {
+      generation,
+      providers,
+    } => {
+      if generation != app.generation {
+        return;
+      }
+      let candidates = crate::resource_command::candidate_environment_names();
+      let picker = crate::picker::Picker::providers(&providers, &candidates);
+      if picker.is_empty() {
+        app.push_local("Providers\n\nagentd 没有返回提供方。");
+      } else {
+        app.open_picker(picker);
+      }
+    }
+    Update::SkillsCatalog {
+      session,
+      generation,
+      scope,
+      skills,
+    } => {
+      if generation != app.generation
+        || session.as_deref() != app.selected_session().map(|value| value.id.as_str())
+      {
+        return;
+      }
+      let picker = crate::picker::Picker::skills(&skills);
+      if picker.is_empty() {
+        app.push_local(format!("Skills · {scope}\n\n没有已安装的技能。"));
+      } else {
+        app.open_picker(picker);
+      }
+    }
     Update::WorkspaceDiffText {
       session,
       generation,

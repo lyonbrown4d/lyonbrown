@@ -31,8 +31,10 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
         app.save_current_draft();
       }
       Ok(P0Command::Sessions) => {
-        app.sessions_cursor = app.selected;
-        app.router.navigate(ContextPanel::Sessions);
+        // The F2 panel stays for browsing; this picker is the quick jump.
+        let current = app.selected_session().map(|session| session.id.clone());
+        let picker = crate::picker::Picker::sessions(&app.sessions, current.as_deref());
+        app.open_picker(picker);
         app.input.clear();
         app.save_current_draft();
       }
@@ -61,6 +63,35 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
         } else {
           let session = app.selected_session().map(|session| session.id.clone());
           match command {
+            // Provider and skill inventories are pickers, not text pages.
+            crate::resource_command::ResourceCommand::Providers { .. } => {
+              send(
+                actions,
+                Action::ProviderCatalog {
+                  generation: app.generation,
+                },
+              )?;
+              app.open_picker(crate::picker::Picker::loading(
+                "选择提供方 · 加载中… · Esc 取消",
+              ));
+              app.input.clear();
+              app.save_current_draft();
+            }
+            crate::resource_command::ResourceCommand::SkillsList { scope } => {
+              send(
+                actions,
+                Action::SkillsCatalog {
+                  session,
+                  generation: app.generation,
+                  scope,
+                },
+              )?;
+              app.open_picker(crate::picker::Picker::loading(
+                "选择技能 · 加载中… · Esc 取消",
+              ));
+              app.input.clear();
+              app.save_current_draft();
+            }
             // A model choice is a picker, not a text page.
             crate::resource_command::ResourceCommand::Models => {
               send(
@@ -447,6 +478,62 @@ pub(crate) fn confirm_picker(app: &mut App, actions: &mpsc::Sender<Action>) -> a
         },
       )?;
       app.notice = "正在切换模型…".into();
+    }
+    crate::picker::PickerValue::Session { id } => {
+      let Some(index) = app.sessions.iter().position(|session| session.id == id) else {
+        app.notice = "该会话已不存在。".into();
+        return Ok(());
+      };
+      app.select_session(index);
+      send(
+        actions,
+        Action::Select {
+          session: id,
+          generation: app.generation,
+        },
+      )?;
+    }
+    crate::picker::PickerValue::Provider {
+      provider,
+      environment,
+    } => {
+      if environment.is_empty() {
+        app.notice = format!("{provider} 没有检测到可上传的凭据环境变量。");
+        return Ok(());
+      }
+      let navigation_revision = app.router.begin_request();
+      send(
+        actions,
+        Action::Resource {
+          session: None,
+          generation: app.generation,
+          navigation_revision,
+          source: String::new(),
+          command: crate::resource_command::ResourceCommand::ProviderUpload {
+            provider,
+            environment,
+          },
+        },
+      )?;
+      app.notice = "正在上传凭据…".into();
+    }
+    crate::picker::PickerValue::Skill { name, scope } => {
+      let session = app.selected_session().map(|session| session.id.clone());
+      let navigation_revision = app.router.begin_request();
+      send(
+        actions,
+        Action::Resource {
+          session,
+          generation: app.generation,
+          navigation_revision,
+          source: String::new(),
+          command: crate::resource_command::ResourceCommand::SkillInspect {
+            source: name,
+            scope,
+          },
+        },
+      )?;
+      app.notice = "正在读取技能…".into();
     }
   }
   Ok(())
