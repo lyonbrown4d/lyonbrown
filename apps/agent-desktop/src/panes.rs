@@ -12,7 +12,7 @@ use gpui_kit::{TestSupportExt as _, prelude::FluentBuilder as _, *};
 impl Desktop {
   pub(super) fn sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
     let colors = DesktopColors::get(cx);
-    let groups = self.vm.session_groups();
+    let groups = self.session_groups();
     let mut rows = Vec::new();
     let mut row_index: usize = 0;
     for (workspace, sessions) in groups {
@@ -119,7 +119,7 @@ impl Desktop {
           .min_h_0()
           .overflow_y_scroll()
           .children(rows)
-          .when(self.vm.sessions.is_empty(), |list| {
+          .when(self.sessions.is_empty(), |list| {
             list.child(
               div()
                 .p_2()

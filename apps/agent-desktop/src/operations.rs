@@ -1,24 +1,21 @@
+//! Chat-side commands towards agentd: connect, session creation and selection,
+//! run submission, cancellation, inspection and approvals. The run event stream
+//! lives in `operations::watch`.
+
 use crate::{
   connection::{Update, public_error},
   shell::Desktop,
-  tabs::{ScopedUpdate, TabSender},
+  tabs::ScopedUpdate,
 };
-use agent_client::AgentClient;
 use gpui_kit::*;
+
+mod watch;
+pub(crate) use watch::terminal;
+use watch::watch;
 
 impl Desktop {
   pub(super) fn connect(&mut self, cx: &mut Context<Self>) {
-    if self.persistence_loading {
-      return;
-    }
-    if self.tasks.read(cx).computer.read(cx).pending {
-      self.vm.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
-      cx.notify();
-      return;
-    }
-    if self.tasks.read(cx).pending_browser_operation {
-      self.vm.error = Some(crate::tabs::BROWSER_WAIT_MESSAGE.into());
-      cx.notify();
+    if !self.can_change_chat(cx) {
       return;
     }
     if self.any_active_work()
@@ -88,7 +85,7 @@ impl Desktop {
   }
 
   pub(super) fn select_session(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
-    if self.navigation.connecting || self.persistence_loading || !self.can_change_chat(cx) {
+    if !self.can_change_chat(cx) {
       return;
     }
     let Some(client) = self.client.clone() else {
@@ -276,40 +273,4 @@ impl Desktop {
     });
     cx.notify();
   }
-}
-
-pub(super) fn terminal(status: &str) -> bool {
-  matches!(
-    status.to_lowercase().as_str(),
-    "completed" | "failed" | "cancelled" | "uncertain"
-  )
-}
-
-async fn watch(
-  client: AgentClient,
-  id: String,
-  sender: TabSender,
-  after_cursor: u64,
-) -> anyhow::Result<()> {
-  let mut stream = client.watch_run(&id, after_cursor).await?;
-  while let Some(event) = stream.message().await? {
-    let approval_required = event.kind == "approval_required";
-    let completed = matches!(
-      event.kind.as_str(),
-      "run_completed" | "run_failed" | "run_cancelled" | "run_uncertain"
-    );
-    let _ = sender.send(Update::Event(event)).await;
-    if approval_required {
-      let _ = sender
-        .send(Update::Approvals(client.list_approvals(&id).await?))
-        .await;
-    }
-    if completed {
-      let _ = sender.send(Update::Run(client.get_run(&id).await?)).await;
-      return Ok(());
-    }
-  }
-  let run = client.get_run(&id).await?;
-  let _ = sender.send(Update::Run(run)).await;
-  Ok(())
 }

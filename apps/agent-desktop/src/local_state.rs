@@ -2,6 +2,9 @@
 use gpui_kit::component::{ThemeMode, dock::DockAreaState};
 use serde::{Deserialize, Serialize};
 
+/// Upper bound for locally restored chat tabs; allocation and validation share it.
+pub(crate) const MAX_TABS: usize = 64;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct DesktopState {
   pub tabs: Vec<TabState>,
@@ -35,7 +38,7 @@ pub(crate) struct EditorDraftState {
 impl DesktopState {
   pub(crate) fn validate(&self) -> anyhow::Result<()> {
     anyhow::ensure!(
-      !self.tabs.is_empty() && self.tabs.len() <= 64,
+      !self.tabs.is_empty() && self.tabs.len() <= MAX_TABS,
       "invalid desktop tab count"
     );
     let mut ids = std::collections::HashSet::with_capacity(self.tabs.len());

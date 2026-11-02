@@ -64,7 +64,7 @@ impl Desktop {
                   )
                 })
                 .child(self.composer_view(cx))
-                .when_some(self.vm.error.clone(), |column, error| {
+                .when_some(self.error_line(), |column, error| {
                   column.child(div().text_sm().text_color(cx.theme().danger).child(error))
                 }),
             ),
@@ -96,7 +96,7 @@ impl Desktop {
                       .enumerate()
                       .map(|(index, message)| self.message_row(index, message, window, cx)),
                   )
-                  .when_some(self.vm.error.clone(), |column, error| {
+                  .when_some(self.error_line(), |column, error| {
                     column.child(div().text_sm().text_color(cx.theme().danger).child(error))
                   }),
               ),

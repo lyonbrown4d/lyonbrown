@@ -1,59 +1,24 @@
 use crate::local_state::DesktopState;
 use crate::tabs::ScopedUpdate;
 use agent_client::local_state::LocalStateStore;
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 
-pub(crate) type LatestSnapshot = std::sync::Arc<std::sync::Mutex<Option<(u64, DesktopState)>>>;
+pub(crate) use super::command::{ActorConfig, Command, LatestSnapshot, ResultMessage};
 
-pub(crate) struct ActorConfig {
-  pub(crate) root: PathBuf,
-  pub(crate) endpoint: String,
-  pub(crate) node_id: String,
-  pub(crate) scope: String,
-  pub(crate) generation: u64,
+/// How a result reaches the bounded UI queue.
+///
+/// `Queue` waits for capacity, so results stay ordered and a burst cannot drop
+/// them silently. The wait is bounded: a wedged UI must not keep the actor from
+/// the `Stop` acknowledgement. The final flush is best-effort because it must
+/// acknowledge the store release even when no one drains the queue any more.
+#[derive(Clone, Copy)]
+enum Delivery {
+  Queue,
+  BestEffort,
 }
 
-#[derive(Debug)]
-pub(crate) enum Command {
-  Save {
-    scope: String,
-    generation: u64,
-    sequence: u64,
-  },
-  Stop {
-    scope: String,
-    generation: u64,
-    sequence: u64,
-    state: Option<Box<DesktopState>>,
-    ack: Option<tokio::sync::oneshot::Sender<()>>,
-  },
-}
-
-#[derive(Debug)]
-pub(crate) enum ResultMessage {
-  Loaded {
-    scope: String,
-    generation: u64,
-    state: Option<Box<DesktopState>>,
-  },
-  Failed {
-    scope: String,
-    generation: u64,
-    message: String,
-  },
-  Saved {
-    scope: String,
-    generation: u64,
-    sequence: u64,
-  },
-  SaveFailed {
-    scope: String,
-    generation: u64,
-    sequence: u64,
-    message: String,
-  },
-}
+const DELIVERY_TIMEOUT: Duration = Duration::from_secs(2);
 
 pub(crate) fn start(
   runtime: std::sync::Arc<tokio::runtime::Runtime>,
@@ -72,10 +37,24 @@ pub(crate) fn start(
   sender
 }
 
-fn send_important(replies: async_channel::Sender<ScopedUpdate>, update: ScopedUpdate) {
-  tokio::spawn(async move {
-    let _ = replies.send(update).await;
-  });
+async fn deliver(
+  replies: &async_channel::Sender<ScopedUpdate>,
+  update: ScopedUpdate,
+  delivery: Delivery,
+) {
+  match delivery {
+    Delivery::Queue => {
+      let sent = tokio::time::timeout(DELIVERY_TIMEOUT, replies.send(update)).await;
+      if !matches!(sent, Ok(Ok(()))) {
+        tracing::warn!("desktop state result missed its delivery deadline");
+      }
+    }
+    Delivery::BestEffort => {
+      if replies.try_send(update).is_err() {
+        tracing::warn!("desktop state result dropped while the final flush released the store");
+      }
+    }
+  }
 }
 
 async fn run(
@@ -103,36 +82,44 @@ async fn run(
   let (store, initial) = match opened {
     Ok(Ok(opened)) => opened,
     Ok(Err(error)) => {
-      send_important(
-        replies.clone(),
+      let message = error.to_string();
+      deliver(
+        &replies,
         ScopedUpdate::Persistence(ResultMessage::Failed {
           scope,
           generation,
-          message: error.to_string(),
+          message,
         }),
-      );
+        Delivery::Queue,
+      )
+      .await;
       return;
     }
     Err(error) => {
-      send_important(
-        replies.clone(),
+      let message = error.to_string();
+      deliver(
+        &replies,
         ScopedUpdate::Persistence(ResultMessage::Failed {
           scope,
           generation,
-          message: error.to_string(),
+          message,
         }),
-      );
+        Delivery::Queue,
+      )
+      .await;
       return;
     }
   };
-  send_important(
-    replies.clone(),
+  deliver(
+    &replies,
     ScopedUpdate::Persistence(ResultMessage::Loaded {
       scope: scope.clone(),
       generation,
       state: initial.map(Box::new),
     }),
-  );
+    Delivery::Queue,
+  )
+  .await;
 
   let store = std::sync::Arc::new(store);
   let mut pending: Option<u64> = None;
@@ -145,7 +132,16 @@ async fn run(
           if pending.take().is_some() {
             let snapshot = latest.lock().ok().and_then(|latest| latest.clone());
             if let Some((sequence, state)) = snapshot {
-              write_latest(store.clone(), state, scope.clone(), generation, sequence, &replies).await;
+              write_latest(
+                store.clone(),
+                state,
+                scope.clone(),
+                generation,
+                sequence,
+                &replies,
+                Delivery::Queue,
+              )
+              .await;
             }
           }
           continue;
@@ -180,6 +176,7 @@ async fn run(
               generation,
               sequence,
               &replies,
+              Delivery::BestEffort,
             )
             .await;
           } else if pending.take().is_some()
@@ -192,6 +189,7 @@ async fn run(
               generation,
               sequence,
               &replies,
+              Delivery::BestEffort,
             )
             .await;
           }
@@ -210,6 +208,7 @@ async fn run(
             generation,
             sequence,
             &replies,
+            Delivery::Queue,
           )
           .await;
         }
@@ -230,53 +229,65 @@ async fn write_latest(
   generation: u64,
   sequence: u64,
   replies: &async_channel::Sender<ScopedUpdate>,
+  delivery: Delivery,
 ) {
   if let Err(error) = state.validate() {
     let message = error.to_string();
-    send_important(
-      replies.clone(),
+    deliver(
+      replies,
       ScopedUpdate::Persistence(ResultMessage::SaveFailed {
         scope,
         generation,
         sequence,
         message,
       }),
-    );
+      delivery,
+    )
+    .await;
     return;
   }
   match tokio::task::spawn_blocking(move || store.save(&state)).await {
     Ok(Ok(())) => {
-      let _ = replies.try_send(ScopedUpdate::Persistence(ResultMessage::Saved {
-        scope,
-        generation,
-        sequence,
-      }));
+      deliver(
+        replies,
+        ScopedUpdate::Persistence(ResultMessage::Saved {
+          scope,
+          generation,
+          sequence,
+        }),
+        delivery,
+      )
+      .await;
     }
     Ok(Err(error)) => {
       let message = error.to_string();
       tracing::error!(scope, generation, error = %message, "desktop state save failed");
-      send_important(
-        replies.clone(),
+      deliver(
+        replies,
         ScopedUpdate::Persistence(ResultMessage::SaveFailed {
           scope,
           generation,
           sequence,
           message,
         }),
-      );
+        delivery,
+      )
+      .await;
     }
     Err(error) => {
       let message = error.to_string();
       tracing::error!(scope, generation, error = %message, "desktop state save worker failed");
-      send_important(
-        replies.clone(),
+      deliver(
+        replies,
         ScopedUpdate::Persistence(ResultMessage::SaveFailed {
           scope,
           generation,
           sequence,
           message,
         }),
-      );
+        delivery,
+      )
+      .await;
     }
   }
 }

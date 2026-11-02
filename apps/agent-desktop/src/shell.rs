@@ -1,11 +1,14 @@
+//! The desktop entity: window-level state, construction, teardown, and the
+//! completion pump. Per-tab presentation state lives in `tabs`, commands in
+//! `operations`, and the render root in `views::root`.
+
 use crate::workbench;
 use agent_client::AgentClient;
 use gpui_kit::component::{
-  ActiveTheme,
   dock::DockArea,
   input::{InputState, TextareaState},
 };
-use gpui_kit::{TestSupportExt as _, *};
+use gpui_kit::*;
 use std::sync::Arc;
 
 actions!(
@@ -31,12 +34,17 @@ pub struct Desktop {
   pub(super) data_dir: std::path::PathBuf,
   pub(super) sender: async_channel::Sender<crate::tabs::ScopedUpdate>,
   pub(super) client: Option<AgentClient>,
+  /// Presentation state of the active chat tab only. Inactive tabs keep their own
+  /// `DesktopViewModel` inside `Navigation::inactive`, and `ChatState::swap_with`
+  /// is the only place where the two are exchanged.
   pub(crate) vm: crate::view_model::DesktopViewModel,
+  /// Window-level daemon session list shared by the sidebar across chat tabs; it
+  /// is never swapped per tab.
+  pub(super) sessions: Vec<agent_protocol::v1::Session>,
   pub(super) endpoint: Entity<InputState>,
   pub(super) token: Entity<InputState>,
   pub(super) workspace: Entity<InputState>,
   pub(super) composer: Entity<TextareaState>,
-  pub(super) recovery: Option<crate::recovery::RecoveryState>,
   pub(super) dock: Entity<DockArea>,
   pub(super) main_layout: Entity<gpui_kit::component::resizable::ResizableState>,
   pub(super) tasks: Entity<workbench::Workbench>,
@@ -46,6 +54,10 @@ pub struct Desktop {
   pub(super) settings_focus: FocusHandle,
   pub(super) resources: crate::resources::ResourcePanels,
   pub(super) navigation: crate::tabs::Navigation,
+  /// Why the last chat-switch or reconnect attempt was refused. Only reasons
+  /// with a user-facing message are recorded, so `Some` always means a wait
+  /// banner is displayed; `vm.error` stays reserved for real errors.
+  pub(super) blocked: Option<crate::block::BlockReason>,
   pub(super) persistence_sender: Option<tokio::sync::mpsc::Sender<crate::persistence::Command>>,
   pub(super) persistence_scope: Option<String>,
   pub(super) persistence_generation: u64,
@@ -54,6 +66,8 @@ pub struct Desktop {
   pub(super) last_persisted: Option<String>,
   pub(super) last_enqueued: Option<String>,
   pub(super) persistence_sequence: u64,
+  pub(super) local_state_dirty: bool,
+  pub(super) local_state_key: crate::persistence::SnapshotKey,
   pub(super) latest_state: Option<crate::local_state::DesktopState>,
   pub(super) latest_shared: crate::persistence::LatestSnapshot,
   pub(super) flush_control: crate::persistence::FlushControl,
@@ -69,14 +83,12 @@ impl Drop for Desktop {
   fn drop(&mut self) {
     if let (Some(sender), Some(scope)) = (&self.persistence_sender, &self.persistence_scope) {
       let sender = sender.clone();
-      let (ack, completion) = tokio::sync::oneshot::channel();
-      let command = crate::persistence::Command::Stop {
-        scope: scope.clone(),
-        generation: self.persistence_generation,
-        sequence: self.persistence_sequence,
-        state: self.latest_state.clone().map(Box::new),
-        ack: Some(ack),
-      };
+      let (command, completion) = crate::persistence::Command::stop(
+        scope.clone(),
+        self.persistence_generation,
+        self.persistence_sequence,
+        self.latest_state.clone(),
+      );
       if let Ok(mut flush) = self.flush_control.lock() {
         flush.sender = None;
         flush.completion = Some(completion);
@@ -192,6 +204,7 @@ impl Desktop {
       sender,
       client: None,
       vm: crate::view_model::DesktopViewModel::default(),
+      sessions: Vec::new(),
       endpoint: cx.new(|cx| {
         InputState::new(window, cx)
           .default_value(settings.endpoint.clone())
@@ -209,7 +222,6 @@ impl Desktop {
       }),
       workspace,
       composer,
-      recovery: None,
       dock,
       main_layout,
       tasks,
@@ -219,6 +231,7 @@ impl Desktop {
       settings_focus: cx.focus_handle(),
       resources,
       navigation: crate::tabs::Navigation::default(),
+      blocked: None,
       persistence_sender: None,
       persistence_scope: None,
       persistence_generation: 0,
@@ -227,6 +240,8 @@ impl Desktop {
       last_persisted: None,
       last_enqueued: None,
       persistence_sequence: 0,
+      local_state_dirty: false,
+      local_state_key: crate::persistence::SnapshotKey::default(),
       latest_state: None,
       latest_shared: std::sync::Arc::new(std::sync::Mutex::new(None)),
       flush_control,
@@ -239,73 +254,16 @@ impl Desktop {
     }
   }
 
+  /// Drops the recorded wait once its own operation has finished. The enum is
+  /// compared, never the banner text, so wording stays free to change.
   fn clear_finished_wait(&mut self, cx: &mut Context<Self>) {
-    let tasks = self.tasks.read(cx);
-    let finished = match self.vm.error.as_deref() {
-      Some(crate::tabs::SAVE_WAIT_MESSAGE) => !tasks.pending_save,
-      Some(crate::tabs::BROWSER_WAIT_MESSAGE) => !tasks.pending_browser_operation,
-      Some(crate::tabs::COMPUTER_WAIT_MESSAGE) => !tasks.computer.read(cx).pending,
-      _ => false,
+    let Some(reason) = self.blocked else {
+      return;
     };
-    if finished {
-      self.vm.error = None;
-      cx.notify();
+    if self.block_reason_holds(reason, cx) {
+      return;
     }
-  }
-}
-
-impl Render for Desktop {
-  fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-    self.queue_snapshot(cx);
-    div()
-      .id("desktop")
-      .test_support()
-      .key_context("Desktop")
-      .on_action(cx.listener(|this, _: &SendPrompt, window, cx| this.send(window, cx)))
-      .on_action(cx.listener(|this, _: &FocusComposer, window, cx| {
-        this.close_settings(window, cx);
-      }))
-      .on_action(cx.listener(|this, _: &ToggleSidebar, _, cx| {
-        if !this.persistence_loading && !this.navigation.connecting {
-          this.show_sidebar = !this.show_sidebar;
-        }
-        cx.notify();
-      }))
-      .on_action(cx.listener(|this, _: &ToggleWorkbench, _, cx| {
-        if !this.persistence_loading && !this.navigation.connecting {
-          this.show_workbench = !this.show_workbench;
-        }
-        cx.notify();
-      }))
-      .on_action(cx.listener(|this, _: &OpenSettings, window, cx| this.open_settings(window, cx)))
-      .on_action(cx.listener(|this, _: &CloseSettings, window, cx| {
-        this.close_settings(window, cx);
-      }))
-      .on_action(cx.listener(|this, _: &NavigateBack, window, cx| {
-        if this.router.back() {
-          this.focus_route(window, cx);
-        }
-      }))
-      .on_action(cx.listener(|this, _: &NavigateForward, window, cx| {
-        if this.router.forward() {
-          this.focus_route(window, cx);
-        }
-      }))
-      .on_action(cx.listener(|this, _: &NewChatTab, window, cx| this.new_chat_tab(window, cx)))
-      .on_action(cx.listener(|this, _: &CloseChatTab, window, cx| {
-        if this.router.is_settings() {
-          this.close_settings(window, cx);
-        } else {
-          this.close_active_chat_tab(window, cx);
-        }
-      }))
-      .size_full()
-      .flex()
-      .flex_col()
-      .bg(cx.theme().background)
-      .text_color(cx.theme().foreground)
-      .text_sm()
-      .child(self.chrome(window, cx))
-      .child(self.route_layout(window, cx))
+    self.blocked = None;
+    cx.notify();
   }
 }

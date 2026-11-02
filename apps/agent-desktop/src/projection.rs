@@ -1,4 +1,6 @@
-use crate::{connection::Update, message::ChatMessage, operations::terminal, shell::Desktop};
+use crate::{
+  connection::Update, events, message::ChatMessage, operations::terminal, shell::Desktop,
+};
 use gpui_kit::*;
 
 impl Desktop {
@@ -12,7 +14,7 @@ impl Desktop {
     match update {
       Update::Recovery(id, report) => self.apply_recovery(id, *report, cx),
       Update::RecoveryError(id, error) => {
-        if let Some(state) = self.recovery.as_mut().filter(|state| state.run_id == id) {
+        if let Some(state) = self.vm.recovery.as_mut().filter(|state| state.run_id == id) {
           state.pending = false;
           state.inspected = false;
           state.error = Some(error);
@@ -40,7 +42,7 @@ impl Desktop {
           .as_deref()
           .is_some_and(|scope| self.persistence_scope.as_deref() == Some(scope));
         if same_identity {
-          if let Some(state) = &mut self.recovery {
+          if let Some(state) = &mut self.vm.recovery {
             state.inspected = false;
           }
           let client = *client;
@@ -83,7 +85,7 @@ impl Desktop {
             task.abort();
           }
           self.client = Some(client);
-          self.vm.sessions = sessions;
+          self.sessions = sessions;
           self.vm.selected = selected;
           self.vm.active_run = None;
           self.vm.cursor = 0;
@@ -111,7 +113,7 @@ impl Desktop {
         if let Some(task) = self.watch_task.take() {
           task.abort();
         }
-        self.recovery = None;
+        self.vm.recovery = None;
         self.vm.active_run = None;
         self.vm.cursor = 0;
         self.vm.error = None;
@@ -120,18 +122,15 @@ impl Desktop {
         self.vm.runs.clear();
         self.vm.approvals.clear();
         self.client = Some(*client);
-        self.vm.sessions = sessions;
+        self.sessions = sessions;
         self.vm.status = "Connected · authenticated".into();
         self.vm.busy = false;
         self.start_persistence(&endpoint, &node_id, window, cx);
       }
       Update::Session(session, keep_busy) => {
         self.vm.selected = Some(session.id.clone());
-        self
-          .vm
-          .sessions
-          .retain(|previous| previous.id != session.id);
-        self.vm.sessions.insert(0, session);
+        self.sessions.retain(|previous| previous.id != session.id);
+        self.sessions.insert(0, session);
         self.vm.conversation.clear();
         self.vm.runs.clear();
         self.vm.approvals.clear();
@@ -183,47 +182,51 @@ impl Desktop {
         {
           return;
         }
+        let decoded = events::decode(&event);
+        let status = decoded.status().map(str::to_owned);
+        let events::DecodedEvent {
+          kind,
+          payload,
+          event: run_event,
+        } = decoded;
         self.vm.cursor = event.cursor;
-        self.vm.status = format!("{} · event {}", event.kind, event.cursor);
-        let payload: serde_json::Value =
-          serde_json::from_str(&event.payload_json).unwrap_or_default();
+        self.vm.status = format!("{} · event {}", kind, event.cursor);
         if let Some(run) = self.vm.runs.iter_mut().find(|run| run.id == event.run_id) {
-          if let Some(status) = payload["status"].as_str() {
-            run.status = status.to_string();
-          } else if event.kind == "approval_required" {
+          if let Some(status) = status {
+            run.status = status;
+          } else if run_event == events::RunEvent::ApprovalRequired {
             run.status = "awaiting_approval".into();
           }
         }
-        if event.kind == "text_delta" {
-          if let Some(text) = payload["text"].as_str() {
+        match run_event {
+          events::RunEvent::TextDelta { text: Some(text) } => {
             if let Some(message) = self
               .vm
               .conversation
               .last_mut()
               .filter(|message| message.role == "Lyonbrown")
             {
-              message.append(text, cx);
+              message.append(&text, cx);
             } else {
               self
                 .vm
                 .conversation
-                .push(ChatMessage::new("Lyonbrown", text.to_string(), cx));
+                .push(ChatMessage::new("Lyonbrown", text, cx));
             }
           }
-        } else if event.kind == "tool_started" || event.kind == "tool_finished" {
-          self.vm.conversation.push(ChatMessage::new(
-            "Tool",
-            format!(
-              "**{}** · {}\n\n```json\n{}\n```",
-              payload["name"]
-                .as_str()
-                .or_else(|| payload["tool"].as_str())
-                .unwrap_or("Tool"),
-              event.kind,
-              serde_json::to_string_pretty(&payload).unwrap_or_default()
-            ),
-            cx,
-          ));
+          events::RunEvent::ToolStarted { name } | events::RunEvent::ToolFinished { name } => {
+            self.vm.conversation.push(ChatMessage::new(
+              "Tool",
+              format!(
+                "**{}** · {}\n\n```json\n{}\n```",
+                name,
+                kind,
+                serde_json::to_string_pretty(&payload).unwrap_or_default()
+              ),
+              cx,
+            ));
+          }
+          _ => {}
         }
       }
       Update::Run(run) => {

@@ -110,7 +110,7 @@ async fn lost_recovery_reply_requires_inspection_and_never_submits_again(cx: &mu
     .unwrap();
   cx.update_window(harness.window.into(), |_, window, cx| {
     harness.view.update(cx, |view, cx| {
-      let state = view.recovery.as_mut().unwrap();
+      let state = view.vm.recovery.as_mut().unwrap();
       state.intent = Some(request);
       state.pending = true;
       view.new_chat_tab(window, cx);

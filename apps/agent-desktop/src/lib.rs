@@ -1,11 +1,13 @@
 #[cfg(test)]
 extern crate self as agent_desktop;
 
+mod block;
 mod chrome;
 mod completion;
 mod composition;
 mod computer;
 mod connection;
+mod events;
 mod layout;
 mod local_state;
 mod message;

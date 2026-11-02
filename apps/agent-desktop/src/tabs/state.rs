@@ -1,5 +1,4 @@
-use crate::{message::ChatMessage, shell::Desktop};
-use agent_protocol::v1::{Approval, Run};
+use crate::{shell::Desktop, view_model::DesktopViewModel};
 use gpui_kit::{
   component::input::{InputState, TextareaState},
   *,
@@ -9,6 +8,7 @@ use std::collections::BTreeMap;
 pub(crate) struct Navigation {
   pub active: u64,
   pub order: Vec<u64>,
+  /// Inactive tabs; each entry owns its own `DesktopViewModel`.
   pub inactive: BTreeMap<u64, ChatState>,
   pub unbound: BTreeMap<u64, String>,
   pub connecting: bool,
@@ -32,7 +32,7 @@ impl Default for Navigation {
 
 impl Navigation {
   pub fn allocate(&mut self) -> Option<u64> {
-    if self.order.len() >= 64 {
+    if self.order.len() >= crate::local_state::MAX_TABS {
       return None;
     }
     let id = self.next_id;
@@ -42,17 +42,10 @@ impl Navigation {
   }
 }
 
+/// An inactive chat tab. The active tab's equivalent state lives on `Desktop`
+/// (`Desktop.vm`, `composer`, `workspace`, `watch_task`).
 pub(crate) struct ChatState {
-  pub selected: Option<String>,
-  pub runs: Vec<Run>,
-  pub active_run: Option<String>,
-  cursor: u64,
-  pub busy: bool,
-  error: Option<String>,
-  status: String,
-  conversation: Vec<ChatMessage>,
-  pub approvals: Vec<Approval>,
-  recovery: Option<crate::recovery::RecoveryState>,
+  pub vm: DesktopViewModel,
   pub(super) composer: Entity<TextareaState>,
   pub(super) workspace: Entity<InputState>,
   _persistence_watch: [Subscription; 2],
@@ -80,22 +73,17 @@ impl ChatState {
       cx.observe(&composer, |desktop, _, cx| desktop.queue_snapshot(cx)),
       cx.observe(&workspace, |desktop, _, cx| desktop.queue_snapshot(cx)),
     ];
-    Self {
-      selected: None,
-      runs: Vec::new(),
-      active_run: None,
-      cursor: 0,
-      busy: false,
-      error: None,
+    let vm = DesktopViewModel {
       status: if connected {
         "Connected · authenticated"
       } else {
         "Disconnected"
       }
       .into(),
-      conversation: Vec::new(),
-      approvals: Vec::new(),
-      recovery: None,
+      ..DesktopViewModel::default()
+    };
+    Self {
+      vm,
       watch_task: None,
       composer,
       workspace,
@@ -103,34 +91,29 @@ impl ChatState {
     }
   }
 
+  /// The single exchange point between the active tab (`Desktop`) and this
+  /// inactive tab. Nothing else may move per-tab state, and window-level state
+  /// such as `Desktop.sessions` is never swapped.
   pub fn swap_with(&mut self, desktop: &mut Desktop) {
-    std::mem::swap(&mut self.selected, &mut desktop.vm.selected);
-    std::mem::swap(&mut self.runs, &mut desktop.vm.runs);
-    std::mem::swap(&mut self.active_run, &mut desktop.vm.active_run);
-    std::mem::swap(&mut self.cursor, &mut desktop.vm.cursor);
-    std::mem::swap(&mut self.busy, &mut desktop.vm.busy);
-    std::mem::swap(&mut self.error, &mut desktop.vm.error);
-    std::mem::swap(&mut self.status, &mut desktop.vm.status);
-    std::mem::swap(&mut self.conversation, &mut desktop.vm.conversation);
-    std::mem::swap(&mut self.approvals, &mut desktop.vm.approvals);
-    std::mem::swap(&mut self.recovery, &mut desktop.recovery);
+    std::mem::swap(&mut self.vm, &mut desktop.vm);
     std::mem::swap(&mut self.composer, &mut desktop.composer);
     std::mem::swap(&mut self.workspace, &mut desktop.workspace);
     std::mem::swap(&mut self.watch_task, &mut desktop.watch_task);
   }
 
   pub fn reset_connection_preserving_session(&mut self) {
-    if let Some(state) = &mut self.recovery {
+    let vm = &mut self.vm;
+    if let Some(state) = &mut vm.recovery {
       state.inspected = false;
     }
-    self.runs.clear();
-    self.active_run = None;
-    self.cursor = 0;
-    self.busy = false;
-    self.error = None;
-    self.status = "Connected · authenticated".into();
-    self.conversation.clear();
-    self.approvals.clear();
+    vm.runs.clear();
+    vm.active_run = None;
+    vm.cursor = 0;
+    vm.busy = false;
+    vm.error = None;
+    vm.status = "Connected · authenticated".into();
+    vm.conversation.clear();
+    vm.approvals.clear();
     if let Some(task) = self.watch_task.take() {
       task.abort();
     }

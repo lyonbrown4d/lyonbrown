@@ -11,7 +11,9 @@ use crate::{Desktop, connection::Update};
 
 /// Per-chat presentation and an exact request retained for explicit retries.
 /// No old Harness state or authority is restored here.
-pub(super) struct RecoveryState {
+///
+/// Held by the per-tab `DesktopViewModel`, so it travels with its chat tab.
+pub(crate) struct RecoveryState {
   pub run_id: String,
   pub visible: bool,
   pub report: Option<v1::RunRecovery>,
@@ -29,11 +31,12 @@ impl Desktop {
       return;
     }
     if self
+      .vm
       .recovery
       .as_ref()
       .is_none_or(|state| state.run_id != id)
     {
-      self.recovery = Some(RecoveryState {
+      self.vm.recovery = Some(RecoveryState {
         run_id: id,
         visible: true,
         report: None,
@@ -53,7 +56,7 @@ impl Desktop {
         intent: None,
       });
     }
-    if let Some(state) = &mut self.recovery {
+    if let Some(state) = &mut self.vm.recovery {
       state.visible = true;
     }
     self.inspect_recovery(cx);
@@ -63,7 +66,7 @@ impl Desktop {
     let Some(client) = self.client.clone() else {
       return;
     };
-    let Some(state) = self.recovery.as_mut().filter(|state| !state.pending) else {
+    let Some(state) = self.vm.recovery.as_mut().filter(|state| !state.pending) else {
       return;
     };
     state.pending = true;
@@ -104,6 +107,7 @@ impl Desktop {
       return;
     };
     let Some(state) = self
+      .vm
       .recovery
       .as_mut()
       .filter(|state| !state.pending && state.inspected)
@@ -185,7 +189,7 @@ impl Desktop {
     report: v1::RunRecovery,
     cx: &mut Context<Self>,
   ) {
-    let Some(state) = self.recovery.as_mut().filter(|state| state.run_id == id) else {
+    let Some(state) = self.vm.recovery.as_mut().filter(|state| state.run_id == id) else {
       return;
     };
     if report.run.as_ref().is_none_or(|run| {
@@ -201,11 +205,8 @@ impl Desktop {
       .as_ref()
       .and_then(|result| result.session.clone())
     {
-      self
-        .vm
-        .sessions
-        .retain(|previous| previous.id != session.id);
-      self.vm.sessions.insert(0, session);
+      self.sessions.retain(|previous| previous.id != session.id);
+      self.sessions.insert(0, session);
     }
     state.report = Some(report);
     state.pending = false;
@@ -216,7 +217,7 @@ impl Desktop {
 
   pub(super) fn open_recovery_tasks(&mut self, window: &mut Window, cx: &mut Context<Self>) {
     if self.tasks.read(cx).task_pending {
-      if let Some(state) = &mut self.recovery {
+      if let Some(state) = &mut self.vm.recovery {
         state.error = Some("等待当前 Task 请求结束后再打开核对列表。".into());
       }
       cx.notify();

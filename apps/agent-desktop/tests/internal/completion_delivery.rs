@@ -53,23 +53,23 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
   });
 
   let workbench = cx.update(|cx| harness.view.read(cx).tasks.clone());
-  for (wait_message, reply) in [
+  for (reason, reply) in [
     (
-      crate::tabs::SAVE_WAIT_MESSAGE,
+      crate::block::BlockReason::SavePending,
       Reply::SaveError("save conflict".into()),
     ),
     (
-      crate::tabs::BROWSER_WAIT_MESSAGE,
+      crate::block::BlockReason::BrowserPending,
       Reply::BrowserOperationError("browser unavailable".into()),
     ),
   ] {
     cx.update(|cx| {
       harness
         .view
-        .update(cx, |view, _| view.vm.error = Some(wait_message.into()));
+        .update(cx, |view, _| view.blocked = Some(reason));
       workbench.update(cx, |view, _| {
-        view.pending_save = wait_message == crate::tabs::SAVE_WAIT_MESSAGE;
-        view.pending_browser_operation = wait_message == crate::tabs::BROWSER_WAIT_MESSAGE;
+        view.pending_save = reason == crate::block::BlockReason::SavePending;
+        view.pending_browser_operation = reason == crate::block::BlockReason::BrowserPending;
         view
           .sender
           .try_send((view.generation, reply))
@@ -78,10 +78,14 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
     });
     cx.run_until_parked();
     cx.update(|cx| {
+      let view = harness.view.read(cx);
       assert!(
-        harness.view.read(cx).vm.error.is_none(),
-        "completed work clears close/switch wait"
+        view.blocked.is_none(),
+        "completed work clears the recorded wait reason"
       );
+      // The earlier transport error stays in `vm.error`: wait text is derived
+      // from `blocked`, so completion must not clear a real error either.
+      assert_eq!(view.vm.error.as_deref(), Some("completion 255"));
       assert!(!workbench.read(cx).pending_save);
       assert!(!workbench.read(cx).pending_browser_operation);
     });
@@ -89,7 +93,7 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
 
   cx.update(|cx| {
     harness.view.update(cx, |view, _| {
-      view.vm.error = Some(crate::tabs::COMPUTER_WAIT_MESSAGE.into());
+      view.blocked = Some(crate::block::BlockReason::ComputerPending);
     });
     workbench.read(cx).computer.clone().update(cx, |view, _| {
       view.pending = true;
@@ -101,7 +105,11 @@ async fn burst_completion_and_pending_operation_waits_wake_without_advancing_clo
   });
   cx.run_until_parked();
   cx.update(|cx| {
-    assert!(harness.view.read(cx).vm.error.is_none());
+    assert!(harness.view.read(cx).blocked.is_none());
+    assert_eq!(
+      harness.view.read(cx).vm.error.as_deref(),
+      Some("completion 255")
+    );
     assert!(!workbench.read(cx).computer.read(cx).pending);
   });
 }

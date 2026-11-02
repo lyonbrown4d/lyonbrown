@@ -1,106 +1,18 @@
-use crate::local_state::DesktopState;
 use crate::{shell::Desktop, tabs::ScopedUpdate};
+mod command;
+mod flush;
 mod layout;
 mod snapshot;
 mod worker;
+pub(crate) use self::command::{Command, LatestSnapshot, ResultMessage};
+pub(crate) use self::flush::{FlushControl, FlushState, quit_flush};
+pub(crate) use self::snapshot::SnapshotKey;
 use self::worker::{ActorConfig, start};
-pub(crate) use self::worker::{Command, LatestSnapshot, ResultMessage};
 use gpui_kit::component::Theme;
 use gpui_kit::*;
 use std::collections::HashSet;
-use tokio::sync::mpsc::Sender;
-
-pub(crate) type FlushControl = std::sync::Arc<std::sync::Mutex<FlushState>>;
-
-#[derive(Default)]
-pub(crate) struct FlushState {
-  pub(crate) sender: Option<Sender<Command>>,
-  pub(crate) scope: Option<String>,
-  pub(crate) generation: u64,
-  pub(crate) sequence: u64,
-  pub(crate) state: Option<DesktopState>,
-  pub(crate) completion: Option<tokio::sync::oneshot::Receiver<()>>,
-}
-
-pub(crate) async fn quit_flush(control: FlushControl) {
-  let pending = {
-    let Ok(mut state) = control.lock() else {
-      return;
-    };
-    if let Some(completion) = state.completion.take() {
-      Some((None, completion))
-    } else if let (Some(sender), Some(scope)) = (state.sender.take(), state.scope.take()) {
-      let (ack, completion) = tokio::sync::oneshot::channel();
-      Some((
-        Some((
-          sender,
-          Command::Stop {
-            scope,
-            generation: state.generation,
-            sequence: state.sequence,
-            state: state.state.take().map(Box::new),
-            ack: Some(ack),
-          },
-        )),
-        completion,
-      ))
-    } else {
-      None
-    }
-  };
-  if let Some((send, completion)) = pending {
-    if let Some((sender, command)) = send {
-      let _ = sender.send(command).await;
-    }
-    let _ = completion.await;
-  }
-}
 
 impl Desktop {
-  /// Flush pending local state and release its exclusive store lock.
-  ///
-  /// The desktop normally calls this from the application quit hook. It is
-  /// also useful to coordinate a view replacement before reopening the same
-  /// client state directory.
-  #[doc(hidden)]
-  pub fn flush_local_state(
-    &mut self,
-  ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>> {
-    let sender = self.persistence_sender.take();
-    let scope = self.persistence_scope.take();
-    let generation = self.persistence_generation;
-    let sequence = self.persistence_sequence;
-    let state = self.latest_state.clone();
-    let (ack, completion) = tokio::sync::oneshot::channel();
-    if let Ok(mut flush) = self.flush_control.lock() {
-      flush.sender = None;
-      flush.scope = None;
-      flush.state = None;
-      flush.completion = None;
-    }
-    let should_wait = if let (Some(sender), Some(scope)) = (sender, scope) {
-      self.runtime.spawn(async move {
-        let _ = sender
-          .send(Command::Stop {
-            scope,
-            generation,
-            sequence,
-            state: state.map(Box::new),
-            ack: Some(ack),
-          })
-          .await;
-      });
-      Some(completion)
-    } else {
-      None
-    };
-    Box::pin(async move {
-      if let Some(completion) = should_wait {
-        let _ = completion.await;
-      }
-    })
-  }
-
   pub(super) fn start_persistence(
     &mut self,
     endpoint: &str,
@@ -126,14 +38,12 @@ impl Desktop {
       &self.latest_state,
     ) {
       let sender = sender.clone();
-      let (ack, completion) = tokio::sync::oneshot::channel();
-      let command = Command::Stop {
-        scope: previous_scope.clone(),
-        generation: self.persistence_generation,
-        sequence: self.persistence_sequence,
-        state: Some(Box::new(state.clone())),
-        ack: Some(ack),
-      };
+      let (command, completion) = Command::stop(
+        previous_scope.clone(),
+        self.persistence_generation,
+        self.persistence_sequence,
+        Some(state.clone()),
+      );
       self.runtime.spawn(async move {
         let _ = sender.send(command).await;
       });
@@ -228,7 +138,6 @@ impl Desktop {
         if let Some(state) = state {
           let state = *state;
           let sessions = self
-            .vm
             .sessions
             .iter()
             .map(|session| session.id.clone())

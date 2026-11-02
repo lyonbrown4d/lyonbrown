@@ -1,6 +1,8 @@
 mod browser;
+mod dispatch;
 mod drafts;
 pub(crate) mod files;
+mod files_view;
 mod frames;
 mod git;
 mod ime;
@@ -8,6 +10,7 @@ mod input;
 mod layout;
 pub(crate) use layout::select_tasks;
 mod replies;
+mod session_bind;
 pub(crate) mod state;
 mod tasks;
 mod watch;

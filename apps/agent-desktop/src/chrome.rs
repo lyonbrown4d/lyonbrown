@@ -16,7 +16,6 @@ impl Desktop {
       "设置".to_string()
     } else {
       self
-        .vm
         .sessions
         .iter()
         .find(|session| Some(&session.id) == self.vm.selected.as_ref())

@@ -4,7 +4,7 @@ use gpui_kit::component::{Disableable, Sizable, button::Button, input::Textarea}
 
 impl Desktop {
   pub(crate) fn recovery_view(&self, cx: &mut Context<Self>) -> AnyElement {
-    let Some(state) = &self.recovery else {
+    let Some(state) = &self.vm.recovery else {
       return div().into_any_element();
     };
     let blocked = state.pending || self.navigation.connecting || self.persistence_loading;
@@ -53,7 +53,7 @@ impl Desktop {
               .disabled(blocked)
               .on_click(cx.listener(|this, _, window, cx| {
                 // Hiding the form does not discard a possibly dispatched request.
-                if let Some(state) = &mut this.recovery {
+                if let Some(state) = &mut this.vm.recovery {
                   state.visible = false;
                 }
                 this.composer.read(cx).focus_handle(cx).focus(window, cx);

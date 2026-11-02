@@ -19,7 +19,12 @@ pub struct DesktopSnapshot {
   pub draft: String,
   pub messages: Vec<(String, String)>,
   pub approvals: Vec<(String, String, String)>,
+  /// Real error first, otherwise the current wait banner.
   pub error: Option<String>,
+  /// Reason the desktop is refusing to switch chats or reconnect, if it is
+  /// recording one. Reported by name so this public snapshot does not leak the
+  /// crate-private `BlockReason` type.
+  pub blocked: Option<&'static str>,
   pub busy: bool,
   pub recovery: Option<RecoverySnapshot>,
   pub workbench: WorkbenchSnapshot,
@@ -71,7 +76,6 @@ impl Desktop {
       tabs: self.chat_tab_snapshots(cx),
       status: self.vm.status.clone(),
       session_titles: self
-        .vm
         .sessions
         .iter()
         .map(|session| session.title.clone())
@@ -108,9 +112,10 @@ impl Desktop {
           )
         })
         .collect(),
-      error: self.vm.error.clone(),
+      error: self.error_line(),
+      blocked: self.blocked.map(crate::block::BlockReason::label),
       busy: self.vm.busy,
-      recovery: self.recovery.as_ref().map(|state| RecoverySnapshot {
+      recovery: self.vm.recovery.as_ref().map(|state| RecoverySnapshot {
         run_id: state.run_id.clone(),
         pending: state.pending,
         inspected: state.inspected,

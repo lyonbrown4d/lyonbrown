@@ -61,7 +61,7 @@ impl Desktop {
             .child("Finish active work and save file edits before changing the connection."),
         )
       })
-      .when_some(self.vm.error.clone(), |this, error| {
+      .when_some(self.error_line(), |this, error| {
         this.child(
           div()
             .p_3()

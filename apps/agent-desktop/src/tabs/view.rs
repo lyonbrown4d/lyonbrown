@@ -33,7 +33,7 @@ impl Desktop {
             .navigation
             .inactive
             .get(&id)
-            .is_some_and(|state| state.busy || !state.approvals.is_empty())
+            .is_some_and(|state| state.vm.busy || !state.vm.approvals.is_empty())
         };
         let marker = if tab.active_run.is_some() || pending {
           " ●"

@@ -66,17 +66,8 @@ fn stop_ack_survives_a_full_presentation_queue() {
       theme: ThemeMode::Light,
       editor_drafts: Vec::new(),
     };
-    let (ack, completion) = tokio::sync::oneshot::channel();
-    sender
-      .send(Command::Stop {
-        scope,
-        generation: 1,
-        sequence: 1,
-        state: Some(Box::new(state)),
-        ack: Some(ack),
-      })
-      .await
-      .expect("send final flush");
+    let (command, completion) = Command::stop(scope, 1, 1, Some(state));
+    sender.send(command).await.expect("send final flush");
     tokio::time::timeout(Duration::from_secs(3), completion)
       .await
       .expect("final flush must not wait for UI queue")

@@ -122,9 +122,9 @@ cargo run -p agent-desktop
 
 桌面使用 GPUI 和 `gpui-kit` 组件，包含按工作区分组的会话侧栏、多聊天标签页、对话输入，以及 Browser、Computer、Files、Editor、Diff 和 Tasks 停靠面板。自定义标题栏复用组件库的 `TitleBar`；macOS 使用系统原生的关闭、最小化和缩放按钮。左侧会话栏默认展开，右侧工作台默认收起。标题栏上的左右面板按钮分别控制两侧；即使两侧均已收起，也可以从标题栏重新展开；左侧收起后保留紧凑图标栏。助手回复以扁平正文显示，输入区与工作区信息分层放置，明暗外观共用 `theme.rs` 的颜色和尺寸定义。
 
-桌面按 MVVM 组织呈现状态：`DesktopViewModel` 保存当前会话选择、运行、事件游标、消息、审批和状态信息，并按服务端的 `Session.workspace` 分组会话。它不保存网络客户端、异步运行时或连接凭据。`operations.rs` 通过客户端端口发起请求，`projection.rs` 将回复投影到状态；GPUI 视图读取状态并复用 `gpui-kit` 的按钮、输入、Markdown、停靠和调整尺寸组件。
+桌面按 MVVM 组织呈现状态：`DesktopViewModel` 只代表一个聊天标签，保存该标签的所选会话、运行、事件游标、消息、审批、异常运行核对草稿和状态信息，切换标签时与 `ChatState` 整体交换，不逐字段搬运。窗口级的 daemon 会话列表和按 `Session.workspace` 的分组由 `Desktop` 持有，不随标签交换。两者都不保存网络客户端、异步运行时或连接凭据。`operations.rs` 通过客户端端口发起请求，`projection.rs` 用 `events.rs` 解码后的运行事件把回复投影到状态；GPUI 视图读取状态并复用 `gpui-kit` 的按钮、输入、Markdown、停靠和调整尺寸组件。
 
-后台结果通过 `async-channel` 2.5.0 的有界队列投递，队列满时生产者异步等待；GPUI 在主线程应用结果，并丢弃过期会话或代次的回复。Browser 帧刷新保留独立的 160 毫秒定时器，Computer 宿主存活检查保留独立的 80 毫秒定时器。窗口关闭时清理本地订阅与宿主，daemon 作业保留自身生命周期。
+后台结果通过 `async-channel` 2.5.0 的有界队列投递，队列满时生产者异步等待；GPUI 在主线程应用结果，并丢弃过期会话或代次的回复。本地界面状态只在变更后写入：观察者或变更点置脏，帧入口先用廉价快照键比对，未变化的帧既不重建也不序列化 `DesktopState`；持久化 actor 防抖落盘，各退出路径复用同一个 Stop 构造。切换聊天与重连的拒绝原因收敛在 `block.rs`，视图、快照和清理逻辑读同一个枚举，不用横幅文案判断状态。Browser 帧刷新保留独立的 160 毫秒定时器，Computer 宿主存活检查保留独立的 80 毫秒定时器。窗口关闭时清理本地订阅与宿主，daemon 作业保留自身生命周期。
 
 工作台标签栏的省略号菜单列出 Browser、Files、Editor、Diff、Tasks、Computer 和 Git，可直接选择；标签被窄窗口挤出时也可从这里切换。Git 通过 daemon 查询分支、上游、领先／落后数量及文件状态，文件差异复用组件库的 Diff，不在客户端执行 Git。当前组件库的辅助功能树仍不能正确提供这些标签的名称，菜单入口不代表标签的辅助功能问题已解决。
 
@@ -215,6 +215,6 @@ CLI 子命令使用同样参数，去掉 `/` 前缀即可，例如 `agent-cli ru
 
 恢复文件只保存客户端展示与输入状态。令牌、审批决定、原生执行句柄、Browser/Computer 控制权和 daemon 的执行状态均不从恢复文件取得。重启后仍须认证并向 daemon 查询；恢复草稿不会提交请求。损坏、身份不符或版本不支持的文件会保留并报告错误，不会用空白状态覆盖。
 
-源码入口：`apps/agent-cli/src/main.rs`、`apps/agent-desktop/src/main.rs`。终端呈现见 `apps/agent-cli/src/view_model.rs`、`view.rs` 和 `markdown.rs`；桌面交互见 `apps/agent-desktop/src/view_model.rs`、`operations.rs`、`projection.rs`、`chrome.rs`、`settings.rs`、`tabs.rs`、`tabs/` 和 `workbench/drafts.rs`。
+源码入口：`apps/agent-cli/src/main.rs`、`apps/agent-desktop/src/main.rs`。终端呈现见 `apps/agent-cli/src/view_model.rs`、`view.rs` 和 `markdown.rs`；桌面交互见 `apps/agent-desktop/src/view_model.rs`、`events.rs`、`block.rs`、`operations.rs`、`projection.rs`、`chrome.rs`、`settings.rs`、`tabs.rs`、`tabs/` 和 `workbench/drafts.rs`。
 
 实际窗口、明暗切换、审批与文件读取截图及其验收边界见[桌面运行截图与验收范围](runtime-evidence.md)。

@@ -33,7 +33,7 @@ impl Desktop {
   }
 
   pub(crate) fn composer_view(&self, cx: &mut Context<Self>) -> AnyElement {
-    if self.recovery.as_ref().is_some_and(|state| state.visible) {
+    if self.vm.recovery.as_ref().is_some_and(|state| state.visible) {
       return self.recovery_view(cx);
     }
     let colors = DesktopColors::get(cx);
@@ -150,7 +150,7 @@ impl Desktop {
                     Button::new("inspect")
                       .ghost()
                       .small()
-                      .label(if self.vm.error.is_some() {
+                      .label(if self.error_line().is_some() {
                         "检查 / 重连"
                       } else {
                         "刷新任务"
