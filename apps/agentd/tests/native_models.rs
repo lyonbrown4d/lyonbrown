@@ -1,6 +1,7 @@
 //! Opt-in CPU acceptance through daemon configuration, registry and the one Harness.
 #![cfg(any(feature = "local-llama", feature = "local-mistral"))]
 use agent_config::{LocalModelBackend, LocalModelSettings};
+use agent_core::events::{AgentEvent, DecodedEvent, ExecutionPhase, decode};
 use agent_protocol::v1::{self, client_service_server::ClientService};
 use clap::Parser;
 use futures::StreamExt;
@@ -69,7 +70,13 @@ async fn generate(backend: LocalModelBackend) -> anyhow::Result<()> {
   )?;
   assert_eq!(plan["allowed_tools"], serde_json::json!([]));
   assert!(events.iter().any(|event| event.kind == "model_selected"));
-  assert!(events.iter().any(|event| event.kind == "run_started"));
+  assert!(events.iter().any(|event| matches!(
+    decode(&event.kind, &event.payload_json).expect("event contract"),
+    DecodedEvent::Known(AgentEvent::PhaseChanged {
+      phase: ExecutionPhase::ConnectingModel,
+      ..
+    })
+  )));
   assert_eq!(daemon.local_models().len(), 1);
   assert!(!daemon.local_models()[0].supports_tools);
   daemon.shutdown().await;

@@ -4,6 +4,10 @@ use agent_protocol::v1;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResourceCommand {
   Status,
+  Context,
+  Permissions,
+  Mcp,
+  Tools,
   Providers {
     client_candidates: Vec<ClientProviderCandidate>,
   },
@@ -49,6 +53,9 @@ pub enum ResourceCommand {
     provider: String,
   },
 }
+
+/// Inspection uses only published daemon metadata; no prompt, tool arguments or secrets.
+pub use crate::resource_inspection::{format_context, format_inventory, format_permissions};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClientProviderCandidate {

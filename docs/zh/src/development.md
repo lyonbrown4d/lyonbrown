@@ -104,6 +104,19 @@ mdbook build docs/en
 
 这些命令分别检查格式、静态问题、测试、构建和文档生成。它们不能替代真实模型调用、GUI 启动、CEF 操作、系统权限或跨设备网络验收。验证结果应同时说明命令、环境、场景和未覆盖范围。
 
+## TUI 交互与队列恢复验证
+
+TUI 的执行状态由 `agent-core::events::AgentEvent` 定义，agentd 负责产出；客户端不从 Harness 审计记录推断模型阶段。定向回归可在默认 feature 下执行：
+
+```sh
+cargo test --locked -p agent-cli -p agentd -p agent-core -p agent-runtime -p agent-storage --test events --test activity --test interaction --test tui_interactions --test workflow --test input_control --test queue_cancel_failure --test queue_restore --test semantic_events --test input_fence --test run_input --test run_input_handoff --test run_input_failure --test original_task_target
+cargo test --locked -p agent-cli --test pty_interactions
+```
+
+第一组通过真实协议适配器和回环 mock 检查输入幂等、所有权代次、队列恢复、撤销失败后的 `Uncertain`、原 Worker 路由和持久化结果。队列撤销故障通过合成持久化失败注入复现，上游记录见 [pi-rust #235](https://github.com/bigfish1913/pi-rust/issues/235)；产品通过公开持久化接口检测失败，并保留撤销意图，阻止未确认输入被重放。
+
+PTY 用例实际启动 `agent-cli` 子进程，通过认证连接 agentd，检查模型连接状态、展开工具参数与结果、筛选历史、回填不提交以及弹层中的退出。测试在系统临时目录的 `lyonbrown-tui-acceptance/<id>/` 保留终端 ANSI 输出、文本和单元格快照。运行画面及范围见[运行截图与验收范围](runtime-evidence.md#tui-执行活动与输入历史)。这些测试不加载权重，不调用付费模型，也不代替 Desktop GUI 或三平台验收。
+
 ## 修改模块
 
 客户端只修改呈现与输入；模型、工具、权限和持久状态应留在 daemon。新增字段先维护 `proto/agent/v1/agent.proto` 和两端消费者，避免把运行库内部类型放进协议。

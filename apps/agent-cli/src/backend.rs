@@ -30,6 +30,25 @@ pub enum Action {
     prompt: String,
     generation: u64,
   },
+  SubmitInput {
+    attempt: crate::run_input_ui::InputAttempt,
+    generation: u64,
+  },
+  ListInputs {
+    run: String,
+    generation: u64,
+  },
+  CancelInput {
+    run: String,
+    entry: String,
+    generation: u64,
+  },
+  TaskOperation {
+    task_id: String,
+    operation: crate::workflow::TaskOperation,
+    generation: u64,
+    session: Option<String>,
+  },
   Cancel(String),
   Approve {
     id: String,
@@ -83,6 +102,11 @@ pub enum Action {
 }
 
 pub enum Update {
+  Inputs {
+    generation: u64,
+    run: String,
+    inputs: Vec<agent_protocol::v1::RunInputReceipt>,
+  },
   Computer {
     status: ComputerStatus,
     detail: String,
@@ -287,6 +311,10 @@ pub fn spawn_with_computer_factory(
                   Action::NewSession => "session.create",
                   Action::Select { .. } => "session.select",
                   Action::Submit { .. } => "run.submit",
+                  Action::SubmitInput { .. } => "run.input.submit",
+                  Action::ListInputs { .. } => "run.input.list",
+                  Action::CancelInput { .. } => "run.input.cancel",
+                  Action::TaskOperation { .. } => "task.manage.original",
                   Action::Cancel(_) => "run.cancel",
                   Action::Approve { .. } => "approval.decide",
                   Action::Task { .. } => "task.manage",

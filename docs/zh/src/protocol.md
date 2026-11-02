@@ -33,6 +33,16 @@
 | `cursor` / `after_cursor` | 事件位置与增量读取起点 |
 | `deadline_ms` / `expires_at_ms` | 任务截止时间与审批过期时间，毫秒 |
 
+## 强类型执行事件与运行中输入
+
+`agent_core::events::AgentEvent` 是应用拥有的执行事实枚举。`PhaseChanged` 使用 `ExecutionPhase` 和可选 `ModelIdentity`；工具开始／结束、用量、队列状态和 Run 终态分别有明确字段。任意工具参数仍使用 JSON 值，类型属于应用协议，不包含 Harness、Provider SDK 或 UI 类型。TUI 与 Desktop 使用共享解码入口匹配枚举，不从持久化审计 JSON 推断阶段。
+
+现有 `Event` 的 Run ID、游标、时间戳和 `kind/payload_json` 信封保持兼容；新执行事实使用 `kind=agent_event` 和带 `type` 标签的序列化枚举。旧 runtime 和 Run 状态事件集中适配，未知类型只保留名称，已知类型的错误载荷返回解析错误。`record_appended`、`entry_appended` 是审计数据，不是客户端阶段协议。Provider 请求 hook 产生 `ConnectingModel`；该阶段表示请求发起，并非 TCP 连接成功证明。
+
+`SubmitRunInput` 要求 Run ID、owner epoch、UUID request ID、显式 `STEER/FOLLOW_UP` 类型和非空提示（最多 1 MiB）。队列确认与 Harness 快照、事件、Outbox 同事务提交；同 request ID、同内容返回原回执，改变内容或目标 Run 会拒绝。单 Session 不能同时启动另一个 Run。`ListRunInputs` 按指定 Run 所属 Session 返回输入记录，包含跨 Run 保留的待处理输入，并保留每条回执的原始 Run 归属。快照保留全部待处理项与最多 100 条终态记录，`history_truncated` 标记历史裁剪；单条提示预览最多 4096 字节，`prompt_truncated` 明示裁剪，不能把预览重新当作完整请求。待处理输入最多 100 条、合计 1 MiB。`CancelRunInput` 校验原条目和当前 Session epoch，路由当前绑定的 Runtime；已消费的条目不会伪装成已撤销。执行边界后的 Pending 不自动唤醒新运行，断线也不重放提交。没有挂接 Runtime 的重启后队列只提供核对，不声明即时撤销已恢复。
+
+工具、用量和队列事件在 runtime 适配层从 SDK 强类型记录转换后，与快照和 Outbox 原子写入；daemon 绑定明确的 Run ID，不按“最后创建的 Run”猜归属。撤销先持久记录 `CancelRequested` 意图，再调用 Harness；只有持久取消或已提交的消费事实才能结清。失败会关闭输入、停止执行并将 Run 置为 `uncertain`，即使原回复已完成也保留原结果供核对。未结清意图拒绝新的 StartRun，启动恢复同样重建这道限制，不自动重放队列。能力通过 `events.semantic` 与 `runs.input` 声明，旧 daemon 不支持时不回退为普通 StartRun。
+
 ## 平台适配
 
 工作区为浏览器、计算机操作、分布式连接和本地推理设置独立 crate。Windows、macOS、Linux 的原生依赖和可用能力应由对应适配层报告。统一协议不能消除系统 SDK、显示服务器、权限和真实设备差异。

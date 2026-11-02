@@ -93,6 +93,39 @@ impl Daemon {
     Ok(())
   }
 
+  pub(super) fn resolve_master_task_target(
+    &self,
+    id: &str,
+    requested: Option<v1::Node>,
+  ) -> Result<v1::Node, Status> {
+    let node = match requested {
+      Some(node) => target(Some(node))?,
+      None => {
+        self.master_task(id)?;
+        let (worker, endpoint) = self
+          .store
+          .task_target_route(id)
+          .map_err(failure)?
+          .ok_or_else(|| {
+            Status::failed_precondition(
+              "task has no persisted original worker endpoint; provide its explicit target",
+            )
+          })?;
+        target(Some(v1::Node {
+          id: worker,
+          endpoint,
+          ..Default::default()
+        }))?
+      }
+    };
+    self.master_task_target(id, &node)?;
+    crate::peers::manager(self)
+      .map_err(failure)?
+      .trust(&node.id)
+      .map_err(|_| Status::permission_denied("target is not a paired active peer"))?;
+    Ok(node)
+  }
+
   pub(super) fn validate_dispatch(
     &self,
     target: &v1::Node,

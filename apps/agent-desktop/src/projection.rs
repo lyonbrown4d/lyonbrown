@@ -186,20 +186,28 @@ impl Desktop {
         let status = decoded.status().map(str::to_owned);
         let events::DecodedEvent {
           kind,
-          payload,
           event: run_event,
         } = decoded;
         self.vm.cursor = event.cursor;
-        self.vm.status = format!("{} · event {}", kind, event.cursor);
+        match &run_event {
+          events::RunEvent::PhaseChanged { phase, model } => {
+            self.vm.status = events::phase_label(*phase, model.as_ref());
+          }
+          events::RunEvent::StateChanged { status } => {
+            self.vm.status = format!("Run {} · {}", event.run_id, status.as_str());
+          }
+          events::RunEvent::Other | events::RunEvent::ApprovalRequired => {
+            self.vm.status = format!("{} · event {}", kind, event.cursor);
+          }
+          _ => {}
+        }
         if let Some(run) = self.vm.runs.iter_mut().find(|run| run.id == event.run_id) {
           if let Some(status) = status {
             run.status = status;
-          } else if run_event == events::RunEvent::ApprovalRequired {
-            run.status = "awaiting_approval".into();
           }
         }
         match run_event {
-          events::RunEvent::TextDelta { text: Some(text) } => {
+          events::RunEvent::TextDelta { text } => {
             if let Some(message) = self
               .vm
               .conversation
@@ -214,15 +222,12 @@ impl Desktop {
                 .push(ChatMessage::new("Lyonbrown", text, cx));
             }
           }
-          events::RunEvent::ToolStarted { name } | events::RunEvent::ToolFinished { name } => {
+          // Append one transcript record when the tool finishes, without
+          // retaining raw arguments/output or duplicating the start record.
+          events::RunEvent::ToolFinished { name } => {
             self.vm.conversation.push(ChatMessage::new(
               "Tool",
-              format!(
-                "**{}** · {}\n\n```json\n{}\n```",
-                name,
-                kind,
-                serde_json::to_string_pretty(&payload).unwrap_or_default()
-              ),
+              format!("**{}** · finished", name),
               cx,
             ));
           }

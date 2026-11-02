@@ -32,6 +32,11 @@ impl Composer {
     self.0.is_empty()
   }
 
+  /// Recall replaces the editor only; callers must still explicitly submit the resulting text.
+  pub fn replace_text(&mut self, text: &str) {
+    *self = Self::from(text);
+  }
+
   pub fn clear(&mut self) {
     // Acknowledged prompts are no longer drafts, including in undo history.
     *self = Self::default();

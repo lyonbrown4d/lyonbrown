@@ -117,14 +117,24 @@ fn warm_conversation_has_readable_cell_colors_and_no_empty_panels() {
 
 #[test]
 fn markdown_and_inline_approval_remain_visible_without_leaking_identifiers_or_controls() {
-  use agent_cli::model::{Approval, Message};
+  use agent_cli::model::Message;
   use ratatui::style::Modifier;
-  let app = App {
+  let mut app = App {
     connection: Connection::Connected,
     messages: vec![Message { role: "Agent".into(), content: "## Result\n\n**important** and `Cargo.toml`\n\n- item\n\n```rust\nlet x = 1;\n```\n\n\u{1b}[31munsafe\u{7}".into() }],
-    approvals: vec![Approval { id: "private-approval-id".into(), description: "write_file\nREADME.md".into() }],
     ..App::default()
   };
+  app
+    .workflow
+    .approvals
+    .replace(vec![agent_protocol::v1::Approval {
+      id: "private-approval-id".into(),
+      tool: "write_file".into(),
+      arguments_json: r#"{"path":"README.md"}"#.into(),
+      status: "pending".into(),
+      expires_at_ms: i64::MAX,
+      ..Default::default()
+    }]);
   let buffer = painted(&app, ThemeChoice::Dark, 120, 32);
   let screen = visible(&buffer);
   assert!(screen.contains("important"));

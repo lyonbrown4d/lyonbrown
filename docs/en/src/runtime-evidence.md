@@ -4,6 +4,20 @@ The earlier Desktop client screenshots show the local native GPUI Desktop window
 
 The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.
 
+## TUI execution activity and input history
+
+On November 2, 2026, the version 0.1.0 `agent-cli` child process ran on macOS 27.2 (26B123), arm64, authenticated to a real agentd and a loopback Chat Completions synthetic model. These images render terminal-cell snapshots captured from the actual PTY, preserving application output and terminal colors. They are not screenshots of a native Terminal window. The [capture record](evidence/tui-interaction-macos.json) contains binary, source, terminal-cell, and image digests.
+
+![Expanded tool arguments and results in a macOS PTY](images/tui-activity-macos.png)
+
+The main model requested `read_file` through the real adapter to read `fixture.txt` in a temporary workspace. F6 shows the daemon-authored tool completion, and Enter expands its arguments and actual result. The next model request contains the file content. Model identity, context budget, and usage in the footer come from daemon events; usage counts only committed records.
+
+![Filtered acknowledged input history in a macOS PTY](images/tui-history-macos.png)
+
+After the Run completed, Ctrl+P opened acknowledged input history, `fixture` filtered the list, and Enter restored the selected prompt into the editor. Acceptance confirmed one Run and two model requests throughout; restoring history and exiting from the overlay created no execution.
+
+Separate loopback mock regressions cover queue input and permission constraints through Responses, Chat Completions, and Anthropic Messages, including snapshot, `Uncertain`, event, and Outbox checks after failed cancellation. Recovery checks do not replay model or tool calls. The upstream queue cancellation persistence defect is tracked in [pi-rust #235](https://github.com/bigfish1913/pi-rust/issues/235). Desktop validation in this iteration covers shared event decoding only; GPUI windows were not rerun. These results do not validate real model quality or performance, native CEF/Computer, Windows, Linux, or public-network operation.
+
 ## Desktop recovery and unresolved Task inspection
 
 On November 1, 2026, the 0.1.0 native acceptance example ran on macOS 27.2 (26B123), arm64, with GPUI Kit 0.8.1, an authenticated real agentd, a paired mTLS Worker and local synthetic Chat Completions models. It reuses the product views and recovery operations. This build is an unsigned local debug application bundle from an uncommitted working tree. The [runtime record](evidence/desktop-recovery-macos.json) contains executable, source and screenshot digests alongside actual persisted state. See [development and verification](development.md) to reproduce it.

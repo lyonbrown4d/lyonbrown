@@ -40,6 +40,9 @@ pub struct RuntimeConfig {
 pub struct SessionMutation {
   pub kind: String,
   pub payload: Value,
+  /// Application events committed atomically with this Harness mutation.
+  #[serde(default)]
+  pub events: Vec<agent_core::events::AgentEvent>,
 }
 
 /// Implemented by the daemon's transactional store. A successful commit must
@@ -116,6 +119,11 @@ pub struct TokenUsage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeEvent {
+  /// The configured provider is about to receive a request; this does not
+  /// assert that a network connection has already been established.
+  ModelRequestStarted,
+  ModelResponseStarted,
+  PreparingTool,
   RunStarted {
     run_id: String,
   },

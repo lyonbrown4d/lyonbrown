@@ -16,6 +16,14 @@ impl AgentEmitter for Emitter {
   fn try_emit(&self, event: AgentEvent) {
     let mapped = match event {
       AgentEvent::MessageUpdate {
+        assistant_message_event: AssistantMessageEvent::Start { .. },
+        ..
+      } => RuntimeEvent::ModelResponseStarted,
+      AgentEvent::MessageUpdate {
+        assistant_message_event: AssistantMessageEvent::ToolCallStart { .. },
+        ..
+      } => RuntimeEvent::PreparingTool,
+      AgentEvent::MessageUpdate {
         assistant_message_event: AssistantMessageEvent::TextDelta { delta, .. },
         ..
       } => RuntimeEvent::TextDelta { text: delta },

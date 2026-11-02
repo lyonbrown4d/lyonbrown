@@ -85,26 +85,34 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 
 | 按键 | 操作 |
 | --- | --- |
-| `F1` / `F2` / `F3` / `F4` / `F5` | 切换帮助／会话／任务／计算机／完整审批上下文面板 |
-| `Esc` | 返回上一层上下文；无历史时回到对话 |
-| `Ctrl+N` | 以当前工作目录创建会话 |
-| `Tab` | 切换到下一个会话并加载运行记录 |
-| `Enter` | 向已选会话提交输入 |
+| `F1`～`F7` | 帮助、会话、Task、计算机、审批、执行记录、排队输入 |
+| `Enter` | 空闲时提交新 Run；运行时将输入排入当前回复之后 |
+| `Ctrl+S` | 向当前 Run 提交纠偏输入，保持原工具和授权范围 |
+| `Alt+Enter` / `Shift+Enter` | 换行 |
+| `↑` / `↓` | 输入区首行／末行回填已确认输入历史；面板内选择条目 |
+| `Ctrl+P` | 搜索输入历史，`Enter` 只回填，需再次确认才提交 |
+| `Ctrl+Y` / `Ctrl+E` | 批准一次／拒绝所选审批；过期或已移除的选择不能操作 |
+| `F5` 内 `Space` | 展开／折叠所选审批参数 |
+| `F6` 内 `Enter` | 展开／折叠所选工具记录；`↑↓` 选择，`PgUp/PgDn` 滚动 |
+| `F7` 内 `Delete` | 请求撤销所选待处理输入；已采纳的输入不能撤回 |
+| `/search TEXT`、`Alt+N/P`、`End` | 搜索本地对话、前后命中、返回最新消息 |
+| `Ctrl+N` / `Tab` | 创建／切换会话 |
+| `Ctrl+R` / `Ctrl+X` | 重连／请求取消当前 Run |
+| `Ctrl+C` / `Ctrl+D` | 在对话、选择器或 Diff 中退出客户端，daemon 作业继续 |
+| `Esc` | 收起浮层或返回上层面板 |
 
 本地命令的结果不占用上下文面板。需要选择时（`/model`、`/models`）在输入区上方浮出可选项，`↑↓` 选择、`Enter` 确认、`Esc` 取消；只读结果（`/status`、`/git`、`/providers`、`/skills` 与各类操作回执）直接追加到对话记录，以 `· 本地` 标记并且不按 Markdown 渲染。命令提交时立即清空输入区，后到的结果不会覆盖等待期间新输入的文字。`/models` 的 hub 子命令（`search`、`inspect`、`plan`、`installed`、`status`）把 daemon 返回的 JSON 读成仓库、版本、架构、许可、文件大小与作业状态等字段；无法识别的结构退回原始 JSON，不会丢信息。
 
 `/diff` 打开全屏 diff 视图：默认 unified，`Tab` 切换 side-by-side，`j`／`k` 或方向键滚动，`n`／`p` 切换文件，`h`／`l` 横向滚动，`g`／`G` 跳到首尾，`Esc` 关闭。视图只展开改动块与其上下文，语法高亮使用 tree-sitter（Rust、Python、JavaScript、TypeScript、JSON、TOML、Bash、Markdown）；着色只影响呈现，不改变发送给 daemon 的文本。
-| `Shift+Enter` / `Alt+Enter` | 在输入区换行 |
-| 方向键、`Home` / `End`、`Delete` | 移动光标或编辑光标处文本 |
-| `Ctrl+R` | 重新连接 daemon |
-| `Ctrl+X` | 请求取消当前运行 |
-| `Ctrl+Y` / `Ctrl+E` | 批准 / 拒绝首个待处理审批 |
-| `PageUp` / `PageDown` | 滚动已打开的上下文面板，否则滚动对话 |
-| `Ctrl+C` / `Ctrl+D` | 退出客户端 |
+执行记录消费共享的 `agent_core::events::AgentEvent` 枚举。agentd 产出阶段、模型、工具结果、用量和队列事实；TUI 只映射文案和渲染，不从文本增量或 Harness 审计 JSON 推断“正在连接模型”。模型请求阶段来自 Provider 请求入口，表示正在发起请求，不证明网络连接已经建立。工具与队列事实、用量同 Harness 快照、事件及 Outbox 原子保存。`F6` 使用同一投影处理实时事件和历史回放，按 Run 与游标去重；用量是已报告值，不推算剩余上下文。尚未报告时不显示虚构数据。
+
+运行中的 `Enter` 使用 Harness follow-up 队列，`Ctrl+S` 使用 steering 队列，不创建第二个 Agent Loop，也不扩大原执行计划的工具权限。每次输入保留稳定 request ID；只有 agentd 确认持久化后才清空匹配草稿和记录历史。重复确认使用同一身份，内容不一致会被拒绝；断线不自动重放。 未确认输入沿用原 Run、request ID 和模式，即使原 Run 已结束，也不会转成新的 StartRun。`F7` 区分待处理、已采纳和已撤销。队列在执行边界后仍待处理时，保留到下一次显式运行；接收不代表本轮已经采纳。撤销失败不会显示成功；已进入执行的输入只能通过 Run 取消处理，不能撤销已经产生的副作用。重启后无活动 Runtime 的遗留队列可核对，但不能假装已恢复可撤销的宿主。
+
+输入历史按 daemon 身份和 Session 隔离，仅保存已确认输入；最多 32 个会话、每会话 100 条、合计 1 MiB。草稿与未确认输入不进入历史。模型、会话、Provider、技能和历史选择器支持键入过滤与 Backspace，筛选后仍使用原始条目身份。`/context`、`/permissions`、`/tools`、`/mcp` 读取现有 daemon 接口；完整上下文、权限策略全文、工具目录和 MCP 连接健康尚未由协议开放，界面明确说明限制。
 
 输入区复用 `ratatui-textarea` 0.9.4，支持光标编辑、多行文本、换行显示和粘贴。应用快捷键优先于编辑器的同名映射，例如 `Ctrl+X` 仍请求取消运行，`Ctrl+Y` 仍处理审批。提交等待期间不重复发送；失败保留草稿，服务端接受后清空对应草稿及其撤销历史。
 
-审批区展示工具和参数；紧凑布局只保留待处理数量和审批快捷键，完整参数通过 `F5` 查看。审批决定由 daemon 校验并保存，界面按服务端结果更新。对话的 Run 记录每两秒刷新一次，新提交的运行同时订阅事件流。持久 Task 按面板查询与本地管理命令刷新。客户端退出时恢复终端状态，不向 daemon 发送取消请求。
+审批区展示所选工具和参数；紧凑布局只保留待处理数量和审批快捷键，完整参数通过 `F5` 查看。审批决定由 daemon 校验并保存，界面按服务端结果更新。对话的 Run 记录每两秒刷新一次，新提交的运行同时订阅事件流。持久 Task 按面板查询与本地管理命令刷新。客户端退出时恢复终端状态，不向 daemon 发送取消请求。
 
 界面使用暖深色或暖浅色的纯色终端背景、正文和强调色。`--theme auto` 根据 `COLORFGBG` 选择配色；无法检测时使用深色，可显式指定 `--theme light` 或 `--theme dark`。模型回复的 Markdown 复用固定版本 `tui-markdown` 0.3.12，经公开 `StyleSheet` 接口适配主题；关闭该库的默认 features，不启用代码语法高亮依赖。
 
@@ -153,6 +161,9 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 配对身份和凭据留在 daemon，节点地址不授予信任。提交响应丢失时，保留原 Task ID，通过 `get` 和 `reconcile` 核对，不生成新的任务身份自动重试。分页返回 `next_task_id`，后续查询通过 `--after` 继续。
 
 TUI 的 `F3` 面板查询当前会话的持久 Task，分别显示 Task 与 Worker Attempt 状态。方向键选择任务，输入区为空时按 `Enter` 查看详情，`PageDown` 查询下一页；重新打开面板回到第一页。输入区中的 `/task ...` 使用与独立 CLI 相同的子命令和参数，例如 `/task get TASK_ID`、`/task cancel TASK_ID --node-id WORKER_ID --node-endpoint https://worker.example:7448`。这些命令在本地解析，语法错误也不会成为模型 Prompt。
+
+`F3` 选择 Task 后，输入区为空时可用 `i/r/c/a/x` 查看、核对、取消、采纳或拒绝。远程操作由 daemon 从首次 dispatch 意图取出原始 Worker ID 和 HTTPS origin，并重新验证当前配对、撤销状态与 owner epoch；不会从发现结果猜目标。旧任务没有原始 origin 时明确要求使用原有显式目标命令。Worker Attempt 成功仍不等于 Master 已采纳。
+
 
 TUI 保存各会话草稿、未绑定草稿、所选会话、上下文面板和滚动位置。会话切换保留各自的输入；提交确认只清除原会话中仍与已提交文本一致的草稿。`/draft list` 列出本地草稿，`/draft recover SESSION_ID` 将选定草稿放入输入区，`/draft recover unbound` 读取未绑定草稿，供用户检查后决定是否提交。原会话当前不可用的草稿仍保留，不会自动附到其他会话。
 

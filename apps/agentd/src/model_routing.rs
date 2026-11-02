@@ -8,6 +8,20 @@ use decision_core::{
 use tokio_util::sync::CancellationToken;
 
 impl Daemon {
+  pub(crate) fn execution_model_identity(
+    &self,
+    session: &agent_core::Session,
+  ) -> anyhow::Result<agent_core::events::ModelIdentity> {
+    Ok(agent_core::events::ModelIdentity {
+      provider: self.config.provider.clone(),
+      model: self.config.model.clone(),
+      context_window: Some(u64::from(if self.config.provider == "local" {
+        self.models.info(&self.config.model)?.context_window
+      } else {
+        self.config.runtime(session).context_window
+      })),
+    })
+  }
   pub(crate) async fn record_model_route(
     &self,
     run: &Run,

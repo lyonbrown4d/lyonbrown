@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agent-core = { path = "../agent-core" }
 model-provider = { path = "../model-provider" }
 async-trait.workspace = true
 serde.workspace = true

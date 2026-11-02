@@ -85,26 +85,34 @@ The workbench shows the conversation and composer by default. Sessions, tasks, c
 
 | Key | Action |
 | --- | --- |
-| `F1` / `F2` / `F3` / `F4` / `F5` | Toggle help / sessions / tasks / computer / full approval context |
-| `Esc` | Return to the previous context, or the conversation without history |
-| `Ctrl+N` | Create a session using the current working directory |
-| `Tab` | Select the next session and load its runs |
-| `Enter` | Submit input to the selected session |
+| `F1`–`F7` | Help, sessions, Tasks, computer, approvals, activity, queued input |
+| `Enter` | Start a Run when idle; queue a follow-up during execution |
+| `Ctrl+S` | Steer the current Run within its existing tools and authorization |
+| `Alt+Enter` / `Shift+Enter` | Insert a newline |
+| `↑` / `↓` | Recall confirmed input from the first/last composer line; select panel rows |
+| `Ctrl+P` | Search input history; `Enter` fills the editor without submitting |
+| `Ctrl+Y` / `Ctrl+E` | Approve once / deny the selected approval; expired or removed selections cannot act |
+| `Space` in `F5` | Expand/collapse selected approval arguments |
+| `Enter` in `F6` | Expand/collapse a tool record; arrows select, page keys scroll |
+| `Delete` in `F7` | Request cancellation of selected pending input; consumed input cannot be withdrawn |
+| `/search TEXT`, `Alt+N/P`, `End` | Search the local transcript, visit hits, return to latest messages |
+| `Ctrl+N` / `Tab` | Create / switch sessions |
+| `Ctrl+R` / `Ctrl+X` | Reconnect / request cancellation of the current Run |
+| `Ctrl+C` / `Ctrl+D` | Exit from conversation, picker or Diff; daemon jobs continue |
+| `Esc` | Close an overlay or return to the previous panel |
 
 Local command results never take over a context panel. A command that needs a choice (`/model`, `/models`) floats candidates above the composer: `↑↓` moves, `Enter` confirms, `Esc` cancels. Read-only output (`/status`, `/git`, `/providers`, `/skills` and every operation receipt) is appended to the transcript as a `· 本地` line that is not rendered as Markdown. Submission clears the composer immediately, so a late result never overwrites text typed while waiting. The `/models` hub subcommands (`search`, `inspect`, `plan`, `installed`, `status`) read the daemon's JSON into repository, revision, architecture, licence, size and job fields; an unrecognised shape falls back to the original JSON rather than dropping data.
 
 `/diff` opens a full-screen diff view: unified by default, `Tab` switches to side-by-side, `j`/`k` or the arrow keys scroll, `n`/`p` move between files, `h`/`l` scroll horizontally, `g`/`G` jump to the ends and `Esc` closes. Only changed blocks and their context are expanded. Syntax highlighting uses tree-sitter (Rust, Python, JavaScript, TypeScript, JSON, TOML, Bash, Markdown) and affects presentation only; the text sent to the daemon is unchanged.
-| `Shift+Enter` / `Alt+Enter` | Insert a newline in the composer |
-| Arrow keys, `Home` / `End`, `Delete` | Move the cursor or edit text at the cursor |
-| `Ctrl+R` | Reconnect to the daemon |
-| `Ctrl+X` | Request cancellation of the active run |
-| `Ctrl+Y` / `Ctrl+E` | Approve / deny the first pending approval |
-| `PageUp` / `PageDown` | Scroll the open context panel, or the conversation when no panel is open |
-| `Ctrl+C` / `Ctrl+D` | Exit the client |
+Activity consumes the shared `agent_core::events::AgentEvent` enum. agentd publishes execution phases, model identity, tool results, usage and queue facts; TUI renders them without deriving “connecting” from text deltas or Harness audit JSON. The provider request hook marks a request being initiated, not proof of an established network connection. Tool, queue and usage facts commit atomically with the Harness snapshot, events and Outbox. `F6` uses one projection for live delivery and historical replay, deduplicated by Run and cursor. Usage is observed data; missing context or token information is not estimated.
+
+During execution, `Enter` uses the Harness follow-up queue and `Ctrl+S` uses its steering queue. Neither creates another Agent Loop nor expands the existing execution plan's tool authority. Each input retains a stable request ID. Only a durable daemon acknowledgement clears the matching draft and records history. Retrying the same identity is idempotent; changed content is rejected and disconnects never replay automatically. An unconfirmed input retains its original Run, request ID and kind even after that Run ends; it never becomes a new StartRun. `F7` distinguishes pending, consumed and cancelled entries. Input left pending across an execution boundary remains for the next explicit Run; acceptance does not mean adoption in the current turn. Failed withdrawal is never shown as success. Consumed input can only be stopped through Run cancellation, which cannot undo side effects. After a daemon restart, an unattached retained queue can be inspected, but the client does not claim its runtime has recovered for withdrawal.
+
+Confirmed input history is isolated by daemon identity and Session, with up to 32 sessions, 100 entries per session and 1 MiB total. Drafts and unconfirmed input are excluded. Model, session, Provider, skill and history pickers support typing and Backspace while preserving the original selected identity. `/context`, `/permissions`, `/tools` and `/mcp` use existing daemon APIs. Full context, full permission policy, tool catalogs and MCP connection health are not exposed by the current protocol, and the UI states those limits.
 
 The composer uses `ratatui-textarea` 0.9.4 for cursor editing, multiline text, wrapping and paste. Application shortcuts take precedence over matching editor bindings: `Ctrl+X` still requests run cancellation and `Ctrl+Y` still handles approval. Pending submissions are not sent again; failure preserves the draft, and service acceptance clears the matching draft and its undo history.
 
-The approval area displays the tool and arguments. Compact layouts retain only the pending count and approval shortcuts; use `F5` to read the full arguments. The daemon validates and saves decisions before the UI updates them. Durable runs refresh every two seconds; newly submitted runs also subscribe to an event stream. Exiting restores the terminal and sends no cancellation request.
+The approval area displays the selected tool and arguments. Compact layouts retain only the pending count and approval shortcuts; use `F5` to read the full arguments. The daemon validates and saves decisions before the UI updates them. Durable runs refresh every two seconds; newly submitted runs also subscribe to an event stream. Exiting restores the terminal and sends no cancellation request.
 
 The UI uses warm dark or warm light solid terminal backgrounds, text and accents. `--theme auto` uses `COLORFGBG` to choose the palette, falling back to dark without a hint. Select `--theme light` or `--theme dark` explicitly when needed. Model replies render Markdown through fixed `tui-markdown` 0.3.12, adapting the theme through its public `StyleSheet` interface. Default features are disabled, omitting code syntax-highlighting dependencies.
 
@@ -153,6 +161,8 @@ cargo run -p agent-cli -- task reconcile TASK_ID --node-id WORKER_ID --node-endp
 Pairing identity and credentials stay in the daemon; an address grants no trust. After a lost submission response, retain the original Task ID and use `get` and `reconcile`, without automatically generating a new task identity. Pages return `next_task_id`; pass it through `--after` to continue.
 
 The TUI `F3` panel queries durable Tasks for the selected session and displays Task and Worker Attempt status separately. Use arrow keys to select a task, `Enter` with an empty composer to inspect it, and `PageDown` to fetch the next page. Reopening the panel returns to the first page. Composer commands `/task ...` use the standalone CLI subcommands and arguments, such as `/task get TASK_ID` or `/task cancel TASK_ID --node-id WORKER_ID --node-endpoint https://worker.example:7448`. Parsing is local; malformed commands never become model prompts.
+
+With a Task selected in `F3` and an empty composer, `i/r/c/a/x` inspect, reconcile, cancel, accept or reject it. The daemon resolves the original Worker ID and HTTPS origin from the first dispatch intent, then rechecks pairing, revocation and owner epoch. Discovery never supplies trust. Legacy Tasks without an original origin require the existing explicit-target command. Worker Attempt success does not mean the Master accepted the Task.
 
 The TUI saves session drafts, the unbound draft, selected session, context panel and scroll positions. Switching sessions retains independent input. A submission acknowledgement clears only the originating session draft that still matches the submitted text. `/draft list` lists local drafts; `/draft recover SESSION_ID` places the selected text in the composer, and `/draft recover unbound` retrieves the unbound draft, for inspection before the user decides whether to submit it. Drafts whose original sessions are unavailable remain stored and are never automatically attached to another session.
 

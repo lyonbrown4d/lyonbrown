@@ -65,14 +65,21 @@ async fn content_drift_before_preparation_or_execution_never_sends_input() {
     assert_eq!(result.status, "completed", "{}", result.error);
     assert!(result.result.contains("desktop changed"));
     let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
-    let failed: Vec<Value> = events
+    let failed: Vec<_> = events
       .iter()
-      .filter(|event| event.kind == "tool_finished")
-      .map(|event| serde_json::from_str(&event.payload_json).unwrap())
-      .filter(|event: &Value| event["name"] == "computer_act")
+      .filter_map(
+        |event| match decode(&event.kind, &event.payload_json).expect("event contract") {
+          DecodedEvent::Known(AgentEvent::ToolFinished { name, is_error, .. })
+            if name == "computer_act" =>
+          {
+            Some(is_error)
+          }
+          _ => None,
+        },
+      )
       .collect();
     assert_eq!(failed.len(), 1);
-    assert_eq!(failed[0]["is_error"], true);
+    assert!(failed[0]);
     if let Some(pending) = pending {
       assert_receipts(&node, &pending, "consumed", Some("failed"));
     } else {

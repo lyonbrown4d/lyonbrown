@@ -8,6 +8,36 @@ pub(crate) async fn execute(
   command: ResourceCommand,
 ) -> anyhow::Result<(String, String)> {
   match command {
+    ResourceCommand::Context => {
+      let status = client.runtime_status(required_session(session)?).await?;
+      Ok((
+        "Session context".into(),
+        crate::resource_command::format_context(&status),
+      ))
+    }
+    ResourceCommand::Permissions => {
+      let status = client.runtime_status(required_session(session)?).await?;
+      let approvals = match status.active_run {
+        Some(run) => client.list_approvals(&run.id).await?,
+        None => Vec::new(),
+      };
+      Ok((
+        "Permissions and approvals".into(),
+        crate::resource_command::format_permissions(&approvals),
+      ))
+    }
+    ResourceCommand::Mcp | ResourceCommand::Tools => {
+      let status = client.runtime_status(required_session(session)?).await?;
+      let (title, kind, count) = if command == ResourceCommand::Mcp {
+        ("MCP servers", "MCP server", status.mcp_servers)
+      } else {
+        ("Tools", "tool", status.tools)
+      };
+      Ok((
+        title.into(),
+        crate::resource_command::format_inventory(kind, count),
+      ))
+    }
     ResourceCommand::Status => {
       let session = required_session(session)?;
       let status = client.runtime_status(session).await?;

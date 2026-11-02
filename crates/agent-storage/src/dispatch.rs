@@ -33,6 +33,25 @@ impl Store {
     envelope: TaskEnvelope,
     worker_node_id: &str,
   ) -> Result<(Task, bool)> {
+    self.accept_master_dispatch(envelope, worker_node_id, None)
+  }
+
+  /// Record the authenticated worker identity and requested origin with the first intent.
+  pub fn accept_master_dispatched_task_at(
+    &self,
+    envelope: TaskEnvelope,
+    worker_node_id: &str,
+    worker_endpoint: &str,
+  ) -> Result<(Task, bool)> {
+    self.accept_master_dispatch(envelope, worker_node_id, Some(worker_endpoint))
+  }
+
+  fn accept_master_dispatch(
+    &self,
+    envelope: TaskEnvelope,
+    worker_node_id: &str,
+    worker_endpoint: Option<&str>,
+  ) -> Result<(Task, bool)> {
     self.lock()?.immediate_transaction(|connection| {
       verify_epoch(connection, &envelope.session_id, envelope.owner_epoch)?;
       let record: String = sessions::table
@@ -52,8 +71,48 @@ impl Store {
         parent_session == envelope.session_id && status == "running",
         "task requires an active, uncancelled parent Run in the same Session"
       );
-      accept_task_tx(connection, envelope, Some(worker_node_id))
+      accept_task_tx(connection, envelope, Some(worker_node_id), worker_endpoint)
     })
+  }
+
+  pub fn task_target(&self, task_id: &str) -> Result<Option<String>> {
+    Ok(
+      self
+        .task_target_intent(task_id)?
+        .and_then(|payload| payload["worker_node_id"].as_str().map(str::to_owned)),
+    )
+  }
+
+  /// Only the first accepted intent defines a task's original worker route.
+  /// Legacy tasks have no route; later discovery or events cannot supply one.
+  pub fn task_target_route(&self, task_id: &str) -> Result<Option<(String, String)>> {
+    let Some(payload) = self.task_target_intent(task_id)? else {
+      return Ok(None);
+    };
+    let Some(endpoint) = payload["worker_endpoint"].as_str() else {
+      ensure!(
+        payload["worker_endpoint"].is_null(),
+        "invalid task worker endpoint"
+      );
+      return Ok(None);
+    };
+    let worker = payload["worker_node_id"]
+      .as_str()
+      .filter(|id| !id.is_empty())
+      .ok_or_else(|| anyhow::anyhow!("task worker identity is missing"))?;
+    ensure!(!endpoint.is_empty(), "task worker endpoint is empty");
+    Ok(Some((worker.to_owned(), endpoint.to_owned())))
+  }
+
+  fn task_target_intent(&self, task_id: &str) -> Result<Option<serde_json::Value>> {
+    let Some(event) = self.events(task_id, 0, 1)?.into_iter().next() else {
+      return Ok(None);
+    };
+    ensure!(
+      event.kind == "task_accepted",
+      "task acceptance intent is missing"
+    );
+    Ok(Some(serde_json::from_str(&event.payload_json)?))
   }
 
   /// Stable task-ID pagination; caller requests one extra row to determine continuation.

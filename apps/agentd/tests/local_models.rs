@@ -1,4 +1,5 @@
 mod local_support;
+use agent_core::events::{AgentEvent, DecodedEvent, ExecutionPhase, decode};
 use agent_inference::*;
 use agent_protocol::v1::{self, client_service_server::ClientService};
 use clap::Parser;
@@ -229,7 +230,13 @@ async fn local_model_cancellation_persists_cancelled_for_classifier_and_harness(
         .events(&run.id, 0, 1000)
         .unwrap()
         .iter()
-        .any(|event| event.kind == "run_started"),
+        .any(|event| matches!(
+          decode(&event.kind, &event.payload_json).expect("event contract"),
+          DecodedEvent::Known(AgentEvent::PhaseChanged {
+            phase: ExecutionPhase::ConnectingModel,
+            ..
+          })
+        )),
       !during_classification
     );
     daemon.shutdown().await;

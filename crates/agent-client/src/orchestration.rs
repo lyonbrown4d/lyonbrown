@@ -103,4 +103,52 @@ impl AgentClient {
         .into_inner(),
     )
   }
+
+  /// Reconcile only the original worker route persisted by the daemon at dispatch.
+  pub async fn reconcile_task_original(&self, task_id: &str) -> Result<v1::Task> {
+    Ok(
+      self
+        .orchestration
+        .clone()
+        .reconcile_task(v1::RemoteTaskRequest {
+          target: None,
+          task_id: task_id.into(),
+        })
+        .await?
+        .into_inner(),
+    )
+  }
+
+  pub async fn cancel_task_original(&self, task_id: &str) -> Result<v1::Task> {
+    Ok(
+      self
+        .orchestration
+        .clone()
+        .cancel_task(v1::RemoteTaskRequest {
+          target: None,
+          task_id: task_id.into(),
+        })
+        .await?
+        .into_inner(),
+    )
+  }
+
+  pub async fn accept_task_result_original(
+    &self,
+    task_id: &str,
+    accepted: bool,
+  ) -> Result<v1::Task> {
+    Ok(
+      self
+        .orchestration
+        .clone()
+        .accept_result(v1::AcceptRemoteResultRequest {
+          target: None,
+          task_id: task_id.into(),
+          accepted,
+        })
+        .await?
+        .into_inner(),
+    )
+  }
 }

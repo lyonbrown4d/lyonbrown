@@ -126,7 +126,20 @@ async fn shared_mock_local_backend_runs_through_harness_and_persists_routing() {
     .iter()
     .position(|e| e.kind == "execution_plan")
     .unwrap();
-  let started = events.iter().position(|e| e.kind == "run_started").unwrap();
+  let started = events
+    .iter()
+    .position(|e| {
+      matches!(
+        agent_core::events::decode(&e.kind, &e.payload_json),
+        Ok(agent_core::events::DecodedEvent::Known(
+          agent_core::events::AgentEvent::PhaseChanged {
+            phase: agent_core::events::ExecutionPhase::ConnectingModel,
+            ..
+          }
+        ))
+      )
+    })
+    .unwrap();
   assert!(route < plan && plan < started);
   let decision: serde_json::Value = serde_json::from_str(&events[route].payload_json).unwrap();
   assert_eq!(

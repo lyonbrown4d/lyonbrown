@@ -1,3 +1,4 @@
+use crate::local_parse::{P0Command, parse_p0};
 use clap::Parser;
 use tokio::sync::mpsc;
 
@@ -23,8 +24,20 @@ struct RunLine {
 
 pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
   let prompt = app.input.text();
-  if let Some(parsed) = parse_p0(&prompt) {
+  if prompt.trim() == "/search" || prompt.trim_start().starts_with("/search ") {
+    let query = prompt
+      .trim_start()
+      .strip_prefix("/search")
+      .unwrap_or_default()
+      .trim();
+    crate::reading_ui::search(app, query);
+    app.input.clear();
+  } else if let Some(parsed) = parse_p0(&prompt) {
     match parsed {
+      Ok(P0Command::Activity) => {
+        app.router.navigate(ContextPanel::Activity);
+        app.input.clear();
+      }
       Ok(P0Command::New) => {
         send(actions, Action::NewSession)?;
         app.input.clear();
@@ -146,7 +159,7 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
     app.router.navigate(ContextPanel::Help);
     app.input.clear();
   } else if prompt.trim_start() == "/draft" || prompt.trim_start().starts_with("/draft ") {
-    run_draft_command(app, &prompt);
+    crate::draft_command::run(app, &prompt);
   } else if prompt.trim_start() == "/run" || prompt.trim_start().starts_with("/run ") {
     app.router.navigate(ContextPanel::Tasks);
     match shell_words::split(&prompt) {
@@ -225,6 +238,16 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
     } else {
       format!("未知命令 /{command}。输入 / 查看命令，或 /help 查看帮助。")
     };
+  } else if app.connection == Connection::Connected
+    && (app.active_run.is_some()
+      || app.input_attempt.as_ref().is_some_and(|attempt| {
+        app
+          .selected_session()
+          .is_some_and(|session| session.id == attempt.session)
+          && attempt.prompt == prompt
+      }))
+  {
+    crate::run_input_ui::submit(app, actions, agent_core::events::QueueKind::FollowUp)?;
   } else if app.connection != Connection::Connected {
     app.notice = "Disconnected: Ctrl+R reconnects. Your draft is preserved.".into();
   } else if let Some(session) = app.selected_session() {
@@ -243,181 +266,6 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
     app.notice = "Ctrl+N creates a session before sending.".into();
   }
   Ok(())
-}
-
-#[derive(Debug)]
-enum P0Command {
-  New,
-  Sessions,
-  Cancel,
-  Resource(crate::resource_command::ResourceCommand),
-}
-
-fn parse_p0(prompt: &str) -> Option<Result<P0Command, String>> {
-  let words = match shell_words::split(prompt) {
-    Ok(words) => words,
-    Err(error) if prompt.trim_start().starts_with('/') => {
-      return Some(Err(format!("Invalid command quoting: {error}")));
-    }
-    Err(_) => return None,
-  };
-  let root = words.first()?.as_str();
-  let args = &words[1..];
-  let parsed = match root {
-    "/new" if args.is_empty() => Ok(P0Command::New),
-    "/sessions" if args.is_empty() => Ok(P0Command::Sessions),
-    "/cancel" if args.is_empty() => Ok(P0Command::Cancel),
-    "/status" if args.is_empty() => Ok(P0Command::Resource(
-      crate::resource_command::ResourceCommand::Status,
-    )),
-    "/providers" => parse_providers(args),
-    "/models" | "/model" => crate::model_command::parse(args).map(P0Command::Resource),
-    "/git" if args.is_empty() => Ok(P0Command::Resource(
-      crate::resource_command::ResourceCommand::Git,
-    )),
-    "/diff" if args.len() <= 1 => Ok(P0Command::Resource(
-      crate::resource_command::ResourceCommand::Diff {
-        path: args.first().cloned().unwrap_or_default(),
-      },
-    )),
-    "/skills" => parse_skills(args),
-    _ => return None,
-  };
-  Some(parsed)
-}
-
-fn parse_providers(args: &[String]) -> Result<P0Command, String> {
-  use crate::resource_command::ResourceCommand;
-  match args {
-    [] => Ok(P0Command::Resource(ResourceCommand::Providers {
-      client_candidates: crate::resource_command::candidate_environment_names(),
-    })),
-    [verb, provider, environment] if verb == "upload" => {
-      Ok(P0Command::Resource(ResourceCommand::ProviderUpload {
-        provider: provider.clone(),
-        environment: environment.clone(),
-      }))
-    }
-    [verb, provider] if verb == "remove" => {
-      Ok(P0Command::Resource(ResourceCommand::ProviderRemove {
-        provider: provider.clone(),
-      }))
-    }
-    [verb, ..] if verb == "upload" || verb == "remove" => {
-      Err("Usage: /providers upload PROVIDER ENV_NAME | /providers remove PROVIDER".into())
-    }
-    _ => Err("Usage: /providers [upload PROVIDER ENV_NAME | remove PROVIDER]".into()),
-  }
-}
-
-fn parse_skills(args: &[String]) -> Result<P0Command, String> {
-  use crate::resource_command::ResourceCommand;
-  let valid_scope = |scope: &str| matches!(scope, "daemon_user" | "workspace");
-  match args {
-    [] => {
-      Ok(P0Command::Resource(ResourceCommand::SkillsList {
-        scope: "daemon_user".into(),
-      }))
-    }
-    [verb] if verb == "list" => {
-      Ok(P0Command::Resource(ResourceCommand::SkillsList {
-        scope: "daemon_user".into(),
-      }))
-    }
-    [verb, scope] if verb == "list" && valid_scope(scope) => {
-      Ok(P0Command::Resource(ResourceCommand::SkillsList {
-        scope: scope.clone(),
-      }))
-    }
-    [verb, source] if verb == "inspect" => Ok(P0Command::Resource(ResourceCommand::SkillInspect {
-      source: source.clone(),
-      scope: "daemon_user".into(),
-    })),
-    [verb, source, scope] if verb == "inspect" && valid_scope(scope) => {
-      Ok(P0Command::Resource(ResourceCommand::SkillInspect {
-        source: source.clone(),
-        scope: scope.clone(),
-      }))
-    }
-    [verb, source, scope, expected] if verb == "install" && valid_scope(scope) => {
-      Ok(P0Command::Resource(ResourceCommand::SkillInstall {
-        source: source.clone(),
-        scope: scope.clone(),
-        expected_sha256: expected.clone(),
-      }))
-    }
-    [verb, name, scope, expected] if verb == "remove" && valid_scope(scope) => {
-      Ok(P0Command::Resource(ResourceCommand::SkillRemove {
-        name: name.clone(),
-        scope: scope.clone(),
-        expected_sha256: expected.clone(),
-      }))
-    }
-    _ => Err("Usage: /skills list [daemon_user|workspace] · inspect SOURCE [SCOPE] · install SOURCE SCOPE EXPECTED_SHA256 · remove NAME SCOPE EXPECTED_SHA256".into()),
-  }
-}
-
-fn run_draft_command(app: &mut App, prompt: &str) {
-  let words = match shell_words::split(prompt) {
-    Ok(words) => words,
-    Err(error) => {
-      app.draft_detail = format!("Invalid draft command quoting: {error}");
-      app.router.navigate(ContextPanel::Drafts);
-      return;
-    }
-  };
-  match words.as_slice() {
-    [_, command] if command == "list" => {
-      app.draft_detail = if app.drafts.is_empty() && app.unbound_draft.is_empty() {
-        "没有保存的草稿。".into()
-      } else {
-        app
-          .drafts
-          .iter()
-          .map(|(session, draft)| {
-            let known = app.sessions.iter().any(|value| value.id == *session);
-            format!(
-              "{} {session} · {} 字符 · /draft recover {session}",
-              if known {
-                "会话草稿"
-              } else {
-                "原会话当前不可用"
-              },
-              draft.chars().count()
-            )
-          })
-          .chain((!app.unbound_draft.is_empty()).then(|| {
-            format!(
-              "未绑定草稿 · {} 字符 · /draft recover unbound",
-              app.unbound_draft.chars().count()
-            )
-          }))
-          .collect::<Vec<_>>()
-          .join("\n")
-      };
-      app.input.clear();
-      app.recovered_draft_from = None;
-    }
-    [_, command, session] if command == "recover" => {
-      let draft = if session == "unbound" {
-        (!app.unbound_draft.is_empty()).then(|| app.unbound_draft.clone())
-      } else {
-        app.drafts.get(session).cloned()
-      };
-      if let Some(draft) = draft {
-        app.input = crate::composer::Composer::from(draft.as_str());
-        app.recovered_draft_from = Some(session.clone());
-        app.draft_detail =
-          format!("已从会话 {session} 恢复草稿到编辑器。检查内容和当前会话后按 Enter 才会提交。");
-      } else {
-        app.draft_detail = format!("找不到会话 {session} 的保存草稿。没有发送任何内容。");
-      }
-    }
-    _ => {
-      app.draft_detail = "用法：/draft list · /draft recover SESSION_ID".into();
-    }
-  }
-  app.router.navigate(ContextPanel::Drafts);
 }
 
 pub(crate) fn request_task_page(
@@ -446,95 +294,4 @@ pub(crate) fn request_task_page(
 
 pub(crate) fn load_tasks(app: &App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
   request_task_page(app, actions, "")
-}
-
-/// Confirming a picker row only dispatches a daemon action; it never applies state locally.
-pub(crate) fn confirm_picker(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
-  let Some(value) = app
-    .picker
-    .as_ref()
-    .and_then(|picker| picker.selected_value().cloned())
-  else {
-    app.notice = "没有可用的选项。".into();
-    app.close_picker();
-    return Ok(());
-  };
-  app.close_picker();
-  match value {
-    crate::picker::PickerValue::Model { model, execution } => {
-      let Some(session) = app.selected_session().map(|session| session.id.clone()) else {
-        app.notice = "请先创建或选择一个会话。".into();
-        return Ok(());
-      };
-      let navigation_revision = app.router.begin_request();
-      send(
-        actions,
-        Action::Resource {
-          session: Some(session),
-          generation: app.generation,
-          navigation_revision,
-          source: String::new(),
-          command: crate::resource_command::ResourceCommand::ModelSelect { model, execution },
-        },
-      )?;
-      app.notice = "正在切换模型…".into();
-    }
-    crate::picker::PickerValue::Session { id } => {
-      let Some(index) = app.sessions.iter().position(|session| session.id == id) else {
-        app.notice = "该会话已不存在。".into();
-        return Ok(());
-      };
-      app.select_session(index);
-      send(
-        actions,
-        Action::Select {
-          session: id,
-          generation: app.generation,
-        },
-      )?;
-    }
-    crate::picker::PickerValue::Provider {
-      provider,
-      environment,
-    } => {
-      if environment.is_empty() {
-        app.notice = format!("{provider} 没有检测到可上传的凭据环境变量。");
-        return Ok(());
-      }
-      let navigation_revision = app.router.begin_request();
-      send(
-        actions,
-        Action::Resource {
-          session: None,
-          generation: app.generation,
-          navigation_revision,
-          source: String::new(),
-          command: crate::resource_command::ResourceCommand::ProviderUpload {
-            provider,
-            environment,
-          },
-        },
-      )?;
-      app.notice = "正在上传凭据…".into();
-    }
-    crate::picker::PickerValue::Skill { name, scope } => {
-      let session = app.selected_session().map(|session| session.id.clone());
-      let navigation_revision = app.router.begin_request();
-      send(
-        actions,
-        Action::Resource {
-          session,
-          generation: app.generation,
-          navigation_revision,
-          source: String::new(),
-          command: crate::resource_command::ResourceCommand::SkillInspect {
-            source: name,
-            scope,
-          },
-        },
-      )?;
-      app.notice = "正在读取技能…".into();
-    }
-  }
-  Ok(())
 }

@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+tonic.workspace = true
+agent-core = { path = "../../crates/agent-core" }
 anyhow.workspace = true
 clap.workspace = true
 directories.workspace = true
@@ -43,7 +45,6 @@ shell-words.workspace = true
 async-trait.workspace = true
 agent-computer = { path = "../../crates/agent-computer", default-features = false }
 agentd = { path = "../agentd" }
-agent-core = { path = "../../crates/agent-core" }
 agent-distributed = { path = "../../crates/agent-distributed" }
 agent-inference = { path = "../../crates/agent-inference" }
 agent-test-support = { path = "../../crates/agent-test-support" }
@@ -51,7 +52,6 @@ portable-pty = "0.9"
 vt100 = "0.18"
 tempfile.workspace = true
 tokio-stream.workspace = true
-tonic.workspace = true
 
 [features]
 default = []

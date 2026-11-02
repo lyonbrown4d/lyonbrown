@@ -1,4 +1,5 @@
 mod mcp_support;
+use agent_core::events::{AgentEvent, DecodedEvent, decode};
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply};
 use mcp_support::{Fixture, Node};
 use serde_json::{Value, json};
@@ -31,18 +32,19 @@ async fn every_model_protocol_persists_exact_mcp_approval_and_consumes_only_acce
         .store
         .events(&run.id, 0, 1000)
         .expect("durable events");
-      let tool_started: Value = serde_json::from_str(
-        &events
-          .iter()
-          .find(|event| event.kind == "tool_started")
-          .expect("durable tool intent")
-          .payload_json,
-      )
-      .expect("tool intent JSON");
+      let call_id = events
+        .iter()
+        .find_map(
+          |event| match decode(&event.kind, &event.payload_json).expect("event contract") {
+            DecodedEvent::Known(AgentEvent::ToolStarted { call_id, .. }) => Some(call_id),
+            _ => None,
+          },
+        )
+        .expect("durable tool intent");
       let exact: Value = serde_json::from_str(&approval.arguments_json).expect("exact approval");
       assert_eq!(
         exact,
-        json!({"server":"fixture","tool":"echo","call_id":tool_started["call_id"],"arguments":{"message":"exact fixture value"}})
+        json!({"server":"fixture","tool":"echo","call_id":call_id,"arguments":{"message":"exact fixture value"}})
       );
       assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
       assert_eq!(

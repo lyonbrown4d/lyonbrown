@@ -128,8 +128,7 @@ impl OrchestrationService for Daemon {
     request: Request<v1::RemoteTaskRequest>,
   ) -> Result<Response<v1::Task>, Status> {
     let input = request.into_inner();
-    let target = validation::target(input.target)?;
-    self.master_task_target(&input.task_id, &target)?;
+    let target = self.resolve_master_task_target(&input.task_id, input.target)?;
     let value = self
       .dispatcher()?
       .reconcile(&target, &input.task_id)
@@ -144,8 +143,7 @@ impl OrchestrationService for Daemon {
     request: Request<v1::RemoteTaskRequest>,
   ) -> Result<Response<v1::Task>, Status> {
     let input = request.into_inner();
-    let target = validation::target(input.target)?;
-    self.master_task_target(&input.task_id, &target)?;
+    let target = self.resolve_master_task_target(&input.task_id, input.target)?;
     let value = self
       .dispatcher()?
       .cancel(&target, &input.task_id)
@@ -160,8 +158,7 @@ impl OrchestrationService for Daemon {
     request: Request<v1::AcceptRemoteResultRequest>,
   ) -> Result<Response<v1::Task>, Status> {
     let input = request.into_inner();
-    let target = validation::target(input.target)?;
-    self.master_task_target(&input.task_id, &target)?;
+    let target = self.resolve_master_task_target(&input.task_id, input.target)?;
     let value = self
       .dispatcher()?
       .accept(&target, &input.task_id, input.accepted)

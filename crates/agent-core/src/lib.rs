@@ -1,4 +1,5 @@
 //! Application-owned domain records; independent of UI and agent-engine types.
+pub mod events;
 mod records;
 pub use records::*;
 use std::time::{SystemTime, UNIX_EPOCH};

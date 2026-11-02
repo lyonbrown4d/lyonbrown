@@ -68,6 +68,7 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<u8> {
   loop {
     let completed = terminal.draw(|frame| view::render(frame, &app, theme))?;
     app.viewport = completed.area.height;
+    app.viewport_width = completed.area.width;
     tokio::select! {
         _ = &mut stop => break,
         update = updates.recv() => {

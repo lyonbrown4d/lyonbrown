@@ -18,6 +18,10 @@ use crate::theme::Theme;
 /// What confirming the highlighted row dispatches.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PickerValue {
+  History {
+    session: String,
+    prompt: String,
+  },
   Model {
     model: String,
     execution: String,
@@ -54,7 +58,9 @@ impl std::fmt::Display for PickerItem {
 pub struct Picker {
   pub title: String,
   pub items: Vec<PickerItem>,
+  /// Original item index, including while filtered.
   pub selected: usize,
+  pub query: String,
   pub loading: bool,
   pub error: String,
 }
@@ -72,6 +78,7 @@ impl Picker {
       selected: 0,
       loading: true,
       error: String::new(),
+      query: String::new(),
     }
   }
 
@@ -109,6 +116,7 @@ impl Picker {
         item
       })
       .collect();
+    self.set_query(self.query.clone());
     self
   }
 
@@ -136,6 +144,7 @@ impl Picker {
         .unwrap_or(0),
       loading: false,
       error: String::new(),
+      query: String::new(),
     }
   }
 
@@ -186,6 +195,7 @@ impl Picker {
       selected: 0,
       loading: false,
       error: String::new(),
+      query: String::new(),
     }
   }
 
@@ -215,30 +225,84 @@ impl Picker {
       selected: 0,
       loading: false,
       error: String::new(),
+      query: String::new(),
     }
   }
 
   pub fn is_empty(&self) -> bool {
-    self.items.is_empty()
+    self.visible_indices().is_empty()
+  }
+
+  /// Indices always refer to the unfiltered source catalog, including credential providers.
+  pub fn visible_indices(&self) -> Vec<usize> {
+    let query = self.query.to_lowercase();
+    self
+      .items
+      .iter()
+      .enumerate()
+      .filter(|(_, item)| {
+        query.is_empty()
+          || item.label.to_lowercase().contains(&query)
+          || item.detail.to_lowercase().contains(&query)
+          || matches!(&item.value,PickerValue::History{prompt,..} if prompt.to_lowercase().contains(&query))
+      })
+      .map(|(index, _)| index)
+      .collect()
+  }
+
+  pub fn set_query(&mut self, query: impl Into<String>) {
+    self.query = query.into().chars().take(256).collect();
+    let visible = self.visible_indices();
+    if !visible.contains(&self.selected) {
+      self.selected = visible.first().copied().unwrap_or(0);
+    }
+  }
+
+  pub fn filter(&mut self, character: char) {
+    if !character.is_control() && self.query.chars().count() < 256 {
+      let mut query = self.query.clone();
+      query.push(character);
+      self.set_query(query);
+    }
+  }
+
+  pub fn backspace(&mut self) {
+    let mut query = self.query.clone();
+    query.pop();
+    self.set_query(query);
   }
 
   pub fn selected_value(&self) -> Option<&PickerValue> {
-    self.items.get(self.selected).map(|item| &item.value)
+    self
+      .items
+      .get(self.selected)
+      .filter(|_| self.visible_indices().contains(&self.selected))
+      .map(|item| &item.value)
   }
 
   pub fn next(&mut self) {
-    if !self.items.is_empty() {
-      self.selected = (self.selected + 1).min(self.items.len() - 1);
+    let visible = self.visible_indices();
+    if let Some(position) = visible.iter().position(|index| *index == self.selected) {
+      if let Some(index) = visible.get(position + 1) {
+        self.selected = *index;
+      }
+    } else if let Some(index) = visible.first() {
+      self.selected = *index;
     }
   }
 
   pub fn previous(&mut self) {
-    self.selected = self.selected.saturating_sub(1);
+    let visible = self.visible_indices();
+    if let Some(position) = visible.iter().position(|index| *index == self.selected) {
+      self.selected = visible[position.saturating_sub(1)];
+    } else if let Some(index) = visible.first() {
+      self.selected = *index;
+    }
   }
 
   /// Rows shown by the overlay; the caller sizes the popup with the same number.
   pub fn visible_rows(&self) -> usize {
-    self.items.len().clamp(1, 8)
+    self.visible_indices().len().clamp(1, 8)
   }
 }
 
@@ -253,16 +317,20 @@ fn model_state(state: &str, reason: &str) -> String {
 
 pub fn render(frame: &mut Frame, area: Rect, picker: &Picker, theme: Theme) {
   frame.render_widget(Clear, area);
-  if picker.items.is_empty() {
+  let visible = picker.visible_indices();
+  let title = format!("{} · 搜索: {}", picker.title, picker.query);
+  if visible.is_empty() {
     let message = if picker.loading {
       "加载中…"
+    } else if !picker.query.is_empty() {
+      "没有匹配项 · Backspace 修改搜索 · Esc 取消"
     } else {
       "没有可选项"
     };
     frame.render_widget(
       Paragraph::new(Text::from(vec![
         Line::from(Span::styled(
-          picker.title.clone(),
+          title.clone(),
           Style::default()
             .fg(theme.accent)
             .add_modifier(Modifier::BOLD),
@@ -290,10 +358,18 @@ pub fn render(frame: &mut Frame, area: Rect, picker: &Picker, theme: Theme) {
     indicator_empty: "  ",
     bordered: true,
   };
-  let mut state = ListPickerState::new(picker.items.len());
-  state.select(picker.selected);
+  let mut state = ListPickerState::new(visible.len());
+  state.select(
+    visible
+      .iter()
+      .position(|index| *index == picker.selected)
+      .unwrap_or(0),
+  );
   state.ensure_visible(area.height.saturating_sub(3) as usize);
-  let items = picker.items.clone();
+  let items: Vec<_> = visible
+    .iter()
+    .filter_map(|index| picker.items.get(*index))
+    .collect();
   frame.render_widget(
     ListPicker::new(&items, &state)
       .render_item(|item, _index, _selected| {
@@ -302,7 +378,7 @@ pub fn render(frame: &mut Frame, area: Rect, picker: &Picker, theme: Theme) {
           Span::styled(item.detail.clone(), Style::default().fg(theme.muted)),
         ])]
       })
-      .title(&picker.title)
+      .title(&title)
       .style(style),
     area,
   );

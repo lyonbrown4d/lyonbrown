@@ -218,6 +218,8 @@ fn saved_drafts_restore_known_sessions_and_preserve_orphans_for_explicit_recover
     Update::LocalState {
       node_id: Some("node-1".into()),
       state: Some(ClientState {
+        input_attempt: None,
+        interaction: Default::default(),
         selected_session: Some("known-b".into()),
         drafts: [
           ("known-a".into(), "draft A".into()),

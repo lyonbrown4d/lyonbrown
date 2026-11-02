@@ -4,6 +4,20 @@
 
 浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。
 
+## TUI 执行活动与输入历史
+
+2026 年 11 月 2 日在 macOS 27.2（26B123）、arm64 上运行版本 0.1.0 的 `agent-cli` 子进程，通过认证连接真实 agentd 和回环 Chat Completions 合成模型。下图由实际 PTY 的终端单元格快照渲染，保留程序输出与终端颜色；不是原生 Terminal 窗口截图。[运行记录](evidence/tui-interaction-macos.json)保存程序、源码、单元格和图片摘要。
+
+![macOS PTY 中展开的工具参数与结果](images/tui-activity-macos.png)
+
+主模型通过真实适配器请求 `read_file`，读取临时工作区中的 `fixture.txt`。F6 面板显示 daemon 产出的工具完成事件，Enter 展开参数和实际结果；下一次模型请求包含读取内容。底部模型身份、上下文预算和用量来自 daemon 事件，用量只累计已提交的记录。
+
+![macOS PTY 中筛选已确认的输入历史](images/tui-history-macos.png)
+
+Run 完成后打开 Ctrl+P，用 `fixture` 筛选已确认输入，再按 Enter 回填编辑器。验收核对 Run 数仍为 1，模型请求仍为 2；回填和弹层中的退出没有新建执行。
+
+另行执行的回环 mock 回归覆盖 Responses、Chat Completions 和 Anthropic Messages 的队列输入与权限约束，并核对撤销失败后的快照、`Uncertain`、事件与 Outbox。恢复检查不重放模型或工具调用。上游队列撤销持久化缺陷已提交至 [pi-rust #235](https://github.com/bigfish1913/pi-rust/issues/235)。Desktop 此次仅验证共享事件解码，未重新运行 GPUI 窗口；本组结果也不代表真实模型质量、性能、原生 CEF/Computer、Windows、Linux 或公网验收。
+
 ## Desktop 异常恢复与未终结 Task 核对
 
 2026 年 11 月 1 日在 macOS 27.2（26B123）、arm64 上运行 0.1.0 原生验收程序，使用 GPUI Kit 0.8.1、真实认证 agentd、已配对的 mTLS Worker 和本地 Chat Completions 合成模型。程序复用产品视图与恢复操作；本次构建来自未提交工作区，属于本地调试应用包。[运行记录](evidence/desktop-recovery-macos.json)包含对应程序、源码和三张截图的摘要，以及实际持久化状态。复现方式见[开发与验证](development.md)。

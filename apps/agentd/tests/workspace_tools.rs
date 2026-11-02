@@ -1,4 +1,5 @@
 mod support;
+use agent_core::events::{AgentEvent, DecodedEvent, decode};
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply_with_id};
 use agent_workspace::Workspace;
 use serde_json::{Value, json};
@@ -96,16 +97,25 @@ async fn model_discovers_searches_and_reads_scoped_rules_through_every_protocol(
     let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
     let finished = events
       .iter()
-      .filter(|event| event.kind == "tool_finished")
-      .map(|event| serde_json::from_str::<Value>(&event.payload_json).unwrap())
+      .filter_map(
+        |event| match decode(&event.kind, &event.payload_json).expect("event contract") {
+          DecodedEvent::Known(AgentEvent::ToolFinished {
+            name,
+            text,
+            is_error,
+            ..
+          }) => Some((name, text, is_error)),
+          _ => None,
+        },
+      )
       .collect::<Vec<_>>();
     assert_eq!(finished.len(), 4);
-    assert!(finished.iter().all(|event| event["is_error"] == false));
+    assert!(finished.iter().all(|event| !event.2));
     let missing = finished
       .iter()
-      .find(|event| event["name"] == "search_files")
+      .find(|event| event.0 == "search_files")
       .unwrap();
-    let missing: Value = serde_json::from_str(missing["text"].as_str().unwrap()).unwrap();
+    let missing: Value = serde_json::from_str(&missing.1).unwrap();
     assert_eq!(missing["matches"], json!([]));
     assert_eq!(
       missing["repository_instructions"][1]["content"],
@@ -186,11 +196,18 @@ async fn approved_model_write_conflicts_with_editor_revision_without_overwrite_f
     let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
     let write = events
       .iter()
-      .filter(|event| event.kind == "tool_finished")
-      .map(|event| serde_json::from_str::<Value>(&event.payload_json).unwrap())
-      .find(|event| event["name"] == "write_file")
+      .find_map(
+        |event| match decode(&event.kind, &event.payload_json).expect("event contract") {
+          DecodedEvent::Known(AgentEvent::ToolFinished { name, is_error, .. })
+            if name == "write_file" =>
+          {
+            Some(is_error)
+          }
+          _ => None,
+        },
+      )
       .unwrap();
-    assert_eq!(write["is_error"], true);
+    assert!(write);
     assert!(
       node
         .client

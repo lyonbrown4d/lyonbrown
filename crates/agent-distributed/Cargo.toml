@@ -23,6 +23,7 @@ sha2.workspace = true
 hex.workspace = true
 uuid.workspace = true
 tracing.workspace = true
+url = "2"
 mdns-sd = "0.21.6"
 rcgen = "0.14"
 rustls-pemfile = "2.2"

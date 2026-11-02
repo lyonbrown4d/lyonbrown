@@ -8,6 +8,7 @@ pub use receipts::assert_receipts;
 pub use runtime::Runtime;
 
 use crate::support::TestNode;
+use agent_core::events::{AgentEvent, DecodedEvent, decode};
 use agent_protocol::v1;
 use agent_test_support::MockModelServer;
 use serde_json::{Value, json};
@@ -65,19 +66,26 @@ pub fn exact_approval(node: &TestNode, pending: &v1::Approval, host: &str, args:
   assert_eq!(exact["owner_epoch"], 1);
   assert_eq!(exact["timeout_ms"], 5000);
   assert_eq!(exact["run_id"], pending.run_id);
-  let started: Vec<Value> = node
+  let started: Vec<_> = node
     .daemon
     .store
     .events(&pending.run_id, 0, 1000)
     .unwrap()
     .into_iter()
-    .filter(|event| event.kind == "tool_started")
-    .map(|event| serde_json::from_str(&event.payload_json).unwrap())
-    .filter(|event: &Value| event["name"] == "computer_act")
+    .filter_map(
+      |event| match decode(&event.kind, &event.payload_json).expect("event contract") {
+        DecodedEvent::Known(AgentEvent::ToolStarted {
+          call_id,
+          name,
+          arguments,
+        }) if name == "computer_act" => Some((call_id, arguments)),
+        _ => None,
+      },
+    )
     .collect();
   assert_eq!(started.len(), 1);
-  assert_eq!(started[0]["arguments"], *args);
-  assert_eq!(exact["call_id"], started[0]["call_id"]);
+  assert_eq!(started[0].1, *args);
+  assert_eq!(exact["call_id"], started[0].0);
   assert_eq!(exact["host_id"], host);
   assert_eq!(
     exact["original_observation"],

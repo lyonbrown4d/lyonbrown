@@ -3,6 +3,7 @@ mod local_model_worker;
 mod local_support;
 mod peer_support;
 
+use agent_core::events::{AgentEvent, DecodedEvent, ExecutionPhase, decode};
 use std::time::Duration;
 
 use agent_protocol::v1::{self, client_service_server::ClientService};
@@ -51,7 +52,13 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status, "completed");
     let events = pair.worker.store.events(&runs[0].id, 0, 1000).unwrap();
-    assert!(events.iter().any(|event| event.kind == "run_started"));
+    assert!(events.iter().any(|event| matches!(
+      decode(&event.kind, &event.payload_json).expect("event contract"),
+      DecodedEvent::Known(AgentEvent::PhaseChanged {
+        phase: ExecutionPhase::ConnectingModel,
+        ..
+      })
+    )));
     let plan: serde_json::Value = serde_json::from_str(
       &events
         .iter()

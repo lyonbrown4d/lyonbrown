@@ -27,6 +27,8 @@ impl ClientService for Daemon {
       capabilities: vec![
         "sessions".into(),
         "runs".into(),
+        "runs.input".into(),
+        "events.semantic".into(),
         "runs.recover".into(),
         "workspace.read".into(),
         "workspace.write.approval".into(),
@@ -237,6 +239,32 @@ impl ClientService for Daemon {
     }
     self.events.notify_waiters();
     Ok(Response::new(value.into()))
+  }
+  async fn submit_run_input(
+    &self,
+    request: Request<v1::RunInputRequest>,
+  ) -> Result<Response<v1::RunInputReceipt>, Status> {
+    self
+      .submit_input(request.into_inner())
+      .await
+      .map(Response::new)
+  }
+  async fn cancel_run_input(
+    &self,
+    request: Request<v1::CancelRunInputRequest>,
+  ) -> Result<Response<v1::RunInputReceipt>, Status> {
+    self
+      .cancel_input(request.into_inner())
+      .await
+      .map(Response::new)
+  }
+  async fn list_run_inputs(
+    &self,
+    request: Request<v1::RunRequest>,
+  ) -> Result<Response<v1::RunInputs>, Status> {
+    self
+      .input_snapshot(&request.into_inner().run_id)
+      .map(Response::new)
   }
   async fn list_runs(
     &self,

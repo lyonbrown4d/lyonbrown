@@ -5,6 +5,33 @@ use crate::{
 
 pub fn apply(app: &mut App, update: Update) {
   match update {
+    Update::Inputs {
+      generation,
+      run,
+      inputs,
+    } => {
+      if generation != app.generation {
+        return;
+      }
+      let _ = run;
+      for receipt in inputs {
+        if let Some(existing) = app
+          .input_receipts
+          .iter_mut()
+          .find(|value| value.entry_id == receipt.entry_id)
+        {
+          if !crate::run_input_ui::terminal_input_state(existing.state)
+            || crate::run_input_ui::terminal_input_state(receipt.state)
+          {
+            *existing = receipt;
+          }
+        } else {
+          app.input_receipts.push(receipt);
+        }
+      }
+      app.notice = "输入状态已由 agentd 确认；F7 查看待处理、采纳和撤销记录。".into();
+    }
+
     Update::RecoveryResult {
       session,
       generation,
@@ -115,6 +142,7 @@ pub fn apply(app: &mut App, update: Update) {
       app.generation = app.generation.saturating_add(1);
       let selected = app.selected_session().map(|session| session.id.clone());
       app.connection = Connection::Connected;
+      app.activity = Default::default();
       app.streaming = None;
       app.sessions = sessions
         .into_iter()
@@ -135,6 +163,9 @@ pub fn apply(app: &mut App, update: Update) {
       preserve,
     } => {
       app.state_loaded = true;
+      app
+        .interaction
+        .bind_connection(node_id.as_deref().unwrap_or_default());
       app.persistence_node_id = node_id;
       app.persistence_warning = warning.unwrap_or_default();
       if preserve {
@@ -142,6 +173,8 @@ pub fn apply(app: &mut App, update: Update) {
       }
       if let Some(state) = state {
         app.generation = app.generation.saturating_add(1);
+        app.interaction.import_history(state.interaction);
+        app.input_attempt = state.input_attempt;
         app.drafts = state.drafts;
         app.unbound_draft = state.unbound_draft;
         if let Some(index) = state
@@ -171,7 +204,14 @@ pub fn apply(app: &mut App, update: Update) {
       });
       app.selected = app.sessions.len().saturating_sub(1);
       app.sessions_cursor = app.selected;
+      app.activity = Default::default();
+      app.workflow = Default::default();
+      app.input_receipts.clear();
+      app.input_selected = 0;
+      app.transcript_anchor = None;
+      app.reading = Default::default();
       app.messages.clear();
+      app.message_keys.clear();
       app.tasks.clear();
       app.task_rows.clear();
       app.task_cursor.clear();
@@ -200,29 +240,34 @@ pub fn apply(app: &mut App, update: Update) {
       runs.sort_by_key(|run| run.created_at_ms);
       app.tasks.clear();
       app.messages.clear();
+      app.message_keys.clear();
       app.active_run = None;
       for run in runs {
         if !run.result.is_empty() && app.streaming.as_ref().is_some_and(|(id, _)| id == &run.id) {
           app.streaming = None;
         }
         app.tasks.push(format!("{}\n{}", run.id, run.status));
+        app.message_keys.push(format!("{}:prompt", run.id));
         app.messages.push(Message {
           role: "You".into(),
           content: run.prompt,
         });
         if !run.result.is_empty() {
+          app.message_keys.push(format!("{}:result", run.id));
           app.messages.push(Message {
             role: "Agent".into(),
             content: run.result,
           });
         }
         if !run.error.is_empty() {
+          app.message_keys.push(format!("{}:error", run.id));
           app.messages.push(Message {
             role: "Error".into(),
             content: run.error,
           });
         }
         if run.status == "uncertain" {
+          app.message_keys.push(format!("{}:recovery", run.id));
           app.messages.push(Message {
             role: "Recovery".into(),
             content: format!(
@@ -250,16 +295,20 @@ pub fn apply(app: &mut App, update: Update) {
       if generation != app.generation {
         return;
       }
-      app.notice = format!("Task event · {} · cursor {}", event.kind, event.cursor);
-      if event.kind == "text_delta"
-        && app.active_run.as_deref() == Some(event.run_id.as_str())
-        && let Ok(payload) = serde_json::from_str::<serde_json::Value>(&event.payload_json)
-        && let Some(text) = payload.get("text").and_then(|value| value.as_str())
+      if !app.activity.apply(&event) {
+        return;
+      }
+      crate::run_input_ui::apply_event(app, &event);
+      app.notice = app.activity.summary();
+      if app.active_run.as_deref() == Some(event.run_id.as_str())
+        && let Ok(agent_core::events::DecodedEvent::Known(
+          agent_core::events::AgentEvent::TextDelta { text },
+        )) = agent_core::events::decode(&event.kind, &event.payload_json)
       {
         let (_, content) = app
           .streaming
           .get_or_insert_with(|| (event.run_id, String::new()));
-        content.push_str(text);
+        content.push_str(&text);
       }
     }
     Update::Approvals {
@@ -272,6 +321,7 @@ pub fn apply(app: &mut App, update: Update) {
           .selected_session()
           .is_some_and(|selected| selected.id == session)
       {
+        app.workflow.approvals.replace(approvals.clone());
         app.approvals = approvals
           .into_iter()
           .map(|approval| Approval {
@@ -282,7 +332,18 @@ pub fn apply(app: &mut App, update: Update) {
       }
     }
 
-    Update::ApprovalDecided(id) => app.approvals.retain(|approval| approval.id != id),
+    Update::ApprovalDecided(id) => {
+      app.approvals.retain(|approval| approval.id != id);
+      let remaining = app
+        .workflow
+        .approvals
+        .rows()
+        .iter()
+        .filter(|approval| approval.id != id)
+        .cloned()
+        .collect();
+      app.workflow.approvals.replace(remaining);
+    }
     Update::Notice(notice) => {
       app.submitting = false;
       app.notice = notice;
@@ -293,6 +354,14 @@ pub fn apply(app: &mut App, update: Update) {
       generation,
     } => {
       app.submitting = false;
+      app.interaction.record_acknowledged(&session, &prompt);
+      if app
+        .input_attempt
+        .as_ref()
+        .is_some_and(|attempt| attempt.session == session && attempt.prompt == prompt)
+      {
+        app.input_attempt = None;
+      }
       if app
         .drafts
         .get(&session)
@@ -357,6 +426,19 @@ pub fn apply(app: &mut App, update: Update) {
         } else {
           app.task_rows = tasks.clone();
           app.task_selected = 0;
+        }
+        app.workflow.tasks.replace(app.task_rows.clone());
+        if let Some(id) = app.workflow.tasks.selected_id() {
+          app.task_selected = app
+            .task_rows
+            .iter()
+            .position(|row| {
+              row
+                .pointer("/envelope/task_id")
+                .and_then(serde_json::Value::as_str)
+                == Some(id)
+            })
+            .unwrap_or(0);
         }
         app.task_cursor = value
           .get("next_task_id")

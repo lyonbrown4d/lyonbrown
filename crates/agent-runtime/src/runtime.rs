@@ -17,7 +17,8 @@ use crate::{
 };
 
 pub struct Runtime {
-  harness: AgentHarness,
+  pub(crate) harness: AgentHarness,
+  pub(crate) control: Arc<crate::control::InputControl>,
   _listeners: Vec<OnUnsubscribe>,
   _compaction: WatchHandle<()>,
   execution: tokio::sync::Mutex<()>,
@@ -61,6 +62,11 @@ impl Runtime {
         "rpi-harness requires a multithreaded Tokio runtime for durable frame callbacks".into(),
       ));
     }
+    let control = Arc::new(crate::control::InputControl::default());
+    let persistence = Arc::new(crate::control::InputPersistence {
+      inner: persistence,
+      control: control.clone(),
+    });
     let storage = DurableSession::open(&config.session_id, config.owner_epoch, persistence).await?;
     let session = Session::new(Arc::new(storage), None);
     ensure_certain(&session).await?;
@@ -94,6 +100,9 @@ impl Runtime {
       },
       tool_execution: HarnessToolExecution::Sequential,
       agent_emitter: Some(Arc::new(Emitter(on_event.clone()))),
+      provider_hooks: Some(Arc::new(crate::request_events::RequestEvents(
+        on_event.clone(),
+      ))),
       after_tool_call: Some(crate::tools::uncertainty_hook()),
       ..Default::default()
     })
@@ -124,6 +133,7 @@ impl Runtime {
     }));
     Ok(Self {
       harness,
+      control,
       _listeners: listeners,
       _compaction: compaction,
       execution: tokio::sync::Mutex::new(()),
@@ -165,6 +175,12 @@ impl Runtime {
       })
       .collect();
     let result = self.harness.prompt_text(prompt, images).await;
+    self.close_input_admission().await;
+    if self.input_persistence_failed() {
+      return Err(RuntimeError::Uncertain(
+        "session input persistence failed".into(),
+      ));
+    }
     ensure_certain(self.harness.session()).await?;
     result.map(convert_result).map_err(harness_error)
   }

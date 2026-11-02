@@ -3,6 +3,7 @@
 
 mod classification;
 mod contracts;
+mod control;
 mod event_projection;
 mod events;
 mod image_recovery;
@@ -12,7 +13,9 @@ mod local_stream;
 mod persistence;
 mod provider;
 mod recovery;
+mod request_events;
 mod runtime;
+mod semantic_events;
 mod tools;
 
 pub use classification::{CLASSIFICATION_OUTPUT_LIMIT, classify_json};

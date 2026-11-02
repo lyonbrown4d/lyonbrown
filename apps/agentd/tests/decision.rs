@@ -1,4 +1,5 @@
 mod support;
+use agent_core::events::{AgentEvent, DecodedEvent, ExecutionPhase, decode};
 use agent_test_support::{
   MockModelServer, ScriptedReply, StandardProtocol, text_reply, tool_reply,
 };
@@ -43,11 +44,13 @@ async fn classifier_then_harness_uses_persisted_effective_plan_for_every_protoco
     let plan: serde_json::Value = serde_json::from_str(&events[plan_index].payload_json).unwrap();
     assert_eq!(plan["source"]["kind"], "classifier");
     assert_eq!(plan["risk_level"], "high");
-    assert!(
-      events[plan_index + 1..]
-        .iter()
-        .any(|event| event.kind == "run_started")
-    );
+    assert!(events[plan_index + 1..].iter().any(|event| matches!(
+      decode(&event.kind, &event.payload_json).expect("event contract"),
+      DecodedEvent::Known(AgentEvent::PhaseChanged {
+        phase: ExecutionPhase::ConnectingModel,
+        ..
+      })
+    )));
     let requests = main.requests().await;
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].body["model"], "main-fixture");
@@ -187,7 +190,13 @@ async fn cancellation_during_classification_never_starts_main_model() {
     assert_eq!(result.status, "cancelled");
     assert!(main.requests().await.is_empty());
     let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
-    assert!(!events.iter().any(|event| event.kind == "run_started"));
+    assert!(!events.iter().any(|event| matches!(
+      decode(&event.kind, &event.payload_json).expect("event contract"),
+      DecodedEvent::Known(AgentEvent::PhaseChanged {
+        phase: ExecutionPhase::ConnectingModel,
+        ..
+      })
+    )));
     assert!(
       node
         .client

@@ -15,12 +15,13 @@ impl SessionPersistence for Store {
     mutation: SessionMutation,
   ) -> Result<()> {
     self
-      .commit_snapshot(
+      .commit_snapshot_with_events(
         session_id,
         owner_epoch,
         &snapshot,
         &mutation.kind,
         mutation.payload,
+        &mutation.events,
       )
       .map_err(|e| RuntimeError::Persistence(e.to_string()))
   }

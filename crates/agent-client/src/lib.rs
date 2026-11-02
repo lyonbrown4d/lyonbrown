@@ -8,6 +8,7 @@ mod models;
 pub mod navigation;
 mod orchestration;
 mod recovery;
+mod run_input;
 mod skills;
 mod workspace;
 use agent_protocol::v1::{self, client_service_client::ClientServiceClient};

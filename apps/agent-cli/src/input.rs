@@ -1,3 +1,4 @@
+use crate::input_overlay::{complete_selected, handle_diff_key, handle_picker_key};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tokio::sync::mpsc;
 
@@ -42,6 +43,9 @@ fn handle_key(
   key: KeyEvent,
   actions: &mpsc::Sender<Action>,
 ) -> anyhow::Result<bool> {
+  if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c' | 'd')) {
+    return Ok(true);
+  }
   // A full-screen diff and a picker own the keyboard while they are open.
   if app.diff.is_some() {
     handle_diff_key(app, key);
@@ -56,6 +60,10 @@ fn handle_key(
     match key.code {
       KeyCode::Char('c' | 'd') => return Ok(true),
       KeyCode::Char('n') => send(actions, Action::NewSession)?,
+      KeyCode::Char('s') => {
+        crate::run_input_ui::submit(app, actions, agent_core::events::QueueKind::Steer)?
+      }
+      KeyCode::Char('p') => crate::history_ui::open(app),
       KeyCode::Char('r') => {
         if let Some(node_id) = app.persistence_node_id.clone() {
           let state = app.client_state();
@@ -71,11 +79,16 @@ fn handle_key(
         }
       }
       KeyCode::Char('y' | 'e') => {
-        if let Some(approval) = app.approvals.first() {
+        if let Some(id) = app
+          .workflow
+          .approvals
+          .decision_id(agent_core::now_ms())
+          .map(str::to_owned)
+        {
           send(
             actions,
             Action::Approve {
-              id: approval.id.clone(),
+              id,
               approved: key.code == KeyCode::Char('y'),
             },
           )?;
@@ -85,6 +98,59 @@ fn handle_key(
     }
   } else {
     match key.code {
+      KeyCode::Up if app.router.current() == ContextPanel::Inputs => {
+        app.input_selected = app.input_selected.saturating_sub(1)
+      }
+      KeyCode::Down if app.router.current() == ContextPanel::Inputs => {
+        app.input_selected =
+          (app.input_selected + 1).min(app.input_receipts.len().saturating_sub(1))
+      }
+      KeyCode::Delete if app.router.current() == ContextPanel::Inputs => {
+        crate::run_input_ui::cancel_selected(app, actions)?
+      }
+      KeyCode::Char(ch @ ('i' | 'r' | 'c' | 'a' | 'x'))
+        if app.router.current() == ContextPanel::Tasks && app.input.is_empty() =>
+      {
+        crate::workflow_ui::request_task(app, actions, ch)?
+      }
+      KeyCode::Up if app.router.current() == ContextPanel::Approval => {
+        app.workflow.approvals.previous()
+      }
+      KeyCode::Down if app.router.current() == ContextPanel::Approval => {
+        app.workflow.approvals.next()
+      }
+      KeyCode::Char(' ') if app.router.current() == ContextPanel::Approval => {
+        app.workflow.approvals.toggle_expanded()
+      }
+      KeyCode::Up if app.router.current() == ContextPanel::Activity => {
+        app.activity.select_previous();
+        crate::activity_ui::focus(app);
+      }
+      KeyCode::Down if app.router.current() == ContextPanel::Activity => {
+        app.activity.select_next();
+        crate::activity_ui::focus(app);
+      }
+      KeyCode::Enter if app.router.current() == ContextPanel::Activity => {
+        app.activity.toggle_selected();
+        crate::activity_ui::focus(app);
+      }
+      KeyCode::Up if app.router.current() == ContextPanel::Closed && app.input.cursor().0 == 0 => {
+        if let Some(session) = app.selected_session().map(|session| session.id.clone())
+          && let Some(text) = app.interaction.previous(&session, &app.input.text())
+        {
+          app.input.replace_text(&text);
+        }
+      }
+      KeyCode::Down
+        if app.router.current() == ContextPanel::Closed
+          && app.input.cursor().0 + 1 >= app.input.text().lines().count() =>
+      {
+        if let Some(session) = app.selected_session().map(|session| session.id.clone())
+          && let Some(text) = app.interaction.next(&session)
+        {
+          app.input.replace_text(&text);
+        }
+      }
       KeyCode::Esc if app.command_menu_open => {
         app.close_command_menu();
       }
@@ -139,16 +205,22 @@ fn handle_key(
           app.router.back();
         }
       }
-      KeyCode::F(number @ 1..=5) => {
+      KeyCode::F(number @ 1..=7) => {
         app.close_command_menu();
         let panel = match number {
           1 => ContextPanel::Help,
           2 => ContextPanel::Sessions,
           3 => ContextPanel::Tasks,
           4 => ContextPanel::Computer,
-          _ => ContextPanel::Approval,
+          5 => ContextPanel::Approval,
+          6 => ContextPanel::Activity,
+          _ => ContextPanel::Inputs,
         };
-        app.router.toggle(panel);
+        if number == 7 {
+          crate::run_input_ui::open(app, actions)?;
+        } else {
+          app.router.toggle(panel);
+        }
         if number == 2 && app.router.current() == ContextPanel::Sessions {
           app.sessions_cursor = app.selected;
         }
@@ -225,16 +297,31 @@ fn handle_key(
         crate::local_command::request_task_page(app, actions, &cursor)?;
       }
       KeyCode::Down if app.router.current() == ContextPanel::Tasks && !app.task_rows.is_empty() => {
-        app.task_selected = (app.task_selected + 1).min(app.task_rows.len().saturating_sub(1));
+        app.workflow.tasks.next();
+        crate::workflow_ui::sync_task_index(app);
       }
       KeyCode::Up if app.router.current() == ContextPanel::Tasks => {
-        app.task_selected = app.task_selected.saturating_sub(1);
+        app.workflow.tasks.previous();
+        crate::workflow_ui::sync_task_index(app);
       }
       KeyCode::PageDown if app.router.current() != ContextPanel::Closed => {
         app.router.set_scroll(app.router.scroll().saturating_add(5));
       }
       KeyCode::PageUp if app.router.current() != ContextPanel::Closed => {
         app.router.set_scroll(app.router.scroll().saturating_sub(5));
+      }
+      KeyCode::Char('n' | 'p') if key.modifiers.contains(KeyModifiers::ALT) => {
+        crate::reading_ui::next(app, key.code == KeyCode::Char('n'))
+      }
+      KeyCode::End if app.transcript_anchor.is_some() => {
+        app.transcript_anchor = None;
+        app.scroll = 0;
+      }
+      KeyCode::PageDown if app.transcript_anchor.is_some() => {
+        app.scroll = app.scroll.saturating_add(5)
+      }
+      KeyCode::PageUp if app.transcript_anchor.is_some() => {
+        app.scroll = app.scroll.saturating_sub(5)
       }
       KeyCode::PageDown => app.scroll = app.scroll.saturating_sub(5),
       KeyCode::PageUp => app.scroll = app.scroll.saturating_add(5),
@@ -250,52 +337,6 @@ fn handle_key(
     }
   }
   Ok(false)
-}
-
-fn handle_diff_key(app: &mut App, key: KeyEvent) {
-  if matches!(key.code, KeyCode::Esc | KeyCode::Char('q')) {
-    app.close_diff();
-    return;
-  }
-  let viewport = app.viewport.saturating_sub(2).max(3);
-  if let Some(view) = app.diff.as_mut() {
-    crate::diff::input::handle(&mut view.state, &view.document, key, viewport);
-  }
-}
-
-fn handle_picker_key(
-  app: &mut App,
-  key: KeyEvent,
-  actions: &mpsc::Sender<Action>,
-) -> anyhow::Result<()> {
-  match key.code {
-    KeyCode::Esc => app.close_picker(),
-    KeyCode::Up | KeyCode::Char('k') => {
-      if let Some(picker) = app.picker.as_mut() {
-        picker.previous();
-      }
-    }
-    KeyCode::Down | KeyCode::Char('j') => {
-      if let Some(picker) = app.picker.as_mut() {
-        picker.next();
-      }
-    }
-    KeyCode::Enter => crate::local_command::confirm_picker(app, actions)?,
-    _ => {}
-  }
-  Ok(())
-}
-
-/// Writes the highlighted command into the composer and closes completion.
-fn complete_selected(app: &mut App) -> bool {
-  let query = app.command_query();
-  let matches = crate::slash_command::filter(&query);
-  let Some(name) = matches.get(app.command_selected).map(|spec| spec.name) else {
-    return false;
-  };
-  app.input = crate::composer::Composer::from(format!("/{name} ").as_str());
-  app.close_command_menu();
-  true
 }
 
 pub(crate) fn send(actions: &mpsc::Sender<Action>, action: Action) -> anyhow::Result<()> {

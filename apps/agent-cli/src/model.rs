@@ -33,10 +33,18 @@ pub enum ContextPanel {
   Computer,
   Approval,
   Drafts,
+  Activity,
+  Inputs,
 }
 
 #[derive(Debug)]
 pub struct App {
+  pub input_attempt: Option<crate::run_input_ui::InputAttempt>,
+  pub input_receipts: Vec<agent_protocol::v1::RunInputReceipt>,
+  pub input_selected: usize,
+  pub activity: crate::activity::ActivityState,
+  pub interaction: crate::interaction::InteractionState,
+  pub workflow: crate::workflow::WorkflowState,
   pub router: crate::router::Router,
   pub connection: Connection,
   pub computer: crate::computer::ComputerStatus,
@@ -51,7 +59,10 @@ pub struct App {
   pub input: crate::composer::Composer,
   pub submitting: bool,
   pub notice: String,
-  pub scroll: u16,
+  pub scroll: usize,
+  pub reading: crate::activity::ReadingState,
+  pub message_keys: Vec<String>,
+  pub transcript_anchor: Option<String>,
   pub drafts: BTreeMap<String, String>,
   pub unbound_draft: String,
   pub persistence_warning: String,
@@ -72,6 +83,7 @@ pub struct App {
   pub diff: Option<crate::diff::model::DiffView>,
   /// Last painted terminal height, so overlay scrolling can clamp without a frame handle.
   pub viewport: u16,
+  pub viewport_width: u16,
   pub command_selected: usize,
   pub sessions_cursor: usize,
 }
@@ -79,6 +91,12 @@ pub struct App {
 impl Default for App {
   fn default() -> Self {
     Self {
+      input_attempt: None,
+      input_receipts: Vec::new(),
+      input_selected: 0,
+      activity: Default::default(),
+      interaction: Default::default(),
+      workflow: Default::default(),
       router: crate::router::Router::default(),
       connection: Connection::Disconnected("Not connected".into()),
       computer: if cfg!(feature = "native-computer") {
@@ -98,6 +116,9 @@ impl Default for App {
       submitting: false,
       notice: String::new(),
       scroll: 0,
+      reading: Default::default(),
+      message_keys: Vec::new(),
+      transcript_anchor: None,
       drafts: BTreeMap::new(),
       unbound_draft: String::new(),
       persistence_warning: String::new(),
@@ -114,6 +135,7 @@ impl Default for App {
       picker: None,
       diff: None,
       viewport: 24,
+      viewport_width: 80,
       command_selected: 0,
       sessions_cursor: 0,
     }
@@ -142,7 +164,14 @@ impl App {
     self.selected = index;
     self.sessions_cursor = index;
     self.restore_current_draft();
+    self.input_receipts.clear();
+    self.input_selected = 0;
+    self.activity = Default::default();
+    self.workflow = Default::default();
     self.messages.clear();
+    self.message_keys.clear();
+    self.transcript_anchor = None;
+    self.reading = Default::default();
     self.tasks.clear();
     self.active_run = None;
     self.streaming = None;
@@ -220,6 +249,7 @@ impl App {
 
   /// Local command output belongs in the transcript, not in a side panel.
   pub fn push_local(&mut self, content: impl Into<String>) {
+    self.message_keys.push(uuid::Uuid::now_v7().to_string());
     self.messages.push(Message {
       role: "Local".into(),
       content: content.into(),
@@ -254,6 +284,8 @@ impl App {
   pub fn client_state(&mut self) -> crate::local_state::ClientState {
     self.save_current_draft();
     crate::local_state::ClientState {
+      interaction: self.interaction.clone(),
+      input_attempt: self.input_attempt.clone(),
       selected_session: self.selected_session().map(|session| session.id.clone()),
       drafts: self.drafts.clone(),
       unbound_draft: self.unbound_draft.clone(),

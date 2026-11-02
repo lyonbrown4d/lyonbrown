@@ -1,0 +1,506 @@
+{
+  "date": "2026-11-02",
+  "platform": "macOS 27.2 (26B123)",
+  "architecture": "arm64",
+  "version": "0.1.0",
+  "baseline_commit": "f30909474aaa7040e8a2583224aec85790198080",
+  "build_source": "uncommitted working tree; source digests below",
+  "capture": "actual agent-cli child process in portable-pty; vt100 cells rendered with AppKit; not an OS terminal window screenshot",
+  "binary": {
+    "path": ".local/build/reuse-target/debug/agent-cli",
+    "sha256": "69566df99d91ac67ffc3bb29727cd7562bf4c52f38d5a173c76f1fef0b166c25"
+  },
+  "model": "loopback synthetic Chat Completions mock via real protocol adapter; no paid model or weights",
+  "observed": {
+    "runs": 1,
+    "model_requests": 2,
+    "tool": "read_file",
+    "path": "fixture.txt",
+    "file_content": "actual tool content 🦀",
+    "final_status": "completed",
+    "history_filter": "fixture",
+    "history_confirmation_starts_run": false,
+    "exit_cancels_run": false
+  },
+  "checks": [
+    "daemon-authored connecting model phase and model identity",
+    "real file read included in next model request",
+    "expanded tool arguments and result",
+    "filtered acknowledged history only restores editor",
+    "global exit while history overlay owns input",
+    "queue snapshot restoration through three standard protocols",
+    "cancellation persistence failure retains intent and fences execution",
+    "Task actions reuse authenticated original Worker route"
+  ],
+  "limits": [
+    "Desktop shared event decoder checked independently; GPUI window not rerun",
+    "no real inference, native CEF/Computer, Windows, Linux, public network, or installer acceptance"
+  ],
+  "captures": [
+    {
+      "name": "activity",
+      "cells_sha256": "150025e38045ba1f034c27e889ebb3c28644ca907db7405f7d8c42075e23842b",
+      "text_sha256": "46ba9fb407bb43fc4f0036774f966de42f850ec38cce4683966fd4e38732dbf4",
+      "image": "images/tui-activity-macos.png",
+      "image_sha256": "ff64570d06bbb5af0e6a9acc1c9caf2855a04d16e2734708c7189d78bed85180"
+    },
+    {
+      "name": "history",
+      "cells_sha256": "06d17c1a487856c4d6bdf8487ac926deac6423ad50cc86a1e5eee265aee6ace5",
+      "text_sha256": "821f9f75e3f87f859c023232cb5cf9b7121cc6daa3503cae69e39e1c52e51f24",
+      "image": "images/tui-history-macos.png",
+      "image_sha256": "a585b61bf7bf5776c52c14d5197d40528c0b3039bf76b72f9d100e5541d04349"
+    }
+  ],
+  "sources": [
+    {
+      "path": "apps/agent-cli/Cargo.toml",
+      "sha256": "18fd17da6be05c30a7d1f964b07ccd186ea643d86cd19e8d4ebc95bfbc143ee1"
+    },
+    {
+      "path": "apps/agent-cli/src/action_backend.rs",
+      "sha256": "e913e665f6212d5b5e2903e402715d74705d9faea10d892d943886b3051955fa"
+    },
+    {
+      "path": "apps/agent-cli/src/activity/compaction.rs",
+      "sha256": "c92a8ecfdecb635287d3a3a25a0c47ef33fb91c810bb07c1d408dae52da28bcb"
+    },
+    {
+      "path": "apps/agent-cli/src/activity/display.rs",
+      "sha256": "96028d87046e40ba1017c51d7dbcfe7b524fdc74e17ee035caca4c0043fc20ed"
+    },
+    {
+      "path": "apps/agent-cli/src/activity/mod.rs",
+      "sha256": "8db5ffe78a59256558927a8ca58c4911ae897d58c2594d0b66cde0db8a0c6143"
+    },
+    {
+      "path": "apps/agent-cli/src/activity/projection.rs",
+      "sha256": "b99d86937b5f9ed60446375d9c09a15a94982ddb7f8af107acab5d70a6ac5d8a"
+    },
+    {
+      "path": "apps/agent-cli/src/activity/reading.rs",
+      "sha256": "ac880a984947c77fe3fa73a0aaafeb484e4292095ad9fadb5e5823e2aacec6c4"
+    },
+    {
+      "path": "apps/agent-cli/src/activity/values.rs",
+      "sha256": "02494665db2d28c9baf0f319a0dbd9c61655022431a7dd9953c844a60986a141"
+    },
+    {
+      "path": "apps/agent-cli/src/activity_ui.rs",
+      "sha256": "751ddb13eee080bb8181d6f97202c963e42dd3f70c01cbe14b992413e7681aba"
+    },
+    {
+      "path": "apps/agent-cli/src/backend.rs",
+      "sha256": "14cf5bf23414f7c728b70fb3296d16e757512aebbc5e413c430b880f33647e5b"
+    },
+    {
+      "path": "apps/agent-cli/src/composer.rs",
+      "sha256": "2135a9a310f4a7698e0ee5283b094c5f9f867cf87095b104fa2a0554e0f75b18"
+    },
+    {
+      "path": "apps/agent-cli/src/draft_command.rs",
+      "sha256": "acdc05fb4af8976e02ea68a10c96231ea7fb2c2ea9f7fc3e3dd5c43d653fa896"
+    },
+    {
+      "path": "apps/agent-cli/src/entry.rs",
+      "sha256": "01f7aff49c42735e3c6c07262df95e6eff618c1b795fec98030825eaa6d71089"
+    },
+    {
+      "path": "apps/agent-cli/src/history_ui.rs",
+      "sha256": "616035b49f5dea98f072772a326e9c25508bbeaa9d73f6e435869db8424da634"
+    },
+    {
+      "path": "apps/agent-cli/src/input.rs",
+      "sha256": "4e9959a709c061fa7c7ed3d625b81216db081eddf326a36a6188974dd53d5a54"
+    },
+    {
+      "path": "apps/agent-cli/src/input_overlay.rs",
+      "sha256": "61057902419ab0c7a21a4be5e0c911b4451594f8d0a427d649742b0c6c398dc5"
+    },
+    {
+      "path": "apps/agent-cli/src/interaction/history.rs",
+      "sha256": "dc7b7356ac31d56ff2e161b056135638e6484ffe3bdb9d65089927c20847eeab"
+    },
+    {
+      "path": "apps/agent-cli/src/interaction/mod.rs",
+      "sha256": "d8303ec6bb708167e4a9afc79f18f729a38f9bb2ad1a0423009fd1dfafffa5a5"
+    },
+    {
+      "path": "apps/agent-cli/src/lib.rs",
+      "sha256": "34fedddf58957e25730cedeee04bda9b2d9aa76bee0ed08d37a33347fbc307e3"
+    },
+    {
+      "path": "apps/agent-cli/src/local_command.rs",
+      "sha256": "bfbf98c49d67219d08b3712ece3e9a57b6f6d9438a576e1d79041ac2d85c1b72"
+    },
+    {
+      "path": "apps/agent-cli/src/local_parse.rs",
+      "sha256": "abf7a3fe241148b914a1227b9a1685bfabd259ffb8923e738b134f5b70cee38b"
+    },
+    {
+      "path": "apps/agent-cli/src/local_state.rs",
+      "sha256": "41ed740745b9984d30c60be4620f82eb054698bef1299fba4e688fbcb68b2bb3"
+    },
+    {
+      "path": "apps/agent-cli/src/model.rs",
+      "sha256": "9ad689b025ec281ff3ba6011828eca7701417027a363895a3ff2ecbca3269d85"
+    },
+    {
+      "path": "apps/agent-cli/src/picker.rs",
+      "sha256": "d14784be81f697986a0ba4deb022f6d0a127c6f8a18b211372312a2cd57a7345"
+    },
+    {
+      "path": "apps/agent-cli/src/picker_command.rs",
+      "sha256": "3e892283763e347a6f492b382f852cc6b9900ba556ceeb2ed82139f5f7c0b97e"
+    },
+    {
+      "path": "apps/agent-cli/src/reading_ui.rs",
+      "sha256": "653e1e28cccf5c81ea6b10070ff4cd3e7d4e8b25628daf6e1e1c225d91a81f9a"
+    },
+    {
+      "path": "apps/agent-cli/src/resource_backend.rs",
+      "sha256": "5c67b28273a23f51723515b580fee40e53e620b6c87395f90ae27687a4d6bf00"
+    },
+    {
+      "path": "apps/agent-cli/src/resource_command.rs",
+      "sha256": "72c58ce82d63c62a228913ca785dafb18c589395ba446d658b679029674184f3"
+    },
+    {
+      "path": "apps/agent-cli/src/resource_inspection.rs",
+      "sha256": "f34caa06c2863bb56cd1b1a53aa2b5069e6203ddc0d9a9dd2a1a1cebe9d788d8"
+    },
+    {
+      "path": "apps/agent-cli/src/run_input_ui.rs",
+      "sha256": "7efb4bf907d29e05413bf2b108584a9296720b32a61729f0d445fffcc0d5aa11"
+    },
+    {
+      "path": "apps/agent-cli/src/session_backend.rs",
+      "sha256": "0e150f432a3ccfdac4e50a9861542a4bd2e53e46170f744bb5f7756d1982207e"
+    },
+    {
+      "path": "apps/agent-cli/src/slash_command.rs",
+      "sha256": "61a84b10639d9537d573a9b11c78cfb3877d274f7d5d4735c386bc39dadd835d"
+    },
+    {
+      "path": "apps/agent-cli/src/task_management.rs",
+      "sha256": "a6c6d4545c0e813b8b094ef7e1912ecc7ec4dcec9dd4f5401ae072edb41c1966"
+    },
+    {
+      "path": "apps/agent-cli/src/update.rs",
+      "sha256": "25ea9a8cb21ca89de6e3c42bfc38de467e5c777ef031aca56e24092712fb445b"
+    },
+    {
+      "path": "apps/agent-cli/src/view.rs",
+      "sha256": "67c179033b79d0f08347355fc8f1885e70d63f49f0d0c997def691347c89a040"
+    },
+    {
+      "path": "apps/agent-cli/src/view_model.rs",
+      "sha256": "a7b83b57cef634e17b018d63c5d971b78b68fc953fd31f06626c298a440303ef"
+    },
+    {
+      "path": "apps/agent-cli/src/workflow/approval.rs",
+      "sha256": "5d5c469b99ae7773e288159d41812a68a3b4f3aea0a3a0c40473b243d566ab1b"
+    },
+    {
+      "path": "apps/agent-cli/src/workflow/mod.rs",
+      "sha256": "9728de26d60930075d9dbfd94706bb42f42bee2421b756aa144a06065b7fee54"
+    },
+    {
+      "path": "apps/agent-cli/src/workflow/render.rs",
+      "sha256": "dd2e3567b9b86398940bd4a4e8fe36d449e3c21ff5e9a52d166f97297fcecaab"
+    },
+    {
+      "path": "apps/agent-cli/src/workflow/selection.rs",
+      "sha256": "bbcacfc662502ecec9fc16a7363de80cb50cbb92ba4351dd93ba0f71afc6b095"
+    },
+    {
+      "path": "apps/agent-cli/src/workflow/task.rs",
+      "sha256": "c6d53a90ad6b89b2b2f3c02bfad7087f33b7627d36ff2835595761dce80cb4be"
+    },
+    {
+      "path": "apps/agent-cli/src/workflow_ui.rs",
+      "sha256": "249a498c3f328fdfc2413e5a4606bf2c5683629c4de9f67322d000b5c04ba2f7"
+    },
+    {
+      "path": "apps/agent-cli/tests/activity.rs",
+      "sha256": "a43cea0bd06cc2a8fa1702606e456d24fb06de1a7bb5e94b71bfd9ccbc4dad2e"
+    },
+    {
+      "path": "apps/agent-cli/tests/interaction.rs",
+      "sha256": "a60ae82262cd351bf10c89de624620a6c0ba7f6d85d72f2db88df1b47f2204a8"
+    },
+    {
+      "path": "apps/agent-cli/tests/presentation.rs",
+      "sha256": "8e7c339abfb20ae087b9e6cc42de9e3aec0a79004317fc72335e10e91f175eb9"
+    },
+    {
+      "path": "apps/agent-cli/tests/pty_interactions.rs",
+      "sha256": "9b197c5ec26f01d061fbb093e43d44bd6ecf0176e041713bb210816dff9c57cc"
+    },
+    {
+      "path": "apps/agent-cli/tests/resource_inspection.rs",
+      "sha256": "940b115666ca8cfc814cf1c7e7c926abce4bda2fae148d58751c753bbfe61687"
+    },
+    {
+      "path": "apps/agent-cli/tests/tui_interactions.rs",
+      "sha256": "62455398da6f99ee0eff4ba23692d643f438b5e55b0f3a219ebbe986e65d7421"
+    },
+    {
+      "path": "apps/agent-cli/tests/tui_state_and_local_commands.rs",
+      "sha256": "fb0ccc157a9522e809dcae45d599432aa5c5d51b1d8c0c9083ed47f255128773"
+    },
+    {
+      "path": "apps/agent-cli/tests/workflow.rs",
+      "sha256": "3fdaf5a5b31ea1ffd811ad31dd52dbe733bc713ef51ab1c494efbd221f8f784e"
+    },
+    {
+      "path": "apps/agent-desktop/Cargo.toml",
+      "sha256": "ffdc9ed526152ac2e023bb1f8f2c38a4be2a30139f5b510a84321126fba89915"
+    },
+    {
+      "path": "apps/agent-desktop/src/events.rs",
+      "sha256": "ef0a2139a90bd0144187baa1017f07d65a314f4fb674360b387cbf575286b4e8"
+    },
+    {
+      "path": "apps/agent-desktop/src/projection.rs",
+      "sha256": "b76aca449fc3daeaa3413e1d2df2aa5862eb7586c0aecef204e1ea4c8c998383"
+    },
+    {
+      "path": "apps/agent-desktop/tests/events_contract.rs",
+      "sha256": "39ca673b91e174e6865ac2bcb27b66985b3dfa22a409ae3721b7e6acd1dfe6e7"
+    },
+    {
+      "path": "apps/agentd/Cargo.toml",
+      "sha256": "5a5d9f44b82e1d184ebfd41661fbb90c87544071513dc5dcd0022f789eac3f2c"
+    },
+    {
+      "path": "apps/agentd/src/execution.rs",
+      "sha256": "c16037f458b828ed248d8234f1cbc4f471798eee7931302aa1ab6e37bce34156"
+    },
+    {
+      "path": "apps/agentd/src/execution_events.rs",
+      "sha256": "147489bbbc9f8f5e805d90e6516575a0734b63891e174f0bb505f47d3d0130eb"
+    },
+    {
+      "path": "apps/agentd/src/lib.rs",
+      "sha256": "a63038dcc760164f10865d123ecdee0718425e114879570833a905675b01d14d"
+    },
+    {
+      "path": "apps/agentd/src/model_routing.rs",
+      "sha256": "58ac22dad2399395e92020a2f1beba50ea964668a03359a133128c965df78766"
+    },
+    {
+      "path": "apps/agentd/src/orchestration/mod.rs",
+      "sha256": "88a336ee408283d731f325e6a5496e3f0c3b4a08ef6ebd8cc23b2f9a46b4836e"
+    },
+    {
+      "path": "apps/agentd/src/orchestration/validation.rs",
+      "sha256": "08152c9a4daba55f169cfdb3f661d106165ae55bddddbb276da30e783de89a14"
+    },
+    {
+      "path": "apps/agentd/src/run_input.rs",
+      "sha256": "7b7677b554051d4725015436c1bd3b23b8598b5d7327848fabe14f1beb177350"
+    },
+    {
+      "path": "apps/agentd/src/run_input/snapshot.rs",
+      "sha256": "f3dd6ff9e72c4290cc9cd420d046f8901b6bea73052926e2b443c54bc70e666a"
+    },
+    {
+      "path": "apps/agentd/src/service.rs",
+      "sha256": "24c6cb95edfda71a8c6e31013e506e5d7674225c85f658233928c32981641931"
+    },
+    {
+      "path": "apps/agentd/src/state.rs",
+      "sha256": "b44ebb73e1307718bfd368bc91d1b41e1b4ead8b7330937daacda79265fe376b"
+    },
+    {
+      "path": "apps/agentd/tests/computer_tool_support/failures.rs",
+      "sha256": "f1c36d55df8990b47e36e5a2c955773caed57386bc333beac91e0a47fdb0c281"
+    },
+    {
+      "path": "apps/agentd/tests/computer_tool_support/mod.rs",
+      "sha256": "00dadb276654aa58fd0d9e145b9a4a2bbcc815f85b708e75b118ca5215c28d8e"
+    },
+    {
+      "path": "apps/agentd/tests/decision.rs",
+      "sha256": "bcb2a1711e0becbb5acd60b7cc6c73e04dff6cb12655462bf1c6f746e3f1313a"
+    },
+    {
+      "path": "apps/agentd/tests/local_mock.rs",
+      "sha256": "c80ac0ad3b3902410f16042769b680803560fa708ef7cf9fa88080a08729c0a4"
+    },
+    {
+      "path": "apps/agentd/tests/local_models.rs",
+      "sha256": "53ea45014c732bbcfa14cb24f9e973d6ccf82f0726dcd6be0752ded364afbfb0"
+    },
+    {
+      "path": "apps/agentd/tests/mcp.rs",
+      "sha256": "a900eee3acd5c7bf4942769b82ca7fba670cddfbb3c660ac121ffa2a23a88ebf"
+    },
+    {
+      "path": "apps/agentd/tests/model_native_tools.rs",
+      "sha256": "e82d0840f5e242699aa28ed5dd890e6f48bd1914be828a0e250da1e630cf8fb5"
+    },
+    {
+      "path": "apps/agentd/tests/native_models.rs",
+      "sha256": "fb956e7cf2581509fa774dc4fbf274df2facc00686cacf221034511b194a5d88"
+    },
+    {
+      "path": "apps/agentd/tests/original_task_target.rs",
+      "sha256": "14ceb8ec71a8bbb212ad41064643826712d9fdf8d6d008bfad110b3bfb5af449"
+    },
+    {
+      "path": "apps/agentd/tests/peers.rs",
+      "sha256": "0cecb8393d280e586529d6d96583563b023f7be0f9335e5fe581d91799a590c2"
+    },
+    {
+      "path": "apps/agentd/tests/run_input.rs",
+      "sha256": "10959b35f7b50e0e0bef76ec9d1f7bae783d8b30a27f4c4b49ef5a298861246e"
+    },
+    {
+      "path": "apps/agentd/tests/run_input_failure.rs",
+      "sha256": "ead12c20585c35eda4dd297f4cc461d1a61d1c936e69b0f85bba60d1ea4ae4e3"
+    },
+    {
+      "path": "apps/agentd/tests/run_input_handoff.rs",
+      "sha256": "e6027144b0a20aa43124a3552048404698bcfa1b5ea41d6947e34bcbbd65b208"
+    },
+    {
+      "path": "apps/agentd/tests/workspace_tools.rs",
+      "sha256": "e2c6fdfeb1bc41df8dc4d9db9eb5cc7a03c6339596558afa05a49505dc9eda1c"
+    },
+    {
+      "path": "crates/agent-client/src/lib.rs",
+      "sha256": "53ee7c42bfe888f0c3ca702689eaf02add99963e95a8ee223cfffad0513fe3a0"
+    },
+    {
+      "path": "crates/agent-client/src/orchestration.rs",
+      "sha256": "97049d196872084fe53c4a2b1e648bdfcb6eb645c671977e024f03cfe8120257"
+    },
+    {
+      "path": "crates/agent-client/src/run_input.rs",
+      "sha256": "878d71d1b8c3f7bb149d2035c8d69e474b898c18516fdcfada74a6e9a5979f18"
+    },
+    {
+      "path": "crates/agent-core/Cargo.toml",
+      "sha256": "b16d8705fce913317f08ce9f9e10139af858e4385f0324ec73e78a3982c3e6e6"
+    },
+    {
+      "path": "crates/agent-core/src/events/decode.rs",
+      "sha256": "fa716192a9c01274017267e2f28f1010a8f9e4a7c8c8fd8f40190a535b5d1f40"
+    },
+    {
+      "path": "crates/agent-core/src/events/mod.rs",
+      "sha256": "8cbc40f99d32890927047c4eb374a132ac6efa781098184efb0ffe394fc5bcff"
+    },
+    {
+      "path": "crates/agent-core/src/lib.rs",
+      "sha256": "04816e9ed0cae9419dd77be034317e478f2c5520404012ffa719911dc8c5df90"
+    },
+    {
+      "path": "crates/agent-core/tests/events.rs",
+      "sha256": "e3ca9fd41e6c124bdc8876c297a8e4017b01d50d4e86e913a349cc8963b7a48e"
+    },
+    {
+      "path": "crates/agent-distributed/Cargo.toml",
+      "sha256": "d33c465da12c62c4f1f917cc71bf19c3e15ffe6edc6546f9b9d78709d15dd727"
+    },
+    {
+      "path": "crates/agent-distributed/src/dispatcher.rs",
+      "sha256": "515924e9595b4fe3b66ba7dfc7f90640473bc5b304196a0c38f3f0f2e6a35813"
+    },
+    {
+      "path": "crates/agent-runtime/Cargo.toml",
+      "sha256": "f9d7341f0a36a27801d2b1b1e8108912406c500d1d117069faddba571c283b0c"
+    },
+    {
+      "path": "crates/agent-runtime/src/contracts.rs",
+      "sha256": "a80824e966b4c646cbdd238ab8ad798292374da67d562281087d538df0afe627"
+    },
+    {
+      "path": "crates/agent-runtime/src/control.rs",
+      "sha256": "47237def75788afc1f8ce1a2043e052fa5d9b849dfcc34ee3cfda9c722b4f2e0"
+    },
+    {
+      "path": "crates/agent-runtime/src/events.rs",
+      "sha256": "b21705178e247b2d6755e077bf3989bd654df74ed459cad8ea34133128dc44db"
+    },
+    {
+      "path": "crates/agent-runtime/src/lib.rs",
+      "sha256": "58a43db1a1b17364b4d2b1f65e90cd0381be0f13aa81533dce467b4d59be5f7d"
+    },
+    {
+      "path": "crates/agent-runtime/src/persistence.rs",
+      "sha256": "9ae96531f056a90ecd4936a00bf00d6e2a320ef3ab558ca39df9df87cf90356c"
+    },
+    {
+      "path": "crates/agent-runtime/src/request_events.rs",
+      "sha256": "303ed6f58fa4b30831c43a6760dfade0a1ab24fb374f96444ccd15f6e9f27f99"
+    },
+    {
+      "path": "crates/agent-runtime/src/runtime.rs",
+      "sha256": "a90610b087d9e89d09240b0b7264f9d7b236a77e0305b803c4716acf529f524d"
+    },
+    {
+      "path": "crates/agent-runtime/src/semantic_events.rs",
+      "sha256": "35bd0eb59a8071292b97ace76c50778a392e51d5b02ef6b833bf7fd2dba979b5"
+    },
+    {
+      "path": "crates/agent-runtime/tests/input_control.rs",
+      "sha256": "d0b1e5c49978df29f677441020684c95c0bb8a00721680ffea7e525fc2bd44cb"
+    },
+    {
+      "path": "crates/agent-runtime/tests/queue_cancel_failure.rs",
+      "sha256": "b9db0813f048eba155323af504be8b9681c9f270f33cdc3ade99a32bd433527c"
+    },
+    {
+      "path": "crates/agent-runtime/tests/queue_restore.rs",
+      "sha256": "8706120256ee40f90712fb8a357f087054c0f0110ebda3eb71a3f1602d5cd74f"
+    },
+    {
+      "path": "crates/agent-runtime/tests/semantic_events.rs",
+      "sha256": "c7424aab9d52d793341863501e0270666d69511e15749d8403f4a5939dc8369b"
+    },
+    {
+      "path": "crates/agent-storage/src/dispatch.rs",
+      "sha256": "bcf3815f980d3ac5ec216180410bd997a29c94e266c939c9ad5fe386e50e5606"
+    },
+    {
+      "path": "crates/agent-storage/src/input_fence.rs",
+      "sha256": "6243ed1dcbb9df394e07cb00b14d096064e8b0bb8b23a30c0d26a4a8b5c8156f"
+    },
+    {
+      "path": "crates/agent-storage/src/lib.rs",
+      "sha256": "bbbb4a61003d11b321fe86d549864d6dbe1c93752c0f10542859031bf3800125"
+    },
+    {
+      "path": "crates/agent-storage/src/persistence.rs",
+      "sha256": "718b07dc378ed45a940345797993229fcb6c27b9c2b2967390583fd98992a8b7"
+    },
+    {
+      "path": "crates/agent-storage/src/runs.rs",
+      "sha256": "307b8df0c98f44fc725f4d2127642f594e1c9dc862ffac61a901ff6ba18c7f82"
+    },
+    {
+      "path": "crates/agent-storage/src/tasks.rs",
+      "sha256": "ef4773781fd2099d60a7b3e077905fa269931c52fccf1edbdd50a755def1119b"
+    },
+    {
+      "path": "crates/agent-storage/tests/input_fence.rs",
+      "sha256": "e3a251d9202faecf202b4d3cbdf2b2aa2fad0e2524c308543236f96eb997c567"
+    },
+    {
+      "path": "crates/agent-storage/tests/semantic_events.rs",
+      "sha256": "ad5f09ad54ba6473e3c86062893cc53988bc436eabe1200856155074e98e23eb"
+    },
+    {
+      "path": "proto/agent/v1/agent.proto",
+      "sha256": "f97478e98713016af90be5ff02f1d7e2e7314f058d3cd9c092265908dceaecc3"
+    }
+  ],
+  "upstream_issue": "https://github.com/bigfish1913/pi-rust/issues/235",
+  "lockfile": {
+    "path": "Cargo.lock",
+    "sha256": "64529042c312175073f6e511cb6057fa1ea17260f9e6103cd3cb715e972826d0"
+  }
+}

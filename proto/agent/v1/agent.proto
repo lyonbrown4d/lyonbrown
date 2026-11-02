@@ -28,6 +28,9 @@ service ClientService {
   rpc CreateSession(CreateSessionRequest) returns (Session);
   rpc GetSession(SessionRequest) returns (Session);
   rpc StartRun(StartRunRequest) returns (Run);
+  rpc SubmitRunInput(RunInputRequest) returns (RunInputReceipt);
+  rpc CancelRunInput(CancelRunInputRequest) returns (RunInputReceipt);
+  rpc ListRunInputs(RunRequest) returns (RunInputs);
   rpc ListRuns(SessionRequest) returns (Runs);
   rpc GetRun(RunRequest) returns (Run);
   rpc WatchRun(WatchRequest) returns (stream Event);
@@ -211,3 +214,11 @@ message BrowserRuntimeRequest { string request_id = 1; bytes payload = 2; }
 message BrowserRuntimeResponse { string request_id = 1; string host_id = 2; uint32 protocol_version = 3; bytes payload = 4; }
 message ComputerRuntimeRequest { string request_id = 1; bytes payload = 2; }
 message ComputerRuntimeResponse { string request_id = 1; string host_id = 2; uint32 protocol_version = 3; bytes payload = 4; string daemon_session_id = 5; }
+
+// Inputs are durable Harness queue commands, never implicit StartRun retries.
+enum RunInputKind { RUN_INPUT_KIND_UNSPECIFIED = 0; RUN_INPUT_KIND_STEER = 1; RUN_INPUT_KIND_FOLLOW_UP = 2; }
+enum RunInputState { RUN_INPUT_STATE_UNSPECIFIED = 0; RUN_INPUT_STATE_PENDING = 1; RUN_INPUT_STATE_CONSUMED = 2; RUN_INPUT_STATE_CANCELLED = 3; RUN_INPUT_STATE_CANCEL_REQUESTED = 4; }
+message RunInputRequest { string run_id = 1; uint64 owner_epoch = 2; string request_id = 3; RunInputKind kind = 4; string prompt = 5; }
+message CancelRunInputRequest { string run_id = 1; uint64 owner_epoch = 2; string entry_id = 3; }
+message RunInputReceipt { string run_id = 1; string request_id = 2; string entry_id = 3; RunInputKind kind = 4; RunInputState state = 5; string prompt = 6; bool prompt_truncated = 7; }
+message RunInputs { repeated RunInputReceipt inputs = 1; bool history_truncated = 2; }

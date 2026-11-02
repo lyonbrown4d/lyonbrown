@@ -357,6 +357,7 @@ name = "agent-core"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "strum 0.28.0",
  "thiserror 2.0.21",
  "uuid 1.29.0",
@@ -467,6 +468,7 @@ dependencies = [
  "tonic",
  "tower",
  "tracing",
+ "url",
  "uuid 1.29.0",
 ]
 
@@ -577,6 +579,7 @@ dependencies = [
 name = "agent-runtime"
 version = "0.1.0"
 dependencies = [
+ "agent-core",
  "agent-inference",
  "agent-test-support",
  "async-trait",
@@ -726,6 +729,7 @@ dependencies = [
  "axum",
  "clap",
  "decision-core",
+ "diesel",
  "directories",
  "dotenvy",
  "fluxdi",

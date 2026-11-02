@@ -34,6 +34,7 @@ serde.workspace = true
 tracing.workspace = true
 fluxdi.workspace = true
 agent-client = { path = "../../crates/agent-client" }
+agent-core = { path = "../../crates/agent-core" }
 agent-protocol = { path = "../../crates/agent-protocol" }
 agent-launch = { path = "../../crates/agent-launch" }
 agent-browser-runtime = { path = "../../crates/agent-browser-runtime" }
@@ -53,7 +54,6 @@ clap.workspace = true
 gpui-kit = { version = "0.8.1", features = ["test-support"] }
 agent-test-support = { path = "../../crates/agent-test-support" }
 agentd = { path = "../agentd" }
-agent-core = { path = "../../crates/agent-core" }
 agent-distributed = { path = "../../crates/agent-distributed" }
 agent-inference = { path = "../../crates/agent-inference" }
 tempfile.workspace = true

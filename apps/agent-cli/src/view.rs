@@ -91,11 +91,11 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
   }
   if !compact {
     let execution = if model.active {
-      "Ctrl+X 取消执行 · "
+      "Enter 排队 · Ctrl+S 纠偏 · Ctrl+X 取消 · "
     } else {
       ""
     };
-    let hint = format!("{execution}F1 帮助 · F2 会话 · F3 任务 · F4 计算机");
+    let hint = format!("{execution}F1 帮助 · F2 会话 · F3 任务 · F5 审批 · F6 执行 · F7 输入");
     frame.render_widget(
       Paragraph::new(vec![
         Line::from(hint),
@@ -164,7 +164,15 @@ fn body(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
     transcript(frame, model, transcript_area, theme);
   }
   if let (Some(context_area), Some((title, content))) = (layout.context, &model.context) {
-    if let Some(task_list) = &model.task_list {
+    if let Some(selection) = model.approval_selection {
+      crate::workflow::render_approvals(
+        frame,
+        selection,
+        context_area,
+        theme,
+        model.context_scroll,
+      );
+    } else if let Some(task_list) = &model.task_list {
       crate::context_view::render_task_list(frame, title, task_list, context_area, theme);
     } else {
       crate::context_view::render_text(
@@ -181,7 +189,7 @@ fn body(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
 
 fn transcript(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme) {
   let compact = area.width < 66 || area.height < 5;
-  let mut text = if compact && model.scroll == 0 {
+  let mut text = if compact && model.scroll == 0 && !model.anchored {
     model.compact_transcript.clone()
   } else {
     model.transcript.clone()
@@ -197,19 +205,38 @@ fn transcript(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme
         .add_modifier(Modifier::BOLD);
     }
   }
-  let paragraph = Paragraph::new(text)
-    .style(Style::default().fg(theme.text))
-    .wrap(Wrap { trim: false });
-  let end = paragraph
+  let end = Paragraph::new(text.clone())
+    .wrap(Wrap { trim: false })
     .line_count(area.width)
     .saturating_sub(usize::from(area.height));
-  let scroll = if compact && model.scroll == 0 {
+  let mut offset = if model.anchored {
+    model.scroll
+  } else if compact && model.scroll == 0 {
     0
   } else {
-    end.saturating_sub(usize::from(model.scroll))
+    end.saturating_sub(model.scroll)
+  };
+  // Drop whole logical lines before handing the remaining local offset to
+  // Paragraph. This keeps long multi-line histories beyond its u16 scroll range.
+  let mut skip = 0;
+  for line in &text.lines {
+    let height = Paragraph::new(line.clone())
+      .wrap(Wrap { trim: false })
+      .line_count(area.width);
+    if offset < height {
+      break;
+    }
+    offset = offset.saturating_sub(height);
+    skip += 1;
   }
-  .min(usize::from(u16::MAX)) as u16;
-  frame.render_widget(paragraph.scroll((scroll, 0)), area);
+  text.lines.drain(..skip);
+  frame.render_widget(
+    Paragraph::new(text)
+      .style(Style::default().fg(theme.text))
+      .wrap(Wrap { trim: false })
+      .scroll((offset.min(u16::MAX as usize) as u16, 0)),
+    area,
+  );
 }
 
 /// Completion floats above the composer; hidden matches are reported instead of scrolled away.

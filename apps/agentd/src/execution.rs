@@ -1,4 +1,5 @@
 use crate::Daemon;
+use agent_core::events::{AGENT_EVENT_KIND, AgentEvent, ExecutionPhase};
 use agent_core::{Run, RunStatus};
 use agent_runtime::{RunOutcome, Runtime, RuntimeError, RuntimeEvent};
 use anyhow::Result;
@@ -75,6 +76,16 @@ impl Daemon {
     cancel: CancellationToken,
     permitted_tools: Option<&std::collections::BTreeSet<String>>,
   ) -> Result<()> {
+    let model = self.execution_model_identity(session)?;
+    self.store.append_event_owned(
+      &run.id,
+      session.owner_epoch,
+      AGENT_EVENT_KIND,
+      serde_json::to_value(AgentEvent::PhaseChanged {
+        phase: ExecutionPhase::Preparing,
+        model: Some(model.clone()),
+      })?,
+    )?;
     self
       .store
       .update_run_owned(&run.id, session.owner_epoch, RunStatus::Running, "", "")?;
@@ -178,18 +189,26 @@ impl Daemon {
     let run_id = run.id.clone();
     let notify = self.events.clone();
     let stop = cancel.clone();
+    let last_phase = std::sync::Mutex::new(None);
     let listener = Arc::new(move |event: RuntimeEvent| {
       let result = (|| -> anyhow::Result<()> {
-        let mut payload = serde_json::to_value(&event)?;
-        let kind = payload
-          .get("type")
-          .and_then(|v| v.as_str())
-          .unwrap_or("runtime_event")
-          .to_owned();
-        if let Some(map) = payload.as_object_mut() {
-          map.remove("type");
+        for event in crate::execution_events::project(event, &model, &run_id) {
+          if let agent_core::events::AgentEvent::PhaseChanged { phase, .. } = &event {
+            let mut previous = last_phase
+              .lock()
+              .map_err(|_| anyhow::anyhow!("execution phase lock unavailable"))?;
+            if *previous == Some(*phase) {
+              continue;
+            }
+            *previous = Some(*phase);
+          }
+          store.append_event_owned(
+            &run_id,
+            epoch,
+            AGENT_EVENT_KIND,
+            serde_json::to_value(event)?,
+          )?;
         }
-        store.append_event_owned(&run_id, epoch, &kind, payload)?;
         Ok(())
       })();
       if result.is_err() {
@@ -282,7 +301,10 @@ impl Daemon {
       runtime_config.supports_images = info.supports_images;
       Runtime::open_with_backend(
         runtime_config,
-        Arc::new(self.store.clone()),
+        Arc::new(crate::run_input::RunPersistence {
+          store: self.store.clone(),
+          run_id: run.id.clone(),
+        }),
         tools,
         listener,
         backend,
@@ -291,12 +313,32 @@ impl Daemon {
     } else {
       Runtime::open(
         runtime_config,
-        Arc::new(self.store.clone()),
+        Arc::new(crate::run_input::RunPersistence {
+          store: self.store.clone(),
+          run_id: run.id.clone(),
+        }),
         tools,
         listener,
       )
       .await?
     };
+    let runtime = Arc::new(runtime);
+    {
+      let mut registered = self.input_runtimes.lock().await;
+      if registered.len() >= 128 && !registered.contains_key(&session.id) {
+        anyhow::bail!(
+          "input runtime capacity reached; reconcile pending queues before starting another session"
+        );
+      }
+      registered.insert(
+        session.id.clone(),
+        crate::run_input::RunRuntime {
+          run_id: run.id.clone(),
+          epoch: session.owner_epoch,
+          runtime: runtime.clone(),
+        },
+      );
+    }
     let execute = runtime.execute(&run.prompt);
     tokio::pin!(execute);
     let result = tokio::select! {
@@ -305,6 +347,10 @@ impl Daemon {
       result=&mut execute=>result,
       _=tokio::time::sleep(Duration::from_secs(self.config.run_timeout_secs))=>{runtime.cancel().await?;tokio::time::timeout(Duration::from_secs(10),&mut execute).await.map_err(|_|RuntimeError::Uncertain("execution deadline expired with unknown outcome".into()))?},
     };
+    runtime.close_input_admission().await;
+    if !runtime.has_pending_inputs().await.unwrap_or(true) {
+      self.input_runtimes.lock().await.remove(&session.id);
+    }
     if let Some(computer) = &computer {
       computer.close().await;
     }

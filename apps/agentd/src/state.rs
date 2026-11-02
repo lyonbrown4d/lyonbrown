@@ -52,6 +52,11 @@ impl Daemon {
     tracing::info!(browser_uncertain, "reconciled interrupted browser actions");
     let interrupted = self.store.recover_interrupted()?;
     self.store.recover_model_jobs()?;
+    let inputs_uncertain = self.store.recover_input_cancellations()?;
+    tracing::info!(
+      inputs_uncertain,
+      "reconciled unconfirmed input cancellations"
+    );
     tracing::info!(uncertain = interrupted.len(), "reconciled interrupted runs");
     for run in self.store.pending_runs()? {
       if run.session_id.starts_with("worker:") {
@@ -135,6 +140,7 @@ pub struct RuntimeServices {
   pub(crate) workspace_writes: Arc<Mutex<()>>,
   pub(crate) events: Arc<Notify>,
   pub(crate) approvals: Arc<Notify>,
+  pub(crate) input_runtimes: Mutex<HashMap<String, crate::run_input::RunRuntime>>,
   pub(crate) active: Arc<Mutex<HashMap<String, CancellationToken>>>,
   pub(crate) permits: Arc<Semaphore>,
   pub(crate) stopping: CancellationToken,
@@ -152,6 +158,7 @@ impl RuntimeServices {
       workspace_writes: Arc::new(Mutex::new(())),
       events: Arc::new(Notify::new()),
       approvals: Arc::new(Notify::new()),
+      input_runtimes: Mutex::new(HashMap::new()),
       active: Arc::new(Mutex::new(HashMap::new())),
       permits: Arc::new(Semaphore::new(max_runs)),
       stopping: CancellationToken::new(),

@@ -28,6 +28,17 @@ impl Dispatcher {
       session.owner_node_id == self.manager.node.id && session.owner_epoch == envelope.owner_epoch,
       "master session ownership or epoch changed"
     );
+    let endpoint = url::Url::parse(&remote.endpoint)?;
+    ensure!(
+      endpoint.scheme() == "https"
+        && endpoint.host_str().is_some()
+        && endpoint.username().is_empty()
+        && endpoint.password().is_none()
+        && endpoint.query().is_none()
+        && endpoint.fragment().is_none()
+        && endpoint.path() == "/",
+      "peer endpoint must be a credential-free HTTPS origin"
+    );
     let mut connection = self.manager.connect(remote).await?;
     ensure!(
       envelope
@@ -36,10 +47,11 @@ impl Dispatcher {
         .all(|cap| connection.node.capabilities.contains(cap)),
       "peer lacks required task capabilities"
     );
-    let (task, created) = self
-      .manager
-      .store
-      .accept_master_dispatched_task(envelope.clone(), &connection.node.id)?;
+    let (task, created) = self.manager.store.accept_master_dispatched_task_at(
+      envelope.clone(),
+      &connection.node.id,
+      endpoint.as_str(),
+    )?;
     ensure!(
       created,
       "task was already dispatched or has an unknown outcome; reconcile its existing identity instead of resubmitting"

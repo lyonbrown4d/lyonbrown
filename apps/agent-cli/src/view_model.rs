@@ -29,13 +29,15 @@ pub struct ViewModel<'a> {
   pub transcript: Text<'static>,
   pub compact_transcript: Text<'static>,
   pub approval: Option<ApprovalView>,
+  pub approval_selection: Option<&'a crate::workflow::ApprovalSelection>,
   pub context: Option<(&'static str, Text<'static>)>,
   pub task_list: Option<TaskListView>,
   pub composer: &'a Composer,
   pub submitting: bool,
   pub active: bool,
   pub notice: String,
-  pub scroll: u16,
+  pub scroll: usize,
+  pub anchored: bool,
   pub context_scroll: u16,
   pub command_palette: Option<CommandPaletteView>,
   pub picker: Option<&'a crate::picker::Picker>,
@@ -63,7 +65,15 @@ impl<'a> ViewModel<'a> {
         Line::from("❯ 先读取 Cargo.toml，帮我梳理工作区结构。"),
       ]);
     }
-    for message in &app.messages {
+    let mut anchor_line = None;
+    for (index, message) in app.messages.iter().enumerate() {
+      if app
+        .transcript_anchor
+        .as_ref()
+        .is_some_and(|anchor| app.message_keys.get(index) == Some(anchor))
+      {
+        anchor_line = Some(lines.len());
+      }
       let role = match message.role.as_str() {
         "You" => "❯ 你",
         "Error" => "! 错误",
@@ -82,6 +92,9 @@ impl<'a> ViewModel<'a> {
     if let Some((_, content)) = &app.streaming {
       lines.push(Line::from("● Lyonbrown · 正在回复"));
       lines.extend(crate::markdown::render(&safe_text(content), theme).lines);
+    }
+    if let Some(start) = anchor_line {
+      lines.drain(..start);
     }
     let task_list = (app.router.current() == ContextPanel::Tasks
       && app.task_detail.is_empty()
@@ -127,10 +140,18 @@ impl<'a> ViewModel<'a> {
     });
     let context = match app.router.current() {
       ContextPanel::Closed => None,
+      ContextPanel::Inputs => Some((
+        "运行输入 · ↑↓ 选择 · Delete 撤销 · F7 关闭",
+        crate::run_input_ui::detail(app),
+      )),
+      ContextPanel::Activity => Some((
+        "执行记录 · ↑↓ 选择 · Enter 展开 · F6 关闭",
+        app.activity.text(theme),
+      )),
       ContextPanel::Help => Some((
         "快捷键 · F1 关闭",
         Text::from(format!(
-          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准一次 · Ctrl+E 拒绝\nCtrl+C / Ctrl+D 退出\nF2 会话 · F3 持久 Task · F4 计算机\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 返回面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/run inspect RUN_ID\n/run abandon RUN_ID --idempotency-key KEY --note '核对记录'\n/run continue RUN_ID --idempotency-key KEY --note '核对记录' --prompt '新的输入'\n恢复保留原 Run 的不确定状态；继续会创建新会话，用 Tab 切换查看。\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n\n{}\n\n管理命令由 CLI 本地解析，格式错误不会作为提示发送给模型。",
+          "Enter 发送 · Alt/Shift+Enter 换行\nPgUp/PgDn 滚动对话或面板\nCtrl+N 新建会话 · Tab 切换会话\nCtrl+R 重连 · Ctrl+X 取消当前 Run\nCtrl+Y 批准所选一次 · Ctrl+E 拒绝所选\nCtrl+C / Ctrl+D 退出\nF2 会话 · F3 持久 Task · F4 计算机 · F6 执行记录\n↑/↓ 输入历史 · Ctrl+P 搜索历史（回填后确认）\n任务面板：↑/↓ 选择 · Enter 查看 · PgDn 下一页\nEsc 返回面板 · F5 完整审批内容\n\n/draft list · /draft recover SESSION_ID\n/run inspect RUN_ID\n/run abandon RUN_ID --idempotency-key KEY --note '核对记录'\n/run continue RUN_ID --idempotency-key KEY --note '核对记录' --prompt '新的输入'\n恢复保留原 Run 的不确定状态；继续会创建新会话，用 Tab 切换查看。\n/task list --session SESSION [--after CURSOR]\n/task get TASK_ID\n/task dispatch --node-id NODE --node-endpoint https://worker --session SESSION --parent-run RUN --task-id UUID --attempt-id UUID --idempotency-key KEY --instructions '…' --capability workspace.read\n/task cancel TASK_ID --node-id NODE --node-endpoint https://worker\n/task reconcile TASK_ID --node-id NODE --node-endpoint https://worker\n/task accept TASK_ID --node-id NODE --node-endpoint https://worker --accepted true|false\n\n{}\n\n管理命令由 CLI 本地解析，格式错误不会作为提示发送给模型。",
           crate::slash_command::help_text(None)
         )),
       )),
@@ -174,14 +195,8 @@ impl<'a> ViewModel<'a> {
         }),
       )),
       ContextPanel::Approval => Some((
-        "审批详情 · PgUp/PgDn 滚动",
-        Text::from(
-          app
-            .approvals
-            .first()
-            .map(|approval| safe_text(&approval.description))
-            .unwrap_or_else(|| "没有待处理的审批".into()),
-        ),
+        "审批 · ↑↓ 选择 · Space 展开 · Ctrl+Y 批准所选一次 · Ctrl+E 拒绝所选",
+        app.workflow.approvals.detail(),
       )),
       ContextPanel::Computer => Some((
         "计算机 · Alt+PgUp/PgDn",
@@ -203,7 +218,12 @@ impl<'a> ViewModel<'a> {
       Text::from("从一个具体问题开始。\nF1 帮助 · Ctrl+N 新建会话")
     };
     let notice = if app.persistence_warning.is_empty() {
-      app.notice.clone()
+      let progress = app.activity.summary();
+      if app.notice.is_empty() || app.notice == progress {
+        progress
+      } else {
+        format!("{progress} · {}", app.notice)
+      }
     } else if app.notice.is_empty() {
       app.persistence_warning.clone()
     } else {
@@ -218,17 +238,24 @@ impl<'a> ViewModel<'a> {
         .unwrap_or_else(|| "新会话".into()),
       transcript: Text::from(lines),
       compact_transcript,
-      approval: app.approvals.first().map(|approval| ApprovalView {
-        description: safe_text(&approval.description),
-        pending: app.approvals.len(),
-      }),
+      approval: app
+        .workflow
+        .approvals
+        .selected()
+        .map(|approval| ApprovalView {
+          description: safe_text(&approval.tool),
+          pending: app.approvals.len(),
+        }),
       context,
+      approval_selection: (app.router.current() == ContextPanel::Approval)
+        .then_some(&app.workflow.approvals),
       task_list,
       composer: &app.input,
       submitting: app.submitting,
       active: app.active_run.is_some(),
       notice: safe_text(&notice),
       scroll: app.scroll,
+      anchored: anchor_line.is_some(),
       context_scroll: app.router.scroll(),
       command_palette,
       picker: app.picker.as_ref(),

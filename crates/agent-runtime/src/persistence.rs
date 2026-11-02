@@ -72,6 +72,7 @@ impl DurableSession {
     before: SessionState,
     kind: &str,
     payload: serde_json::Value,
+    events: Vec<agent_core::events::AgentEvent>,
   ) -> SessionResult<()> {
     let metadata = self.inner.metadata();
     let snapshot = Snapshot {
@@ -91,6 +92,7 @@ impl DurableSession {
           Mutation {
             kind: kind.into(),
             payload,
+            events,
           },
         )
         .await
@@ -167,7 +169,12 @@ impl SessionStorage for DurableSession {
     let before = self.inner.snapshot_state();
     self.inner.create_lane(lane, at).await?;
     self
-      .persist(before, "lane_created", json!({"lane": lane, "at": at}))
+      .persist(
+        before,
+        "lane_created",
+        json!({"lane": lane, "at": at}),
+        Vec::new(),
+      )
       .await
   }
 
@@ -176,19 +183,33 @@ impl SessionStorage for DurableSession {
     let before = self.inner.snapshot_state();
     self.inner.move_lane(lane, to).await?;
     self
-      .persist(before, "lane_moved", json!({"lane": lane, "to": to}))
+      .persist(
+        before,
+        "lane_moved",
+        json!({"lane": lane, "to": to}),
+        Vec::new(),
+      )
       .await
   }
 
   async fn append_entry(&self, entry: ProvisionedEntry, lane: &str) -> SessionResult<Entry> {
     let _guard = self.gate.lock().await;
     let before = self.inner.snapshot_state();
+    let records = self
+      .inner
+      .find_records(&RecordQuery {
+        record_type: Some("queue_enqueued"),
+        ..Default::default()
+      })
+      .await?;
     let entry = self.inner.append_entry(entry, lane).await?;
+    let events = crate::semantic_events::entry(&entry, &records);
     self
       .persist(
         before,
         "entry_appended",
         json!({"lane": lane, "entry": crate::event_projection::entry(&entry)}),
+        events,
       )
       .await?;
     Ok(entry)
@@ -197,12 +218,25 @@ impl SessionStorage for DurableSession {
   async fn append_record(&self, record: LaneRecord) -> SessionResult<LaneRecord> {
     let _guard = self.gate.lock().await;
     let before = self.inner.snapshot_state();
+    let records = if matches!(&record, LaneRecord::QueueCancelled(_)) {
+      self
+        .inner
+        .find_records(&RecordQuery {
+          record_type: Some("queue_enqueued"),
+          ..Default::default()
+        })
+        .await?
+    } else {
+      Vec::new()
+    };
     let record = self.inner.append_record(record).await?;
+    let events = crate::semantic_events::record(&record, &records);
     self
       .persist(
         before,
         "record_appended",
         json!({"record": crate::event_projection::record(&record)}),
+        events,
       )
       .await?;
     Ok(record)
@@ -213,7 +247,7 @@ impl SessionStorage for DurableSession {
     let before = self.inner.snapshot_state();
     self.inner.set_name(name).await?;
     self
-      .persist(before, "name_changed", json!({"name": name}))
+      .persist(before, "name_changed", json!({"name": name}), Vec::new())
       .await
   }
 
@@ -222,7 +256,12 @@ impl SessionStorage for DurableSession {
     let before = self.inner.snapshot_state();
     self.inner.set_label(id, label).await?;
     self
-      .persist(before, "label_changed", json!({"id": id, "label": label}))
+      .persist(
+        before,
+        "label_changed",
+        json!({"id": id, "label": label}),
+        Vec::new(),
+      )
       .await
   }
 }

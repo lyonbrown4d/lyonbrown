@@ -152,7 +152,7 @@ pub fn dispatch_envelope(
   Ok(envelope)
 }
 
-fn task_json(task: &v1::Task) -> Value {
+pub(crate) fn task_json(task: &v1::Task) -> Value {
   let envelope = task.envelope.as_ref().map(|value| {
     json!({
       "task_id": value.task_id, "attempt_id": value.attempt_id,

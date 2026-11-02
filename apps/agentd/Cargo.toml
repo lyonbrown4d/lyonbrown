@@ -53,6 +53,7 @@ async-stream = "0.3.6"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
 
 [dev-dependencies]
+diesel.workspace = true
 agent-test-support = { path = "../../crates/agent-test-support" }
 agent-client = { path = "../../crates/agent-client" }
 tempfile.workspace = true

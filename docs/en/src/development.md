@@ -104,6 +104,19 @@ mdbook build docs/en
 
 These commands check formatting, static issues, tests, compilation and documentation generation. They do not replace real-model requests, GUI startup, CEF operation, system permissions or cross-device acceptance. Report the command, environment, scenario and remaining coverage limits together.
 
+## TUI interaction and queue recovery checks
+
+`agent-core::events::AgentEvent` defines execution facts authored by agentd. Clients do not infer model phases from Harness audit records. Run focused checks with default features:
+
+```sh
+cargo test --locked -p agent-cli -p agentd -p agent-core -p agent-runtime -p agent-storage --test events --test activity --test interaction --test tui_interactions --test workflow --test input_control --test queue_cancel_failure --test queue_restore --test semantic_events --test input_fence --test run_input --test run_input_handoff --test run_input_failure --test original_task_target
+cargo test --locked -p agent-cli --test pty_interactions
+```
+
+The first group uses real protocol adapters and loopback mocks to verify input idempotency, owner epochs, queue restoration, `Uncertain` after cancellation persistence failure, original Worker routing, and persisted results. Synthetic persistence failure reproduces the upstream queue cancellation defect tracked in [pi-rust #235](https://github.com/bigfish1913/pi-rust/issues/235). The product detects failure through the public persistence interface, retains cancellation intent, and blocks replay of unconfirmed input.
+
+The PTY case starts the actual `agent-cli` child process, authenticates to agentd, and checks model connection status, expanded tool arguments and results, filtered history, restoring history without submission, and exit while an overlay owns input. It retains ANSI output, text, and terminal-cell snapshots under the system temporary directory at `lyonbrown-tui-acceptance/<id>/`. See [runtime captures and scope](runtime-evidence.md#tui-execution-activity-and-input-history). These checks load no model weights, call no paid models, and do not replace Desktop GUI or cross-platform acceptance.
+
 ## Module changes
 
 Clients own presentation and input. Models, tools, permissions and durable state remain in the daemon. Add shared fields to `proto/agent/v1/agent.proto` and update both consumers; do not put execution-library internals in protocol messages.

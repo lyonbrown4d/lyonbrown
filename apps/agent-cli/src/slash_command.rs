@@ -9,6 +9,16 @@ pub struct CommandSpec {
 
 pub const COMMANDS: &[CommandSpec] = &[
   CommandSpec {
+    name: "search",
+    usage: "/search TEXT",
+    summary: "Search local transcript; Alt+N/P visits stable message anchors",
+  },
+  CommandSpec {
+    name: "activity",
+    usage: "/activity",
+    summary: "Inspect daemon execution events and tool results",
+  },
+  CommandSpec {
     name: "cancel",
     usage: "/cancel",
     summary: "Cancel the active run",
@@ -66,7 +76,7 @@ pub const COMMANDS: &[CommandSpec] = &[
   CommandSpec {
     name: "permissions",
     usage: "/permissions",
-    summary: "Inspect permission policy",
+    summary: "Inspect pending approvals and policy visibility limits",
   },
   CommandSpec {
     name: "providers",

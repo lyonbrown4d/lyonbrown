@@ -34,6 +34,22 @@ impl Store {
         );
         return Ok((run, false));
       }
+      crate::input_fence::ensure_no_input_cancellation(connection, session)?;
+      let active: i64 = runs::table
+        .filter(runs::session_id.eq(session))
+        .filter(runs::status.eq_any([
+          "accepted",
+          "running",
+          "awaiting_approval",
+          "cancel_requested",
+          "uncertain",
+        ]))
+        .count()
+        .get_result(connection)?;
+      anyhow::ensure!(
+        active == 0,
+        "session already has an active run; use explicit steering or follow-up input"
+      );
       let run = Run {
         id: new_id(),
         session_id: session.into(),

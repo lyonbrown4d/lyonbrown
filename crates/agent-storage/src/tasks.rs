@@ -9,7 +9,7 @@ impl Store {
   pub fn accept_task(&self, envelope: TaskEnvelope) -> Result<(Task, bool)> {
     self
       .lock()?
-      .immediate_transaction(|connection| accept_task_tx(connection, envelope, None))
+      .immediate_transaction(|connection| accept_task_tx(connection, envelope, None, None))
   }
   pub fn accept_dispatched_task(
     &self,
@@ -17,19 +17,8 @@ impl Store {
     worker_node_id: &str,
   ) -> Result<(Task, bool)> {
     self.lock()?.immediate_transaction(|connection| {
-      accept_task_tx(connection, envelope, Some(worker_node_id))
+      accept_task_tx(connection, envelope, Some(worker_node_id), None)
     })
-  }
-  pub fn task_target(&self, task_id: &str) -> Result<Option<String>> {
-    let Some(event) = self.events(task_id, 0, 1)?.into_iter().next() else {
-      return Ok(None);
-    };
-    anyhow::ensure!(
-      event.kind == "task_accepted",
-      "task acceptance intent is missing"
-    );
-    let payload: serde_json::Value = serde_json::from_str(&event.payload_json)?;
-    Ok(payload["worker_node_id"].as_str().map(str::to_owned))
   }
   pub fn accept_worker_task(
     &self,
@@ -39,7 +28,7 @@ impl Store {
   ) -> Result<(Task, agent_core::Session, bool)> {
     let local_session_id = format!("worker:{}:{}", envelope.task_id, envelope.attempt_id);
     self.lock()?.immediate_transaction(|connection| {
-      let (task, created) = accept_task_tx(connection, envelope, Some(worker_node_id))?;
+      let (task, created) = accept_task_tx(connection, envelope, Some(worker_node_id), None)?;
       let session = if created {
         let session = agent_core::Session {
           id: local_session_id.clone(),
@@ -246,6 +235,7 @@ pub(crate) fn accept_task_tx(
   connection: &mut diesel::SqliteConnection,
   envelope: TaskEnvelope,
   worker_node_id: Option<&str>,
+  worker_endpoint: Option<&str>,
 ) -> Result<(Task, bool)> {
   anyhow::ensure!(
     !envelope.task_id.is_empty()
@@ -280,7 +270,7 @@ pub(crate) fn accept_task_tx(
     connection,
     &task.envelope.task_id,
     "task_accepted",
-    serde_json::json!({"attempt_id":task.envelope.attempt_id,"worker_node_id":worker_node_id}),
+    serde_json::json!({"attempt_id":task.envelope.attempt_id,"worker_node_id":worker_node_id,"worker_endpoint":worker_endpoint}),
   )?;
   task.cursor = event.cursor;
   diesel::insert_into(tasks::table)
