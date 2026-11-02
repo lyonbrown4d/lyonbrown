@@ -55,29 +55,33 @@ pub(crate) fn confirm(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::
         },
       )?;
     }
+    crate::picker::PickerValue::ProviderProfile { id } => {
+      let profile = id.and_then(|id| {
+        app
+          .provider_profiles
+          .iter()
+          .find(|profile| profile.id == id)
+          .cloned()
+      });
+      app.profile_dialog = Some(crate::profile_dialog::ProfileDialog::new(profile));
+    }
     crate::picker::PickerValue::Provider {
       provider,
       environment,
     } => {
-      if environment.is_empty() {
-        app.notice = format!("{provider} 没有检测到可上传的凭据环境变量。");
-        return Ok(());
+      if let Some(provider) = app
+        .provider_catalog
+        .iter()
+        .find(|value| value.id == provider)
+        .cloned()
+      {
+        app.provider_dialog = Some(crate::provider_dialog::ProviderDialog::new(
+          provider,
+          environment,
+        ));
+      } else {
+        app.notice = "提供方目录已变化，请重新打开 /providers。".into();
       }
-      let navigation_revision = app.router.begin_request();
-      send(
-        actions,
-        Action::Resource {
-          session: None,
-          generation: app.generation,
-          navigation_revision,
-          source: String::new(),
-          command: crate::resource_command::ResourceCommand::ProviderUpload {
-            provider,
-            environment,
-          },
-        },
-      )?;
-      app.notice = "正在上传凭据…".into();
     }
     crate::picker::PickerValue::Skill { name, scope } => {
       let session = app.selected_session().map(|session| session.id.clone());

@@ -16,6 +16,29 @@ pub(crate) async fn execute(
   updates: &mpsc::Sender<Update>,
 ) -> anyhow::Result<()> {
   match action {
+    Action::CancelProviderProbe { .. } => {}
+    Action::ProviderProfile {
+      generation,
+      dialog,
+      operation,
+    } => {
+      let result = crate::profile_dialog::execute(client, operation).await;
+      let _ = updates
+        .send(Update::ProviderProfile {
+          generation,
+          dialog,
+          result,
+        })
+        .await;
+    }
+    Action::ProviderCredential {
+      provider,
+      change,
+      generation,
+      dialog,
+    } => {
+      crate::provider_dialog::execute(client, provider, change, generation, dialog, updates).await;
+    }
     Action::SubmitInput {
       attempt,
       generation,
@@ -270,11 +293,13 @@ pub(crate) async fn execute(
         .await;
     }
     Action::ProviderCatalog { generation } => {
-      let providers = client.list_providers().await?;
+      let (providers, profiles) =
+        tokio::try_join!(client.list_providers(), client.list_provider_profiles())?;
       let _ = updates
         .send(Update::ProviderCatalog {
           generation,
           providers,
+          profiles,
         })
         .await;
     }

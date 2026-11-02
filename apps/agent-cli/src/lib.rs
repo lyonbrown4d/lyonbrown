@@ -25,6 +25,8 @@ mod model_command;
 mod model_hub_view;
 pub mod picker;
 mod picker_command;
+pub mod profile_dialog;
+pub mod provider_dialog;
 mod reading_ui;
 mod recovery_update;
 mod resource_backend;

@@ -110,6 +110,12 @@ pub fn render_model(frame: &mut Frame, model: &ViewModel<'_>, theme: Theme) {
       layout.footer,
     );
   }
+  if let Some(dialog) = model.provider_dialog {
+    crate::provider_dialog::render(frame, dialog, theme);
+  }
+  if let Some(dialog) = model.profile_dialog {
+    crate::profile_dialog::render(frame, dialog, theme);
+  }
 }
 
 fn header(frame: &mut Frame, model: &ViewModel<'_>, area: Rect, theme: Theme, compact: bool) {

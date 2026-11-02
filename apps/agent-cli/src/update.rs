@@ -75,15 +75,61 @@ pub fn apply(app: &mut App, update: Update) {
         app.open_picker(picker);
       }
     }
+    Update::ProviderProfile {
+      generation,
+      dialog,
+      result,
+    } => {
+      crate::profile_dialog::apply(app, generation, &dialog, result);
+    }
+    Update::ProviderCredential {
+      generation,
+      dialog,
+      result,
+    } => {
+      if generation != app.generation {
+        return;
+      }
+      let Some(current) = app
+        .provider_dialog
+        .as_mut()
+        .filter(|current| current.id == dialog)
+      else {
+        return;
+      };
+      current.busy = false;
+      current.confirm_remove = false;
+      match result {
+        Ok(provider) if provider.id == current.provider.id => {
+          if let Some(cached) = app
+            .provider_catalog
+            .iter_mut()
+            .find(|cached| cached.id == provider.id)
+          {
+            *cached = provider.clone();
+          }
+          current.provider = provider;
+          current.revision = current.revision.saturating_add(1);
+          current.credential_present = false;
+          current.message = "agentd 已确认；密钥输入已清空。可关闭后使用 /model 选择模型。".into();
+        }
+        Ok(_) => current.message = "响应身份不匹配，请关闭后刷新核对。".into(),
+        Err(message) => current.message = message,
+      }
+    }
     Update::ProviderCatalog {
       generation,
       providers,
+      profiles,
     } => {
       if generation != app.generation {
         return;
       }
       let candidates = crate::resource_command::candidate_environment_names();
-      let picker = crate::picker::Picker::providers(&providers, &candidates);
+      let picker =
+        crate::picker::Picker::providers(&providers, &candidates).with_profiles(&profiles);
+      app.provider_catalog = providers;
+      app.provider_profiles = profiles;
       if picker.is_empty() {
         app.push_local("Providers\n\nagentd 没有返回提供方。");
       } else {
@@ -193,7 +239,11 @@ pub fn apply(app: &mut App, update: Update) {
         app.restore_current_draft();
       }
     }
-    Update::Disconnected(reason) => app.connection = Connection::Disconnected(reason),
+    Update::Disconnected(reason) => {
+      app.provider_dialog = None;
+      app.profile_dialog = None;
+      app.connection = Connection::Disconnected(reason);
+    }
     Update::Selected(session) => {
       app.router.rebind();
       app.generation = app.generation.saturating_add(1);

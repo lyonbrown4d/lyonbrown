@@ -61,12 +61,28 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<u8> {
     state_loaded: false,
     ..App::default()
   };
+  let mut probe_owner: Option<String> = None;
+  let mut credential_input = crate::provider_dialog::CredentialInput::default();
+  let mut profile_input = crate::profile_dialog::ProfileInput::default();
   let stop = terminal::shutdown();
   tokio::pin!(stop);
   let mut save_state = tokio::time::interval(std::time::Duration::from_millis(300));
   let mut last_saved = None;
   loop {
-    let completed = terminal.draw(|frame| view::render(frame, &app, theme))?;
+    let current = app.profile_dialog.as_ref().map(|dialog| dialog.id.clone());
+    if current != probe_owner {
+      if let Some(dialog) = probe_owner.take() {
+        send(&actions, Action::CancelProviderProbe { dialog })?;
+      }
+      probe_owner = current;
+    }
+    credential_input.sync(&app);
+    profile_input.sync(&app);
+    let completed = terminal.draw(|frame| {
+      view::render(frame, &app, theme);
+      credential_input.render(frame, &app, theme);
+      profile_input.render(frame, &app, theme);
+    })?;
     app.viewport = completed.area.height;
     app.viewport_width = completed.area.width;
     tokio::select! {
@@ -99,7 +115,11 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<u8> {
         }
         event = events.next() => match event {
             Some(Ok(event)) => {
-                if input::handle(&mut app, event, &actions)? { break; }
+                let handled = if app.profile_dialog.is_some() {
+                    profile_input.handle(&mut app,&event,&actions)?
+                } else { credential_input.handle(&mut app,&event,&actions)? };
+                if handled.unwrap_or(false) { break; }
+                if handled.is_none() && input::handle(&mut app, event, &actions)? { break; }
             }
             Some(Err(error)) => return Err(error.into()),
             None => break,

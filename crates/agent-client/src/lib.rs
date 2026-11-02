@@ -7,6 +7,7 @@ pub mod local_state;
 mod models;
 pub mod navigation;
 mod orchestration;
+mod provider_profiles;
 mod recovery;
 mod run_input;
 mod skills;

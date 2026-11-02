@@ -29,7 +29,10 @@ pub enum PickerValue {
   Session {
     id: String,
   },
-  /// Confirming uploads the detected credential environment for this provider.
+  ProviderProfile {
+    id: Option<String>,
+  },
+  /// Confirming opens a credential dialog without uploading anything.
   Provider {
     provider: String,
     environment: String,
@@ -154,7 +157,7 @@ impl Picker {
     candidates: &[crate::resource_command::ClientProviderCandidate],
   ) -> Self {
     Self {
-      title: "选择提供方 · ↑↓ 选择 · Enter 上传凭据 · Esc 取消".into(),
+      title: "Provider · ↑↓ 选择 · Enter 配置 · Esc 取消".into(),
       items: providers
         .iter()
         .map(|provider| {
@@ -197,6 +200,24 @@ impl Picker {
       error: String::new(),
       query: String::new(),
     }
+  }
+
+  pub fn with_profiles(mut self, profiles: &[agent_protocol::v1::ProviderProfile]) -> Self {
+    let mut items = vec![PickerItem {
+      label: "新增 Provider".into(),
+      detail: "配置标准协议、地址、模型和密钥".into(),
+      value: PickerValue::ProviderProfile { id: None },
+    }];
+    items.extend(profiles.iter().map(|profile| PickerItem {
+      label: profile.name.clone(),
+      detail: format!("自定义 · {} · 版本 {}", profile.model, profile.revision),
+      value: PickerValue::ProviderProfile {
+        id: Some(profile.id.clone()),
+      },
+    }));
+    items.append(&mut self.items);
+    self.items = items;
+    self
   }
 
   pub fn skills(skills: &[agent_protocol::v1::Skill]) -> Self {

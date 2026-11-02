@@ -10,6 +10,12 @@ use crate::{
 /// Handle the same terminal events in the live loop and terminal integration tests.
 /// Returns true when the client should close; daemon work remains owned by agentd.
 pub fn handle(app: &mut App, event: Event, actions: &mpsc::Sender<Action>) -> anyhow::Result<bool> {
+  // Dialog input is owned by transient adapters, never the chat draft/history.
+  if app.provider_dialog.is_some() || app.profile_dialog.is_some() {
+    return Ok(
+      matches!(event, Event::Key(key) if key.kind == KeyEventKind::Press && key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c' | 'd'))),
+    );
+  }
   if app.connection == Connection::Connecting
     || (app.connection == Connection::Connected && !app.state_loaded)
   {

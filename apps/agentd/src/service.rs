@@ -35,6 +35,7 @@ impl ClientService for Daemon {
         "workspace.watch".into(),
         "decision.routing".into(),
         "tasks.manage".into(),
+        "providers.profiles".into(),
       ],
       protocol_version: 1,
       daemon_version: env!("CARGO_PKG_VERSION").into(),
@@ -120,6 +121,46 @@ impl ClientService for Daemon {
       tools: 4 + u32::from(self.config.browser_tools) + u32::from(self.config.computer_tools),
       mcp_servers: self.config.mcp.len() as u32,
     }))
+  }
+  async fn list_provider_profiles(
+    &self,
+    _: Request<v1::Empty>,
+  ) -> Result<Response<v1::ProviderProfiles>, Status> {
+    let profiles = self
+      .store
+      .provider_profiles()
+      .map_err(crate::provider_profiles::storage_error)?
+      .into_iter()
+      .map(|profile| self.public_profile(profile))
+      .collect::<Result<Vec<_>, _>>()?;
+    Ok(Response::new(v1::ProviderProfiles { profiles }))
+  }
+  async fn put_provider_profile(
+    &self,
+    request: Request<v1::PutProviderProfileRequest>,
+  ) -> Result<Response<v1::ProviderProfile>, Status> {
+    self.save_profile(request.into_inner()).map(Response::new)
+  }
+  async fn remove_provider_profile(
+    &self,
+    request: Request<v1::RemoveProviderProfileRequest>,
+  ) -> Result<Response<v1::Empty>, Status> {
+    let input = request.into_inner();
+    self
+      .store
+      .remove_provider_profile(&input.id, input.expected_revision)
+      .map_err(crate::provider_profiles::storage_error)?;
+    self.events.notify_waiters();
+    Ok(Response::new(v1::Empty {}))
+  }
+  async fn probe_provider_profile(
+    &self,
+    request: Request<v1::ProbeProviderProfileRequest>,
+  ) -> Result<Response<v1::ProviderProbe>, Status> {
+    self
+      .probe_profile(request.into_inner())
+      .await
+      .map(Response::new)
   }
   async fn list_providers(&self, _: Request<v1::Empty>) -> Result<Response<v1::Providers>, Status> {
     let uploaded = self

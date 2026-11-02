@@ -101,7 +101,7 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 | `Ctrl+C` / `Ctrl+D` | 在对话、选择器或 Diff 中退出客户端，daemon 作业继续 |
 | `Esc` | 收起浮层或返回上层面板 |
 
-本地命令的结果不占用上下文面板。需要选择时（`/model`、`/models`）在输入区上方浮出可选项，`↑↓` 选择、`Enter` 确认、`Esc` 取消；只读结果（`/status`、`/git`、`/providers`、`/skills` 与各类操作回执）直接追加到对话记录，以 `· 本地` 标记并且不按 Markdown 渲染。命令提交时立即清空输入区，后到的结果不会覆盖等待期间新输入的文字。`/models` 的 hub 子命令（`search`、`inspect`、`plan`、`installed`、`status`）把 daemon 返回的 JSON 读成仓库、版本、架构、许可、文件大小与作业状态等字段；无法识别的结构退回原始 JSON，不会丢信息。
+本地命令的结果不占用上下文面板。需要选择时（`/model`、`/models`、`/providers`、`/skills`）在输入区上方浮出可选项，`↑↓` 选择、`Enter` 确认、`Esc` 取消；只读结果（`/status`、`/git` 与各类操作回执）直接追加到对话记录，以 `· 本地` 标记并且不按 Markdown 渲染。命令提交时立即清空输入区，后到的结果不会覆盖等待期间新输入的文字。`/models` 的 hub 子命令（`search`、`inspect`、`plan`、`installed`、`status`）把 daemon 返回的 JSON 读成仓库、版本、架构、许可、文件大小与作业状态等字段；无法识别的结构退回原始 JSON，不会丢信息。
 
 `/diff` 打开全屏 diff 视图：默认 unified，`Tab` 切换 side-by-side，`j`／`k` 或方向键滚动，`n`／`p` 切换文件，`h`／`l` 横向滚动，`g`／`G` 跳到首尾，`Esc` 关闭。视图只展开改动块与其上下文，语法高亮使用 tree-sitter（Rust、Python、JavaScript、TypeScript、JSON、TOML、Bash、Markdown）；着色只影响呈现，不改变发送给 daemon 的文本。
 执行记录消费共享的 `agent_core::events::AgentEvent` 枚举。agentd 产出阶段、模型、工具结果、用量和队列事实；TUI 只映射文案和渲染，不从文本增量或 Harness 审计 JSON 推断“正在连接模型”。模型请求阶段来自 Provider 请求入口，表示正在发起请求，不证明网络连接已经建立。工具与队列事实、用量同 Harness 快照、事件及 Outbox 原子保存。`F6` 使用同一投影处理实时事件和历史回放，按 Run 与游标去重；用量是已报告值，不推算剩余上下文。尚未报告时不显示虚构数据。
@@ -119,6 +119,18 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 TUI 按 MVVM 分离呈现：`view_model.rs` 从客户端 `App` 状态生成只读 `ViewModel`，整理连接标签、消息、审批和当前上下文；`view.rs` 只通过 Ratatui 渲染该数据与输入组件。输入动作和后台更新分别留在 `input.rs`、`backend.rs` 与 `update.rs`，呈现层不派发 daemon 操作。
 
 TUI 的 `Router` 统一上下文页面、返回栈和页面滚动位置。`Esc` 返回上一层。斜杠命令补全是输入框的临时状态，不占用路由：在空输入框输入 `/` 会在输入框上方浮出候选，`↑↓` 选择、`Tab` 或 `Enter` 补全、输入参数或 `Esc` 收起，对话和当前页面保持原样。会话或连接变更会清除旧返回栈及临时资源页面。`AppLayout`、`BodyLayout` 复用 Ratatui 的约束布局，集中计算宽屏、窄屏、审批区和补全浮层的区域；路由不持有 daemon 的执行权限。
+
+## TUI Provider 配置对话框
+
+输入 `/providers`，选择「新增 Provider」或已有自定义配置，按 Enter 打开模态对话框。通过 Tab／Shift+Tab 切换字段和按钮；协议字段使用左右方向键或空格切换。表单支持名称、标准协议、Base URL、模型 ID 和掩码密钥。支持的协议为 OpenAI Responses、OpenAI Chat Completions 和 Anthropic Messages；名称、模型 ID 和地址分别限制为 100、256、2048 字节。Base URL 必须为 HTTPS，只有回环地址允许 HTTP，不能包含用户名、密码、查询参数或 fragment。OpenAI 常用地址以 `/v1` 结尾；自定义路径应与推理适配器使用的地址一致。
+
+「探测」由 agentd 向该协议的模型列表端点发送只读 GET，不发起推理，不保存表单，也不能证明所填模型支持生成或工具调用。探测最长 5 秒，响应最多 1 MiB、100 个模型；禁用代理、自动重试与重定向。失败时保留表单并显示安全错误。按 Esc 关闭对话框会停止客户端的探测请求；已经受理的保存或移除操作仍可能完成，不能把关闭视为回滚。
+
+「保存」将配置交给 agentd，首次保存必须填写密钥，编辑时留空保留原凭据。密钥只进入临时输入适配器和认证请求，不进入 App、ViewModel、聊天草稿、输入历史或客户端持久状态；保存确认、关闭、断线和身份变化会清空输入。保存不会选择模型，关闭后使用 `/model` 显式选择该 Provider。不要把保存成功当成探测成功。
+
+配置最多 100 条，通过修订号防止旧表单覆盖新修改。移除需要再次确认，不删除已经固定到 Session 或 Run 的绑定；删除过的配置身份不能重新使用。每次修改密钥创建新的加密凭据引用，旧绑定仍可使用原值。旧凭据目前保留在 daemon 凭据存储中，没有自动垃圾回收。配置变更、事件和 Outbox 在同一个 SQLite 事务中保存；连接验证不写配置、事件或 Outbox。
+
+列表中的内置 Provider 打开凭据对话框，可填写新密钥、显式导入允许的环境变量或移除已保存凭据；打开和选择 Provider 不会自动上传。需要自定义地址与模型时使用「新增 Provider」。这套自定义配置界面目前仅接入 TUI；Desktop 的 Providers 页面仍只提供环境变量凭据管理。
 
 ## 原生计算机连接
 

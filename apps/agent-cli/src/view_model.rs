@@ -23,6 +23,8 @@ pub struct CommandPaletteView {
 }
 
 pub struct ViewModel<'a> {
+  pub provider_dialog: Option<&'a crate::provider_dialog::ProviderDialog>,
+  pub profile_dialog: Option<&'a crate::profile_dialog::ProfileDialog>,
   pub connection: &'static str,
   pub connected: bool,
   pub title: String,
@@ -259,6 +261,8 @@ impl<'a> ViewModel<'a> {
       context_scroll: app.router.scroll(),
       command_palette,
       picker: app.picker.as_ref(),
+      provider_dialog: app.provider_dialog.as_ref(),
+      profile_dialog: app.profile_dialog.as_ref(),
       diff: app.diff.as_ref(),
       viewport: app.viewport,
     }

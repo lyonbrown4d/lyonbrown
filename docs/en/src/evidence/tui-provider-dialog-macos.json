@@ -1,0 +1,198 @@
+{
+  "date": "2026-11-02",
+  "platform": "macOS 27.2 (26B123)",
+  "architecture": "arm64",
+  "version": "0.1.0",
+  "baseline_commit": "c4ebfcac766bcdc014f87ad6e619fc82f6b264ea",
+  "build_source": "uncommitted working tree; digests below",
+  "capture": "Actual agent-cli child process through portable-pty; vt100 terminal cells rendered with AppKit, not an OS window screenshot",
+  "binary": {
+    "path": ".local/build/reuse-target/debug/agent-cli",
+    "sha256": "ec2d787868d0f0826722485c84b3cc487abc14e5ae18a7b5ae4f512564846a14"
+  },
+  "lockfile_sha256": "daee1ec946ac86a13535a27af9c4f7236b877a795a2104d0dbeec60ec98c3ca6",
+  "image": "images/tui-provider-dialog-macos.png",
+  "image_sha256": "89843a78933500ff1ccf3672ab4140a70b6a041f771a4d3a310b935d436af844",
+  "cells_sha256": "a25eae2b0033f916e753790c135baf9d2a1fc833245f228796261bd89fad5431",
+  "text_sha256": "0972586c98f135b4e9bf7909b94fc80898b3bc550e9a5f2f55d981ecd0036d99",
+  "observed": {
+    "profile_name": "PTY Provider",
+    "protocol": "openai_completions",
+    "profile_revision": 1,
+    "credential_masked": true,
+    "probe_writes_profile": false,
+    "model_requests": {
+      "catalog_gets": 2,
+      "inference_posts": 1
+    },
+    "second_probe": "stalled; closed with Esc before timeout, client commands remain responsive",
+    "model_selection": "explicit /model selection before Run",
+    "requested_model": "terminal-custom",
+    "run_status": "completed",
+    "credential_in_events": false
+  },
+  "scope": [
+    "authenticated real agentd and product agent-cli child process",
+    "loopback synthetic model only; no weights or paid inference",
+    "three-protocol daemon adapter regression and storage transaction/CAS regression run separately"
+  ],
+  "limits": [
+    "no real Provider service acceptance",
+    "no Desktop configuration GUI acceptance",
+    "no Windows, Linux, public network or installer acceptance"
+  ],
+  "sources": [
+    {
+      "path": "apps/agent-cli/Cargo.toml",
+      "sha256": "00fe0897b6071c4df1319eeb8c35a0009397a51f2d913656ab413cee7f5101bb"
+    },
+    {
+      "path": "apps/agent-cli/src/action_backend.rs",
+      "sha256": "ae10deec264941f9123a6cfcf01dc9ba918589ce1a2ace076dee685fc1fcfa72"
+    },
+    {
+      "path": "apps/agent-cli/src/backend.rs",
+      "sha256": "2152e36e423219dc1a42220ccc2dc92f60aedbfca41760d2bebacbfabb73bb4a"
+    },
+    {
+      "path": "apps/agent-cli/src/entry.rs",
+      "sha256": "5e680fe43848a32affdb08debca8859153686bc54da7a99995240886df78c8ca"
+    },
+    {
+      "path": "apps/agent-cli/src/input.rs",
+      "sha256": "a6ad0980af304d063a03ef4a4b306fe16b723a94956794e6197fa671e7672ecd"
+    },
+    {
+      "path": "apps/agent-cli/src/lib.rs",
+      "sha256": "9e380f8dc2621e712f905d8c943cb81bea8f9fdf45ef770f70e5bf3aeade03eb"
+    },
+    {
+      "path": "apps/agent-cli/src/model.rs",
+      "sha256": "437520734739c2468e30af289697efe05b4a68994da6e35a64c30b8e4bb5c051"
+    },
+    {
+      "path": "apps/agent-cli/src/picker.rs",
+      "sha256": "d105974b572595133d5a11f5f9c81b56d9bdd28318c60c8ec0e164303f06b40f"
+    },
+    {
+      "path": "apps/agent-cli/src/picker_command.rs",
+      "sha256": "18a7539c5d9473907f429f9d729d39f737832e93d6b99eb43255019f36aed0e3"
+    },
+    {
+      "path": "apps/agent-cli/src/profile_dialog/backend.rs",
+      "sha256": "e95422f21c8be38316a7293031b35fb43901d10df91f90c2994843260caadd53"
+    },
+    {
+      "path": "apps/agent-cli/src/profile_dialog/input.rs",
+      "sha256": "baabc4500c1dac29d4e891e0039b3ce65cc92a4480d4681dc06d64646b1985c8"
+    },
+    {
+      "path": "apps/agent-cli/src/profile_dialog/mod.rs",
+      "sha256": "5891312eef43fa0fb0ac8360144ce557c3845bb2c077a43d14436e847d37a254"
+    },
+    {
+      "path": "apps/agent-cli/src/profile_dialog/view.rs",
+      "sha256": "7711fcbfa05c67caee3dac4e417d9dc47360e000c63bce12e270535de0ef8e1b"
+    },
+    {
+      "path": "apps/agent-cli/src/provider_dialog/backend.rs",
+      "sha256": "82b0a67bff91fddc36109dd624b5fc7542fce7c55f7d657353de6633cd0bcca8"
+    },
+    {
+      "path": "apps/agent-cli/src/provider_dialog/input.rs",
+      "sha256": "f927802588d6d6f93fd20acb8b12fe1ca7d1599ff71bb4e8f2166021d0788b54"
+    },
+    {
+      "path": "apps/agent-cli/src/provider_dialog/mod.rs",
+      "sha256": "d77d2e158adac292b0f72a27ce083b1f38de4d35ec7eccbbc3ffb82969c9d303"
+    },
+    {
+      "path": "apps/agent-cli/src/provider_dialog/view.rs",
+      "sha256": "23fc2f4636cd77618eb40eb437373a8d4a209e3c88930cbcc244aafa2a6a26a7"
+    },
+    {
+      "path": "apps/agent-cli/src/update.rs",
+      "sha256": "4a8121a8e65bf25a3fa27ccd574de8a570b62d7119bd05f025b243913858d2b3"
+    },
+    {
+      "path": "apps/agent-cli/src/view.rs",
+      "sha256": "54cc9ccb485914ff985c7ebde6a3e9019d860f744de8c5ac5bafd40734e06b50"
+    },
+    {
+      "path": "apps/agent-cli/src/view_model.rs",
+      "sha256": "223509c195690eb746bc42a0d56dbbd39aa4d196f0060d3b73057cbe5f07c629"
+    },
+    {
+      "path": "apps/agent-cli/tests/profile_dialog.rs",
+      "sha256": "6c3f2bca701bb6e207a0433cd157615c9f05ba53dc4283b247bcdea6bb46a10a"
+    },
+    {
+      "path": "apps/agent-cli/tests/provider_dialog.rs",
+      "sha256": "2fb6680206e4a2548a4e1058c0332dfb2b1fb6b70ce3f373fd01695a879e72e9"
+    },
+    {
+      "path": "apps/agent-cli/tests/pty_provider_dialog.rs",
+      "sha256": "ac9ae5f581a32a5d0b684ca3c1c6cf239199ae8f9581315c300f24f76e0d2b80"
+    },
+    {
+      "path": "apps/agentd/src/lib.rs",
+      "sha256": "338dd074589715353caa2ebe2d40c8adef4d086e998dbaa3974de1958bff145b"
+    },
+    {
+      "path": "apps/agentd/src/model_catalog.rs",
+      "sha256": "b2cd5e196a1aca99401b887d9d1e4e354de8ba61876233cb0c41318613ed927a"
+    },
+    {
+      "path": "apps/agentd/src/provider_probe.rs",
+      "sha256": "ccc173d18cdaef68b4b638ad50a3d7602b994abf5d1ce4e1787fe90d6ec7ce68"
+    },
+    {
+      "path": "apps/agentd/src/provider_profiles.rs",
+      "sha256": "7674228f8010ac60b6e36eb631bdda1485ee07a2b11d53688cb5b6e9400eafbc"
+    },
+    {
+      "path": "apps/agentd/src/service.rs",
+      "sha256": "cb23cfe61db52feff2fdf23912845dd602c6b0c02b48b6cfba4a4adda70b3056"
+    },
+    {
+      "path": "apps/agentd/tests/provider_profiles.rs",
+      "sha256": "97f92cc387c705fae2c24c513d3613ec7aa330436424e48239d74c1d231d70ab"
+    },
+    {
+      "path": "crates/agent-client/src/lib.rs",
+      "sha256": "c369f485b29f66a2c654482c9d4e0dd9dba3533210563d51670bc89142320e77"
+    },
+    {
+      "path": "crates/agent-client/src/provider_profiles.rs",
+      "sha256": "147a6c6b407e61a9cd37ea06955d41e220532dda76f5548b198ddd678618c319"
+    },
+    {
+      "path": "crates/agent-core/src/lib.rs",
+      "sha256": "9048264509c17c230cf397f2364edb8b3e991768c2e3c104652c042290a6bfc3"
+    },
+    {
+      "path": "crates/agent-core/src/provider_profiles.rs",
+      "sha256": "1d243bfa4abd58f2e225799c8366e25f1c58398b36396bb7a52c8683a5e8f283"
+    },
+    {
+      "path": "crates/agent-storage/src/lib.rs",
+      "sha256": "f6cf79f9d60088184c1c45d82194f5da2219fbcbec07c764dfc3546de2f1b87d"
+    },
+    {
+      "path": "crates/agent-storage/src/provider_profiles.rs",
+      "sha256": "deb382e636b06523185ca53492a68486cd565d379a04615e9f3cdaf6c43c83ae"
+    },
+    {
+      "path": "crates/agent-storage/src/schema.rs",
+      "sha256": "82ab73484773363b5886f720ca6512a11a4c0bffd05b348de0e0c639ddd55787"
+    },
+    {
+      "path": "crates/agent-storage/tests/provider_profiles.rs",
+      "sha256": "b46dfbaceb747adc9f50f623055288fb26511e8499f46ed3fcb1555027edb193"
+    },
+    {
+      "path": "proto/agent/v1/agent.proto",
+      "sha256": "b3dbad6b514ff2f59e21fff16becb72e91769f9e5ae4bcab107e450e99d4936b"
+    }
+  ]
+}

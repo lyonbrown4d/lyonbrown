@@ -10,6 +10,7 @@ mod input_fence;
 mod model_bindings;
 mod operations;
 mod persistence;
+mod provider_profiles;
 mod recovery;
 mod runs;
 mod schema;
@@ -22,6 +23,7 @@ pub use approved_browser_action::{ApprovedBrowserAction, BrowserActionAuthorizat
 pub use approved_operation::{ApprovedOperation, OperationAuthorization};
 use diesel::{connection::SimpleConnection, prelude::*};
 pub use operations::{OperationRecord, OperationStatus};
+pub use provider_profiles::ProviderProfileError;
 pub use recovery::{RecoverRun, RecoveryAction, RunRecovery};
 use schema::{events, harness_sessions, outbox, runs as run_rows, sessions as session_rows};
 

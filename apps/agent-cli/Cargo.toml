@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agent-secrets = { path = "../../crates/agent-secrets" }
 tonic.workspace = true
 agent-core = { path = "../../crates/agent-core" }
 anyhow.workspace = true

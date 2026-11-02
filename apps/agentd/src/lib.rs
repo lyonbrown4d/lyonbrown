@@ -23,6 +23,8 @@ mod model_catalog;
 mod model_hub;
 mod model_jobs;
 pub mod peers;
+mod provider_probe;
+mod provider_profiles;
 mod service;
 mod service_stream;
 mod skill_runtime;

@@ -4,6 +4,18 @@ The earlier Desktop client screenshots show the local native GPUI Desktop window
 
 The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.
 
+## TUI Provider configuration Dialog
+
+On November 2, 2026, the version 0.1.0 product `agent-cli` ran in an actual PTY on macOS 27.2 (26B123), arm64, authenticated to a real agentd and loopback synthetic model. This image renders terminal cells rather than an OS window screenshot. The [capture record](evidence/tui-provider-dialog-macos.json) includes binary, source, cell, and image digests.
+
+![Custom Provider probe in the actual TUI, with masked credentials](images/tui-provider-dialog-macos.png)
+
+The dialog accepted a name, Chat Completions protocol, loopback Base URL, model ID, and synthetic credential. A successful model-list GET did not save the profile or create a Session or Run. Explicit Save then created exactly one revision-one profile in agentd; its event contained no credential value.
+
+The same process started a stalled second probe, closed it with Esc, and continued by creating a session. `/model` filtered and selected the saved Provider before submitting a prompt. The model server recorded two catalog GETs and one inference POST. The POST used the selected model ID and credential, and the Run finished `completed`. This synthetic loopback check does not establish real Provider availability, model quality, or tool support. Desktop forms, Windows, Linux, public networks, and installers were not accepted in this run.
+
+These captures and digests precede the dependency update. The subsequent CEF bindings `156.3.0`, SDK `156.0.15`, and `mdns-sd` `0.21.7` updates are outside the native runtime acceptance scope of these captures.
+
 ## TUI execution activity and input history
 
 On November 2, 2026, the version 0.1.0 `agent-cli` child process ran on macOS 27.2 (26B123), arm64, authenticated to a real agentd and a loopback Chat Completions synthetic model. These images render terminal-cell snapshots captured from the actual PTY, preserving application output and terminal colors. They are not screenshots of a native Terminal window. The [capture record](evidence/tui-interaction-macos.json) contains binary, source, terminal-cell, and image digests.

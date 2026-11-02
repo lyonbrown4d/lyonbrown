@@ -4,6 +4,18 @@
 
 浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。
 
+## TUI Provider 配置 Dialog
+
+2026 年 11 月 2 日在 macOS 27.2（26B123）、arm64 上通过实际 PTY 启动 0.1.0 产品 `agent-cli`，认证连接真实 agentd 与回环合成模型。下图由终端单元格渲染，不是操作系统窗口截图；[运行记录](evidence/tui-provider-dialog-macos.json)包含程序、源码、单元格与图片摘要。
+
+![实际 TUI 中验证自定义 Provider，密钥保持掩码](images/tui-provider-dialog-macos.png)
+
+在 Dialog 中填写名称、Chat Completions 协议、回环 Base URL、模型 ID 与合成密钥，执行探测。模型列表 GET 成功时，配置仍未保存，也没有新建 Session 或 Run。随后明确保存，daemon 中只有一条修订号为 1 的配置；事件不包含密钥。
+
+同一程序再次发起停滞探测，按 Esc 关闭后继续创建会话；通过 `/model` 搜索并选择刚保存的 Provider，再提交输入。模型服务共记录两次模型列表 GET 和一次推理 POST，POST 使用所选模型 ID 和凭据，Run 最终为 `completed`。此组只使用合成回环服务，不证明真实 Provider 的可用性、模型质量或工具支持；Desktop 表单、Windows、Linux、公网和安装包未在此组验收。
+
+此组截图与摘要采集于本轮依赖更新前；后续 CEF 绑定 `156.3.0`、SDK `156.0.15` 和 `mdns-sd` `0.21.7` 的版本更新不属于这份画面的原生运行验收范围。
+
 ## TUI 执行活动与输入历史
 
 2026 年 11 月 2 日在 macOS 27.2（26B123）、arm64 上运行版本 0.1.0 的 `agent-cli` 子进程，通过认证连接真实 agentd 和回环 Chat Completions 合成模型。下图由实际 PTY 的终端单元格快照渲染，保留程序输出与终端颜色；不是原生 Terminal 窗口截图。[运行记录](evidence/tui-interaction-macos.json)保存程序、源码、单元格和图片摘要。

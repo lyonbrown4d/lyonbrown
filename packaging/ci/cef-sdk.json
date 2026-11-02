@@ -1,46 +1,46 @@
 {
   "source": "https://cef-builds.spotifycdn.com/index.json",
-  "cef_version": "156.0.14+g4fa4ab5+chromium-156.0.8078.48",
-  "crate_version": "156.2.0+156.0.14",
-  "export_cef_dir_checksum": "26958be5644b3aa4b29ac88c56c7df6c573d8d90a1e26fb4aed2891aa650db91",
+  "cef_version": "156.0.15+gcf671c0+chromium-156.0.8078.80",
+  "crate_version": "156.3.0+156.0.15",
+  "export_cef_dir_checksum": "332d93916fca60403bc8dc22f86f1e306b1a29024d0dcb94860898f264f24094",
   "targets": {
     "x86_64-unknown-linux-gnu": {
       "platform": "linux64",
       "archive": {
-        "last_modified": "2026-10-24T03:05:44.177000Z",
-        "name": "cef_binary_156.0.14+g4fa4ab5+chromium-156.0.8078.48_linux64_minimal.tar.bz2",
-        "sha1": "d091c82a8655113a34616c08cb340bf92310298d",
-        "size": 331729249,
+        "last_modified": "2026-10-31T04:22:57.018000Z",
+        "name": "cef_binary_156.0.15+gcf671c0+chromium-156.0.8078.80_linux64_minimal.tar.bz2",
+        "sha1": "09235427222e026a4f34399742df27c5d98a4f8a",
+        "size": 333318600,
         "type": "minimal"
       }
     },
     "x86_64-pc-windows-msvc": {
       "platform": "windows64",
       "archive": {
-        "last_modified": "2026-10-24T02:28:30.536000Z",
-        "name": "cef_binary_156.0.14+g4fa4ab5+chromium-156.0.8078.48_windows64_minimal.tar.bz2",
-        "sha1": "72dc1dd1636acc2391609fa6f410aa09f09168d4",
-        "size": 175051364,
+        "last_modified": "2026-10-31T06:20:13.288000Z",
+        "name": "cef_binary_156.0.15+gcf671c0+chromium-156.0.8078.80_windows64_minimal.tar.bz2",
+        "sha1": "b690e035689ee20ba9d2500ac8953815bc7ed46a",
+        "size": 174836914,
         "type": "minimal"
       }
     },
     "aarch64-apple-darwin": {
       "platform": "macosarm64",
       "archive": {
-        "last_modified": "2026-10-24T04:22:30.334000Z",
-        "name": "cef_binary_156.0.14+g4fa4ab5+chromium-156.0.8078.48_macosarm64_minimal.tar.bz2",
-        "sha1": "7359a9d293dd5c480bec3f18b762731b483b0e13",
-        "size": 134887274,
+        "last_modified": "2026-10-31T05:44:11.781000Z",
+        "name": "cef_binary_156.0.15+gcf671c0+chromium-156.0.8078.80_macosarm64_minimal.tar.bz2",
+        "sha1": "bcdd1877edb300b0fb91d8f71c0b14aae256cd0f",
+        "size": 135024501,
         "type": "minimal"
       }
     },
     "x86_64-apple-darwin": {
       "platform": "macosx64",
       "archive": {
-        "last_modified": "2026-10-24T06:44:15.466000Z",
-        "name": "cef_binary_156.0.14+g4fa4ab5+chromium-156.0.8078.48_macosx64_minimal.tar.bz2",
-        "sha1": "bc46c83878741fa2b23486940dacebabb294bf39",
-        "size": 141687370,
+        "last_modified": "2026-10-31T08:01:55.629000Z",
+        "name": "cef_binary_156.0.15+gcf671c0+chromium-156.0.8078.80_macosx64_minimal.tar.bz2",
+        "sha1": "13756e3029307720fe00898d54aef8a64c9b4043",
+        "size": 141647289,
         "type": "minimal"
       }
     }

@@ -39,6 +39,10 @@ pub enum ContextPanel {
 
 #[derive(Debug)]
 pub struct App {
+  pub provider_dialog: Option<crate::provider_dialog::ProviderDialog>,
+  pub provider_profiles: Vec<agent_protocol::v1::ProviderProfile>,
+  pub provider_catalog: Vec<agent_protocol::v1::Provider>,
+  pub profile_dialog: Option<crate::profile_dialog::ProfileDialog>,
   pub input_attempt: Option<crate::run_input_ui::InputAttempt>,
   pub input_receipts: Vec<agent_protocol::v1::RunInputReceipt>,
   pub input_selected: usize,
@@ -91,6 +95,10 @@ pub struct App {
 impl Default for App {
   fn default() -> Self {
     Self {
+      provider_dialog: None,
+      provider_profiles: Vec::new(),
+      provider_catalog: Vec::new(),
+      profile_dialog: None,
       input_attempt: None,
       input_receipts: Vec::new(),
       input_selected: 0,

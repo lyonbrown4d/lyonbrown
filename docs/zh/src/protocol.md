@@ -70,3 +70,13 @@ daemon 已通过这条认证连接装配 Harness 的 `computer_observe` 与 `com
 macOS 通过 CoreGraphics 读取调用进程的会话，要求位于控制台、登录完成，且 `CGSSessionUniqueSessionUUID` 能解析为非全零 UUID。检查还通过维护中的 `objc2` 绑定读取 IORegistry 根节点，要求 `IOConsoleLocked` 明确为 `false`；它与 `CGSSessionScreenIsLocked` 任一为 `true` 时返回 `Locked`。`IOConsoleLocked` 缺失或类型错误、会话 UUID 缺失或无效时返回 `SessionStateUnknown`。会话检查前后各读取一次快照并校验；快照变化时拒绝。锁字段属于 macOS 的实际实现字段，以上为项目采用的兼容策略，不是 Apple 文档承诺的锁屏状态保证。
 
 原生后端一旦观察到锁屏、无法读取的会话状态或会话身份变化，就保持撤销状态；解锁后同一后端也不会恢复控制，必须重新显式挂接。会话检查、屏幕捕获和输入仍是分开的操作系统调用，前后校验不构成原子性的捕获与输入保证。实现见 `crates/agent-computer/src/native/macos.rs`、`session.rs` 与 `mod.rs`。
+
+## Provider Profile 控制接口
+
+认证 ClientService 提供 `ListProviderProfiles`、`PutProviderProfile`、`RemoveProviderProfile` 与 `ProbeProviderProfile`，通过 `providers.profiles` 能力标识开放。协议使用 `RemoteProviderProtocol` 枚举，只接入 Responses、Chat Completions 和 Anthropic Messages。Profile DTO 包含 UUID、名称、协议、Base URL、模型 ID、修订号和凭据存在标记，不返回凭据值或内部存储引用。
+
+客户端为新表单生成稳定 UUID，`revision=0` 表示创建；编辑提交已读取的修订号，daemon 在同一 SQLite 事务内校验并递增版本、保存配置、事件和 Outbox。移除要求 `expected_revision`，已移除身份由保留事件阻止复用。错误使用既有 gRPC 状态：校验失败为 `InvalidArgument`，版本冲突为 `Aborted`，缺失为 `NotFound`，容量限制为 `ResourceExhausted`。结果丢失后先查询原 UUID，不自动生成新身份重放。
+
+新建必须携带单行、最多 16 KiB 的凭据；更新时空字节数组表示保留已有值。凭据由加密存储持有，修改时创建不可变引用，存储 CAS 失败不会改写旧引用；未能确认发布状态的孤立凭据保留，不盲目清除。Profile 配置与加密凭据文件不构成跨存储原子事务。删除 Profile 不撤销已固定的 Session/Run 模型绑定，旧凭据没有自动回收。
+
+Probe 对未保存草稿执行校验和模型列表 GET，不保存配置或执行推理。只有使用已保存凭据时才要求匹配当前修订号。HTTPS 地址或回环 HTTP 地址须不含嵌入凭据、查询参数和 fragment；探测禁用代理、重定向与自动重试，最长 5 秒，响应最多 1 MiB、100 个合法模型 ID。失败响应不回显上游正文、地址中的秘密或密钥。此限制与具体推理 SDK 的真实环境验收分别记录。

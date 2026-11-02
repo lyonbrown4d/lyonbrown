@@ -23,6 +23,10 @@ service ClientService {
   rpc ListSessions(Empty) returns (Sessions);
   rpc GetRuntimeStatus(SessionRequest) returns (RuntimeStatus);
   rpc ListProviders(Empty) returns (Providers);
+  rpc ListProviderProfiles(Empty) returns (ProviderProfiles);
+  rpc PutProviderProfile(PutProviderProfileRequest) returns (ProviderProfile);
+  rpc RemoveProviderProfile(RemoveProviderProfileRequest) returns (Empty);
+  rpc ProbeProviderProfile(ProbeProviderProfileRequest) returns (ProviderProbe);
   rpc PutProviderCredential(PutProviderCredentialRequest) returns (Provider);
   rpc RemoveProviderCredential(RemoveProviderCredentialRequest) returns (Provider);
   rpc CreateSession(CreateSessionRequest) returns (Session);
@@ -111,6 +115,16 @@ message Nodes { repeated Node nodes = 1; }
 message Session { string id = 1; string title = 2; string workspace = 3; string owner_node_id = 4; uint64 owner_epoch = 5; int64 created_at_ms = 6; }
 message Sessions { repeated Session sessions = 1; }
 message RuntimeStatus { Node node = 1; Session session = 2; Run active_run = 3; string provider = 4; string model = 5; uint32 pending_approvals = 6; uint32 tools = 7; uint32 mcp_servers = 8; }
+enum RemoteProviderProtocol { REMOTE_PROVIDER_PROTOCOL_UNSPECIFIED = 0; REMOTE_PROVIDER_PROTOCOL_OPENAI_RESPONSES = 1; REMOTE_PROVIDER_PROTOCOL_OPENAI_COMPLETIONS = 2; REMOTE_PROVIDER_PROTOCOL_ANTHROPIC_MESSAGES = 3; }
+message ProviderProfile { string id = 1; string name = 2; RemoteProviderProtocol protocol = 3; string base_url = 4; string model = 5; uint64 revision = 6; bool credential_configured = 7; }
+message ProviderProfiles { repeated ProviderProfile profiles = 1; }
+// revision=0 creates a new UUID identity; otherwise compare-and-swap the existing revision.
+// Empty credential preserves the existing secret reference; it is invalid on creation.
+message PutProviderProfileRequest { ProviderProfile profile = 1; bytes credential = 2; }
+message RemoveProviderProfileRequest { string id = 1; uint64 expected_revision = 2; }
+// Read-only GET to the protocol's models endpoint; never starts inference or saves a draft.
+message ProbeProviderProfileRequest { ProviderProfile profile = 1; bytes credential = 2; }
+message ProviderProbe { bool reachable = 1; string message = 2; repeated string model_ids = 3; }
 message ProviderModel { string id = 1; bool selected = 2; }
 message Provider { string id = 1; string name = 2; repeated string protocols = 3; bool runtime_supported = 4; bool selected = 5; string credential_state = 6; string credential_source = 7; string credential_environment = 8; repeated ProviderModel models = 9; }
 message Providers { repeated Provider providers = 1; }

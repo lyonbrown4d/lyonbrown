@@ -117,6 +117,14 @@ The first group uses real protocol adapters and loopback mocks to verify input i
 
 The PTY case starts the actual `agent-cli` child process, authenticates to agentd, and checks model connection status, expanded tool arguments and results, filtered history, restoring history without submission, and exit while an overlay owns input. It retains ANSI output, text, and terminal-cell snapshots under the system temporary directory at `lyonbrown-tui-acceptance/<id>/`. See [runtime captures and scope](runtime-evidence.md#tui-execution-activity-and-input-history). These checks load no model weights, call no paid models, and do not replace Desktop GUI or cross-platform acceptance.
 
+## Provider Dialog checks
+
+```sh
+cargo test --locked -p agent-cli -p agentd -p agent-storage --test provider_profiles --test profile_dialog --test provider_dialog --test pty_provider_dialog
+```
+
+Storage regressions verify CAS conflicts, deleted identity reuse, capacity, transaction rollback, and reopening. Daemon regressions use real adapters for all three standard protocols to check pinned bindings and immutable credentials, plus authenticated probes, errors, redirects, response bounds, and timeout. The PTY case operates the real `agent-cli`: fill the dialog, fetch the model catalog, save, close a stalled probe, explicitly select a model, and complete a Run. All requests use loopback synthetic models, without paid inference. Native Desktop forms and real Provider services are outside this acceptance scope.
+
 ## Module changes
 
 Clients own presentation and input. Models, tools, permissions and durable state remain in the daemon. Add shared fields to `proto/agent/v1/agent.proto` and update both consumers; do not put execution-library internals in protocol messages.

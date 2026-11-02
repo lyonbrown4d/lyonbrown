@@ -14,6 +14,20 @@ use agent_computer_runtime::{ComputerHostFactory, NativeComputerHost};
 use std::sync::Arc;
 
 pub enum Action {
+  CancelProviderProbe {
+    dialog: String,
+  },
+  ProviderProfile {
+    generation: u64,
+    dialog: String,
+    operation: crate::profile_dialog::ProfileOperation,
+  },
+  ProviderCredential {
+    provider: String,
+    change: crate::provider_dialog::CredentialChange,
+    generation: u64,
+    dialog: String,
+  },
   Connect,
   Computer {
     session: Option<String>,
@@ -102,6 +116,16 @@ pub enum Action {
 }
 
 pub enum Update {
+  ProviderProfile {
+    generation: u64,
+    dialog: String,
+    result: Result<crate::profile_dialog::ProfileResult, String>,
+  },
+  ProviderCredential {
+    generation: u64,
+    dialog: String,
+    result: Result<agent_protocol::v1::Provider, String>,
+  },
   Inputs {
     generation: u64,
     run: String,
@@ -164,6 +188,7 @@ pub enum Update {
   ProviderCatalog {
     generation: u64,
     providers: Vec<agent_protocol::v1::Provider>,
+    profiles: Vec<agent_protocol::v1::ProviderProfile>,
   },
   SkillsCatalog {
     session: Option<String>,
@@ -210,12 +235,35 @@ pub fn spawn_with_computer_factory(
     let mut selected_generation = 0;
     let mut browser: Option<agent_browser_runtime::RuntimeAttachment> = None;
     let mut stream: Option<tokio::task::JoinHandle<()>> = None;
+    let mut probes: std::collections::HashMap<String, tokio::task::JoinHandle<()>> =
+      std::collections::HashMap::new();
     let mut refresh = tokio::time::interval(std::time::Duration::from_secs(2));
     loop {
       tokio::select! {
           action = receiver.recv() => {
               let Some(action) = action else { break };
+              if let Action::CancelProviderProbe { dialog } = action {
+                  if let Some(task) = probes.remove(&dialog) { task.abort(); }
+                  continue;
+              }
+              probes.retain(|_,task| !task.is_finished());
+              if let Action::ProviderProfile {generation,dialog,operation: operation @ crate::profile_dialog::ProfileOperation::Probe { .. }} = action {
+                  if let Some(client) = client.clone() {
+                      if let Some(task) = probes.remove(&dialog) { task.abort(); }
+                      let updates = updates.clone();
+                      let key = dialog.clone();
+                      let task = tokio::spawn(async move {
+                          let result = crate::profile_dialog::execute(&client,operation).await;
+                          let _ = updates.send(Update::ProviderProfile {generation,dialog,result}).await;
+                      });
+                      probes.insert(key,task);
+                  } else {
+                      let _ = updates.send(Update::ProviderProfile {generation,dialog,result:Err("连接已断开，请重连后重试。".into())}).await;
+                  }
+                  continue;
+              }
               if let Action::Shutdown(done) = action {
+                  for (_,task) in probes.drain() { task.abort(); }
                   computer.disconnected();
                   drop(browser.take());
                   if let Some(task) = stream.take() { task.abort(); }
@@ -247,6 +295,7 @@ pub fn spawn_with_computer_factory(
                   continue;
               }
               if matches!(action, Action::Connect) {
+                  for (_,task) in probes.drain() { task.abort(); }
                   computer.disconnected();
                   let _ = updates.send(computer.snapshot()).await;
                   browser = None;
@@ -322,6 +371,9 @@ pub fn spawn_with_computer_factory(
                   Action::Resource { .. } => "resource.inspect_or_manage",
                   Action::ModelCatalog { .. } => "model.catalog",
                   Action::ProviderCatalog { .. } => "provider.catalog",
+                  Action::ProviderCredential { .. } => "provider.credential",
+                  Action::ProviderProfile { .. } => "provider.profile",
+                  Action::CancelProviderProbe { .. } => "provider.probe.cancel",
                   Action::SkillsCatalog { .. } => "skill.catalog",
                   Action::WorkspaceDiff { .. } => "workspace.diff",
                   Action::SaveState { .. } => "client.state.save",

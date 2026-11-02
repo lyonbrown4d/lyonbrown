@@ -15,7 +15,9 @@ pub fn model_service(
 }
 
 impl Daemon {
-  pub(crate) fn model_bindings(&self) -> Vec<(String, String, String, ModelBinding)> {
+  pub(crate) fn model_bindings(
+    &self,
+  ) -> anyhow::Result<Vec<(String, String, String, ModelBinding)>> {
     let mut entries = vec![(
       self.config.model.clone(),
       self.config.model.clone(),
@@ -114,13 +116,37 @@ impl Daemon {
         },
       ));
     }
-    entries
+    for profile in self.store.provider_profiles()? {
+      let id = format!("profile:{}", profile.id);
+      entries.push((
+        id.clone(),
+        profile.name.clone(),
+        profile.name,
+        ModelBinding {
+          model_id: id,
+          execution_id: format!("profile:{}:{}", profile.id, profile.revision),
+          provider: profile.protocol.runtime_provider().into(),
+          model: profile.model,
+          endpoint: Some(profile.base_url),
+          credential_id: format!("profile-secret:{}", profile.credential_id),
+        },
+      ));
+    }
+    Ok(entries)
   }
   pub(crate) fn binding_credential(
     &self,
     binding: &ModelBinding,
   ) -> anyhow::Result<Option<String>> {
     use agent_secrets::ExposeSecret;
+    if let Some(id) = binding.credential_id.strip_prefix("profile-secret:") {
+      return Ok(
+        self
+          .provider_secrets
+          .get(id)?
+          .map(|secret| secret.expose_secret().to_owned()),
+      );
+    }
     if let Some(value) = self.config.catalog_credentials.get(&binding.credential_id) {
       return Ok(Some(value.clone()));
     }
@@ -183,7 +209,7 @@ impl ModelService for Daemon {
       None
     };
     let mut models = Vec::new();
-    for (id, name, vendor, binding) in self.model_bindings() {
+    for (id, name, vendor, binding) in self.model_bindings().map_err(crate::service::db_error)? {
       let ready = if binding.provider == "local" {
         self.models.backend(&binding.model).await.is_ok()
       } else {
@@ -205,6 +231,8 @@ impl ModelService for Daemon {
         vendor,
         source: if binding.execution_id == "configured" {
           "configured"
+        } else if binding.execution_id.starts_with("profile:") {
+          "profile"
         } else {
           "builtin"
         }
@@ -302,6 +330,7 @@ impl ModelService for Daemon {
     }
     let binding = self
       .model_bindings()
+      .map_err(crate::service::db_error)?
       .into_iter()
       .map(|entry| entry.3)
       .find(|binding| {

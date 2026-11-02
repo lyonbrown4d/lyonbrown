@@ -117,6 +117,14 @@ cargo test --locked -p agent-cli --test pty_interactions
 
 PTY 用例实际启动 `agent-cli` 子进程，通过认证连接 agentd，检查模型连接状态、展开工具参数与结果、筛选历史、回填不提交以及弹层中的退出。测试在系统临时目录的 `lyonbrown-tui-acceptance/<id>/` 保留终端 ANSI 输出、文本和单元格快照。运行画面及范围见[运行截图与验收范围](runtime-evidence.md#tui-执行活动与输入历史)。这些测试不加载权重，不调用付费模型，也不代替 Desktop GUI 或三平台验收。
 
+## Provider Dialog 验证
+
+```sh
+cargo test --locked -p agent-cli -p agentd -p agent-storage --test provider_profiles --test profile_dialog --test provider_dialog --test pty_provider_dialog
+```
+
+存储回归检查版本冲突、删除身份复用、容量、事务回滚和重开数据库；daemon 回归通过三个标准协议的真实适配器检查固定绑定与不可变凭据，并验证探测的认证、错误、重定向、响应大小和超时。PTY 用例操作真实 `agent-cli`：填写 Dialog、读取模型列表、保存、关闭停滞探测、显式选择模型并完成运行。全部使用回环合成模型，不调用付费模型；原生 Desktop 表单和真实 Provider 服务不在此验收范围。
+
 ## 修改模块
 
 客户端只修改呈现与输入；模型、工具、权限和持久状态应留在 daemon。新增字段先维护 `proto/agent/v1/agent.proto` 和两端消费者，避免把运行库内部类型放进协议。
