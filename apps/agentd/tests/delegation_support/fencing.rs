@@ -13,7 +13,7 @@ async fn another_parent_runs_task_cannot_be_read_reconciled_cancelled_or_accepte
     .await
     .unwrap();
   let node = Delegation::open(&main, &worker, protocol).await;
-  let envelope = node.pair.envelope(vec!["workspace.read".into()]);
+  let envelope = node.pair.envelope(vec!["workspace.read".into()]).await;
   node
     .pair
     .dispatch
@@ -32,6 +32,7 @@ async fn another_parent_runs_task_cannot_be_read_reconciled_cancelled_or_accepte
       "previous parent ended",
       "",
     )
+    .await
     .unwrap();
   for op in ["get", "reconcile", "cancel", "accept"] {
     let mut call = json!({"op":op,"target_id":node.pair.worker.node_id,"task_id":envelope.task_id});
@@ -53,6 +54,7 @@ async fn another_parent_runs_task_cannot_be_read_reconciled_cancelled_or_accepte
       .master
       .store
       .approvals(&run.id)
+      .await
       .unwrap()
       .is_empty()
   );
@@ -62,6 +64,7 @@ async fn another_parent_runs_task_cannot_be_read_reconciled_cancelled_or_accepte
       .master
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .unwrap(),
     original
@@ -125,7 +128,15 @@ async fn lost_cancel_response_is_durable_uncertain_and_never_replays_worker_exec
     .await;
   let second = node.approval(&run.id, 2).await;
   assert_eq!(
-    node.pair.master.store.task(id).unwrap().unwrap().status,
+    node
+      .pair
+      .master
+      .store
+      .task(id)
+      .await
+      .unwrap()
+      .unwrap()
+      .status,
     "running"
   );
   node.pair.abort_worker_listener().await;
@@ -133,7 +144,15 @@ async fn lost_cancel_response_is_durable_uncertain_and_never_replays_worker_exec
   let run = node.terminal(&run.id).await;
   assert_eq!(run.status, "uncertain", "{}", run.error);
   assert_eq!(
-    node.pair.master.store.task(id).unwrap().unwrap().status,
+    node
+      .pair
+      .master
+      .store
+      .task(id)
+      .await
+      .unwrap()
+      .unwrap()
+      .status,
     "uncertain"
   );
   assert_eq!(
@@ -177,6 +196,7 @@ async fn model_cannot_supply_endpoint_or_expand_configured_capabilities() {
       .master
       .store
       .approvals(&run.id)
+      .await
       .unwrap()
       .is_empty()
   );
@@ -186,6 +206,7 @@ async fn model_cannot_supply_endpoint_or_expand_configured_capabilities() {
       .master
       .store
       .tasks_for_session(&node.pair.session.id, "", 100)
+      .await
       .unwrap()
       .is_empty()
   );

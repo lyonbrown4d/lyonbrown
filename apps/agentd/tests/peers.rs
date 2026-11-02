@@ -26,7 +26,7 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
     .unwrap();
     let mut pair = Pair::open(&mock, protocol).await;
     pair.serve().await;
-    let envelope = pair.envelope(vec!["workspace.read".into()]);
+    let envelope = pair.envelope(vec!["workspace.read".into()]).await;
     pair
       .dispatch
       .submit(&pair.worker_manager.local_node(), envelope.clone())
@@ -36,10 +36,16 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
     assert_eq!(task.attempt_status, "succeeded", "{}", task.error);
     assert_eq!(task.status, "awaiting_acceptance");
     assert_eq!(task.result, "worker-independent-result");
-    let worker_task = pair.worker.store.task(&envelope.task_id).unwrap().unwrap();
+    let worker_task = pair
+      .worker
+      .store
+      .task(&envelope.task_id)
+      .await
+      .unwrap()
+      .unwrap();
     assert_eq!(worker_task.status, "awaiting_acceptance");
     let local_id = format!("worker:{}:{}", envelope.task_id, envelope.attempt_id);
-    let session = pair.worker.store.session(&local_id).unwrap().unwrap();
+    let session = pair.worker.store.session(&local_id).await.unwrap().unwrap();
     assert_ne!(session.id, pair.session.id);
     assert_ne!(session.workspace, envelope.workspace);
     assert_eq!(session.owner_node_id, pair.worker.node_id);
@@ -48,10 +54,15 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
         .join("master-only.txt")
         .exists()
     );
-    let runs = pair.worker.store.runs(&session.id).unwrap();
+    let runs = pair.worker.store.runs(&session.id).await.unwrap();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status, "completed");
-    let events = pair.worker.store.events(&runs[0].id, 0, 1000).unwrap();
+    let events = pair
+      .worker
+      .store
+      .events(&runs[0].id, 0, 1000)
+      .await
+      .unwrap();
     assert!(events.iter().any(|event| matches!(
       decode(&event.kind, &event.payload_json).expect("event contract"),
       DecodedEvent::Known(AgentEvent::PhaseChanged {
@@ -102,7 +113,7 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
         .is_err()
     );
     assert_eq!(mock.requests().await.len(), 2);
-    assert_eq!(pair.worker.store.runs(&session.id).unwrap().len(), 1);
+    assert_eq!(pair.worker.store.runs(&session.id).await.unwrap().len(), 1);
     let accepted = pair
       .dispatch
       .accept(&pair.worker_manager.local_node(), &envelope.task_id, true)
@@ -114,13 +125,14 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
         .worker
         .store
         .task(&envelope.task_id)
+        .await
         .unwrap()
         .unwrap()
         .status,
       "completed"
     );
 
-    let empty = pair.envelope(vec![]);
+    let empty = pair.envelope(vec![]).await;
     pair
       .dispatch
       .submit(&pair.worker_manager.local_node(), empty.clone())
@@ -138,11 +150,12 @@ async fn two_daemons_use_real_worker_harness_with_isolated_session_and_capabilit
         .get("tools")
         .is_none_or(|tools| tools.as_array().is_some_and(Vec::is_empty))
     );
-    let empty_runs = pair.worker_runs(&empty);
+    let empty_runs = pair.worker_runs(&empty).await;
     let empty_events = pair
       .worker
       .store
       .events(&empty_runs[0].id, 0, 1000)
+      .await
       .unwrap();
     let plan: serde_json::Value = serde_json::from_str(
       &empty_events
@@ -164,7 +177,7 @@ async fn worker_tasks_participate_in_upgrade_fence_and_shutdown_cancellation() {
     .unwrap();
   let mut pair = Pair::open(&mock, StandardProtocol::ChatCompletions).await;
   pair.serve().await;
-  let envelope = pair.envelope(vec![]);
+  let envelope = pair.envelope(vec![]).await;
   pair
     .dispatch
     .submit(&pair.worker_manager.local_node(), envelope.clone())
@@ -181,7 +194,7 @@ async fn worker_tasks_participate_in_upgrade_fence_and_shutdown_cancellation() {
     .into_inner();
   assert!(node.draining);
   assert_eq!(node.active_runs, 1);
-  let denied = pair.envelope(vec![]);
+  let denied = pair.envelope(vec![]).await;
   assert!(
     pair
       .dispatch
@@ -189,11 +202,25 @@ async fn worker_tasks_participate_in_upgrade_fence_and_shutdown_cancellation() {
       .await
       .is_err()
   );
-  assert!(pair.worker.store.task(&denied.task_id).unwrap().is_none());
+  assert!(
+    pair
+      .worker
+      .store
+      .task(&denied.task_id)
+      .await
+      .unwrap()
+      .is_none()
+  );
   pair.worker.shutdown().await;
-  let task = pair.worker.store.task(&envelope.task_id).unwrap().unwrap();
+  let task = pair
+    .worker
+    .store
+    .task(&envelope.task_id)
+    .await
+    .unwrap()
+    .unwrap();
   assert_eq!(task.attempt_status, "cancelled");
-  let runs = pair.worker_runs(&envelope);
+  let runs = pair.worker_runs(&envelope).await;
   assert_eq!(runs[0].status, "cancelled");
   assert_eq!(
     pair
@@ -213,7 +240,7 @@ async fn worker_tasks_participate_in_upgrade_fence_and_shutdown_cancellation() {
 async fn interrupted_worker_task_and_pending_run_are_uncertain_without_model_replay() {
   let mock = MockModelServer::start(vec![]).await.unwrap();
   let pair = Pair::open(&mock, StandardProtocol::ChatCompletions).await;
-  let envelope = pair.envelope(vec![]);
+  let envelope = pair.envelope(vec![]).await;
   let workspace = pair
     .worker
     .config
@@ -230,6 +257,7 @@ async fn interrupted_worker_task_and_pending_run_are_uncertain_without_model_rep
       &pair.worker.node_id,
       workspace.to_str().unwrap(),
     )
+    .await
     .unwrap();
   let (run, _) = pair
     .worker
@@ -240,6 +268,7 @@ async fn interrupted_worker_task_and_pending_run_are_uncertain_without_model_rep
       &envelope.instructions,
       &envelope.attempt_id,
     )
+    .await
     .unwrap();
   pair.worker.recover().await.unwrap();
   let runtime = agentd::peers::PeerRuntime::prepare(pair.worker.clone())
@@ -251,13 +280,21 @@ async fn interrupted_worker_task_and_pending_run_are_uncertain_without_model_rep
       .worker
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .unwrap()
       .attempt_status,
     "uncertain"
   );
   assert_eq!(
-    pair.worker.store.run(&run.id).unwrap().unwrap().status,
+    pair
+      .worker
+      .store
+      .run(&run.id)
+      .await
+      .unwrap()
+      .unwrap()
+      .status,
     "uncertain"
   );
   assert!(mock.requests().await.is_empty());
@@ -272,7 +309,7 @@ async fn lost_peer_listener_does_not_orphan_accepted_worker_execution() {
     .unwrap();
   let mut pair = Pair::open(&mock, StandardProtocol::ChatCompletions).await;
   pair.serve().await;
-  let envelope = pair.envelope(vec![]);
+  let envelope = pair.envelope(vec![]).await;
   pair
     .dispatch
     .submit(&pair.worker_manager.local_node(), envelope.clone())
@@ -295,12 +332,13 @@ async fn lost_peer_listener_does_not_orphan_accepted_worker_execution() {
       .worker
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .unwrap()
       .attempt_status,
     "cancelled"
   );
-  let runs = pair.worker_runs(&envelope);
+  let runs = pair.worker_runs(&envelope).await;
   assert_eq!(runs[0].status, "cancelled");
   assert_eq!(mock.requests().await.len(), 1);
   pair.stop().await;

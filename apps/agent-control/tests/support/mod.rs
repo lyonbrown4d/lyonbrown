@@ -26,21 +26,23 @@ pub struct Fixture {
 impl Fixture {
   pub async fn new(queue: usize) -> Result<Self> {
     let directory = tempfile::tempdir()?;
-    let store = Store::open(directory.path().join("control.sqlite3"))?;
+    let store = Store::open(directory.path().join("control.sqlite3")).await?;
     let control = PeerIdentity::generate("control")?;
     let a = PeerIdentity::generate("node-a")?;
     let b = PeerIdentity::generate("node-b")?;
     let manager = PeerManager::new(store.clone(), control.clone(), node(&control))?;
     for identity in [&a, &b] {
-      manager.pair_local(
-        identity.public.clone(),
-        ["control.register", "control.resolve", "control.relay"]
-          .map(String::from)
-          .to_vec(),
-      )?;
+      manager
+        .pair_local(
+          identity.public.clone(),
+          ["control.register", "control.resolve", "control.relay"]
+            .map(String::from)
+            .to_vec(),
+        )
+        .await?;
     }
-    store.control_allow_link("node-a", "node-b", true)?;
-    store.control_allow_link("node-b", "node-a", true)?;
+    store.control_allow_link("node-a", "node-b", true).await?;
+    store.control_allow_link("node-b", "node-a", true).await?;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let endpoint = format!("https://{}", listener.local_addr()?);
     let plane = ControlPlane::new(
@@ -49,7 +51,7 @@ impl Fixture {
       Duration::from_secs(1),
       queue,
     )?;
-    let mut server = tonic::transport::Server::builder().tls_config(manager.server_tls()?)?;
+    let mut server = tonic::transport::Server::builder().tls_config(manager.server_tls().await?)?;
     let server_plane = plane.clone();
     let task = tokio::spawn(async move {
       server

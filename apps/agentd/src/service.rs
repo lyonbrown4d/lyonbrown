@@ -13,7 +13,7 @@ pub fn client_service(
   ClientServiceServer::with_interceptor(daemon, auth)
 }
 pub(crate) fn db_error(error: anyhow::Error) -> Status {
-  Status::failed_precondition(error.to_string())
+  Status::failed_precondition(agent_storage::public_error_message(&error))
 }
 #[tonic::async_trait]
 impl ClientService for Daemon {
@@ -36,6 +36,7 @@ impl ClientService for Daemon {
         "decision.routing".into(),
         "tasks.manage".into(),
         "providers.profiles".into(),
+        "memory.manage".into(),
       ],
       protocol_version: 1,
       daemon_version: env!("CARGO_PKG_VERSION").into(),
@@ -75,6 +76,7 @@ impl ClientService for Daemon {
       sessions: self
         .store
         .sessions()
+        .await
         .map_err(db_error)?
         .into_iter()
         .map(Into::into)
@@ -88,9 +90,10 @@ impl ClientService for Daemon {
     let session = self
       .store
       .session(&request.into_inner().session_id)
+      .await
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("session not found"))?;
-    let runs = self.store.runs(&session.id).map_err(db_error)?;
+    let runs = self.store.runs(&session.id).await.map_err(db_error)?;
     let active = runs.iter().find(|run| {
       matches!(
         run.status.as_str(),
@@ -101,6 +104,7 @@ impl ClientService for Daemon {
       Some(run) => self
         .store
         .approvals(&run.id)
+        .await
         .map_err(db_error)?
         .into_iter()
         .filter(|approval| approval.status == "pending")
@@ -129,6 +133,7 @@ impl ClientService for Daemon {
     let profiles = self
       .store
       .provider_profiles()
+      .await
       .map_err(crate::provider_profiles::storage_error)?
       .into_iter()
       .map(|profile| self.public_profile(profile))
@@ -139,7 +144,10 @@ impl ClientService for Daemon {
     &self,
     request: Request<v1::PutProviderProfileRequest>,
   ) -> Result<Response<v1::ProviderProfile>, Status> {
-    self.save_profile(request.into_inner()).map(Response::new)
+    self
+      .save_profile(request.into_inner())
+      .await
+      .map(Response::new)
   }
   async fn remove_provider_profile(
     &self,
@@ -149,6 +157,7 @@ impl ClientService for Daemon {
     self
       .store
       .remove_provider_profile(&input.id, input.expected_revision)
+      .await
       .map_err(crate::provider_profiles::storage_error)?;
     self.events.notify_waiters();
     Ok(Response::new(v1::Empty {}))
@@ -240,6 +249,7 @@ impl ClientService for Daemon {
     let value = self
       .store
       .create_session(&input.title, &workspace.to_string_lossy(), &self.node_id)
+      .await
       .map_err(db_error)?;
     Ok(Response::new(value.into()))
   }
@@ -250,6 +260,7 @@ impl ClientService for Daemon {
     let value = self
       .store
       .session(&request.into_inner().session_id)
+      .await
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("session not found"))?;
     Ok(Response::new(value.into()))
@@ -274,6 +285,7 @@ impl ClientService for Daemon {
         &input.prompt,
         &input.idempotency_key,
       )
+      .await
       .map_err(db_error)?;
     if created {
       self.launch(value.clone()).await.map_err(db_error)?;
@@ -305,6 +317,7 @@ impl ClientService for Daemon {
   ) -> Result<Response<v1::RunInputs>, Status> {
     self
       .input_snapshot(&request.into_inner().run_id)
+      .await
       .map(Response::new)
   }
   async fn list_runs(
@@ -315,6 +328,7 @@ impl ClientService for Daemon {
       runs: self
         .store
         .runs(&request.into_inner().session_id)
+        .await
         .map_err(db_error)?
         .into_iter()
         .map(Into::into)
@@ -325,6 +339,7 @@ impl ClientService for Daemon {
     let value = self
       .store
       .run(&request.into_inner().run_id)
+      .await
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("run not found"))?;
     Ok(Response::new(value.into()))
@@ -352,7 +367,10 @@ impl ClientService for Daemon {
     &self,
     request: Request<v1::WatchRequest>,
   ) -> Result<Response<Self::WatchRunStream>, Status> {
-    self.event_stream(request.into_inner()).map(Response::new)
+    self
+      .event_stream(request.into_inner())
+      .await
+      .map(Response::new)
   }
   async fn cancel_run(
     &self,
@@ -362,11 +380,13 @@ impl ClientService for Daemon {
     let run = self
       .store
       .run(&id)
+      .await
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("run not found"))?;
     let session = self
       .store
       .session(&run.session_id)
+      .await
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("session not found"))?;
     if matches!(
@@ -384,6 +404,7 @@ impl ClientService for Daemon {
         "",
         "",
       )
+      .await
       .map_err(db_error)?;
     if let Some(token) = self.active.lock().await.get(&id) {
       token.cancel();
@@ -399,6 +420,7 @@ impl ClientService for Daemon {
       approvals: self
         .store
         .approvals(&request.into_inner().run_id)
+        .await
         .map_err(db_error)?
         .into_iter()
         .map(Into::into)
@@ -413,6 +435,7 @@ impl ClientService for Daemon {
     let value = self
       .store
       .decide_approval(&input.approval_id, input.approved)
+      .await
       .map_err(db_error)?;
     self.approvals.notify_waiters();
     self.events.notify_waiters();

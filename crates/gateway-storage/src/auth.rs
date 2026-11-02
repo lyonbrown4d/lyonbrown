@@ -1,10 +1,8 @@
 use crate::{GatewayStorage, Result, StorageError, schema::gateway_admin_accounts as accounts};
-use diesel::prelude::*;
 use gateway_validation::Credentials;
+use sea_orm::{ActiveModelTrait, ConnectionTrait, EntityTrait, Set};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
-
-// Password PHCs and credential revision strings never implement Debug or serialization.
 #[derive(Clone, Eq, PartialEq)]
 pub(crate) struct Account {
   pub username: String,
@@ -12,34 +10,27 @@ pub(crate) struct Account {
   pub role: i16,
   pub revision: String,
 }
-pub(crate) fn account(connection: &mut SqliteConnection) -> Result<Option<Account>> {
-  let row = accounts::table
-    .find(1)
-    .select((
-      accounts::username,
-      accounts::password_hash,
-      accounts::role,
-      accounts::credential_revision,
-    ))
-    .first::<(String, String, i16, String)>(connection)
-    .optional()?;
+pub(crate) async fn account(connection: &impl ConnectionTrait) -> Result<Option<Account>> {
   Ok(
-    row.map(|(username, password_hash, role, revision)| Account {
-      username,
-      password_hash,
-      role,
-      revision,
-    }),
+    accounts::Entity::find_by_id(1)
+      .one(connection)
+      .await?
+      .map(|row| Account {
+        username: row.username,
+        password_hash: row.password_hash,
+        role: row.role,
+        revision: row.credential_revision,
+      }),
   )
 }
 impl GatewayStorage {
-  /// Create the sole SuperAdmin once. Environment changes never overwrite persisted credentials.
+  /// Persist the sole SuperAdmin once; changed environment credentials cannot overwrite it.
   pub async fn bootstrap_super_admin(&self, username: &str, password: &str) -> Result<()> {
     if (Credentials { username, password }).validate().is_err() {
       return Err(StorageError::InvalidInput("super admin credentials"));
     }
     for _ in 0..3 {
-      let previous = self.run(account).await?;
+      let previous = self.run(|connection| Box::pin(account(connection))).await?;
       if let Some(previous) = previous {
         let matches = previous.username == username && previous.role == 1;
         let verified = self
@@ -49,9 +40,9 @@ impl GatewayStorage {
           )
           .await?;
         return self
-          .run(move |connection| {
-            connection.immediate_transaction(|connection| {
-              if verified && matches && account(connection)?.as_ref() == Some(&previous) {
+          .write(move |connection| {
+            Box::pin(async move {
+              if verified && matches && account(connection).await?.as_ref() == Some(&previous) {
                 Ok(())
               } else {
                 Err(StorageError::Conflict)
@@ -64,20 +55,20 @@ impl GatewayStorage {
       let username = username.to_owned();
       let revision = random_token()?;
       let inserted = self
-        .run(move |connection| {
-          connection.immediate_transaction(|connection| {
-            if account(connection)?.is_some() {
+        .write(move |connection| {
+          Box::pin(async move {
+            if account(connection).await?.is_some() {
               return Ok(false);
             }
-            diesel::insert_into(accounts::table)
-              .values((
-                accounts::id.eq(1),
-                accounts::username.eq(username),
-                accounts::password_hash.eq(password_hash),
-                accounts::role.eq(1_i16),
-                accounts::credential_revision.eq(revision),
-              ))
-              .execute(connection)?;
+            accounts::ActiveModel {
+              id: Set(1),
+              username: Set(username),
+              password_hash: Set(password_hash),
+              role: Set(1),
+              credential_revision: Set(revision),
+            }
+            .insert(connection)
+            .await?;
             Ok(true)
           })
         })

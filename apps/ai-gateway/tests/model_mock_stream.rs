@@ -41,8 +41,11 @@ async fn shared_mock_success_truncation_and_post_terminal_data_have_distinct_dur
   })
   .await
   .expect("mock app");
-  let store =
-    Arc::new(GatewayStorage::open(directory.path().join("gateway.sqlite")).expect("store"));
+  let store = Arc::new(
+    GatewayStorage::open(directory.path().join("gateway.sqlite"))
+      .await
+      .expect("store"),
+  );
   store.bootstrap_access_token(TOKEN).await.expect("access");
   store
     .save_policy(Policy::default(), None)

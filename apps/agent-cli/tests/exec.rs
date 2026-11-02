@@ -48,10 +48,10 @@ async fn stdin_jsonl_persisted_events_and_explicit_idempotent_reuse() {
   assert_eq!(result["result"], "done\n第二行");
   let id = result["run_id"].as_str().unwrap();
   let session = result["session_id"].as_str().unwrap();
-  let run = node.daemon.store.run(id).unwrap().unwrap();
+  let run = node.daemon.store.run(id).await.unwrap().unwrap();
   assert_eq!(run.status, "completed");
   assert_eq!(run.prompt, "Summarize\n\ninput context");
-  let events = node.daemon.store.events(id, 0, 1000).unwrap();
+  let events = node.daemon.store.events(id, 0, 1000).await.unwrap();
   let emitted: Vec<_> = lines
     .iter()
     .filter(|line| line["type"] == "event")
@@ -65,18 +65,19 @@ async fn stdin_jsonl_persisted_events_and_explicit_idempotent_reuse() {
       serde_json::from_str::<serde_json::Value>(&event.payload_json).unwrap()
     );
   }
-  let outbox = node.daemon.store.pending_outbox(1000).unwrap();
+  let outbox = node.daemon.store.pending_outbox(1000).await.unwrap();
   assert!(events.iter().all(|event| {
     outbox
       .iter()
       .any(|entry| entry.run_id == id && entry.cursor == event.cursor)
   }));
   // Existing sessions use their current fence, even after ownership advances.
-  let old = node.daemon.store.session(session).unwrap().unwrap();
+  let old = node.daemon.store.session(session).await.unwrap().unwrap();
   let changed = node
     .daemon
     .store
     .change_owner(session, old.owner_epoch, &old.owner_node_id)
+    .await
     .unwrap();
   assert_eq!(changed.owner_epoch, 2);
   let reused = invoke(
@@ -126,7 +127,7 @@ async fn approval_is_not_granted_and_tool_effect_is_not_executed() {
   let id = last["run_id"].as_str().unwrap();
   assert!(!node.workspace.path().join("must-not-exist.txt").exists());
   assert_eq!(
-    node.daemon.store.run(id).unwrap().unwrap().status,
+    node.daemon.store.run(id).await.unwrap().unwrap().status,
     "awaiting_approval"
   );
   assert!(
@@ -177,6 +178,7 @@ async fn provider_failure_exits_nonzero_and_is_persisted() {
       .daemon
       .store
       .run(result["run_id"].as_str().unwrap())
+      .await
       .unwrap()
       .unwrap()
       .status,
@@ -218,7 +220,7 @@ async fn lost_submission_ack_reports_unknown_identity_without_replay() {
       let mut bytes = [0u8; 8192];
       loop {
         let count = incoming.read(&mut bytes).await.unwrap();
-        if count == 0 || !store.runs(&session_id).unwrap().is_empty() {
+        if count == 0 || !store.runs(&session_id).await.unwrap().is_empty() {
           break;
         }
         output.write_all(&bytes[..count]).await.unwrap();

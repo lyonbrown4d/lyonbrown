@@ -151,7 +151,7 @@ impl Session {
         _ = self.incoming.closed() => anyhow::bail!("relay incoming server closed"),
         command = commands.recv(), if self.outgoing.capacity() > 0 => match command {
           Some(command) => {
-            if let Err(error) = self.command(command) {
+            if let Err(error) = self.command(command).await {
               if self.stop.is_cancelled() { return Ok(()) }
               tracing::warn!(operation = "relay.bridge", outcome = "generation_failed",
                 reason = %error, "relay byte bridge command failed");
@@ -165,13 +165,13 @@ impl Session {
           return Err(failure.unwrap_or_else(|_| tonic::Status::unavailable("relay outbound pump closed")).into());
         },
         frame = self.incoming_frames.message() => match frame? {
-          Some(frame) => self.frame(frame)?,
+          Some(frame) => self.frame(frame).await?,
           None => anyhow::bail!("relay generation disconnected"),
         },
         _ = check.tick() => {
-          ensure!(self.paired(&self.control)? == self.control_fingerprint,
+          ensure!(self.paired(&self.control).await? == self.control_fingerprint,
             "relay control pairing changed");
-          self.expire()?;
+          self.expire().await?;
         },
         result = self.tasks.join_next(), if !self.tasks.is_empty() => {
           if let Some(result) = result { result?; }
@@ -189,7 +189,7 @@ impl Session {
     })
   }
 
-  fn command(&mut self, command: Command) -> Result<()> {
+  async fn command(&mut self, command: Command) -> Result<()> {
     match command {
       Command::Open {
         peer,
@@ -200,7 +200,7 @@ impl Session {
           let _ = reply.send(Err(anyhow::anyhow!("relay generation changed before open")));
           return Ok(());
         }
-        self.open(peer, reply)
+        self.open(peer, reply).await
       }
       Command::Data {
         id,
@@ -211,10 +211,10 @@ impl Session {
           bytes.len() <= super::bridge::CHUNK,
           "relay bridge chunk exceeds limit"
         );
-        self.send(&id, DATA, &bytes)
+        self.send(&id, DATA, &bytes).await
       }
       Command::Fin { id, generation } if generation == self.generation => {
-        self.send(&id, FIN, &[])?;
+        self.send(&id, FIN, &[]).await?;
         if let Some(Link {
           stage: Stage::Active { local_fin, .. },
           ..
@@ -244,11 +244,13 @@ impl Session {
         {
           ensure!(*received > 0, "relay writer returned excess credit");
           *received -= 1;
-          self.send(&id, CREDIT, &[])?;
+          self.send(&id, CREDIT, &[]).await?;
         }
         Ok(())
       }
-      Command::Abort { id, generation } if generation == self.generation => self.close(&id, true),
+      Command::Abort { id, generation } if generation == self.generation => {
+        self.close(&id, true).await
+      }
       _ => Ok(()),
     }
   }

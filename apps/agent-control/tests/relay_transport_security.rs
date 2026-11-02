@@ -81,9 +81,10 @@ async fn durable_pair_revocation_or_noise_rekey_closes_active_local_streams() ->
       identity.noise_public_key = "ab".repeat(32);
       tunnels
         .b_manager
-        .pair_local(identity, vec!["tasks.read".into()])?;
+        .pair_local(identity, vec!["tasks.read".into()])
+        .await?;
     } else {
-      tunnels.b_manager.revoke_local("node-a")?;
+      tunnels.b_manager.revoke_local("node-a").await?;
     }
     assert_eq!(
       tokio::time::timeout(Duration::from_secs(2), right.read(&mut [0])).await??,
@@ -107,7 +108,8 @@ async fn disconnected_configured_route_never_dials_the_direct_endpoint() -> Resu
   .await?;
   let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
   let mut remote =
-    relay_transport_support::manager(&raw.fixture, &raw.fixture.b, "direct-tripwire.sqlite3")?
+    relay_transport_support::manager(&raw.fixture, &raw.fixture.b, "direct-tripwire.sqlite3")
+      .await?
       .local_node();
   remote.endpoint = format!("https://{}", listener.local_addr()?);
   let error = raw

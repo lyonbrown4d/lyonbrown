@@ -11,7 +11,7 @@ use crate::{
 };
 
 impl Session {
-  pub(super) fn frame(&mut self, frame: RelayEnvelope) -> Result<()> {
+  pub(super) async fn frame(&mut self, frame: RelayEnvelope) -> Result<()> {
     if frame.target_node_id != self.manager.node.id
       || frame.source_node_id == self.manager.node.id
       || frame.ciphertext.len() > 65_535
@@ -21,11 +21,12 @@ impl Session {
       return Ok(());
     }
     let Some(mut link) = self.links.remove(&frame.link_id) else {
-      return self.initiation(frame);
+      return self.initiation(frame).await;
     };
     if frame.source_node_id != link.peer
       || !self
         .paired(&link.peer)
+        .await
         .is_ok_and(|fingerprint| fingerprint == link.fingerprint)
     {
       link.stop.cancel();
@@ -38,7 +39,7 @@ impl Session {
     if let Err(error) = handled {
       tracing::debug!(operation = "relay.link", outcome = "closed", link_id = %id,
         reason = %error, "authenticated relay link closed");
-      self.close(&id, true)?;
+      self.close(&id, true).await?;
     } else {
       self.finish(&id);
     }
@@ -123,7 +124,7 @@ impl Session {
     Ok(())
   }
 
-  fn initiation(&mut self, frame: RelayEnvelope) -> Result<()> {
+  async fn initiation(&mut self, frame: RelayEnvelope) -> Result<()> {
     if frame.seq != HANDSHAKE
       || self.recent.ids.contains(&frame.link_id)
       || self.links.len() >= MAX_LINKS
@@ -132,8 +133,8 @@ impl Session {
     {
       return Ok(());
     }
-    let authenticated = (|| {
-      let paired = public_identity(&self.manager.trust(&frame.source_node_id)?);
+    let authenticated = (async {
+      let paired = public_identity(&self.manager.trust(&frame.source_node_id).await?);
       let fingerprint = paired.pairing_fingerprint()?;
       let binding = LinkBinding {
         link_id: frame.link_id.clone(),
@@ -143,7 +144,8 @@ impl Session {
       let mut handshake = LinkHandshake::new(&self.manager.identity, &paired, binding, false)?;
       handshake.read(&frame.ciphertext)?;
       Ok::<_, anyhow::Error>((fingerprint, handshake.write()?, handshake.finish()?))
-    })();
+    })
+    .await;
     let Ok((fingerprint, response, secure)) = authenticated else {
       return Ok(());
     };

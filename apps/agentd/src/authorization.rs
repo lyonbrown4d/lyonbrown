@@ -17,7 +17,8 @@ pub(crate) async fn approve(
   ensure!(
     daemon
       .store
-      .consume_approval_owned(&approval, run, epoch, tool, arguments)?,
+      .consume_approval_owned(&approval, run, epoch, tool, arguments)
+      .await?,
     "operation was not approved"
   );
   Ok(())
@@ -39,7 +40,8 @@ pub(crate) async fn wait_for_approval(
   );
   let approval = daemon
     .store
-    .request_approval_owned(run, epoch, tool, arguments)?;
+    .request_approval_owned(run, epoch, tool, arguments)
+    .await?;
   daemon.events.notify_waiters();
   loop {
     let changed = daemon.approvals.notified();
@@ -47,7 +49,8 @@ pub(crate) async fn wait_for_approval(
     changed.as_mut().enable();
     let current = daemon
       .store
-      .approval(&approval.id)?
+      .approval(&approval.id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("approval missing"))?;
     ensure!(
       !cancellation.is_cancelled(),

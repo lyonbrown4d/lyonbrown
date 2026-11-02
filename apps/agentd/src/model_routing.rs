@@ -62,12 +62,15 @@ impl Daemon {
       _=cancellation.cancelled()=>{token.cancel();return Ok(());},
       result=engine.decide(&request,&token)=>result,
     };
-    self.store.append_event_owned(
-      &run.id,
-      epoch,
-      "model_route_decision",
-      serde_json::to_value(&result)?,
-    )?;
+    self
+      .store
+      .append_event_owned(
+        &run.id,
+        epoch,
+        "model_route_decision",
+        serde_json::to_value(&result)?,
+      )
+      .await?;
     anyhow::ensure!(
       result.status != DecisionStatus::Denied,
       "shared decision policy denied the configured model route"

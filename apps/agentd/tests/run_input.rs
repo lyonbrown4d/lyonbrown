@@ -58,6 +58,7 @@ async fn concurrent_retry_and_cancel_have_one_durable_queue_identity() {
       .daemon
       .store
       .load_snapshot(&node.session_id)
+      .await
       .unwrap()
       .unwrap();
     assert!(
@@ -92,7 +93,7 @@ async fn concurrent_retry_and_cancel_have_one_durable_queue_identity() {
     let result = node.terminal(&run.id).await;
     assert_eq!(result.status, "completed", "{}", result.error);
     assert_eq!(main.requests().await.len(), 1);
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let transitions: Vec<_> = events
       .iter()
       .filter_map(|event| {
@@ -184,7 +185,7 @@ async fn queued_input_cannot_expand_the_persisted_fallback_tool_plan() {
     assert_eq!(inputs.len(), 1);
     assert_eq!(inputs[0].entry_id, receipt.entry_id);
     assert_eq!(inputs[0].state, v1::RunInputState::Consumed as i32);
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let plans: Vec<_> = events
       .iter()
       .filter(|event| event.kind == "execution_plan")
@@ -208,8 +209,13 @@ async fn stale_epoch_parallel_run_and_terminal_input_leave_no_queue_mutation() {
     let (main, _classifier, node) = fixture(protocol, "invalid decision").await;
     let run = node.run("keep this run active").await;
     wait_model(&main, 1).await;
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
-    let snapshot = node.daemon.store.load_snapshot(&node.session_id).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
+    let snapshot = node
+      .daemon
+      .store
+      .load_snapshot(&node.session_id)
+      .await
+      .unwrap();
     let mut stale = input(&run.id, "reject stale owner");
     stale.owner_epoch = 2;
     assert!(node.client.submit_run_input(stale).await.is_err());
@@ -220,7 +226,16 @@ async fn stale_epoch_parallel_run_and_terminal_input_leave_no_queue_mutation() {
         .await
         .is_err()
     );
-    assert_eq!(node.daemon.store.runs(&node.session_id).unwrap().len(), 1);
+    assert_eq!(
+      node
+        .daemon
+        .store
+        .runs(&node.session_id)
+        .await
+        .unwrap()
+        .len(),
+      1
+    );
     assert!(
       node
         .client
@@ -230,14 +245,27 @@ async fn stale_epoch_parallel_run_and_terminal_input_leave_no_queue_mutation() {
         .is_empty()
     );
     assert_eq!(
-      node.daemon.store.load_snapshot(&node.session_id).unwrap(),
+      node
+        .daemon
+        .store
+        .load_snapshot(&node.session_id)
+        .await
+        .unwrap(),
       snapshot
     );
-    assert_eq!(node.daemon.store.events(&run.id, 0, 1000).unwrap(), events);
+    assert_eq!(
+      node.daemon.store.events(&run.id, 0, 1000).await.unwrap(),
+      events
+    );
     main.push_reply(text_reply(protocol, "finished")).await;
     assert_eq!(node.terminal(&run.id).await.status, "completed");
-    let terminal_events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
-    let terminal_snapshot = node.daemon.store.load_snapshot(&node.session_id).unwrap();
+    let terminal_events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
+    let terminal_snapshot = node
+      .daemon
+      .store
+      .load_snapshot(&node.session_id)
+      .await
+      .unwrap();
     assert!(
       node
         .client
@@ -254,11 +282,16 @@ async fn stale_epoch_parallel_run_and_terminal_input_leave_no_queue_mutation() {
         .is_empty()
     );
     assert_eq!(
-      node.daemon.store.load_snapshot(&node.session_id).unwrap(),
+      node
+        .daemon
+        .store
+        .load_snapshot(&node.session_id)
+        .await
+        .unwrap(),
       terminal_snapshot
     );
     assert_eq!(
-      node.daemon.store.events(&run.id, 0, 1000).unwrap(),
+      node.daemon.store.events(&run.id, 0, 1000).await.unwrap(),
       terminal_events
     );
     assert_eq!(main.requests().await.len(), 1);

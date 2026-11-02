@@ -1,5 +1,7 @@
 # 运行截图与验收范围
 
+本页保留历史运行证据及原平台、版本和摘要。SeaORM 异步存储、最新数据库结构、记忆管理与 Qdrant、Gateway 全异步 FluxDI 装配均未在本轮重新编译或运行验收；这些历史截图不覆盖上述实现。当前阻塞见[开发与验证](development.md#当前依赖解析限制)。
+
 本页早期桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；该组截图对应的 CEF 版本为 154.0.34（Rust crate `cef` 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。[原生截图记录](evidence/desktop-native-capture.json)保存了对应程序、源文件与图片摘要、两次已持久化为 `completed` 的 Run，以及状态为 `consumed` 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见[客户端文档](clients.md)。
 
 浏览器运行使用仅用于调试的 Chromium 测试钥匙串，不能据此认定生产钥匙串集成已验收。下列图片不代表 Windows、Linux、公网连接、真实模型、原生 Computer 输入或最终安装包验收。
@@ -180,7 +182,7 @@ CEF Runtime 加载本地静态验收页面，通过 daemon 将真实 Chromium �
 
 ![macOS 上展示七条实际审计记录的 Gateway 请求页](images/gateway-library-reuse-macos.png)
 
-本节使用 macOS arm64 上版本 0.1.0 的 Gateway SSR/WASM 产品构建和独立回环 `model-mock`。启动时读取旧 SQLite 副本，将旧版本记录 `[1, 2]` 转为 Diesel 的 `["0001", "0002"]` 并退役旧账本，保留唯一超级管理员和 4 条既有成功审计。随后 3 个 JSON/SSE 请求均成功，页面及数据库共显示 7 条成功记录。
+本节使用 macOS arm64 上版本 0.1.0 的 Gateway SSR/WASM 产品构建和独立回环 `model-mock`。该历史构建使用既有 SQLite 数据库的副本，保留唯一超级管理员和 4 条既有成功审计。当前 SeaORM 结构不提供这份历史构建的旧库升级行为。随后 3 个 JSON/SSE 请求均成功，页面及数据库共显示 7 条成功记录。
 
 浏览器实际检查了 WASM 对过短密码的本地拒绝、原账户登录、请求页展示与退出；退出后访问保护页面回到登录页，数据库管理会话数为 0，浏览器控制台未见警告或错误。`POST /v1/models`、`GET /v1/chat/completions`、`POST /health/live` 和 `DELETE /health/ready` 均返回 405，未增加审计记录；OpenAPI 的标题和版本保持一致。
 

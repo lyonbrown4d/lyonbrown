@@ -41,11 +41,11 @@ async fn every_protocol_delegates_after_exact_approval_and_separately_accepts_re
       exact["envelope"]["owner_epoch"],
       node.pair.session.owner_epoch
     );
-    assert!(node.pair.master.store.task(id).unwrap().is_none());
+    assert!(node.pair.master.store.task(id).await.unwrap().is_none());
     assert!(worker.requests().await.is_empty());
     node.client.approve(&approval.id, true).await.unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
-      while node.pair.master.store.task(id).unwrap().is_none() {
+      while node.pair.master.store.task(id).await.unwrap().is_none() {
         tokio::task::yield_now().await;
       }
     })
@@ -70,7 +70,15 @@ async fn every_protocol_delegates_after_exact_approval_and_separately_accepts_re
     assert_eq!(accepted["accepted"], true);
     assert_eq!(accepted["result_digest"].as_str().unwrap().len(), 64);
     assert_eq!(
-      node.pair.master.store.task(id).unwrap().unwrap().status,
+      node
+        .pair
+        .master
+        .store
+        .task(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .status,
       "awaiting_acceptance"
     );
     main
@@ -81,9 +89,9 @@ async fn every_protocol_delegates_after_exact_approval_and_separately_accepts_re
       .await;
     node.client.approve(&approval.id, true).await.unwrap();
     assert_eq!(node.terminal(&run.id).await.status, "completed");
-    let task = node.pair.master.store.task(id).unwrap().unwrap();
+    let task = node.pair.master.store.task(id).await.unwrap().unwrap();
     assert_eq!(task.status, "completed");
-    assert_eq!(node.pair.worker_runs(&task.envelope).len(), 1);
+    assert_eq!(node.pair.worker_runs(&task.envelope).await.len(), 1);
     assert_eq!(worker.requests().await.len(), 1);
     assert_eq!(worker.requests().await[0].path, protocol.path());
     let requests = main.requests().await;
@@ -153,6 +161,7 @@ async fn denial_revocation_stale_owner_and_pending_cancellation_never_dispatch_a
           .pair
           .master_manager
           .revoke_local(&node.pair.worker.node_id)
+          .await
           .unwrap();
       }
       "owner" => {
@@ -161,6 +170,7 @@ async fn denial_revocation_stale_owner_and_pending_cancellation_never_dispatch_a
           .master
           .store
           .change_owner(&node.pair.session.id, 1, "new-master")
+          .await
           .unwrap();
       }
       "rekey" => {
@@ -170,12 +180,14 @@ async fn denial_revocation_stale_owner_and_pending_cancellation_never_dispatch_a
           .pair
           .master_manager
           .trust(&node.pair.worker.node_id)
+          .await
           .unwrap()
           .capabilities;
         node
           .pair
           .master_manager
           .pair_local(identity, capabilities)
+          .await
           .unwrap();
       }
       "cancel" => {
@@ -202,7 +214,7 @@ async fn denial_revocation_stale_owner_and_pending_cancellation_never_dispatch_a
       node.terminal(&run.id).await;
     }
     assert!(
-      node.pair.master.store.task(id).unwrap().is_none(),
+      node.pair.master.store.task(id).await.unwrap().is_none(),
       "{scenario}"
     );
     assert!(worker.requests().await.is_empty(), "{scenario}");

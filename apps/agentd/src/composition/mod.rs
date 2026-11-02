@@ -1,5 +1,6 @@
 //! Typed composition root. Business services receive concrete ports, never an Injector.
 mod local;
+mod memory;
 mod persistence;
 use crate::{Daemon, config::Config, state::RuntimeServices};
 use fluxdi::{Error, Shared, static_module};
@@ -8,7 +9,7 @@ use persistence::StorageModule;
 
 static_module! {
   struct DaemonModule {
-    import persistence: StorageModule { store: agent_storage::Store; };
+    import persistence: StorageModule { async store: agent_storage::Store; };
     #[scope(root)]
     services: RuntimeServices = runtime_services(config);
     #[scope(root)]
@@ -16,13 +17,15 @@ static_module! {
     #[scope(root)]
     decision: agent_decision::DecisionEngine = decision(config,models);
     #[scope(root)]
-    daemon: Daemon = daemon(config,local,store,services,decision,models,mcp);
+    async memory: agent_memory::MemoryService = memory::service(config,store);
+    #[scope(root)]
+    daemon: Daemon = daemon(config,local,store,services,decision,models,mcp,memory);
     external config: Config;
     external local: LocalNode;
     external models: crate::models::Models;
   }
 }
-pub fn build(mut config: Config, models: crate::models::Models) -> anyhow::Result<Daemon> {
+pub async fn build(mut config: Config, models: crate::models::Models) -> anyhow::Result<Daemon> {
   if config.provider_inventory.is_empty() {
     let selected = agent_config::provider_definition(&config.provider);
     config.provider_inventory = agent_config::PROVIDER_CATALOG
@@ -68,7 +71,7 @@ pub fn build(mut config: Config, models: crate::models::Models) -> anyhow::Resul
   let local = security.local()?;
   let persistence = StorageModule::new(config.clone(), local.clone());
   let application = DaemonModule::new(persistence, config, local, Shared::new(models));
-  Ok((*application.daemon()?).clone())
+  Ok((*application.daemon().await?).clone())
 }
 fn runtime_services(config: Shared<Config>) -> Result<Shared<RuntimeServices>, Error> {
   Ok(Shared::new(RuntimeServices::new(config.max_runs)))
@@ -84,6 +87,10 @@ fn decision(
     .map(Shared::new)
     .map_err(|error| Error::factory_failed("DecisionEngine", &error.to_string()))
 }
+#[allow(
+  clippy::too_many_arguments,
+  reason = "composition lists concrete application ports"
+)]
 fn daemon(
   config: Shared<Config>,
   local: Shared<LocalNode>,
@@ -92,6 +99,7 @@ fn daemon(
   decision: Shared<agent_decision::DecisionEngine>,
   models: Shared<crate::models::Models>,
   mcp: Shared<crate::mcp::Connections>,
+  memory: Shared<agent_memory::MemoryService>,
 ) -> Result<Shared<Daemon>, Error> {
   let secret_root = config
     .data_path()
@@ -102,6 +110,7 @@ fn daemon(
   Ok(Shared::new(Daemon {
     config: (*config).clone(),
     store: (*store).clone(),
+    memory,
     node_id: local.node_id.clone(),
     token: local.token.clone(),
     services,

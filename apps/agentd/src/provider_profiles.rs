@@ -112,7 +112,7 @@ impl Daemon {
       credential_configured: configured,
     })
   }
-  pub(crate) fn save_profile(
+  pub(crate) async fn save_profile(
     &self,
     input: v1::PutProviderProfileRequest,
   ) -> Result<v1::ProviderProfile, Status> {
@@ -131,6 +131,7 @@ impl Daemon {
       let previous = self
         .store
         .provider_profile(&profile.id)
+        .await
         .map_err(storage_error)?
         .ok_or_else(|| Status::not_found("provider profile not found"))?;
       if previous.revision != expected {
@@ -151,7 +152,7 @@ impl Daemon {
         .map_err(|_| Status::failed_precondition("provider credential could not be stored"))?;
       profile.credential_id = id.clone();
     }
-    match self.store.put_provider_profile(&profile, expected) {
+    match self.store.put_provider_profile(&profile, expected).await {
       Ok(profile) => {
         self.events.notify_waiters();
         self.public_profile(profile)
@@ -189,6 +190,7 @@ impl Daemon {
         let previous = self
           .store
           .provider_profile(&profile.id)
+          .await
           .map_err(storage_error)?
           .filter(|previous| previous.revision == profile.revision)
           .ok_or_else(|| Status::aborted("provider profile revision changed"))?;

@@ -16,7 +16,7 @@ async fn outbound_daemons_execute_and_accept_harness_tasks_over_relay_for_every_
     .unwrap();
     let mut pair = RelayPair::start(&model, protocol).await;
     pair.assert_direct_unreachable().await;
-    let envelope = pair.envelope();
+    let envelope = pair.envelope().await;
     let submitted = pair
       .dispatch
       .submit(&pair.worker_node(), envelope.clone())
@@ -27,13 +27,20 @@ async fn outbound_daemons_execute_and_accept_harness_tasks_over_relay_for_every_
     assert_eq!(task.status, "awaiting_acceptance");
     assert_eq!(task.attempt_status, "succeeded", "{}", task.error);
     assert_eq!(task.result, "private-worker-result-over-relay");
-    let worker = pair.worker.store.task(&envelope.task_id).unwrap().unwrap();
+    let worker = pair
+      .worker
+      .store
+      .task(&envelope.task_id)
+      .await
+      .unwrap()
+      .unwrap();
     assert_eq!(worker.status, "awaiting_acceptance");
     assert_eq!(worker.envelope, envelope);
     let session = pair
       .worker
       .store
       .session(&worker_session(&envelope))
+      .await
       .unwrap()
       .unwrap();
     assert_ne!(session.id, pair.session.id);
@@ -43,11 +50,16 @@ async fn outbound_daemons_execute_and_accept_harness_tasks_over_relay_for_every_
         .join("master-only.txt")
         .exists()
     );
-    let runs = pair.worker.store.runs(&session.id).unwrap();
+    let runs = pair.worker.store.runs(&session.id).await.unwrap();
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].status, "completed");
     assert_eq!(runs[0].result, task.result);
-    let events = pair.worker.store.events(&runs[0].id, 0, 1000).unwrap();
+    let events = pair
+      .worker
+      .store
+      .events(&runs[0].id, 0, 1000)
+      .await
+      .unwrap();
     assert!(events.iter().any(|event| event.kind == "run_started"));
     let plan: serde_json::Value = serde_json::from_str(
       &events
@@ -81,7 +93,7 @@ async fn outbound_daemons_execute_and_accept_harness_tasks_over_relay_for_every_
         .await
         .is_err()
     );
-    assert_eq!(pair.worker.store.runs(&session.id).unwrap().len(), 1);
+    assert_eq!(pair.worker.store.runs(&session.id).await.unwrap().len(), 1);
     let accepted = pair
       .dispatch
       .accept(&pair.worker_node(), &envelope.task_id, true)
@@ -93,12 +105,13 @@ async fn outbound_daemons_execute_and_accept_harness_tasks_over_relay_for_every_
         .worker
         .store
         .task(&envelope.task_id)
+        .await
         .unwrap()
         .unwrap()
         .status,
       "completed"
     );
-    pair.control.assert_no_task_plaintext(&envelope);
+    pair.control.assert_no_task_plaintext(&envelope).await;
     eprintln!(
       "{protocol:?}: two outbound daemons, relayed mTLS, actual Worker Harness, isolated workspace and Master acceptance verified"
     );
@@ -112,7 +125,7 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
   let model = MockModelServer::start_interactive().await.unwrap();
   let mut pair = RelayPair::start(&model, protocol).await;
   pair.assert_direct_unreachable().await;
-  let envelope = pair.envelope();
+  let envelope = pair.envelope().await;
   pair
     .dispatch
     .submit(&pair.worker_node(), envelope.clone())
@@ -121,7 +134,13 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
   tokio::time::timeout(Duration::from_secs(5), model.wait_for_requests(1))
     .await
     .unwrap();
-  let worker_before = pair.worker.store.task(&envelope.task_id).unwrap().unwrap();
+  let worker_before = pair
+    .worker
+    .store
+    .task(&envelope.task_id)
+    .await
+    .unwrap()
+    .unwrap();
   assert_eq!(worker_before.attempt_status, "running");
   pair.control.disconnect().await;
   assert!(
@@ -131,7 +150,13 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
       .await
       .is_err()
   );
-  let unknown = pair.master.store.task(&envelope.task_id).unwrap().unwrap();
+  let unknown = pair
+    .master
+    .store
+    .task(&envelope.task_id)
+    .await
+    .unwrap()
+    .unwrap();
   assert_eq!(unknown.attempt_status, "uncertain");
   assert_eq!(unknown.envelope, envelope);
   assert_eq!(
@@ -139,6 +164,7 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
       .worker
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .unwrap()
       .attempt_status,
@@ -166,7 +192,13 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
       .is_err()
   );
   assert_eq!(model.requests().await.len(), 1);
-  let still_unknown = pair.master.store.task(&envelope.task_id).unwrap().unwrap();
+  let still_unknown = pair
+    .master
+    .store
+    .task(&envelope.task_id)
+    .await
+    .unwrap()
+    .unwrap();
   assert_eq!(
     still_unknown.attempt_status, "uncertain",
     "transport reconnect does not reconcile business state automatically"
@@ -179,6 +211,7 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
       .worker
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .unwrap()
       .attempt_status
@@ -194,6 +227,7 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
       .master
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .unwrap()
       .attempt_status,
@@ -215,12 +249,13 @@ async fn relay_disconnect_after_cancel_intent_is_uncertain_until_same_attempt_re
       .worker
       .store
       .runs(&worker_session(&envelope))
+      .await
       .unwrap()
       .len(),
     1
   );
   assert_eq!(model.requests().await.len(), 1);
-  pair.control.assert_no_task_plaintext(&envelope);
+  pair.control.assert_no_task_plaintext(&envelope).await;
   eprintln!(
     "relay disconnect: durable cancellation intent -> Master Uncertain -> same task/attempt reconcile after reconnect, without replay"
   );

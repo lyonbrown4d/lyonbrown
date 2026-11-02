@@ -12,7 +12,7 @@ impl Context {
     let input: input::Act = serde_json::from_value(call.arguments)?;
     input.validate()?;
     let action = input.action.action()?;
-    self.fence(&cancellation)?;
+    self.fence(&cancellation).await?;
     let mut state = self.state.lock().await;
     let observed = state
       .observation
@@ -66,7 +66,7 @@ impl Context {
       cancellation.clone(),
     )
     .await?;
-    self.fence(&cancellation)?;
+    self.fence(&cancellation).await?;
     let approval_id = Uuid::parse_str(&approval)?;
     let operation = Operation::Execute {
       preparation_id: preparation.preparation_id,
@@ -87,7 +87,8 @@ impl Context {
         arguments: &exact,
         summary: json!({}),
         approval_id: &approval,
-      })?;
+      })
+      .await?;
     // No await between the committed authorization and its uncertainty guard.
     let mutation = super::super::mutation::CommittedAction::new(
       self.daemon.store.clone(),

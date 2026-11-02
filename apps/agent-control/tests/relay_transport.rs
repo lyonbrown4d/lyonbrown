@@ -56,8 +56,8 @@ async fn concurrent_authenticated_tunnels_preserve_bytes_and_half_close_without_
       .await
       .is_err()
   );
-  assert!(tunnels.fixture.store.tasks()?.is_empty());
-  assert!(tunnels.fixture.store.sessions()?.is_empty());
+  assert!(tunnels.fixture.store.tasks().await?.is_empty());
+  assert!(tunnels.fixture.store.sessions().await?.is_empty());
   tunnels.close().await
 }
 
@@ -71,7 +71,7 @@ async fn inner_mutual_tls_uses_existing_peer_authorization_and_rejects_an_unpair
     tokio_stream::wrappers::ReceiverStream::new(empty),
   );
   let service = tunnels.b_manager.clone();
-  let tls = service.server_tls()?;
+  let tls = service.server_tls().await?;
   let server = tokio::spawn(async move {
     tonic::transport::Server::builder()
       .tls_config(tls)?
@@ -83,8 +83,10 @@ async fn inner_mutual_tls_uses_existing_peer_authorization_and_rejects_an_unpair
   let paired = tunnels.a_manager.clone().with_relay(tunnels.a.clone());
   assert_eq!(paired.connect(&remote).await?.node.id, "node-b");
   let stranger = PeerIdentity::generate("stranger")?;
-  let stranger_manager = manager(&tunnels.fixture, &stranger, "stranger.sqlite3")?;
-  stranger_manager.pair_local(tunnels.fixture.b.public.clone(), Vec::new())?;
+  let stranger_manager = manager(&tunnels.fixture, &stranger, "stranger.sqlite3").await?;
+  stranger_manager
+    .pair_local(tunnels.fixture.b.public.clone(), Vec::new())
+    .await?;
   // Noise still authenticates node-a. The independent inner TLS certificate must also pass.
   assert!(
     stranger_manager

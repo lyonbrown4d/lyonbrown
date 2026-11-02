@@ -14,8 +14,8 @@ impl Drop for ChildGuard {
   }
 }
 
-#[test]
-fn local_pairing_requires_human_verified_tls_and_noise_binding() -> Result<()> {
+#[tokio::test]
+async fn local_pairing_requires_human_verified_tls_and_noise_binding() -> Result<()> {
   let directory = tempfile::tempdir()?;
   let identity = PeerIdentity::generate("operator-paired-node")?;
   let bundle = directory.path().join("node-public.json");
@@ -38,8 +38,8 @@ fn local_pairing_requires_human_verified_tls_and_noise_binding() -> Result<()> {
     !denied.status.success(),
     "certificate-only fingerprint must not authorize an independent Noise key"
   );
-  let store = Store::open(data_dir.join("control.sqlite3"))?;
-  assert!(store.peers()?.is_empty());
+  let store = Store::open(data_dir.join("control.sqlite3")).await?;
+  assert!(store.peers().await?.is_empty());
   let accepted = invoke(&identity.public.pairing_fingerprint()?)?;
   assert!(
     accepted.status.success(),
@@ -47,7 +47,8 @@ fn local_pairing_requires_human_verified_tls_and_noise_binding() -> Result<()> {
     String::from_utf8_lossy(&accepted.stderr)
   );
   let paired = store
-    .peer("operator-paired-node")?
+    .peer("operator-paired-node")
+    .await?
     .expect("verified peer persisted");
   assert_eq!(paired.noise_public_key, identity.public.noise_public_key);
   assert_eq!(paired.fingerprint, identity.public.fingerprint()?);
@@ -61,7 +62,8 @@ fn local_pairing_requires_human_verified_tls_and_noise_binding() -> Result<()> {
   assert!(revoked.status.success());
   assert!(
     store
-      .peer("operator-paired-node")?
+      .peer("operator-paired-node")
+      .await?
       .expect("revocation persisted")
       .revoked
   );

@@ -6,7 +6,7 @@ use crate::peers::PeerManager;
 #[tonic::async_trait]
 impl PeerService for PeerManager {
   async fn hello(&self, request: Request<v1::Node>) -> Result<Response<v1::Node>, Status> {
-    let peer = self.authorize(&request, &[])?;
+    let peer = self.authorize(&request, &[]).await?;
     if peer.node_id != request.get_ref().id || peer.fingerprint != request.get_ref().fingerprint {
       return Err(Status::permission_denied(
         "claimed node does not match the mutual TLS identity",
@@ -18,10 +18,11 @@ impl PeerService for PeerManager {
     Ok(Response::new(self.local_node()))
   }
   async fn list_peers(&self, request: Request<v1::Empty>) -> Result<Response<v1::Nodes>, Status> {
-    self.authorize(&request, &["peers.list"])?;
+    self.authorize(&request, &["peers.list"]).await?;
     Ok(Response::new(v1::Nodes {
       nodes: self
         .known_peers()
+        .await
         .map_err(|_| Status::internal("peer directory unavailable"))?,
     }))
   }

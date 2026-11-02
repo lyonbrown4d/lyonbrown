@@ -9,9 +9,11 @@ async fn changing_authenticated_endpoint_never_copies_the_previous_scope_draft(
   cx: &mut TestAppContext,
 ) {
   let harness = Harness::new(cx, Vec::new());
+  let storage_runtime_0 = harness.runtime.clone();
+  let _storage_context_0 = storage_runtime_0.enter();
   harness.connect(cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.status.starts_with("Connected") && state.local_state_loaded
     })
     .await;
@@ -38,7 +40,7 @@ async fn changing_authenticated_endpoint_never_copies_the_previous_scope_draft(
     })
     .expect("change authenticated endpoint");
     let state = harness
-      .wait(cx, |state| {
+      .wait(cx, async |state| {
         state.status.starts_with("Connected")
           && state.local_state_loaded
           && !state.local_state_loading
@@ -58,8 +60,12 @@ async fn changing_authenticated_endpoint_never_copies_the_previous_scope_draft(
 #[gpui_kit::test]
 async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut TestAppContext) {
   let harness = Harness::new(cx, Vec::new());
+  let storage_runtime_1 = harness.runtime.clone();
+  let _storage_context_1 = storage_runtime_1.enter();
   harness.connect(cx);
-  harness.wait(cx, |state| state.local_state_loaded).await;
+  harness
+    .wait(cx, async |state| state.local_state_loaded)
+    .await;
   harness.flush_local_state(cx);
   let file = std::fs::read_dir(harness.directory.path().join("client-state"))
     .unwrap()
@@ -92,7 +98,7 @@ async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut 
       .as_deref()
       .is_some_and(|error| error.contains("no session"))
   );
-  assert!(harness.daemon.store.sessions().unwrap().is_empty());
+  assert!(harness.daemon.store.sessions().await.unwrap().is_empty());
   cx.update_window(window.into(), |_, window, cx| {
     window.click("bind-restored-chat", cx)
   })
@@ -111,6 +117,7 @@ async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut 
           .daemon
           .store
           .runs(state.selected_session.as_deref().unwrap())
+          .await
           .unwrap()
           .is_empty()
       );
@@ -121,7 +128,7 @@ async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut 
       "explicit binding did not finish: {state:?}"
     );
   }
-  assert_eq!(harness.daemon.store.sessions().unwrap().len(), 1);
+  assert_eq!(harness.daemon.store.sessions().await.unwrap().len(), 1);
   assert!(
     harness
       .runtime
@@ -162,12 +169,14 @@ async fn recreated_desktop_restores_tabs_composer_and_editor_draft_without_savin
   cx: &mut TestAppContext,
 ) {
   let harness = Harness::new(cx, Vec::new());
+  let storage_runtime_2 = harness.runtime.clone();
+  let _storage_context_2 = storage_runtime_2.enter();
   let workspace = harness.directory.path().join("workspace");
   let file = workspace.join("restore.txt");
   std::fs::write(&file, "original file\n").expect("fixture workspace file");
   harness.connect(cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.status.starts_with("Connected")
         && !state.local_state_loading
         && state.local_state_loaded
@@ -176,7 +185,9 @@ async fn recreated_desktop_restores_tabs_composer_and_editor_draft_without_savin
 
   harness.click("new-session", cx);
   let first_session = harness
-    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .wait(cx, async |state| {
+      state.selected_session.is_some() && !state.busy
+    })
     .await
     .selected_session
     .expect("created session");
@@ -193,7 +204,7 @@ async fn recreated_desktop_restores_tabs_composer_and_editor_draft_without_savin
   })
   .expect("select Files pane");
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state
         .workbench
         .paths
@@ -203,7 +214,7 @@ async fn recreated_desktop_restores_tabs_composer_and_editor_draft_without_savin
     .await;
   harness.click(("workspace-file", 0usize), cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.file.as_deref() == Some("restore.txt")
     })
     .await;
@@ -224,7 +235,7 @@ async fn recreated_desktop_restores_tabs_composer_and_editor_draft_without_savin
   .expect("select durable Tasks pane before restart");
 
   harness.click("new-chat-tab", cx);
-  harness.wait(cx, |state| !state.busy).await;
+  harness.wait(cx, async |state| !state.busy).await;
   let second_tab = harness
     .snapshot(cx)
     .tabs

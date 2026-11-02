@@ -116,22 +116,27 @@ impl TaskWorker {
 
   /// Call before exposing the listener after a process restart. Never restart old work.
   /// Only recover attempts whose durable acceptance assigns them to this worker.
-  pub fn recover_uncertain(&self) -> Result<usize> {
+  pub async fn recover_uncertain(&self) -> Result<usize> {
     let mut count = 0;
-    for task in self.manager.store.tasks()? {
+    for task in self.manager.store.tasks().await? {
       if matches!(task.attempt_status.as_str(), "accepted" | "running")
         && self
           .manager
           .store
-          .task_target(&task.envelope.task_id)?
+          .task_target(&task.envelope.task_id)
+          .await?
           .as_deref()
           == Some(self.manager.node.id.as_str())
       {
-        self.manager.store.mark_task_uncertain(
-          &task.envelope.task_id,
-          &task.envelope.attempt_id,
-          task.envelope.owner_epoch,
-        )?;
+        self
+          .manager
+          .store
+          .mark_task_uncertain(
+            &task.envelope.task_id,
+            &task.envelope.attempt_id,
+            task.envelope.owner_epoch,
+          )
+          .await?;
         count += 1;
       }
     }
@@ -171,11 +176,12 @@ impl TaskWorker {
     )
   }
 
-  pub(crate) fn owned(&self, id: &str, owner: &str) -> Result<Task, tonic::Status> {
+  pub(crate) async fn owned(&self, id: &str, owner: &str) -> Result<Task, tonic::Status> {
     let task = self
       .manager
       .store
       .task(id)
+      .await
       .map_err(|_| tonic::Status::internal("task store unavailable"))?
       .ok_or_else(|| tonic::Status::not_found("task not found"))?;
     if task.envelope.owner_node_id != owner {

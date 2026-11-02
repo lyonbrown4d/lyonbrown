@@ -4,7 +4,7 @@ use agent_protocol::v1;
 use serde_json::{Value, json};
 
 /// Match the model action, excluding authenticated human setup operations.
-pub fn assert_receipts(
+pub async fn assert_receipts(
   node: &TestNode,
   pending: &v1::Approval,
   approval_status: &str,
@@ -14,20 +14,24 @@ pub fn assert_receipts(
   let exact: Value = serde_json::from_str(&pending.arguments_json).unwrap();
   let action = exact["action_id"].as_str().unwrap();
   assert_eq!(
-    store.approval(&pending.id).unwrap().unwrap().status,
+    store.approval(&pending.id).await.unwrap().unwrap().status,
     approval_status
   );
   assert_eq!(
-    store.browser_action_status(action).unwrap().as_deref(),
+    store
+      .browser_action_status(action)
+      .await
+      .unwrap()
+      .as_deref(),
     outcome
   );
-  let run_events = store.events(&pending.run_id, 0, 1000).unwrap();
+  let run_events = store.events(&pending.run_id, 0, 1000).await.unwrap();
   let authorized: Vec<_> = run_events
     .iter()
     .filter(|event| event.kind == "tool_authorized" && payload(event)["approval_id"] == pending.id)
     .collect();
   let browser_stream = format!("browser:{}", node.session_id);
-  let browser_events = store.events(&browser_stream, 0, 1000).unwrap();
+  let browser_events = store.events(&browser_stream, 0, 1000).await.unwrap();
   let action_events: Vec<_> = browser_events
     .iter()
     .filter(|event| payload(event)["action_id"] == action)
@@ -69,7 +73,7 @@ pub fn assert_receipts(
     payload(finished),
     json!({"action_id":action,"status":status})
   );
-  let outbox = store.pending_outbox(10_000).unwrap();
+  let outbox = store.pending_outbox(10_000).await.unwrap();
   for event in [authorized, intent, finished] {
     let copies: Vec<_> = outbox
       .iter()

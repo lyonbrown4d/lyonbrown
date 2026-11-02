@@ -94,7 +94,7 @@ async fn model_discovers_searches_and_reads_scoped_rules_through_every_protocol(
         .unwrap()
         .is_empty()
     );
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let finished = events
       .iter()
       .filter_map(
@@ -193,7 +193,7 @@ async fn approved_model_write_conflicts_with_editor_revision_without_overwrite_f
         .contains("file revision conflict")
     );
     assert!(!requests[2].body.to_string().contains("File written."));
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let write = events
       .iter()
       .find_map(

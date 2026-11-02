@@ -28,7 +28,7 @@ impl SkillService for Daemon {
     request: Request<v1::ListSkillsRequest>,
   ) -> Result<Response<v1::Skills>, Status> {
     let input = request.into_inner();
-    let manager = self.skill_manager(&input.scope, &input.session_id)?;
+    let manager = self.skill_manager(&input.scope, &input.session_id).await?;
     let installed = tokio::task::spawn_blocking(move || manager.list())
       .await
       .map_err(|_| Status::internal("Skill inventory task failed"))?
@@ -46,7 +46,7 @@ impl SkillService for Daemon {
     request: Request<v1::InspectSkillRequest>,
   ) -> Result<Response<v1::SkillInspection>, Status> {
     let input = request.into_inner();
-    let manager = self.skill_manager(&input.scope, &input.session_id)?;
+    let manager = self.skill_manager(&input.scope, &input.session_id).await?;
     let prepared = prepare_source(manager, &input.source).await?;
     Ok(Response::new(inspection_view(
       prepared.inspection(),
@@ -62,7 +62,7 @@ impl SkillService for Daemon {
     if input.expected_sha256.len() != 64 {
       return Err(Status::invalid_argument("expected Skill hash is required"));
     }
-    let manager = self.skill_manager(&input.scope, &input.session_id)?;
+    let manager = self.skill_manager(&input.scope, &input.session_id).await?;
     let prepared = prepare_source(manager, &input.source).await?;
     if prepared.inspection().content_sha256 != input.expected_sha256 {
       return Err(Status::failed_precondition(
@@ -70,7 +70,7 @@ impl SkillService for Daemon {
       ));
     }
     let scope = input.scope.clone();
-    let manager = self.skill_manager(&input.scope, &input.session_id)?;
+    let manager = self.skill_manager(&input.scope, &input.session_id).await?;
     let installed = tokio::task::spawn_blocking(move || manager.activate(prepared))
       .await
       .map_err(|_| Status::internal("Skill activation task failed"))?
@@ -83,7 +83,7 @@ impl SkillService for Daemon {
     request: Request<v1::RemoveSkillRequest>,
   ) -> Result<Response<v1::Skill>, Status> {
     let input = request.into_inner();
-    let manager = self.skill_manager(&input.scope, &input.session_id)?;
+    let manager = self.skill_manager(&input.scope, &input.session_id).await?;
     let expected = input.expected_sha256.clone();
     let name = input.name.clone();
     let removed = tokio::task::spawn_blocking(move || manager.quarantine(&name, &expected))
@@ -95,7 +95,7 @@ impl SkillService for Daemon {
 }
 
 impl Daemon {
-  fn skill_manager(&self, scope: &str, session_id: &str) -> Result<SkillManager, Status> {
+  async fn skill_manager(&self, scope: &str, session_id: &str) -> Result<SkillManager, Status> {
     let root = match scope {
       "daemon_user" => self
         .config
@@ -106,6 +106,7 @@ impl Daemon {
         let session = self
           .store
           .session(session_id)
+          .await
           .map_err(crate::service::db_error)?
           .ok_or_else(|| Status::not_found("session not found"))?;
         PathBuf::from(session.workspace)

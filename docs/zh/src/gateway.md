@@ -2,6 +2,8 @@
 
 `ai-gateway` 是独立 Rust 服务，默认监听 `127.0.0.1:8099`。它通过 FluxDI 的类型化模块与 Axum 请求作用域装配共享决策核心、SQLite 存储、模型转发和 Leptos 管理界面，不需要启动 agentd。Agent 使用网关时仍自行管理 Harness、Session、工具和审批。
 
+当前全异步存储与 FluxDI 启动装配仅完成静态核对，未执行本轮运行验收；依赖解析仍受[上游 SQLite 冲突](development.md#当前依赖解析限制)阻塞。
+
 ## 启动与配置
 
 ```sh
@@ -99,9 +101,11 @@ Gateway 上游传输复用 [Rig-Core 0.45.0](https://docs.rs/rig-core/0.45.0/rig
 
 ## SQLite 与管理界面
 
-默认数据库位于数据目录的 `gateway.sqlite`，由 Diesel 管理，启用 WAL、busy timeout 和完整同步。单进程持有数据库所有权锁，启动时将遗留 Pending 请求标记为 Uncertain。模型快照、策略历史、API Key 哈希及范围、超级管理员账户、管理会话和请求元数据保存在该库；没有原始请求或回复正文的存储字段。
+默认数据库位于数据目录的 `gateway.sqlite`，使用 SeaORM 2.0.4 与 SQLx 原生异步连接。公开打开和读写接口均为异步；SQLite 驱动配置启用 WAL、5 秒 busy timeout 和完整同步。单进程持有数据库所有权锁，启动时将遗留 Pending 请求标记为 Uncertain。模型快照、策略历史、API Key 哈希及范围、超级管理员账户、管理会话和请求元数据保存在该库；没有原始请求或回复正文的存储字段。
 
-数据库脚本通过 `diesel_migrations` 2.3.2 的 `embed_migrations!` 内嵌，由 Diesel 迁移记录表管理。启动时在同一 SQLite 立即事务中衔接旧 `gateway_migrations` 的版本 1 或版本 1、2 记录、执行待运行脚本并恢复 Pending 请求；已执行脚本不重复运行。未知版本、不连续记录、两套记录不一致或没有记录的既有业务表使启动失败，事务回滚。
+版本化 Rust SeaORM Migration 在事务中创建最新结构，由 `seaql_migrations` 记录。当前不提供旧 Diesel 或 `gateway_migrations` 数据库兼容、导入或自动重置。Gateway 入口仍选择 SQLite；daemon 支持其他关系数据库不代表 Gateway 已接入相同配置。
+
+FluxDI 接收应用配置，通过根作用域异步工厂依次准备存储、超级管理员和 API Key、模型快照、持久策略与决策引擎，再解析可接收请求的 Gateway。`main` 等待 `GatewayModule::resolve` 完成后才启动 HTTP；业务对象显式接收依赖，请求作用域的 Injector 仅留在传输边界。数据库、账户或策略初始化失败会阻止启动，不绕过持久校验。
 
 发送上游请求前先保存 Pending 意图，再更新完成或未知状态。Succeeded 表示已收到并验证上游成功终态，不证明调用方已消费回复。数据库写入责任独立于 HTTP 等待期限；请求超时后仍完成已开始的意图或终态写入。实际写库失败留下的 Pending 在重启时恢复为 Uncertain，不能因为 HTTP 连接关闭就认定推理未发生。
 

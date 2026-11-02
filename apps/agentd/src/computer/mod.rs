@@ -28,7 +28,7 @@ impl Daemon {
     &self,
     session_id: &str,
   ) -> Result<Option<ComputerRuntimeInfo>, Status> {
-    let epoch = self.computer_session_epoch(session_id)?;
+    let epoch = self.computer_session_epoch(session_id).await?;
     Ok(self.computer.info(session_id, epoch).await)
   }
 
@@ -39,22 +39,23 @@ impl Daemon {
     binding: RunBinding,
     cancellation: CancellationToken,
   ) -> Result<DesktopCapabilities, Status> {
-    self.validate_computer_run(&binding)?;
+    self.validate_computer_run(&binding).await?;
     let result = self
       .computer
       .capabilities(binding.clone(), cancellation)
       .await?;
-    self.validate_computer_run(&binding)?;
+    self.validate_computer_run(&binding).await?;
     Ok(result)
   }
 
-  fn computer_session_epoch(&self, session_id: &str) -> Result<u64, Status> {
+  async fn computer_session_epoch(&self, session_id: &str) -> Result<u64, Status> {
     if self.stopping.is_cancelled() {
       return Err(Status::unavailable("daemon is stopping"));
     }
     let session = self
       .store
       .session(session_id)
+      .await
       .map_err(|_| Status::internal("session storage unavailable"))?
       .ok_or_else(|| Status::not_found("session not found"))?;
     if session.owner_node_id != self.node_id {
@@ -65,16 +66,21 @@ impl Daemon {
     Ok(session.owner_epoch)
   }
 
-  fn validate_computer_run(&self, binding: &RunBinding) -> Result<(), Status> {
+  async fn validate_computer_run(&self, binding: &RunBinding) -> Result<(), Status> {
     binding
       .validate()
       .map_err(|_| Status::invalid_argument("invalid run binding"))?;
-    if self.computer_session_epoch(&binding.daemon_session_id)? != binding.owner_epoch {
+    if self
+      .computer_session_epoch(&binding.daemon_session_id)
+      .await?
+      != binding.owner_epoch
+    {
       return Err(Status::failed_precondition("session owner epoch changed"));
     }
     let run = self
       .store
       .run(&binding.run_id)
+      .await
       .map_err(|_| Status::internal("run storage unavailable"))?
       .ok_or_else(|| Status::not_found("run not found"))?;
     if run.session_id != binding.daemon_session_id

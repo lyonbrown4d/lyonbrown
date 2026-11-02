@@ -24,7 +24,7 @@ async fn classifier_then_harness_uses_persisted_effective_plan_for_every_protoco
     let result = node.terminal(&run.id).await;
     assert_eq!(result.status, "completed", "{}", result.error);
     assert_eq!(result.result, "main result");
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let shared = events
       .iter()
       .position(|event| event.kind == "model_route_decision")
@@ -97,7 +97,7 @@ async fn invalid_decision_removes_actual_harness_tools_and_cannot_write() {
         .get("tools")
         .is_none_or(|tools| tools.as_array().is_some_and(Vec::is_empty))
     );
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let plan: serde_json::Value = serde_json::from_str(
       &events
         .iter()
@@ -189,7 +189,7 @@ async fn cancellation_during_classification_never_starts_main_model() {
     let result = node.terminal(&run.id).await;
     assert_eq!(result.status, "cancelled");
     assert!(main.requests().await.is_empty());
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     assert!(!events.iter().any(|event| matches!(
       decode(&event.kind, &event.payload_json).expect("event contract"),
       DecodedEvent::Known(AgentEvent::PhaseChanged {

@@ -4,7 +4,7 @@ use crate::{
   schema::{gateway_policy_head as head, gateway_policy_revisions as revisions},
 };
 use decision_core::{Policy, PolicySnapshot};
-use diesel::prelude::*;
+use sea_orm::{ActiveModelTrait, Set, prelude::*, sea_query::OnConflict};
 impl GatewayStorage {
   /// Compare-and-swap the complete validated policy. None requires that no head exists.
   pub async fn save_policy(&self, policy: Policy, expected_revision: Option<String>) -> Result<()> {
@@ -18,41 +18,43 @@ impl GatewayStorage {
       return Err(StorageError::InvalidInput("policy size"));
     }
     self
-      .run(move |connection| {
-        connection.immediate_transaction(|connection| {
-          let current = head::table
-            .find(1)
-            .select(head::revision)
-            .first::<String>(connection)
-            .optional()?;
+      .write(move |connection| {
+        Box::pin(async move {
+          let current = head::Entity::find_by_id(1)
+            .one(connection)
+            .await?
+            .map(|row| row.revision);
           if current != expected_revision {
             return Err(StorageError::Conflict);
           }
-          let existing = revisions::table
-            .find(&policy.revision)
-            .select(revisions::document)
-            .first::<String>(connection)
-            .optional()?;
+          let existing = revisions::Entity::find_by_id(&policy.revision)
+            .one(connection)
+            .await?;
           if existing
             .as_ref()
-            .is_some_and(|previous| previous != &document)
+            .is_some_and(|previous| previous.document != document)
           {
             return Err(StorageError::Conflict);
           }
           if existing.is_none() {
-            diesel::insert_into(revisions::table)
-              .values((
-                revisions::revision.eq(&policy.revision),
-                revisions::document.eq(document),
-              ))
-              .execute(connection)?;
+            revisions::ActiveModel {
+              revision: Set(policy.revision.clone()),
+              document: Set(document),
+            }
+            .insert(connection)
+            .await?;
           }
-          diesel::insert_into(head::table)
-            .values((head::id.eq(1), head::revision.eq(&policy.revision)))
-            .on_conflict(head::id)
-            .do_update()
-            .set(head::revision.eq(&policy.revision))
-            .execute(connection)?;
+          head::Entity::insert(head::ActiveModel {
+            id: Set(1),
+            revision: Set(policy.revision),
+          })
+          .on_conflict(
+            OnConflict::column(head::Column::Id)
+              .update_column(head::Column::Revision)
+              .to_owned(),
+          )
+          .exec(connection)
+          .await?;
           Ok(())
         })
       })
@@ -61,25 +63,22 @@ impl GatewayStorage {
   pub async fn load_policy(&self) -> Result<Option<Policy>> {
     self
       .run(|connection| {
-        let revision = head::table
-          .find(1)
-          .select(head::revision)
-          .first::<String>(connection)
-          .optional()?;
-        let Some(revision) = revision else {
-          return Ok(None);
-        };
-        let document = revisions::table
-          .find(&revision)
-          .select(revisions::document)
-          .first::<String>(connection)?;
-        let policy: Policy =
-          serde_json::from_str(&document).map_err(|_| StorageError::InvalidData)?;
-        PolicySnapshot::new(policy.clone()).map_err(|_| StorageError::InvalidData)?;
-        if !valid_key(&policy.revision) || policy.revision != revision {
-          return Err(StorageError::InvalidData);
-        }
-        Ok(Some(policy))
+        Box::pin(async move {
+          let Some(head) = head::Entity::find_by_id(1).one(connection).await? else {
+            return Ok(None);
+          };
+          let row = revisions::Entity::find_by_id(&head.revision)
+            .one(connection)
+            .await?
+            .ok_or(StorageError::InvalidData)?;
+          let policy: Policy =
+            serde_json::from_str(&row.document).map_err(|_| StorageError::InvalidData)?;
+          PolicySnapshot::new(policy.clone()).map_err(|_| StorageError::InvalidData)?;
+          if !valid_key(&policy.revision) || policy.revision != head.revision {
+            return Err(StorageError::InvalidData);
+          }
+          Ok(Some(policy))
+        })
       })
       .await
   }

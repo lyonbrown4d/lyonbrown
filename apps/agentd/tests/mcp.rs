@@ -31,6 +31,7 @@ async fn every_model_protocol_persists_exact_mcp_approval_and_consumes_only_acce
         .daemon
         .store
         .events(&run.id, 0, 1000)
+        .await
         .expect("durable events");
       let call_id = events
         .iter()
@@ -106,6 +107,7 @@ async fn every_model_protocol_persists_exact_mcp_approval_and_consumes_only_acce
         .daemon
         .store
         .approval(&approval.id)
+        .await
         .expect("load approval")
         .expect("approval row");
       assert_eq!(
@@ -133,6 +135,7 @@ async fn every_model_protocol_persists_exact_mcp_approval_and_consumes_only_acce
             .daemon
             .store
             .load_snapshot(&node.session)
+            .await
             .expect("snapshot")
             .expect("persisted snapshot")
         )
@@ -180,7 +183,12 @@ async fn absent_mcp_configuration_exposes_no_mcp_authority_and_executes_no_remot
       .iter()
       .all(|tool| tool["function"]["name"] != "mcp_call")
   );
-  let events = node.daemon.store.events(&run.id, 0, 1000).expect("events");
+  let events = node
+    .daemon
+    .store
+    .events(&run.id, 0, 1000)
+    .await
+    .expect("events");
   let plan: Value = serde_json::from_str(
     &events
       .iter()

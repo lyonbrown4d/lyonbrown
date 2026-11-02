@@ -68,7 +68,9 @@ impl CommittedAction {
           && approval_id.to_string() == self.proof.approval_id(),
         "computer committed action changed"
       );
-      daemon.validate_computer_run(&self.preparation.binding)?;
+      daemon
+        .validate_computer_run(&self.preparation.binding)
+        .await?;
       let reply = daemon
         .computer
         .request(
@@ -120,6 +122,7 @@ impl CommittedAction {
         status,
         json!({"status":status.as_str()}),
       )
+      .await
       .map_err(|_| {
         RuntimeError::Uncertain("computer receipt could not be persisted; do not replay".into())
       })?;
@@ -157,6 +160,7 @@ impl Drop for ReceiptGuard {
           OperationStatus::Uncertain,
           json!({"status":"uncertain"}),
         )
+        .await
         .is_err()
     {
       tracing::warn!(action_id=%self.action, "computer intent remains unresolved after caller stopped");

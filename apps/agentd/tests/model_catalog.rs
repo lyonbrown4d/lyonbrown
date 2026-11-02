@@ -81,7 +81,12 @@ async fn global_catalog_is_authenticated_and_selection_stays_session_scoped() {
     )
     .await
     .unwrap();
-  let stored = daemon.store.model_binding(&session.id).unwrap().unwrap();
+  let stored = daemon
+    .store
+    .model_binding(&session.id)
+    .await
+    .unwrap()
+    .unwrap();
   assert_eq!(stored.model_id, configured.id);
   assert!(
     client

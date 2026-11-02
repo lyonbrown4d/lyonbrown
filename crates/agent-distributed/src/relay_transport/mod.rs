@@ -134,7 +134,7 @@ impl RelayTransport {
     clippy::new_ret_no_self,
     reason = "factory separates connector, incoming stream, and owned lifecycle ports"
   )]
-  pub fn new(
+  pub async fn new(
     manager: PeerManager,
     control: String,
     endpoint: String,
@@ -154,7 +154,7 @@ impl RelayTransport {
       control != manager.node.id,
       "relay control cannot be the local peer"
     );
-    manager.trust(&control)?;
+    manager.trust(&control).await?;
     let (commands, receiver) = mpsc::channel(QUEUE);
     let (incoming, accepted) = mpsc::channel(8);
     let handle = RelayHandle {
@@ -188,7 +188,7 @@ impl RelayRuntime {
     let mut backoff = Duration::from_millis(100);
     loop {
       let establish = async {
-        let control = public_identity(&self.manager.trust(&self.control)?);
+        let control = public_identity(&self.manager.trust(&self.control).await?);
         let mut client =
           RelayClient::connect(&self.endpoint, &self.manager.identity, &control).await?;
         Ok::<_, anyhow::Error>((client.open(QUEUE).await?, control.pairing_fingerprint()?))

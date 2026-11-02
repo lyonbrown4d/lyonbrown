@@ -128,7 +128,7 @@ TUI 的 `Router` 统一上下文页面、返回栈和页面滚动位置。`Esc` 
 
 「保存」将配置交给 agentd，首次保存必须填写密钥，编辑时留空保留原凭据。密钥只进入临时输入适配器和认证请求，不进入 App、ViewModel、聊天草稿、输入历史或客户端持久状态；保存确认、关闭、断线和身份变化会清空输入。保存不会选择模型，关闭后使用 `/model` 显式选择该 Provider。不要把保存成功当成探测成功。
 
-配置最多 100 条，通过修订号防止旧表单覆盖新修改。移除需要再次确认，不删除已经固定到 Session 或 Run 的绑定；删除过的配置身份不能重新使用。每次修改密钥创建新的加密凭据引用，旧绑定仍可使用原值。旧凭据目前保留在 daemon 凭据存储中，没有自动垃圾回收。配置变更、事件和 Outbox 在同一个 SQLite 事务中保存；连接验证不写配置、事件或 Outbox。
+配置最多 100 条，通过修订号防止旧表单覆盖新修改。移除需要再次确认，不删除已经固定到 Session 或 Run 的绑定；删除过的配置身份不能重新使用。每次修改密钥创建新的加密凭据引用，旧绑定仍可使用原值。旧凭据目前保留在 daemon 凭据存储中，没有自动垃圾回收。配置变更、事件和 Outbox 在同一个关系数据库事务中保存；连接验证不写配置、事件或 Outbox。
 
 列表中的内置 Provider 打开凭据对话框，可填写新密钥、显式导入允许的环境变量或移除已保存凭据；打开和选择 Provider 不会自动上传。需要自定义地址与模型时使用「新增 Provider」。这套自定义配置界面目前仅接入 TUI；Desktop 的 Providers 页面仍只提供环境变量凭据管理。
 
@@ -270,7 +270,7 @@ TUI 的 `/run` 命令在本地解析，不作为模型输入发送。先用 `/ru
 /run continue RUN_ID --idempotency-key KEY --note '已核对文件与外部状态' --prompt '根据核对结果继续处理的明确新输入'
 ```
 
-CLI 子命令使用同样参数，去掉 `/` 前缀即可，例如 `agent-cli run inspect RUN_ID`。恢复写操作要求原运行已停止且状态为 `uncertain`、本机 Master 所有权和有效的 `owner_epoch`。原会话中的持久 Task 必须先核对、取消或明确采纳／拒绝并进入终态，避免递增代次后失去对 Worker 的管理权。恢复决定、所有权代次递增、事件、Outbox 和可选的新会话／Run 在同一 SQLite 事务中写入；旧代次的迟到状态提交会被拒绝。这不撤回已经发往操作系统或外部服务的动作，核对时仍须确认其实际状态。
+CLI 子命令使用同样参数，去掉 `/` 前缀即可，例如 `agent-cli run inspect RUN_ID`。恢复写操作要求原运行已停止且状态为 `uncertain`、本机 Master 所有权和有效的 `owner_epoch`。原会话中的持久 Task 必须先核对、取消或明确采纳／拒绝并进入终态，避免递增代次后失去对 Worker 的管理权。恢复决定、所有权代次递增、事件、Outbox 和可选的新会话／Run 在同一关系数据库事务中写入；旧代次的迟到状态提交会被拒绝。这不撤回已经发往操作系统或外部服务的动作，核对时仍须确认其实际状态。
 
 `abandon` 只记录放弃原运行；`continue` 使用显式新输入创建新会话和新 Run，不复制原 Harness 快照、审批或执行句柄。原 Run 始终保留 `uncertain`，原会话不重新开放写入，不将人工核对记录当作执行成功。新会话出现在 TUI 会话列表，用 `Tab` 切换查看进度和处理审批。同一个原 Run 只能记录一次恢复决定；响应丢失时先 `inspect`，重试必须保留原 key、动作、核对记录和输入，不换身份重发。当前不提供原 Harness 操作的原地续跑，也不会自动核对外部副作用。
 
@@ -283,3 +283,24 @@ CLI 子命令使用同样参数，去掉 `/` 前缀即可，例如 `agent-cli ru
 源码入口：`apps/agent-cli/src/main.rs`、`apps/agent-desktop/src/main.rs`。终端呈现见 `apps/agent-cli/src/view_model.rs`、`view.rs` 和 `markdown.rs`；桌面交互见 `apps/agent-desktop/src/view_model.rs`、`events.rs`、`block.rs`、`operations.rs`、`projection.rs`、`chrome.rs`、`settings.rs`、`tabs.rs`、`tabs/` 和 `workbench/drafts.rs`。
 
 实际窗口、明暗切换、审批与文件读取截图及其验收边界见[桌面运行截图与验收范围](runtime-evidence.md)。
+
+
+## 记忆管理
+
+TUI 通过 `/memory` 调用认证的 daemon 记忆服务，结果显示在已有的本地记录页。它不会直接连接数据库或 Qdrant。未选择 Session 时可管理当前用户范围；选择本机拥有的 Session 后才增加相应项目和会话范围。范围身份由 daemon 确定，缺少 Session 的项目／会话操作会被拒绝。当前没有 Desktop 记忆面板，也没有自动提取或模型记忆工具。配置、索引作业与 Run 绑定见[长期记忆](memory.md)。
+
+| TUI 命令 | 行为 |
+| --- | --- |
+| `/memory`、`/memory list [STATE\|all] [AFTER_ID]` | 列表，默认全部状态，每页 50 条；返回后续游标 |
+| `/memory get ID`、`/memory status` | 查看正文修订或检索配置状态 |
+| `/memory search TEXT` | 搜索当前授权范围，最多 10 条 |
+| `/memory add SCOPE KIND TEXT` | 用户显式创建 `active` 记录 |
+| `/memory propose SCOPE KIND TEXT` | 用户显式创建 `proposed` 记录；不是模型自动提取 |
+| `/memory approve ID REVISION` | 先读取并核对指定修订，只激活仍为 `proposed` 的记录 |
+| `/memory edit ID REVISION TEXT` | 核对修订后修改正文，保留原种类、范围、状态与有效期 |
+| `/memory forget ID REVISION` | 按指定修订忘记记录并提交向量删除意图 |
+| `/memory jobs ID`、`/memory retry ID JOB_ID` | 查看该记录的作业，或显式重试失败／未知作业 |
+
+`SCOPE` 为 `user`、`project` 或 `session`；`KIND` 为 `preference`、`fact` 或 `procedure`。`STATE` 可选 `proposed`、`active`、`superseded`、`rejected`、`deleted` 或 `all`。正文支持 shell 引号或剩余词拼接，限制为 1–16,384 个 UTF-8 字节。
+
+新增、激活和修改命令在解析时生成稳定请求 ID；新增还生成记忆 ID。写操作取消、超时或断线时显示未确认身份，不自动重试；先用详情与作业列表核对结果。忘记与作业重试协议没有独立 `request_id`，分别使用修订和作业身份限制操作。当前仅提供 TUI `/memory` 与共享 AgentClient / RPC，非交互 CLI 未增加 memory 子命令。上述入口尚未完成本轮编译或实际 TUI 验收。

@@ -75,8 +75,8 @@ async fn outbound_nodes_exchange_noise_authenticated_ciphertext_without_control_
     .is_err(),
     "control TLS trust cannot substitute a paired Noise key"
   );
-  assert!(fixture.store.tasks()?.is_empty());
-  assert!(fixture.store.sessions()?.is_empty());
+  assert!(fixture.store.tasks().await?.is_empty());
+  assert!(fixture.store.sessions().await?.is_empty());
   Ok(())
 }
 
@@ -89,7 +89,8 @@ async fn active_stream_revocation_and_graph_revocation_deny_further_delivery() -
   let mut b = b_client.open(8).await?;
   fixture
     .store
-    .control_allow_link("node-a", "node-b", false)?;
+    .control_allow_link("node-a", "node-b", false)
+    .await?;
   a.try_send(frame("node-a", "node-b", vec![7]))?;
   assert_eq!(
     tokio::time::timeout(Duration::from_secs(3), a.receive())
@@ -103,7 +104,7 @@ async fn active_stream_revocation_and_graph_revocation_deny_further_delivery() -
       .await
       .is_err()
   );
-  fixture.manager.revoke_local("node-b")?;
+  fixture.manager.revoke_local("node-b").await?;
   assert_eq!(
     tokio::time::timeout(Duration::from_secs(3), b.receive())
       .await?

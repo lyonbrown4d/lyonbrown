@@ -3,8 +3,8 @@ use crate::{
   auth::{account, digest, equal, random_token, signed_time, valid_token},
   schema::gateway_admin_sessions as sessions,
 };
-use diesel::prelude::*;
 use gateway_validation::Credentials;
+use sea_orm::{ActiveModelTrait, PaginatorTrait, QueryFilter, Set, prelude::*};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
@@ -60,7 +60,7 @@ impl GatewayStorage {
     {
       return Err(StorageError::Unauthorized);
     }
-    let previous = self.run(account).await?;
+    let previous = self.run(|connection| Box::pin(account(connection))).await?;
     let previous = previous.filter(|account| account.username == username && account.role == 1);
     let verified = self
       .verify_password(
@@ -89,25 +89,26 @@ impl GatewayStorage {
     let token_hash = digest("session", session.token());
     let csrf_hash = digest("csrf", session.csrf_token());
     self
-      .run(move |connection| {
-        connection.immediate_transaction(|connection| {
-          // The connection is reacquired after CPU verification; a changed credential cannot create a stale session.
-          if account(connection)?.as_ref() != Some(&previous) {
+      .write(move |connection| {
+        Box::pin(async move {
+          if account(connection).await?.as_ref() != Some(&previous) {
             return Err(StorageError::Unauthorized);
           }
-          diesel::delete(sessions::table.filter(sessions::expires_at.le(now)))
-            .execute(connection)?;
-          if sessions::table.count().get_result::<i64>(connection)? >= 1000 {
+          sessions::Entity::delete_many()
+            .filter(sessions::Column::ExpiresAt.lte(now))
+            .exec(connection)
+            .await?;
+          if sessions::Entity::find().count(connection).await? >= 1000 {
             return Err(StorageError::Unauthorized);
           }
-          diesel::insert_into(sessions::table)
-            .values((
-              sessions::token_hash.eq(token_hash),
-              sessions::csrf_hash.eq(csrf_hash),
-              sessions::expires_at.eq(expires_at),
-              sessions::credential_revision.eq(previous.revision),
-            ))
-            .execute(connection)?;
+          sessions::ActiveModel {
+            token_hash: Set(token_hash),
+            csrf_hash: Set(csrf_hash),
+            expires_at: Set(expires_at),
+            credential_revision: Set(previous.revision),
+          }
+          .insert(connection)
+          .await?;
           Ok(())
         })
       })
@@ -122,17 +123,19 @@ impl GatewayStorage {
     let now = signed_time(now)?;
     self
       .run(move |connection| {
-        connection.transaction(|connection| {
-          let Some(account) = account(connection)?.filter(|account| account.role == 1) else {
+        Box::pin(async move {
+          let Some(account) = account(connection)
+            .await?
+            .filter(|account| account.role == 1)
+          else {
             return Ok(None);
           };
-          let exists = sessions::table
-            .find(hash)
-            .filter(sessions::expires_at.gt(now))
-            .filter(sessions::credential_revision.eq(account.revision))
-            .count()
-            .get_result::<i64>(connection)?
-            == 1;
+          let exists = sessions::Entity::find_by_id(hash)
+            .filter(sessions::Column::ExpiresAt.gt(now))
+            .filter(sessions::Column::CredentialRevision.eq(account.revision))
+            .one(connection)
+            .await?
+            .is_some();
           Ok(exists.then_some(AdminIdentity {
             username: account.username,
             role: AdminRole::SuperAdmin,
@@ -153,18 +156,19 @@ impl GatewayStorage {
     let now = signed_time(now)?;
     self
       .run(move |connection| {
-        connection.transaction(|connection| {
-          let Some(account) = account(connection)?.filter(|account| account.role == 1) else {
+        Box::pin(async move {
+          let Some(account) = account(connection)
+            .await?
+            .filter(|account| account.role == 1)
+          else {
             return Ok(false);
           };
-          let stored = sessions::table
-            .find(token_hash)
-            .filter(sessions::expires_at.gt(now))
-            .filter(sessions::credential_revision.eq(account.revision))
-            .select(sessions::csrf_hash)
-            .first::<String>(connection)
-            .optional()?;
-          Ok(stored.is_some_and(|stored| equal(&stored, &csrf_hash)))
+          let stored = sessions::Entity::find_by_id(token_hash)
+            .filter(sessions::Column::ExpiresAt.gt(now))
+            .filter(sessions::Column::CredentialRevision.eq(account.revision))
+            .one(connection)
+            .await?;
+          Ok(stored.is_some_and(|stored| equal(&stored.csrf_hash, &csrf_hash)))
         })
       })
       .await
@@ -172,9 +176,13 @@ impl GatewayStorage {
   pub async fn revoke_session(&self, token: &str) -> Result<()> {
     let hash = digest("session", token);
     self
-      .run(move |connection| {
-        diesel::delete(sessions::table.find(hash)).execute(connection)?;
-        Ok(())
+      .write(move |connection| {
+        Box::pin(async move {
+          sessions::Entity::delete_by_id(hash)
+            .exec(connection)
+            .await?;
+          Ok(())
+        })
       })
       .await
   }

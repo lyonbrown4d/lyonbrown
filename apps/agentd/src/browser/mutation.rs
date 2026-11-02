@@ -61,6 +61,7 @@ impl CommittedMutation {
         status,
         json!({"status":status}),
       )
+      .await
       .map_err(|_| Status::unknown("browser outcome could not be persisted; do not replay"))?;
     self.guard.finished = true;
     result.map_err(failure)
@@ -79,6 +80,7 @@ impl Daemon {
     let session = self
       .store
       .session(session_id)
+      .await
       .map_err(|_| Status::internal("session storage failed"))?
       .ok_or_else(|| Status::not_found("session not found"))?;
     if session.owner_node_id != self.node_id {
@@ -95,6 +97,7 @@ impl Daemon {
         "browser_command",
         audit_summary(&command),
       )
+      .await
       .map_err(|_| {
         Status::failed_precondition("browser action already recorded or session ownership changed")
       })?;
@@ -157,6 +160,7 @@ impl Drop for MutationGuard {
           "uncertain",
           json!({"reason":"caller_disconnected"}),
         )
+        .await
         .is_err()
     {
       tracing::warn!(action_id=%self.id,"browser intent remains unresolved after caller disconnected");

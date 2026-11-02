@@ -22,6 +22,7 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     .enable_all()
     .build()
     .expect("remote fixture runtime");
+  let _storage_context = runtime.enter();
   let mock = runtime
     .block_on(MockModelServer::start(vec![
       text_reply(StandardProtocol::ChatCompletions, "accepted worker output"),
@@ -30,7 +31,7 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     ]))
     .expect("synthetic model server");
   let remote = runtime.block_on(Remote::open(&mock, StandardProtocol::ChatCompletions));
-  let _parent = remote.pair.envelope(vec!["workspace.read".into()]);
+  let _parent = remote.pair.envelope(vec!["workspace.read".into()]).await;
   let target = worker_target(&remote);
   let ui = TaskUi::new(cx, &remote.endpoint, remote.pair.master.auth_token());
   ui.connect(cx);
@@ -40,8 +41,8 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
   ui.set_target(cx, &target.id, &target.endpoint);
 
   ui.click(cx, "task-dispatch");
-  ui.wait(cx, || {
-    remote.pair.master.store.tasks().is_ok_and(|tasks| {
+  ui.wait(cx, async || {
+    remote.pair.master.store.tasks().await.is_ok_and(|tasks| {
       tasks
         .iter()
         .filter(|task| task.envelope.session_id == remote.pair.session.id)
@@ -51,12 +52,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
   })
   .await;
   let first = task_ids(&remote).await.remove(0);
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .worker
       .store
       .task(&first)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.attempt_status == "succeeded")
@@ -72,12 +74,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     cx,
     gpui_kit::SharedString::from(format!("task-reconcile-{first}")),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .task(&first)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.status == "awaiting_acceptance")
@@ -87,12 +90,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     cx,
     gpui_kit::SharedString::from(format!("task-accept-{first}")),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .task(&first)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.status == "completed")
@@ -104,6 +108,7 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
       .worker
       .store
       .task(&first)
+      .await
       .expect("worker read")
       .expect("worker task")
       .status,
@@ -111,8 +116,8 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
   );
 
   ui.click(cx, "task-dispatch");
-  ui.wait(cx, || {
-    remote.pair.master.store.tasks().is_ok_and(|tasks| {
+  ui.wait(cx, async || {
+    remote.pair.master.store.tasks().await.is_ok_and(|tasks| {
       tasks
         .iter()
         .filter(|task| task.envelope.session_id == remote.pair.session.id)
@@ -126,12 +131,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     .into_iter()
     .find(|id| id != &first)
     .expect("second stable task ID");
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .worker
       .store
       .task(&second)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.attempt_status == "succeeded")
@@ -147,12 +153,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     cx,
     gpui_kit::SharedString::from(format!("task-reconcile-{second}")),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .task(&second)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.status == "awaiting_acceptance")
@@ -168,12 +175,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     cx,
     gpui_kit::SharedString::from(format!("task-reject-{second}")),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .task(&second)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.status == "rejected")
@@ -185,6 +193,7 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
       .worker
       .store
       .task(&second)
+      .await
       .expect("worker read")
       .expect("worker task")
       .status,
@@ -192,8 +201,8 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
   );
 
   ui.click(cx, "task-dispatch");
-  ui.wait(cx, || {
-    remote.pair.master.store.tasks().is_ok_and(|tasks| {
+  ui.wait(cx, async || {
+    remote.pair.master.store.tasks().await.is_ok_and(|tasks| {
       tasks
         .iter()
         .filter(|task| task.envelope.session_id == remote.pair.session.id)
@@ -207,12 +216,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     .into_iter()
     .find(|id| id != &first && id != &second)
     .expect("third stable task ID");
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .worker
       .store
       .task(&third)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.attempt_status == "running")
@@ -229,12 +239,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     cx,
     gpui_kit::SharedString::from(format!("task-cancel-{third}")),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .worker
       .store
       .task(&third)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.status == "cancelled")
@@ -246,6 +257,7 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
       .master
       .store
       .task(&third)
+      .await
       .unwrap()
       .unwrap()
       .status,
@@ -255,12 +267,13 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
     cx,
     gpui_kit::SharedString::from(format!("task-reconcile-{third}")),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .task(&third)
+      .await
       .ok()
       .flatten()
       .is_some_and(|task| task.status == "cancelled")
@@ -272,6 +285,7 @@ async fn task_controls_dispatch_accept_reject_and_cancel_with_durable_master_and
       .worker
       .store
       .task(&third)
+      .await
       .expect("worker read")
       .expect("worker task")
       .status,
@@ -295,11 +309,12 @@ async fn uncertain_dispatch_keeps_identity_and_does_not_create_a_fresh_task(
     .enable_all()
     .build()
     .expect("remote fixture runtime");
+  let _storage_context = runtime.enter();
   let mock = runtime
     .block_on(MockModelServer::start(vec![]))
     .expect("synthetic model server");
   let mut remote = runtime.block_on(Remote::open(&mock, StandardProtocol::ChatCompletions));
-  let _parent = remote.pair.envelope(vec!["workspace.read".into()]);
+  let _parent = remote.pair.envelope(vec!["workspace.read".into()]).await;
   remote
     .pair
     .master
@@ -309,6 +324,7 @@ async fn uncertain_dispatch_keeps_identity_and_does_not_create_a_fresh_task(
       &remote.pair.session.workspace,
       &remote.pair.master.node_id,
     )
+    .await
     .expect("second session for tab switch");
   let target = worker_target(&remote);
   let ui = TaskUi::new(cx, &remote.endpoint, remote.pair.master.auth_token());
@@ -329,13 +345,14 @@ async fn uncertain_dispatch_keeps_identity_and_does_not_create_a_fresh_task(
       .master
       .store
       .tasks()
+      .await
       .expect("no dispatch effect")
       .is_empty()
   );
   ui.click(cx, "task-intent-inspect");
-  ui.wait(cx, || true).await;
+  ui.wait(cx, async || true).await;
   ui.click(cx, ("session", 0usize));
-  let other_session = remote.pair.master.store.sessions().expect("sessions")[0]
+  let other_session = remote.pair.master.store.sessions().await.expect("sessions")[0]
     .id
     .clone();
   ui.wait_selected_session(cx, &other_session).await;
@@ -355,6 +372,7 @@ async fn uncertain_dispatch_keeps_identity_and_does_not_create_a_fresh_task(
       .master
       .store
       .tasks()
+      .await
       .expect("single original task")
       .len(),
     0,

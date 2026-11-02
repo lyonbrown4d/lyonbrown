@@ -2,7 +2,7 @@ mod support;
 use agent_core::events::{AgentEvent, DecodedEvent, QueueStatus, decode};
 use agent_protocol::v1;
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply};
-use diesel::{Connection, connection::SimpleConnection, sqlite::SqliteConnection};
+use sea_orm::{ConnectionTrait, Database};
 use std::time::Duration;
 use support::TestNode;
 
@@ -29,17 +29,24 @@ async fn failed_queue_cancellation_retains_intent_and_fences_execution() {
     })
     .await
     .unwrap();
-  let before = node.daemon.store.load_snapshot(&node.session_id).unwrap();
+  let before = node
+    .daemon
+    .store
+    .load_snapshot(&node.session_id)
+    .await
+    .unwrap();
   let path = node
     .daemon
     .config
     .data_path()
     .unwrap()
     .join("agent.sqlite3");
-  let mut database = SqliteConnection::establish(path.to_str().unwrap()).unwrap();
+  let database = Database::connect(format!("sqlite://{}?mode=rw", path.display()))
+    .await
+    .unwrap();
   // Reviewed test-only fault injection: reject snapshot writes, while allowing
   // the host intent and Run/Outbox fence to commit through the real Store.
-  database.batch_execute("CREATE TRIGGER refuse_input_snapshot BEFORE UPDATE ON harness_sessions BEGIN SELECT RAISE(ABORT, 'synthetic snapshot failure'); END;").unwrap();
+  database.execute_unprepared("CREATE TRIGGER refuse_input_snapshot BEFORE UPDATE ON harness_sessions BEGIN SELECT RAISE(ABORT, 'synthetic snapshot failure'); END;").await.unwrap();
   assert!(
     node
       .client
@@ -48,13 +55,18 @@ async fn failed_queue_cancellation_retains_intent_and_fences_execution() {
       .is_err()
   );
   assert_eq!(
-    node.daemon.store.load_snapshot(&node.session_id).unwrap(),
+    node
+      .daemon
+      .store
+      .load_snapshot(&node.session_id)
+      .await
+      .unwrap(),
     before
   );
   assert_eq!(node.terminal(&run.id).await.status, "uncertain");
   let inputs = node.client.list_run_inputs(&run.id).await.unwrap();
   assert_eq!(inputs[0].state, v1::RunInputState::CancelRequested as i32);
-  let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+  let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
   let statuses: Vec<_> = events
     .iter()
     .filter_map(
@@ -84,8 +96,17 @@ async fn failed_queue_cancellation_retains_intent_and_fences_execution() {
   assert_eq!(main.requests().await.len(), 1);
   assert_eq!(std::fs::read_dir(node.workspace.path()).unwrap().count(), 0);
   database
-    .batch_execute("DROP TRIGGER refuse_input_snapshot;")
+    .execute_unprepared("DROP TRIGGER refuse_input_snapshot;")
+    .await
     .unwrap();
-  assert_eq!(node.daemon.store.recover_input_cancellations().unwrap(), 0);
+  assert_eq!(
+    node
+      .daemon
+      .store
+      .recover_input_cancellations()
+      .await
+      .unwrap(),
+    0
+  );
   node.close().await;
 }

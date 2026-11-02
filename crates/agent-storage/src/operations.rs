@@ -1,19 +1,13 @@
+use crate::schema::operations;
+use sea_orm::{QuerySelect, Set, prelude::*};
 mod summary;
 use summary::validate_summary;
 
 use crate::{Store, event_tx, schema::runs, verify_epoch};
 use agent_core::now_ms;
 use anyhow::{Context, Result, ensure};
-use diesel::{connection::SimpleConnection, prelude::*};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-
-diesel::table! {
-  operations (action_id) {
-    action_id -> Text, run_id -> Text, owner_epoch -> BigInt,
-    status -> Text, record -> Text,
-  }
-}
 
 /// A dispatched operation has one final receipt. Unknown outcomes cannot be replayed.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -48,15 +42,10 @@ pub struct OperationRecord {
   pub finished_at_ms: Option<i64>,
 }
 
-pub(crate) fn initialize(connection: &mut SqliteConnection) -> Result<()> {
-  connection.batch_execute(include_str!("operations.sql"))?;
-  Ok(())
-}
-
 impl Store {
   /// Commit before dispatch. Even an identical identifier is always rejected.
   /// Summaries contain bounded operational metadata, never command input or output.
-  pub fn begin_operation(
+  pub async fn begin_operation(
     &self,
     run: &str,
     epoch: u64,
@@ -65,13 +54,26 @@ impl Store {
     summary: Value,
   ) -> Result<()> {
     validate_intent(action, kind, &summary)?;
-    self.lock()?.immediate_transaction(|connection| {
-      begin_operation_tx(connection, run, epoch, action, kind, summary)
-    })
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> =
+        async { begin_operation_tx(connection, run, epoch, action, kind, summary).await }.await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
 
   /// Cancellation after dispatch does not discard the actual operation receipt.
-  pub fn finish_operation(
+  pub async fn finish_operation(
     &self,
     run: &str,
     epoch: u64,
@@ -84,74 +86,119 @@ impl Store {
       "operation receipt must be terminal"
     );
     validate_summary(&summary)?;
-    self.lock()?.immediate_transaction(|connection| {
-      let mut record = load_operation(connection, action)?.context("operation intent missing")?;
-      ensure!(
-        record.run_id == run && record.owner_epoch == epoch,
-        "operation owner binding mismatch"
-      );
-      let session: String = runs::table
-        .find(run)
-        .select(runs::session_id)
-        .first(connection)?;
-      verify_epoch(connection, &session, epoch)?;
-      record.status = status;
-      record.result_summary = Some(summary);
-      record.finished_at_ms = Some(now_ms());
-      write_receipt(connection, &record)?;
-      Ok(())
-    })
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        let mut record = load_operation(connection, action)
+          .await?
+          .context("operation intent missing")?;
+        ensure!(
+          record.run_id == run && record.owner_epoch == epoch,
+          "operation owner binding mismatch"
+        );
+        let session: String = runs::Entity::find()
+          .filter(runs::Column::Id.eq(run))
+          .select_only()
+          .column(runs::Column::SessionId)
+          .into_tuple::<String>()
+          .one(connection)
+          .await?
+          .ok_or_else(|| anyhow::anyhow!("runs record missing"))?;
+        verify_epoch(connection, &session, epoch).await?;
+        record.status = status;
+        record.result_summary = Some(summary);
+        record.finished_at_ms = Some(now_ms());
+        write_receipt(connection, &record).await?;
+        Ok(())
+      }
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
 
-  pub fn operation(&self, action: &str) -> Result<Option<OperationRecord>> {
-    load_operation(&mut *self.lock()?, action)
+  pub async fn operation(&self, action: &str) -> Result<Option<OperationRecord>> {
+    load_operation(self.connection(), action).await
   }
 
   /// Restart never replays an intent whose dispatch outcome was not committed.
-  pub fn recover_operations(&self) -> Result<usize> {
-    self.lock()?.immediate_transaction(|connection| {
-      let interrupted: Vec<String> = operations::table
-        .filter(operations::status.eq("intent"))
-        .select(operations::record)
-        .load(connection)?;
-      for encoded in &interrupted {
-        let mut record: OperationRecord = serde_json::from_str(encoded)?;
-        record.status = OperationStatus::Uncertain;
-        record.result_summary = Some(json!({"reason":"daemon_restarted"}));
-        record.finished_at_ms = Some(now_ms());
-        write_receipt(connection, &record)?;
+  pub async fn recover_operations(&self) -> Result<usize> {
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        let interrupted: Vec<String> = operations::Entity::find()
+          .filter(operations::Column::Status.eq("intent"))
+          .select_only()
+          .column(operations::Column::Record)
+          .into_tuple::<String>()
+          .all(connection)
+          .await?;
+        for encoded in &interrupted {
+          let mut record: OperationRecord = serde_json::from_str(encoded)?;
+          record.status = OperationStatus::Uncertain;
+          record.result_summary = Some(json!({"reason":"daemon_restarted"}));
+          record.finished_at_ms = Some(now_ms());
+          write_receipt(connection, &record).await?;
+        }
+        Ok(interrupted.len())
       }
-      Ok(interrupted.len())
-    })
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
 }
 
-fn load_operation(
-  connection: &mut SqliteConnection,
+async fn load_operation(
+  connection: &impl ConnectionTrait,
   action: &str,
 ) -> Result<Option<OperationRecord>> {
-  let encoded: Option<String> = operations::table
-    .find(action)
-    .select(operations::record)
-    .first(connection)
-    .optional()?;
+  let encoded: Option<String> = operations::Entity::find()
+    .filter(operations::Column::ActionId.eq(action))
+    .select_only()
+    .column(operations::Column::Record)
+    .into_tuple::<String>()
+    .one(connection)
+    .await?;
   encoded
     .map(|value| Ok(serde_json::from_str(&value)?))
     .transpose()
 }
 
-fn write_receipt(connection: &mut SqliteConnection, record: &OperationRecord) -> Result<()> {
+async fn write_receipt(connection: &impl ConnectionTrait, record: &OperationRecord) -> Result<()> {
   ensure!(
-    diesel::update(
-      operations::table
-        .find(&record.action_id)
-        .filter(operations::status.eq("intent"))
-    )
-    .set((
-      operations::status.eq(record.status.as_str()),
-      operations::record.eq(serde_json::to_string(record)?),
-    ))
-    .execute(connection)?
+    operations::Entity::update_many()
+      .filter(operations::Column::ActionId.eq(&record.action_id))
+      .filter(operations::Column::Status.eq("intent"))
+      .col_expr(
+        operations::Column::Status,
+        Expr::value((record.status.as_str()).to_owned())
+      )
+      .col_expr(
+        operations::Column::Record,
+        Expr::value((serde_json::to_string(record)?).to_owned())
+      )
+      .exec(connection)
+      .await
+      .map(|result| result.rows_affected)?
       == 1,
     "operation outcome already recorded"
   );
@@ -160,7 +207,8 @@ fn write_receipt(connection: &mut SqliteConnection, record: &OperationRecord) ->
     &record.run_id,
     "operation_finished",
     json!({"action_id":record.action_id,"status":record.status,"summary":record.result_summary}),
-  )?;
+  )
+  .await?;
   Ok(())
 }
 
@@ -180,28 +228,35 @@ pub(crate) fn validate_intent(action: &str, kind: &str, summary: &Value) -> Resu
   validate_summary(summary)
 }
 
-pub(crate) fn begin_operation_tx(
-  connection: &mut SqliteConnection,
+pub(crate) async fn begin_operation_tx(
+  connection: &impl ConnectionTrait,
   run: &str,
   epoch: u64,
   action: &str,
   kind: &str,
   summary: Value,
 ) -> Result<()> {
-  let (session, status): (String, String) = runs::table
-    .find(run)
-    .select((runs::session_id, runs::status))
-    .first(connection)?;
-  verify_epoch(connection, &session, epoch)?;
+  let (session, status): (String, String) = runs::Entity::find()
+    .filter(runs::Column::Id.eq(run))
+    .select_only()
+    .column(runs::Column::SessionId)
+    .column(runs::Column::Status)
+    .into_tuple::<(String, String)>()
+    .one(connection)
+    .await?
+    .ok_or_else(|| anyhow::anyhow!("runs record missing"))?;
+  verify_epoch(connection, &session, epoch).await?;
   ensure!(
     status == "running",
     "operation requires a running, uncancelled run"
   );
-  let prior = operations::table
-    .find(action)
-    .select(operations::action_id)
-    .first::<String>(connection)
-    .optional()?;
+  let prior = operations::Entity::find()
+    .filter(operations::Column::ActionId.eq(action))
+    .select_only()
+    .column(operations::Column::ActionId)
+    .into_tuple::<String>()
+    .one(connection)
+    .await?;
   ensure!(
     prior.is_none(),
     "operation identifier already recorded; replay is forbidden"
@@ -217,20 +272,21 @@ pub(crate) fn begin_operation_tx(
     created_at_ms: now_ms(),
     finished_at_ms: None,
   };
-  diesel::insert_into(operations::table)
-    .values((
-      operations::action_id.eq(action),
-      operations::run_id.eq(run),
-      operations::owner_epoch.eq(i64::try_from(epoch)?),
-      operations::status.eq("intent"),
-      operations::record.eq(serde_json::to_string(&record)?),
-    ))
-    .execute(connection)?;
+  operations::ActiveModel {
+    action_id: Set((action).to_owned()),
+    run_id: Set((run).to_owned()),
+    owner_epoch: Set((i64::try_from(epoch)?).to_owned()),
+    status: Set(("intent").to_owned()),
+    record: Set((serde_json::to_string(&record)?).to_owned()),
+  }
+  .insert(connection)
+  .await?;
   event_tx(
     connection,
     run,
     "operation_intent",
     json!({"action_id":action,"kind":kind}),
-  )?;
+  )
+  .await?;
   Ok(())
 }

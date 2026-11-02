@@ -128,7 +128,7 @@ Probe asks agentd to send a read-only GET to the protocol's model-list endpoint.
 
 Save delegates persistence to agentd. New profiles require a credential; leaving it empty while editing preserves the existing credential. Values belong only to the transient input adapter and authenticated request, never App, ViewModel, chat drafts, input history, or saved client state. Acknowledged saves, close, disconnect, and identity changes clear the editor. Saving does not select the model: close the dialog and explicitly choose the Provider through `/model`. Saved credentials do not imply a successful connection probe.
 
-Up to 100 profiles are stored. Revision checks prevent a stale form from overwriting newer edits. Removal requires confirmation and retains bindings already pinned to Sessions or Runs; deleted identities cannot be reused. Each credential change creates an immutable encrypted reference so old bindings retain their original value. Old credentials remain in the daemon store; automatic garbage collection is not implemented. Profile changes, events, and Outbox entries commit in one SQLite transaction. Probes write none of them.
+Up to 100 profiles are stored. Revision checks prevent a stale form from overwriting newer edits. Removal requires confirmation and retains bindings already pinned to Sessions or Runs; deleted identities cannot be reused. Each credential change creates an immutable encrypted reference so old bindings retain their original value. Old credentials remain in the daemon store; automatic garbage collection is not implemented. Profile changes, events, and Outbox entries commit in one relational transaction. Probes write none of them.
 
 Built-in Providers open a credential dialog to enter a new value, explicitly import an allowlisted environment variable, or remove an uploaded credential. Opening or selecting a Provider never uploads automatically. Use New Provider for custom endpoints and models. Custom profile forms currently ship in TUI only; Desktop's Providers page still manages environment credentials.
 
@@ -269,7 +269,7 @@ The TUI parses `/run` commands locally, rather than sending them as model input.
 /run continue RUN_ID --idempotency-key KEY --note 'Verified files and external state' --prompt 'Explicit fresh input based on the verified result'
 ```
 
-CLI subcommands use the same arguments without `/`, for example `agent-cli run inspect RUN_ID`. Recovery requires a stopped `uncertain` run owned by the local Master and a valid owner epoch. Durable Tasks in the original session must first reach a terminal state through reconciliation, cancellation or explicit adoption/rejection, so the epoch fence cannot orphan Worker management. The decision, epoch increment, events, Outbox and optional fresh session/run are committed in one SQLite transaction, fencing late state commits from the old epoch. This does not undo actions already dispatched to the operating system or external services; verify their actual state before recovery.
+CLI subcommands use the same arguments without `/`, for example `agent-cli run inspect RUN_ID`. Recovery requires a stopped `uncertain` run owned by the local Master and a valid owner epoch. Durable Tasks in the original session must first reach a terminal state through reconciliation, cancellation or explicit adoption/rejection, so the epoch fence cannot orphan Worker management. The decision, epoch increment, events, Outbox and optional fresh session/run are committed in one relational transaction, fencing late state commits from the old epoch. This does not undo actions already dispatched to the operating system or external services; verify their actual state before recovery.
 
 `abandon` records the decision to leave the run stopped. `continue` creates a new session and Run from the explicit fresh prompt, without copying Harness snapshots, approvals or native handles. The original Run stays `uncertain` and its session remains closed to new execution; a human note is not evidence of successful execution. The new session appears in the TUI session list; use `Tab` to follow progress and approvals. Only one resolution is allowed per original run. After a lost response, inspect first; retries must retain the original key, action, note and prompt. In-place Harness continuation and automatic verification of external effects are not provided.
 
@@ -282,3 +282,24 @@ Snapshots contain client presentation and input state. They do not provide crede
 Entry points: `apps/agent-cli/src/main.rs`, `apps/agent-desktop/src/main.rs`. TUI presentation is defined in `apps/agent-cli/src/view_model.rs`, `view.rs` and `markdown.rs`; Desktop interaction is defined in `apps/agent-desktop/src/view_model.rs`, `events.rs`, `block.rs`, `operations.rs`, `projection.rs`, `chrome.rs`, `settings.rs`, `tabs.rs`, `tabs/` and `workbench/drafts.rs`.
 
 See [Desktop screenshots and acceptance scope](runtime-evidence.md) for actual windows, light/dark switching, approval, file reading and their verification limits.
+
+
+## Memory management
+
+The TUI `/memory` command calls the authenticated daemon memory service and displays results in the existing local transcript view, without directly connecting to the database or Qdrant. Without a selected Session, operations can use the current user scope. Selecting a locally owned Session adds its project and session scopes. The daemon derives scope identities and rejects project/session operations without a Session. There is no Desktop memory panel, automatic extraction or model memory tool. See [Long-term memory](memory.md) for configuration, indexing jobs and Run bindings.
+
+| TUI command | Behavior |
+| --- | --- |
+| `/memory`, `/memory list [STATE\|all] [AFTER_ID]` | List all states by default, 50 per page, with a continuation cursor |
+| `/memory get ID`, `/memory status` | Inspect content/revision or retrieval configuration status |
+| `/memory search TEXT` | Search authorized scopes, up to 10 records |
+| `/memory add SCOPE KIND TEXT` | Explicitly create an active record |
+| `/memory propose SCOPE KIND TEXT` | Explicitly create a proposed record; no automatic extraction |
+| `/memory approve ID REVISION` | Fetch and check the requested revision; activate only a still-proposed record |
+| `/memory edit ID REVISION TEXT` | Check revision and edit text while retaining kind, scope, state and expiry |
+| `/memory forget ID REVISION` | Forget the specified revision and persist vector-deletion intent |
+| `/memory jobs ID`, `/memory retry ID JOB_ID` | Inspect jobs or explicitly retry a failed/uncertain job |
+
+`SCOPE` is `user`, `project` or `session`; `KIND` is `preference`, `fact` or `procedure`. `STATE` is `proposed`, `active`, `superseded`, `rejected`, `deleted` or `all`. Text supports shell quoting or joined remaining words and is limited to 1–16,384 UTF-8 bytes.
+
+Create, approve and edit commands generate stable request IDs during parsing; create also generates a memory ID. Cancelled, timed-out or disconnected writes report unconfirmed identities without automatic retry. Inspect details and jobs before deciding what to do next. Forget and job retry have no separate protocol `request_id`; they rely on revision and job identity respectively. Only TUI `/memory` and the shared AgentClient/RPC are provided; the noninteractive CLI has no memory subcommand. These commands have not completed compilation or actual TUI acceptance in this iteration.

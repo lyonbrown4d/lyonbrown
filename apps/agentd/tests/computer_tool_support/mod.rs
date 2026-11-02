@@ -60,7 +60,12 @@ pub async fn approval(node: &TestNode, run: &str) -> v1::Approval {
   .await
   .unwrap()
 }
-pub fn exact_approval(node: &TestNode, pending: &v1::Approval, host: &str, args: &Value) -> Value {
+pub async fn exact_approval(
+  node: &TestNode,
+  pending: &v1::Approval,
+  host: &str,
+  args: &Value,
+) -> Value {
   let exact: Value = serde_json::from_str(&pending.arguments_json).unwrap();
   assert_eq!(exact["session_id"], node.session_id);
   assert_eq!(exact["owner_epoch"], 1);
@@ -70,6 +75,7 @@ pub fn exact_approval(node: &TestNode, pending: &v1::Approval, host: &str, args:
     .daemon
     .store
     .events(&pending.run_id, 0, 1000)
+    .await
     .unwrap()
     .into_iter()
     .filter_map(
@@ -109,6 +115,7 @@ pub fn exact_approval(node: &TestNode, pending: &v1::Approval, host: &str, args:
       .daemon
       .store
       .operation(exact["action_id"].as_str().unwrap())
+      .await
       .unwrap(),
     None
   );

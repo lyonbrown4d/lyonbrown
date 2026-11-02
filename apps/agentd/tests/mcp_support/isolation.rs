@@ -26,6 +26,7 @@ async fn shared_mcp_connections_keep_approval_authority_bound_to_each_authentica
     .daemon
     .store
     .session(&node.session)
+    .await
     .expect("session row")
     .expect("first session")
     .workspace;
@@ -59,6 +60,7 @@ async fn shared_mcp_connections_keep_approval_authority_bound_to_each_authentica
       .daemon
       .store
       .approval(&first_approval.id)
+      .await
       .expect("approval")
       .expect("approval row")
       .status,
@@ -84,6 +86,7 @@ async fn shared_mcp_connections_keep_approval_authority_bound_to_each_authentica
       .daemon
       .store
       .approval(&second_approval.id)
+      .await
       .expect("second approval")
       .expect("second approval row")
       .status,

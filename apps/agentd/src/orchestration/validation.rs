@@ -49,11 +49,12 @@ pub(super) fn target(value: Option<v1::Node>) -> Result<v1::Node, Status> {
 }
 
 impl Daemon {
-  pub(super) fn master_session(&self, id: &str) -> Result<Session, Status> {
+  pub(super) async fn master_session(&self, id: &str) -> Result<Session, Status> {
     identifier(id)?;
     let session = self
       .store
       .session(id)
+      .await
       .map_err(failure)?
       .ok_or_else(|| Status::not_found("session not found"))?;
     if session.owner_node_id != self.node_id || id.starts_with("worker:") {
@@ -64,17 +65,18 @@ impl Daemon {
     Ok(session)
   }
 
-  pub(super) fn master_task(&self, id: &str) -> Result<Task, Status> {
+  pub(super) async fn master_task(&self, id: &str) -> Result<Task, Status> {
     identifier(id)?;
     let task = self
       .store
       .task(id)
+      .await
       .map_err(failure)?
       .ok_or_else(|| Status::not_found("task not found"))?;
-    let session = self.master_session(&task.envelope.session_id)?;
+    let session = self.master_session(&task.envelope.session_id).await?;
     if task.envelope.owner_node_id != self.node_id
       || task.envelope.owner_epoch != session.owner_epoch
-      || self.store.task_target(id).map_err(failure)?.is_none()
+      || self.store.task_target(id).await.map_err(failure)?.is_none()
     {
       return Err(Status::permission_denied(
         "task is not owned by the current Master epoch",
@@ -83,9 +85,16 @@ impl Daemon {
     Ok(task)
   }
 
-  pub(super) fn master_task_target(&self, id: &str, target: &v1::Node) -> Result<(), Status> {
-    self.master_task(id)?;
-    if self.store.task_target(id).map_err(failure)?.as_deref() != Some(target.id.as_str()) {
+  pub(super) async fn master_task_target(&self, id: &str, target: &v1::Node) -> Result<(), Status> {
+    self.master_task(id).await?;
+    if self
+      .store
+      .task_target(id)
+      .await
+      .map_err(failure)?
+      .as_deref()
+      != Some(target.id.as_str())
+    {
       return Err(Status::permission_denied(
         "task is assigned to another Worker",
       ));
@@ -93,7 +102,7 @@ impl Daemon {
     Ok(())
   }
 
-  pub(super) fn resolve_master_task_target(
+  pub(super) async fn resolve_master_task_target(
     &self,
     id: &str,
     requested: Option<v1::Node>,
@@ -101,10 +110,11 @@ impl Daemon {
     let node = match requested {
       Some(node) => target(Some(node))?,
       None => {
-        self.master_task(id)?;
+        self.master_task(id).await?;
         let (worker, endpoint) = self
           .store
           .task_target_route(id)
+          .await
           .map_err(failure)?
           .ok_or_else(|| {
             Status::failed_precondition(
@@ -118,15 +128,16 @@ impl Daemon {
         }))?
       }
     };
-    self.master_task_target(id, &node)?;
+    self.master_task_target(id, &node).await?;
     crate::peers::manager(self)
       .map_err(failure)?
       .trust(&node.id)
+      .await
       .map_err(|_| Status::permission_denied("target is not a paired active peer"))?;
     Ok(node)
   }
 
-  pub(super) fn validate_dispatch(
+  pub(super) async fn validate_dispatch(
     &self,
     target: &v1::Node,
     envelope: &v1::TaskEnvelope,
@@ -170,7 +181,7 @@ impl Daemon {
         "task deadline must be within the next 24 hours",
       ));
     }
-    let session = self.master_session(&envelope.session_id)?;
+    let session = self.master_session(&envelope.session_id).await?;
     if envelope.owner_node_id != self.node_id || envelope.owner_epoch != session.owner_epoch {
       return Err(Status::permission_denied(
         "task owner or epoch differs from the current Master",
@@ -184,6 +195,7 @@ impl Daemon {
     let run = self
       .store
       .run(&envelope.parent_run_id)
+      .await
       .map_err(failure)?
       .ok_or_else(|| Status::not_found("parent run not found"))?;
     if run.session_id != session.id || run.status != "running" {
@@ -194,6 +206,7 @@ impl Daemon {
     if self
       .store
       .task(&envelope.task_id)
+      .await
       .map_err(failure)?
       .is_some()
     {
@@ -214,6 +227,7 @@ impl Daemon {
     let trust = crate::peers::manager(self)
       .map_err(failure)?
       .trust(&target.id)
+      .await
       .map_err(|_| Status::permission_denied("target is not a paired active peer"))?;
     if !envelope
       .capabilities

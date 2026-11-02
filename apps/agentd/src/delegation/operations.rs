@@ -20,10 +20,10 @@ enum Mutation {
 
 impl DelegationTool {
   pub(super) async fn perform(&self, call: ToolCall, cancel: CancellationToken) -> Result<Value> {
-    self.fence(&cancel)?;
+    self.fence(&cancel).await?;
     let arguments: Arguments = serde_json::from_value(call.arguments)
       .map_err(|_| anyhow::anyhow!("invalid delegation operation or arguments"))?;
-    let target = self.target(arguments.call.target())?;
+    let target = self.target(arguments.call.target()).await?;
     match arguments.call {
       Operation::Dispatch {
         instructions,
@@ -32,39 +32,39 @@ impl DelegationTool {
         ..
       } => {
         let envelope = input::envelope(self, &call.id, instructions, capabilities, timeout_ms)?;
-        self.validate_scope(&target.id, &envelope)?;
+        self.validate_scope(&target.id, &envelope).await?;
         ensure!(
-          self.daemon.store.task(&envelope.task_id)?.is_none(),
+          self.daemon.store.task(&envelope.task_id).await?.is_none(),
           "delegation identity exists; reconcile it without replaying dispatch"
         );
         let exact = json!({"op":"dispatch","target":target_identity(&target),"envelope":envelope});
         self.approve(&exact, &cancel).await?;
-        self.revalidate_target(&target)?;
-        self.validate_scope(&target.id, &envelope)?;
+        self.revalidate_target(&target).await?;
+        self.validate_scope(&target.id, &envelope).await?;
         let id = envelope.task_id.clone();
         self
           .mutate(&id, target, Mutation::Dispatch(Box::new(envelope)), cancel)
           .await
       }
-      Operation::Get { task_id, .. } => Ok(output(self.task(&task_id, &target.id)?)),
+      Operation::Get { task_id, .. } => Ok(output(self.task(&task_id, &target.id).await?)),
       Operation::Reconcile { task_id, .. } => {
-        self.task(&task_id, &target.id)?;
+        self.task(&task_id, &target.id).await?;
         tokio::select! {
           value = self.daemon.reconcile_task(Request::new(v1::RemoteTaskRequest {
             target: Some(target.clone()), task_id: task_id.clone(),
           })) => value?.into_inner(),
           _ = cancel.cancelled() => anyhow::bail!("delegation observation cancelled"),
         };
-        self.fence(&cancel)?;
-        Ok(output(self.task(&task_id, &target.id)?))
+        self.fence(&cancel).await?;
+        Ok(output(self.task(&task_id, &target.id).await?))
       }
       Operation::Cancel { task_id, .. } => {
-        let task = self.task(&task_id, &target.id)?;
+        let task = self.task(&task_id, &target.id).await?;
         let exact =
           json!({"op":"cancel","target":target_identity(&target),"envelope":task.envelope});
         self.approve(&exact, &cancel).await?;
-        self.task(&task_id, &target.id)?;
-        self.revalidate_target(&target)?;
+        self.task(&task_id, &target.id).await?;
+        self.revalidate_target(&target).await?;
         self
           .mutate(&task_id, target, Mutation::Cancel, cancel)
           .await
@@ -72,7 +72,7 @@ impl DelegationTool {
       Operation::Accept {
         task_id, accepted, ..
       } => {
-        self.task(&task_id, &target.id)?;
+        self.task(&task_id, &target.id).await?;
         // Reconcile first so approval binds the verified current attempt and result.
         tokio::select! {
           value = self.daemon.reconcile_task(Request::new(v1::RemoteTaskRequest {
@@ -80,8 +80,8 @@ impl DelegationTool {
           })) => value?,
           _ = cancel.cancelled() => anyhow::bail!("delegation observation cancelled before approval"),
         };
-        self.fence(&cancel)?;
-        let task = self.task(&task_id, &target.id)?;
+        self.fence(&cancel).await?;
+        let task = self.task(&task_id, &target.id).await?;
         ensure!(
           task.status == "awaiting_acceptance" && task.attempt_status == "succeeded",
           "only a reconciled successful attempt may be accepted or rejected"
@@ -91,8 +91,8 @@ impl DelegationTool {
           "accepted":accepted,"result_digest":result_digest,
           "untrusted_worker_content":true,"result":task.result,"error":task.error});
         self.approve(&exact, &cancel).await?;
-        self.revalidate_target(&target)?;
-        let current = self.task(&task_id, &target.id)?;
+        self.revalidate_target(&target).await?;
+        let current = self.task(&task_id, &target.id).await?;
         ensure!(
           digest(&current) == result_digest,
           "delegation result changed after approval"
@@ -104,7 +104,7 @@ impl DelegationTool {
     }
   }
 
-  fn validate_scope(&self, target: &str, envelope: &TaskEnvelope) -> Result<()> {
+  async fn validate_scope(&self, target: &str, envelope: &TaskEnvelope) -> Result<()> {
     let configured = self
       .daemon
       .config
@@ -112,7 +112,7 @@ impl DelegationTool {
       .iter()
       .find(|value| value.node_id == target)
       .ok_or_else(|| anyhow::anyhow!("delegation target unavailable"))?;
-    let trust = crate::peers::manager(&self.daemon)?.trust(target)?;
+    let trust = crate::peers::manager(&self.daemon)?.trust(target).await?;
     ensure!(
       envelope
         .capabilities
@@ -136,7 +136,7 @@ impl DelegationTool {
     operation: Mutation,
     cancel: CancellationToken,
   ) -> Result<Value> {
-    self.fence(&cancel)?;
+    self.fence(&cancel).await?;
     let target_id = target.id.clone();
     let action = async {
       match operation {
@@ -176,9 +176,9 @@ impl DelegationTool {
     };
     self.daemon.events.notify_waiters();
     match result {
-      Some(Ok(_)) => Ok(output(self.task(id, &target_id)?)),
+      Some(Ok(_)) => Ok(output(self.task(id, &target_id).await?)),
       error => {
-        if let Some(task) = self.daemon.store.task(id)? {
+        if let Some(task) = self.daemon.store.task(id).await? {
           if matches!(task.status.as_str(), "completed" | "rejected") {
             return Ok(output(task));
           }
@@ -188,6 +188,7 @@ impl DelegationTool {
               .daemon
               .store
               .mark_task_uncertain(id, &task.envelope.attempt_id, self.epoch)
+              .await
               .map_err(|_| {
                 RuntimeError::Uncertain(format!(
                   "delegation interrupted for task {id}; durable outcome requires reconciliation"

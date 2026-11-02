@@ -113,7 +113,7 @@ async fn authenticated_hub_install_persists_artifacts_and_never_claims_unloaded_
       .is_err()
   );
   assert_eq!(
-    daemon.store.model_job(id).unwrap().unwrap()["state"],
+    daemon.store.model_job(id).await.unwrap().unwrap()["state"],
     "installed_unverified"
   );
   client.hub_operation(operation("remove", id)).await.unwrap();

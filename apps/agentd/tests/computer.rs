@@ -25,7 +25,7 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
   let mut host = attach_host(node.client.clone(), &node.session_id, runtime)
     .await
     .unwrap();
-  let binding = binding(&node, &node.session_id);
+  let binding = binding(&node, &node.session_id).await;
   let observed = node
     .daemon
     .computer_capabilities(binding.clone(), CancellationToken::new())
@@ -43,6 +43,7 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
       "",
       "",
     )
+    .await
     .unwrap();
   node
     .daemon
@@ -55,7 +56,7 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
     .create_session("other run", node.workspace.path().to_str().unwrap())
     .await
     .unwrap();
-  let mut cross_run = computer_support::binding(&node, &other.id);
+  let mut cross_run = computer_support::binding(&node, &other.id).await;
   cross_run.daemon_session_id = node.session_id.clone();
   assert_eq!(
     node
@@ -76,6 +77,7 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
       "done",
       "",
     )
+    .await
     .unwrap();
   assert_eq!(
     node
@@ -86,11 +88,12 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
       .code(),
     Code::FailedPrecondition
   );
-  let active = computer_support::binding(&node, &node.session_id);
+  let active = computer_support::binding(&node, &node.session_id).await;
   node
     .daemon
     .store
     .change_owner(&node.session_id, 1, &node.daemon.node_id)
+    .await
     .unwrap();
   assert_eq!(
     node
@@ -105,6 +108,7 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
     .daemon
     .store
     .change_owner(&node.session_id, 2, "other-owner")
+    .await
     .unwrap();
   assert_eq!(
     node
@@ -122,6 +126,7 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
       .daemon
       .store
       .run(&binding.run_id)
+      .await
       .unwrap()
       .unwrap()
       .status,
@@ -136,7 +141,7 @@ async fn capabilities_require_active_exact_run_and_owner_without_native_effects(
 async fn cancellation_eof_and_invalid_reply_remove_host_and_allow_explicit_replacement() {
   let (node, _mock) = node().await;
   let desktop = desktop(&node);
-  let binding = binding(&node, &node.session_id);
+  let binding = binding(&node, &node.session_id).await;
   for mode in ["cancel", "eof", "invalid"] {
     let mut host = RawHost::attach(&node, &desktop).await;
     let cancellation = CancellationToken::new();
@@ -207,6 +212,7 @@ async fn cancellation_eof_and_invalid_reply_remove_host_and_allow_explicit_repla
       .daemon
       .store
       .run(&binding.run_id)
+      .await
       .unwrap()
       .unwrap()
       .status,
@@ -220,7 +226,7 @@ async fn owner_change_during_inspection_rejects_reply_and_preserves_run_state() 
   let (node, _mock) = node().await;
   let desktop = desktop(&node);
   let mut host = RawHost::attach(&node, &desktop).await;
-  let binding = binding(&node, &node.session_id);
+  let binding = binding(&node, &node.session_id).await;
   let daemon = node.daemon.clone();
   let active = binding.clone();
   let pending = tokio::spawn(async move {
@@ -233,6 +239,7 @@ async fn owner_change_during_inspection_rejects_reply_and_preserves_run_state() 
     .daemon
     .store
     .change_owner(&node.session_id, 1, "other-owner")
+    .await
     .unwrap();
   let reply: RuntimeResult<Reply> = Ok(Reply::Capabilities(capabilities(desktop.identity)));
   host
@@ -260,6 +267,7 @@ async fn owner_change_during_inspection_rejects_reply_and_preserves_run_state() 
       .daemon
       .store
       .run(&binding.run_id)
+      .await
       .unwrap()
       .unwrap()
       .status,

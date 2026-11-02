@@ -32,9 +32,9 @@ fn model() -> ModelConfig {
 async fn audit_intent_terminal_and_restart_uncertainty_are_durable() {
   let directory = tempfile::tempdir().expect("directory");
   let path = directory.path().join("gateway.sqlite3");
-  let store = GatewayStorage::open(&path).expect("open");
+  let store = GatewayStorage::open(&path).await.expect("open");
   assert!(matches!(
-    GatewayStorage::open(&path),
+    GatewayStorage::open(&path).await,
     Err(StorageError::Conflict)
   ));
   assert!(
@@ -74,7 +74,7 @@ async fn audit_intent_terminal_and_restart_uncertainty_are_durable() {
   assert_eq!(page.total, 2);
   assert_eq!(page.records[0].request_id, "unfinished");
   drop(store);
-  let reopened = GatewayStorage::open(&path).expect("reopen");
+  let reopened = GatewayStorage::open(&path).await.expect("reopen");
   let records = reopened.list_audits(20, 0).await.expect("records").records;
   assert!(matches!(records[0].status, AuditStatus::Uncertain));
   assert!(matches!(records[1].status, AuditStatus::Succeeded));
@@ -111,7 +111,7 @@ async fn audit_intent_terminal_and_restart_uncertainty_are_durable() {
 async fn versioned_policy_compare_and_swap_retains_the_winning_complete_snapshot() {
   let directory = tempfile::tempdir().expect("directory");
   let path = directory.path().join("gateway.sqlite3");
-  let store = GatewayStorage::open(&path).expect("open");
+  let store = GatewayStorage::open(&path).await.expect("open");
   store
     .save_policy(Policy::default(), None)
     .await
@@ -158,7 +158,7 @@ async fn versioned_policy_compare_and_swap_retains_the_winning_complete_snapshot
     Some(current.clone())
   );
   drop(store);
-  let reopened = GatewayStorage::open(path).expect("reopen");
+  let reopened = GatewayStorage::open(path).await.expect("reopen");
   assert_eq!(reopened.load_policy().await.expect("load"), Some(current));
 }
 
@@ -166,7 +166,7 @@ async fn versioned_policy_compare_and_swap_retains_the_winning_complete_snapshot
 async fn model_snapshots_never_persist_credentials_and_active_revision_can_be_reselected() {
   let directory = tempfile::tempdir().expect("directory");
   let path = directory.path().join("gateway.sqlite3");
-  let store = GatewayStorage::open(&path).expect("open");
+  let store = GatewayStorage::open(&path).await.expect("open");
   let original = model();
   store
     .seed_models("catalog-v1", std::slice::from_ref(&original))

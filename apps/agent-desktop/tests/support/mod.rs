@@ -310,14 +310,14 @@ impl Harness {
   pub async fn wait(
     &self,
     cx: &mut TestAppContext,
-    mut ready: impl FnMut(&DesktopSnapshot) -> bool,
+    mut ready: impl AsyncFnMut(&DesktopSnapshot) -> bool,
   ) -> DesktopSnapshot {
     let deadline = Instant::now() + Duration::from_secs(10);
     loop {
       cx.update_window(self.window.into(), |_, window, cx| window.render_frame(cx))
         .expect("render native frame");
       let snapshot = self.snapshot(cx);
-      if ready(&snapshot) && !snapshot.local_state_loading {
+      if ready(&snapshot).await && !snapshot.local_state_loading {
         return snapshot;
       }
       assert!(

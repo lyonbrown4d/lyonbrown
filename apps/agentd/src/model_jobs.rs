@@ -12,7 +12,7 @@ impl Daemon {
     if jobs.contains_key(&id) {
       return Ok(serde_json::json!({"id":id,"state":"running"}));
     }
-    self.store.record_model_job(&id, value.clone())?;
+    self.store.record_model_job(&id, value.clone()).await?;
     let token = self.stopping.child_token();
     jobs.insert(id.clone(), token.clone());
     let daemon = self.clone();
@@ -24,7 +24,7 @@ impl Daemon {
       let watcher = tokio::spawn(async move {
         while let Some(value) = progress.recv().await {
           if let Ok(value) = serde_json::to_value(value)
-            && store.record_model_job(&progress_id, value).is_err()
+            && store.record_model_job(&progress_id, value).await.is_err()
           {
             progress_cancel.cancel();
             break;
@@ -39,7 +39,12 @@ impl Daemon {
           serde_json::json!({"id":id,"state":if token.is_cancelled(){"cancelled"}else{"failed"},"reason":"Model installation did not complete; check source, credentials and disk space"})
         }
       };
-      if daemon.store.record_model_job(&id, final_state).is_err() {
+      if daemon
+        .store
+        .record_model_job(&id, final_state)
+        .await
+        .is_err()
+      {
         tracing::error!(job_id=%id,"model install completion could not be persisted; reconcile uncertain on restart");
       }
       daemon.model_jobs.lock().await.remove(&id);

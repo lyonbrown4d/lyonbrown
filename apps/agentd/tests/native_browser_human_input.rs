@@ -63,6 +63,7 @@ async fn human_mouse_up_effect_is_uncertain_and_never_replayed() {
   let store = &node.daemon.store;
   let cursor = store
     .events(&stream, 0, 1000)
+    .await
     .unwrap()
     .last()
     .map_or(0, |event| event.cursor);
@@ -73,7 +74,7 @@ async fn human_mouse_up_effect_is_uncertain_and_never_replayed() {
     .and_then(|error| error.downcast_ref::<tonic::Status>())
     .map(tonic::Status::code);
   let effect_seen = page.wait_effect().await;
-  let events = store.events(&stream, cursor, 1000).unwrap();
+  let events = store.events(&stream, cursor, 1000).await.unwrap();
   let intents: Vec<_> = events
     .iter()
     .filter(|event| event.kind == "browser_action_intent")
@@ -85,16 +86,18 @@ async fn human_mouse_up_effect_is_uncertain_and_never_replayed() {
   let action = intents
     .first()
     .and_then(|event| payload(event)["action_id"].as_str().map(str::to_owned));
-  let status = action
-    .as_ref()
-    .and_then(|id| store.browser_action_status(id).unwrap());
-  let outbox = store.pending_outbox(10_000).unwrap();
+  let status = match action.as_ref() {
+    Some(id) => store.browser_action_status(id).await.unwrap(),
+    None => None,
+  };
+  let outbox = store.pending_outbox(10_000).await.unwrap();
   let effects_before_recovery = page.count();
   let recovered = node.daemon.recover().await;
-  let recovered_status = action
-    .as_ref()
-    .and_then(|id| store.browser_action_status(id).unwrap());
-  let recovered_events = store.events(&stream, cursor, 1000).unwrap();
+  let recovered_status = match action.as_ref() {
+    Some(id) => store.browser_action_status(id).await.unwrap(),
+    None => None,
+  };
+  let recovered_events = store.events(&stream, cursor, 1000).await.unwrap();
   let recovered_effects = page.count();
   let model_requests = model.requests().await.len();
   let classifier_requests = classifier.requests().await.len();

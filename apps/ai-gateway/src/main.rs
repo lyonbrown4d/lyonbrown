@@ -1,18 +1,14 @@
 mod composition;
 mod config;
 use anyhow::{Context, Result};
-use decision_core::{DecisionEngine, Policy};
 use fluxdi::{
   Shared,
   axum::{InjectorState, request_scope},
 };
-use gateway_storage::GatewayStorage;
-use sha2::{Digest, Sha256};
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-  let settings = config::AppConfig::load()?;
+  let settings = Shared::new(config::AppConfig::load()?);
   let _logs = agent_telemetry::init(&settings.data_dir, "ai-gateway", "info")?;
   settings.validate_web_assets()?;
   let web_options = gateway_web::LeptosOptions::builder()
@@ -26,56 +22,17 @@ async fn main() -> Result<()> {
     )
     .site_addr(settings.listen)
     .build();
-  let store = Arc::new(GatewayStorage::open(
-    settings.data_dir.join("gateway.sqlite"),
-  )?);
-  store
-    .bootstrap_super_admin(
-      &settings.admin_username,
-      settings.admin_password.expose_secret(),
-    )
-    .await?;
-  store
-    .bootstrap_access_token(settings.gateway.token.expose_secret())
-    .await?;
-  let registry: Vec<_> = settings
-    .gateway
-    .models
-    .iter()
-    .map(|model| {
-      serde_json::json!({
-        "id":model.id,"upstream_model":model.upstream_model,"api_base":model.api_base,
-        "tier":model.tier,"local_inference":model.local_inference,"capabilities":model.capabilities,
-        "context_tokens":model.context_tokens,
-      })
-    })
-    .collect();
-  let revision = hex::encode(Sha256::digest(serde_json::to_vec(&registry)?));
-  store
-    .seed_models(&revision, &settings.gateway.models)
-    .await?;
-  let policy = if let Some(policy) = store.load_policy().await? {
-    policy
-  } else {
-    let policy = Policy::default();
-    store.save_policy(policy.clone(), None).await?;
-    policy
-  };
-  let decision = Arc::new(DecisionEngine::new(policy, Vec::new())?);
-  let module = composition::GatewayModule::new(
-    Shared::new(settings.gateway),
-    decision.clone(),
-    store.clone(),
-  );
-  let gateway = module.gateway()?;
+  let module = composition::GatewayModule::new(settings.clone());
+  let application = module.resolve().await?;
+  let gateway = application.gateway.clone();
   let origin = format!("http://{}", settings.listen);
   let scoped = InjectorState::new(Shared::new(module.injector().clone()));
   let router = gateway
     .router()
     .merge(gateway_web::router_with_options(
-      store,
+      application.storage.clone(),
       gateway.clone(),
-      decision,
+      application.decision.clone(),
       origin,
       web_options,
     ))

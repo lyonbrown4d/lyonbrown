@@ -95,6 +95,8 @@ impl StreamState {
           arguments: call.arguments,
           thought_signature: None,
           namespace: None,
+          // Local inference emits requests for this host to execute, never upstream recordings.
+          recorded: None,
         };
         self.message.content[index] = Content::ToolCall(tool.clone());
         self

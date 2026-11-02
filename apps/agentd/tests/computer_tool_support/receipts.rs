@@ -2,7 +2,7 @@ use crate::support::TestNode;
 use agent_protocol::v1;
 use serde_json::{Value, json};
 
-pub fn assert_receipts(
+pub async fn assert_receipts(
   node: &TestNode,
   pending: &v1::Approval,
   approval_status: &str,
@@ -12,17 +12,17 @@ pub fn assert_receipts(
   let exact: Value = serde_json::from_str(&pending.arguments_json).unwrap();
   let action = exact["action_id"].as_str().unwrap();
   assert_eq!(
-    store.approval(&pending.id).unwrap().unwrap().status,
+    store.approval(&pending.id).await.unwrap().unwrap().status,
     approval_status
   );
-  let operation = store.operation(action).unwrap();
+  let operation = store.operation(action).await.unwrap();
   assert_eq!(
     operation
       .as_ref()
       .map(|operation| operation.status.as_str()),
     outcome
   );
-  let events = store.events(&pending.run_id, 0, 1000).unwrap();
+  let events = store.events(&pending.run_id, 0, 1000).await.unwrap();
   let related: Vec<_> = events
     .iter()
     .filter(|event| {
@@ -62,7 +62,7 @@ pub fn assert_receipts(
       json!({"action_id":action,"status":status,"summary":{"status":status}}),
     ),
   ];
-  let outbox = store.pending_outbox(10_000).unwrap();
+  let outbox = store.pending_outbox(10_000).await.unwrap();
   for (event, (kind, payload)) in related.iter().zip(expected) {
     assert_eq!(event.kind, kind);
     assert_eq!(

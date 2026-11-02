@@ -40,7 +40,10 @@ async fn every_model_protocol_observes_and_executes_only_exact_approved_browser_
       assert_eq!(exact["host_id"], runtime.host);
       assert_eq!(exact["call"], click("fixture-tab-1")["call"]);
       let id = exact["action_id"].as_str().unwrap();
-      assert_eq!(node.daemon.store.browser_action_status(id).unwrap(), None);
+      assert_eq!(
+        node.daemon.store.browser_action_status(id).await.unwrap(),
+        None
+      );
       node.client.approve(&pending.id, approved).await.unwrap();
       let result = node.terminal(&run.id).await;
       assert_eq!(result.status, "completed", "{}", result.error);
@@ -57,7 +60,8 @@ async fn every_model_protocol_observes_and_executes_only_exact_approved_browser_
         &pending,
         if approved { "consumed" } else { "denied" },
         approved.then_some("completed"),
-      );
+      )
+      .await;
       assert_eq!(&*runtime.observed.lock().await, &["fixture-tab-1"]);
       let requests = main.requests().await;
       assert_eq!(requests.len(), 3);
@@ -81,7 +85,7 @@ async fn every_model_protocol_observes_and_executes_only_exact_approved_browser_
           .to_string()
           .contains("private-token=redacted")
       );
-      let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+      let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
       let plan: Value = serde_json::from_str(
         &events
           .iter()
@@ -175,6 +179,7 @@ async fn takeover_or_ownership_change_while_approval_pending_prevents_browser_ef
         .daemon
         .store
         .change_owner(&node.session_id, 1, "different-owner")
+        .await
         .unwrap();
       // Human approval cannot restore authority to the adapter captured at epoch 1.
       node.client.approve(&pending.id, true).await.unwrap();
@@ -191,7 +196,7 @@ async fn takeover_or_ownership_change_while_approval_pending_prevents_browser_ef
       assert_eq!(node.terminal(&run.id).await.status, "completed");
     }
     assert!(runtime.actions.lock().await.is_empty());
-    assert_receipts(&node, &pending, "approved", None);
+    assert_receipts(&node, &pending, "approved", None).await;
     drop(runtime);
     node.close().await;
   }
@@ -223,7 +228,7 @@ async fn runtime_disconnect_or_cancellation_after_dispatch_is_persisted_uncertai
     }
     let result = node.terminal(&run.id).await;
     assert_eq!(result.status, "uncertain", "{}", result.error);
-    assert_receipts(&node, &pending, "consumed", Some("uncertain"));
+    assert_receipts(&node, &pending, "consumed", Some("uncertain")).await;
     assert_eq!(runtime.actions.lock().await.len(), 1);
     assert_eq!(
       main.requests().await.len(),

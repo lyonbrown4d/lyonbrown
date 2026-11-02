@@ -50,9 +50,11 @@ impl RelayPair {
     .to_vec();
     direct_master
       .pair_local(direct_worker.public_identity(), task_caps.clone())
+      .await
       .unwrap();
     direct_worker
       .pair_local(direct_master.public_identity(), task_caps)
+      .await
       .unwrap();
     for peer in [&direct_master, &direct_worker] {
       peer
@@ -60,6 +62,7 @@ impl RelayPair {
           control.identity.public.clone(),
           vec!["control.relay".into()],
         )
+        .await
         .unwrap();
       control
         .manager
@@ -69,15 +72,18 @@ impl RelayPair {
             .map(String::from)
             .to_vec(),
         )
+        .await
         .unwrap();
     }
     control
       .store
       .control_allow_link(&master.node_id, &worker.node_id, true)
+      .await
       .unwrap();
     control
       .store
       .control_allow_link(&worker.node_id, &master.node_id, true)
+      .await
       .unwrap();
     let master_id = master.node_id.clone();
     let worker_id = worker.node_id.clone();
@@ -109,6 +115,7 @@ impl RelayPair {
     let session = master
       .store
       .create_session("relay master", workspace.to_str().unwrap(), &master.node_id)
+      .await
       .unwrap();
     let dispatch = Dispatcher::new(master_manager.clone());
     let pair = Self {
@@ -173,7 +180,7 @@ impl RelayPair {
       Some("//127.0.0.2")
     );
   }
-  pub fn envelope(&self) -> TaskEnvelope {
+  pub async fn envelope(&self) -> TaskEnvelope {
     let (run, _) = self
       .master
       .store
@@ -183,6 +190,7 @@ impl RelayPair {
         "coordinate relay worker",
         &agent_core::new_id(),
       )
+      .await
       .unwrap();
     self
       .master
@@ -194,6 +202,7 @@ impl RelayPair {
         "",
         "",
       )
+      .await
       .unwrap();
     TaskEnvelope {
       task_id: agent_core::new_id(),

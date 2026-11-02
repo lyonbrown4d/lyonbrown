@@ -1,5 +1,7 @@
 # Runtime screenshots and acceptance scope
 
+This page retains historical runtime evidence with its original platform, version and hashes. The asynchronous SeaORM storage, current schema, memory management, Qdrant adapters and asynchronous Gateway FluxDI bootstrap were not recompiled or accepted in this iteration. Existing screenshots do not cover those changes. See the [current dependency limit](development.md#current-dependency-resolution-limit).
+
 The earlier Desktop client screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. That capture used CEF 154.0.34 (`cef` Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The [native capture record](evidence/desktop-native-capture.json) stores the executable, source and image digests, two Runs persisted as `completed`, and the exact file-write approval persisted as `consumed`. See [the client documentation](clients.md) for Settings, chat tabs and panel toggles.
 
 The browser run used a debug-only Chromium test keychain; it does not establish acceptance of production keychain integration. These images do not establish Windows, Linux, public-network, real-model, native Computer input or final installer acceptance.
@@ -180,7 +182,7 @@ The desktop layout was checked at 1280 × 800. The narrow viewport requested 390
 
 ![Gateway request page showing seven actual audit records on macOS](images/gateway-library-reuse-macos.png)
 
-This section uses the version 0.1.0 Gateway SSR/WASM product build and independent loopback `model-mock` on macOS arm64. Startup read a copy of the existing SQLite database, converted legacy versions `[1, 2]` to Diesel versions `["0001", "0002"]` and retired the old ledger, preserving the single super administrator and 4 successful audit records. Three subsequent JSON/SSE requests succeeded, bringing the page and database to 7 successful records.
+This section uses the version 0.1.0 Gateway SSR/WASM product build and independent loopback `model-mock` on macOS arm64. This historical build used a copy of an existing SQLite database, retaining its single super administrator and 4 successful audit records. The current SeaORM schema does not provide that historical legacy-database upgrade path. Three subsequent JSON/SSE requests succeeded, bringing the page and database to 7 successful records.
 
 Actual browser checks covered local WASM rejection of a short password, login with the original account, the request page and logout. After logout, a protected page redirected to login, the database held 0 admin sessions, and the browser console showed no warnings or errors. `POST /v1/models`, `GET /v1/chat/completions`, `POST /health/live` and `DELETE /health/ready` each returned 405 without adding audit records. OpenAPI title and version metadata were preserved.
 

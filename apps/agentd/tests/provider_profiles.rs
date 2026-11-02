@@ -140,6 +140,7 @@ async fn profile_selection_pins_immutable_credentials_and_real_adapter_for_all_p
       .daemon
       .store
       .provider_profile(&saved.id)
+      .await
       .unwrap()
       .unwrap();
     let probe = node.probe(saved.clone(), b"").await.unwrap();
@@ -150,6 +151,7 @@ async fn profile_selection_pins_immutable_credentials_and_real_adapter_for_all_p
         .daemon
         .store
         .provider_profile(&saved.id)
+        .await
         .unwrap()
         .unwrap(),
       before
@@ -162,6 +164,7 @@ async fn profile_selection_pins_immutable_credentials_and_real_adapter_for_all_p
         .daemon
         .store
         .provider_profile(&saved.id)
+        .await
         .unwrap()
         .unwrap()
         .credential_id,
@@ -194,6 +197,7 @@ async fn profile_selection_pins_immutable_credentials_and_real_adapter_for_all_p
       .daemon
       .store
       .model_binding(&session.id)
+      .await
       .unwrap()
       .unwrap();
     let mut edit = saved.clone();
@@ -203,6 +207,7 @@ async fn profile_selection_pins_immutable_credentials_and_real_adapter_for_all_p
       .daemon
       .store
       .provider_profile(&saved.id)
+      .await
       .unwrap()
       .unwrap();
     assert_ne!(after.credential_id, before.credential_id);
@@ -233,7 +238,16 @@ async fn profile_selection_pins_immutable_credentials_and_real_adapter_for_all_p
       .await
       .unwrap();
     assert_eq!(
-      serde_json::to_value(node.daemon.store.model_binding(&run.id).unwrap().unwrap()).unwrap(),
+      serde_json::to_value(
+        node
+          .daemon
+          .store
+          .model_binding(&run.id)
+          .await
+          .unwrap()
+          .unwrap()
+      )
+      .unwrap(),
       serde_json::to_value(pinned).unwrap()
     );
     let terminal = tokio::time::timeout(Duration::from_secs(10), async {

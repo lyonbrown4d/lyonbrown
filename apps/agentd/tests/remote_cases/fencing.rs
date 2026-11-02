@@ -13,8 +13,8 @@ async fn task_pages_are_bounded_and_old_master_epoch_cannot_manage_results() {
   .await
   .unwrap();
   let remote = Remote::open(&mock, protocol).await;
-  let first = remote.envelope();
-  let second = remote.envelope();
+  let first = remote.envelope().await;
+  let second = remote.envelope().await;
   for envelope in [&first, &second] {
     remote
       .client
@@ -63,6 +63,7 @@ async fn task_pages_are_bounded_and_old_master_epoch_cannot_manage_results() {
       remote.pair.session.owner_epoch,
       &remote.pair.master.node_id,
     )
+    .await
     .unwrap();
   assert_eq!(
     code(remote.client.task(&first.task_id).await.unwrap_err()),
@@ -113,6 +114,7 @@ async fn task_pages_are_bounded_and_old_master_epoch_cannot_manage_results() {
       .master
       .store
       .task(&first.task_id)
+      .await
       .unwrap()
       .unwrap()
       .status,
@@ -128,7 +130,7 @@ async fn lost_cancellation_response_becomes_uncertain_without_replay() {
     .await
     .unwrap();
   let mut remote = Remote::open(&mock, StandardProtocol::ChatCompletions).await;
-  let envelope = remote.envelope();
+  let envelope = remote.envelope().await;
   remote
     .client
     .dispatch_task(remote.target(), envelope.clone())

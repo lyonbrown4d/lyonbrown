@@ -1,101 +1,109 @@
+use crate::{
+  Store,
+  schema::{control_directory, control_links},
+};
 use anyhow::{Result, ensure};
-use diesel::prelude::*;
-
-use crate::Store;
-
-diesel::table! {
-  control_directory (node_id) {
-    node_id -> Text,
-    record -> Text,
-    expires_at_ms -> BigInt,
-  }
-}
-diesel::table! {
-  control_links (source, target) {
-    source -> Text,
-    target -> Text,
-  }
-}
-
+use sea_orm::{Set, prelude::*, sea_query::OnConflict};
 impl Store {
-  pub fn control_replace_links(&self, links: &[(String, String)]) -> Result<()> {
-    use self::control_links::dsl::*;
+  pub async fn control_replace_links(&self, links: &[(String, String)]) -> Result<()> {
     ensure!(
       links
         .iter()
         .all(|(from, to)| !from.is_empty() && !to.is_empty() && from != to),
       "invalid control link"
     );
-    self.lock()?.immediate_transaction(|connection| {
-      diesel::delete(control_links).execute(connection)?;
-      let rows = links
-        .iter()
-        .map(|(from, to)| (source.eq(from), target.eq(to)))
-        .collect::<Vec<_>>();
-      diesel::insert_or_ignore_into(control_links)
-        .values(&rows)
-        .execute(connection)?;
-      Ok(())
-    })
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        control_links::Entity::delete_many()
+          .exec(connection)
+          .await?;
+        for (from, to) in links {
+          control_links::Entity::insert(control_links::ActiveModel {
+            source: Set(from.clone()),
+            target: Set(to.clone()),
+          })
+          .on_conflict(
+            OnConflict::columns([control_links::Column::Source, control_links::Column::Target])
+              .update_column(control_links::Column::Target)
+              .to_owned(),
+          )
+          .exec_without_returning(connection)
+          .await?;
+        }
+        Ok(())
+      }
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
-  /// Only an authenticated control service may register a node's public metadata.
-  pub fn control_register(&self, id: &str, encoded_record: &str, expires: i64) -> Result<()> {
-    use self::control_directory::dsl::*;
-    diesel::insert_into(control_directory)
-      .values((
-        node_id.eq(id),
-        self::control_directory::record.eq(encoded_record),
-        expires_at_ms.eq(expires),
-      ))
-      .on_conflict(node_id)
-      .do_update()
-      .set((
-        self::control_directory::record.eq(encoded_record),
-        expires_at_ms.eq(expires),
-      ))
-      .execute(&mut *self.lock()?)?;
+  pub async fn control_register(&self, id: &str, encoded_record: &str, expires: i64) -> Result<()> {
+    control_directory::Entity::insert(control_directory::ActiveModel {
+      node_id: Set(id.into()),
+      record: Set(encoded_record.into()),
+      expires_at_ms: Set(expires),
+    })
+    .on_conflict(
+      OnConflict::column(control_directory::Column::NodeId)
+        .update_columns([
+          control_directory::Column::Record,
+          control_directory::Column::ExpiresAtMs,
+        ])
+        .to_owned(),
+    )
+    .exec_without_returning(self.connection())
+    .await?;
     Ok(())
   }
-
-  /// Expiration is checked on every lookup, including after process restart.
-  pub fn control_resolve(&self, id: &str, now: i64) -> Result<Option<String>> {
-    use self::control_directory::dsl::*;
+  pub async fn control_resolve(&self, id: &str, now: i64) -> Result<Option<String>> {
     Ok(
-      control_directory
-        .find(id)
-        .filter(expires_at_ms.gt(now))
-        .select(record)
-        .first(&mut *self.lock()?)
-        .optional()?,
+      control_directory::Entity::find_by_id(id)
+        .filter(control_directory::Column::ExpiresAtMs.gt(now))
+        .one(self.connection())
+        .await?
+        .map(|row| row.record),
     )
   }
-
-  /// Local operator authority; network RPCs must never call this method.
-  pub fn control_allow_link(&self, from: &str, to: &str, allowed: bool) -> Result<()> {
-    use self::control_links::dsl::*;
+  pub async fn control_allow_link(&self, from: &str, to: &str, allowed: bool) -> Result<()> {
     ensure!(
       !from.is_empty() && !to.is_empty() && from != to,
       "invalid control link"
     );
     if allowed {
-      diesel::insert_into(control_links)
-        .values((source.eq(from), target.eq(to)))
-        .on_conflict_do_nothing()
-        .execute(&mut *self.lock()?)?;
+      // Upsert is portable even when the link already exists.
+      control_links::Entity::insert(control_links::ActiveModel {
+        source: Set(from.into()),
+        target: Set(to.into()),
+      })
+      .on_conflict(
+        OnConflict::columns([control_links::Column::Source, control_links::Column::Target])
+          .update_column(control_links::Column::Target)
+          .to_owned(),
+      )
+      .exec_without_returning(self.connection())
+      .await?;
     } else {
-      diesel::delete(control_links.find((from, to))).execute(&mut *self.lock()?)?;
+      control_links::Entity::delete_by_id((from.to_owned(), to.to_owned()))
+        .exec(self.connection())
+        .await?;
     }
     Ok(())
   }
-
-  pub fn control_link_allowed(&self, from: &str, to: &str) -> Result<bool> {
-    use self::control_links::dsl::*;
+  pub async fn control_link_allowed(&self, from: &str, to: &str) -> Result<bool> {
     Ok(
-      control_links
-        .find((from, to))
-        .select(source)
-        .first::<String>(&mut *self.lock()?)
-        .optional()?
+      control_links::Entity::find_by_id((from.to_owned(), to.to_owned()))
+        .one(self.connection())
+        .await?
         .is_some(),
     )
   }

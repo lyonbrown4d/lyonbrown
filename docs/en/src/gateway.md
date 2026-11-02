@@ -2,6 +2,8 @@
 
 `ai-gateway` is an independent Rust service, listening on `127.0.0.1:8099` by default. Typed FluxDI modules and Axum request scopes assemble the decision core, SQLite persistence, forwarding and Leptos administration UI. It needs no agentd. An Agent using the gateway still owns its Harness, Session, tools and approvals.
 
+The asynchronous persistence and FluxDI bootstrap have received static review only, without runtime acceptance in this iteration. Dependency resolution remains blocked by the [upstream SQLite conflict](development.md#current-dependency-resolution-limit).
+
 ## Startup and configuration
 
 ```sh
@@ -99,9 +101,11 @@ An explicit upstream `429` cools that endpoint for 30 seconds for future selecti
 
 ## SQLite and administration
 
-Diesel manages `gateway.sqlite` in the data directory with WAL, busy timeout and full synchronous writes. A single owner holds a database lock; startup reconciles abandoned Pending requests to Uncertain. Tables retain model snapshots, policy history, API key hashes and scopes, admin accounts, sessions and request metadata, with no prompt or completion body fields.
+`gateway.sqlite` in the data directory uses SeaORM 2.0.4 and native asynchronous SQLx connections. Open and read/write APIs are asynchronous. SQLite driver options enable WAL, a five-second busy timeout and full synchronous writes. A single process holds the ownership lock; startup reconciles abandoned Pending requests to Uncertain. Tables retain model snapshots, policy history, API key hashes and scopes, admin accounts, sessions and request metadata, without prompt or completion body fields.
 
-Database scripts are embedded with `diesel_migrations` 2.3.2 `embed_migrations!` and tracked by Diesel’s migration ledger. One SQLite immediate transaction bridges legacy `gateway_migrations` histories containing version 1 or versions 1 and 2, applies pending scripts and reconciles Pending requests. Already applied scripts are not replayed. Unknown versions, gaps, conflicting ledgers or existing application tables without a ledger fail startup and roll back the transaction.
+Versioned Rust SeaORM migrations create the current schema transactionally and use `seaql_migrations` for tracking. No legacy Diesel or `gateway_migrations` import, compatibility path or automatic reset is provided. The Gateway entry point still selects SQLite; the daemon's other relational backends do not imply equivalent Gateway configuration.
+
+Root-scoped asynchronous FluxDI factories prepare configuration and storage, initialize the super administrator and API key, seed model snapshots, load persisted policy and construct the decision engine before resolving Gateway. `main` awaits `GatewayModule::resolve` before HTTP startup. Business objects receive explicit dependencies; request-scope Injector access stays at the transport boundary. Database, account or policy initialization failure prevents startup without bypassing persistence checks.
 
 A Pending intent is persisted before upstream dispatch. Succeeded means the upstream success terminal was received and validated, rather than proving client consumption. Database write ownership is independent of HTTP deadlines, so started intent and terminal writes still finish after the caller times out. Actual database failures can leave Pending for startup reconciliation to Uncertain; closing HTTP does not prove inference never happened.
 

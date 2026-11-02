@@ -60,7 +60,7 @@ impl RuntimeTool for WorkspaceTool {
   }
 }
 impl WorkspaceTool {
-  fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
+  async fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
     anyhow::ensure!(
       !cancel.is_cancelled(),
       "workspace tool cancelled before dispatch"
@@ -68,12 +68,14 @@ impl WorkspaceTool {
     let run = self
       .daemon
       .store
-      .run(&self.run_id)?
+      .run(&self.run_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("workspace run unavailable"))?;
     let session = self
       .daemon
       .store
-      .session(&run.session_id)?
+      .session(&run.session_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("workspace session unavailable"))?;
     anyhow::ensure!(
       session.owner_node_id == self.daemon.node_id && session.owner_epoch == self.owner_epoch,
@@ -89,7 +91,7 @@ impl WorkspaceTool {
     Ok(())
   }
   async fn perform(&self, args: &Value, cancel: CancellationToken) -> anyhow::Result<String> {
-    self.fence(&cancel)?;
+    self.fence(&cancel).await?;
     let workspace = self.workspace.clone();
     match self.name {
       "read_file" => {
@@ -155,15 +157,23 @@ impl WorkspaceTool {
     )
     .await?;
     let write = self.daemon.workspace_writes.clone().lock_owned().await;
-    let tool = self.clone();
-    self.fence(&cancel)?;
-    // All daemon writes share this lock. Validate after approval and before any replacement.
+    self.fence(&cancel).await?;
+    let checked = workspace.clone();
+    let checked_path = input.path.clone();
+    let revision = input.expected_revision.clone();
+    tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+      load_repository_instructions_for_paths(&checked, &[PathBuf::from(&checked_path)])?;
+      checked.check_revision(&checked_path, &revision)
+    })
+    .await??;
+    self.fence(&cancel).await?;
+    // The owned write guard fences recovery until this filesystem effect ends.
     tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
       let _write = write;
-      tool.fence(&cancel)?;
-      load_repository_instructions_for_paths(&workspace, &[PathBuf::from(&input.path)])?;
-      workspace.check_revision(&input.path, &input.expected_revision)?;
-      tool.fence(&cancel)?;
+      anyhow::ensure!(
+        !cancel.is_cancelled(),
+        "workspace write cancelled before replacement"
+      );
       workspace
         .write(&input.path, &input.content)
         .map_err(|error| {

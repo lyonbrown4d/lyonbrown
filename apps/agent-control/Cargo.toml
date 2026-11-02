@@ -16,6 +16,7 @@ clap.workspace = true
 config = { version = "0.15", default-features = false, features = ["toml"] }
 dotenvy.workspace = true
 fluxdi.workspace = true
+futures.workspace = true
 hex.workspace = true
 prost.workspace = true
 serde.workspace = true

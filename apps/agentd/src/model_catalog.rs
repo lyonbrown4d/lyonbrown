@@ -15,7 +15,7 @@ pub fn model_service(
 }
 
 impl Daemon {
-  pub(crate) fn model_bindings(
+  pub(crate) async fn model_bindings(
     &self,
   ) -> anyhow::Result<Vec<(String, String, String, ModelBinding)>> {
     let mut entries = vec![(
@@ -116,7 +116,7 @@ impl Daemon {
         },
       ));
     }
-    for profile in self.store.provider_profiles()? {
+    for profile in self.store.provider_profiles().await? {
       let id = format!("profile:{}", profile.id);
       entries.push((
         id.clone(),
@@ -163,8 +163,8 @@ impl Daemon {
         .map(|secret| secret.expose_secret().to_owned()),
     )
   }
-  pub(crate) fn configured_for_run(&self, run: &str) -> anyhow::Result<Self> {
-    let Some(binding) = self.store.model_binding(run)? else {
+  pub(crate) async fn configured_for_run(&self, run: &str) -> anyhow::Result<Self> {
+    let Some(binding) = self.store.model_binding(run).await? else {
       return Ok(self.clone());
     };
     let mut daemon = self.clone();
@@ -199,17 +199,23 @@ impl ModelService for Daemon {
       self
         .store
         .session(&id)
+        .await
         .map_err(crate::service::db_error)?
         .ok_or_else(|| Status::not_found("session not found"))?;
       self
         .store
         .model_binding(&id)
+        .await
         .map_err(crate::service::db_error)?
     } else {
       None
     };
     let mut models = Vec::new();
-    for (id, name, vendor, binding) in self.model_bindings().map_err(crate::service::db_error)? {
+    for (id, name, vendor, binding) in self
+      .model_bindings()
+      .await
+      .map_err(crate::service::db_error)?
+    {
       let ready = if binding.provider == "local" {
         self.models.backend(&binding.model).await.is_ok()
       } else {
@@ -321,6 +327,7 @@ impl ModelService for Daemon {
     let session = self
       .store
       .session(&input.session_id)
+      .await
       .map_err(crate::service::db_error)?
       .ok_or_else(|| Status::not_found("session not found"))?;
     if session.owner_node_id != self.node_id {
@@ -330,6 +337,7 @@ impl ModelService for Daemon {
     }
     let binding = self
       .model_bindings()
+      .await
       .map_err(crate::service::db_error)?
       .into_iter()
       .map(|entry| entry.3)
@@ -353,6 +361,7 @@ impl ModelService for Daemon {
     self
       .store
       .select_model(&input.session_id, input.owner_epoch, &binding)
+      .await
       .map_err(crate::service::db_error)?;
     Ok(Response::new(v1::ModelSelection {
       model_id: binding.model_id,

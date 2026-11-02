@@ -84,7 +84,8 @@ impl PeerRuntime {
         settings.endpoint.clone(),
         settings.routes.clone(),
         daemon.stopping.child_token(),
-      )?;
+      )
+      .await?;
       daemon
         .relay
         .set(handle.clone())
@@ -94,13 +95,13 @@ impl PeerRuntime {
     } else {
       None
     };
-    let tls = manager.server_tls()?;
+    let tls = manager.server_tls().await?;
     let worker = Arc::new(TaskWorker::new(
       manager.clone(),
       Arc::new(executor::HarnessWorker(daemon.clone())),
       daemon.config.data_path()?.join("worker-workspaces"),
     )?);
-    let recovered = worker.recover_uncertain()?;
+    let recovered = worker.recover_uncertain().await?;
     tracing::info!(
       recovered,
       "reconciled interrupted worker attempts without replay"

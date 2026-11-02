@@ -7,6 +7,8 @@ use crate::settings::{Credentials, Settings};
 
 const ALIASES: &[(&str, &str)] = &[
   ("LYONBROWN_LISTEN", "listen"),
+  ("LYONBROWN_DATABASE_URL", "database_url"),
+  ("LYONBROWN_MEMORY_ENABLED", "memory.enabled"),
   ("LYONBROWN_ENDPOINT", "endpoint"),
   ("LYONBROWN_PROVIDER", "provider"),
   ("LYONBROWN_MODEL", "model"),
@@ -108,6 +110,19 @@ pub fn load_with_environment(
     .collect(),
   );
   settings.validate()?;
+  for (key, name) in settings.memory.credential_references() {
+    let value = merged
+      .get(name)
+      .ok_or_else(|| anyhow::anyhow!("memory credential reference is missing"))?;
+    ensure!(
+      !value.is_empty() && !value.contains('\0'),
+      "invalid memory credential value"
+    );
+    settings
+      .credentials
+      .0
+      .insert(key.into(), value.clone().into());
+  }
   for server in &settings.mcp {
     for name in server.environment_references() {
       let value = merged

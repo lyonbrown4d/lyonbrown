@@ -55,7 +55,7 @@ impl RuntimeTool for BrowserTool {
   }
 }
 impl BrowserTool {
-  fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
+  async fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
     ensure!(
       !cancel.is_cancelled(),
       "browser tool cancelled before dispatch"
@@ -63,7 +63,8 @@ impl BrowserTool {
     let session = self
       .daemon
       .store
-      .session(&self.session_id)?
+      .session(&self.session_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("browser session unavailable"))?;
     ensure!(
       session.owner_node_id == self.daemon.node_id && session.owner_epoch == self.epoch,
@@ -72,7 +73,8 @@ impl BrowserTool {
     let run = self
       .daemon
       .store
-      .run(&self.run_id)?
+      .run(&self.run_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("browser run unavailable"))?;
     ensure!(
       run.session_id == self.session_id
@@ -111,7 +113,7 @@ impl BrowserTool {
     Ok(host)
   }
   async fn perform(&self, call: ToolCall, cancel: CancellationToken) -> anyhow::Result<Value> {
-    self.fence(&cancel)?;
+    self.fence(&cancel).await?;
     if self.name == "browser_observe" {
       return self.observe(call.arguments, cancel).await;
     }
@@ -128,12 +130,12 @@ impl BrowserTool {
       cancel.clone(),
     )
     .await?;
-    self.fence(&cancel)?;
+    self.fence(&cancel).await?;
     ensure!(
       operation.host(self).await? == selected_host,
       "browser runtime binding changed"
     );
-    self.fence(&cancel)?;
+    self.fence(&cancel).await?;
     let result = tokio::select! {
       result = operation.dispatch(self, &selected_host, &exact, &approval_id, &cancel) => result,
       _ = cancel.cancelled() => return Err(RuntimeError::Uncertain(
@@ -152,12 +154,12 @@ impl BrowserTool {
       Value::Null
     } else {
       self.tab(&tab_id, false).await?;
-      self.fence(&cancel)?;
+      self.fence(&cancel).await?;
       let response = tokio::select! {
         result = self.daemon.observe(tonic::Request::new(ObserveRequest { tab_id: tab_id.clone(), screenshot })) => result?,
         _ = cancel.cancelled() => anyhow::bail!("browser observation cancelled"),
       }.into_inner();
-      self.fence(&cancel)?;
+      self.fence(&cancel).await?;
       self.tab(&tab_id, false).await?;
       ensure!(
         response.snapshot_id.len() <= 1024,

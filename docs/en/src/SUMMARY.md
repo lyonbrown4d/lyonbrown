@@ -10,6 +10,7 @@
 - [Local tools and browser actions](tools.md)
 - [Components and calls](architecture.md)
 - [Sessions, tasks and recovery](persistence.md)
+- [Long-term memory](memory.md)
 - [Terminal and desktop clients](clients.md)
 - [Runtime screenshots and acceptance scope](runtime-evidence.md)
 - [Connect peers and Control Relay](network.md)

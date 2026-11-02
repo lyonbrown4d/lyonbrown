@@ -2,6 +2,8 @@
 
 先准备根 `Cargo.toml` 要求的 Rust 工具链。模型、原生图形和浏览器 SDK 的前置条件取决于启用的能力；缺少原生依赖时不能仅凭 crate 名称认定该能力可用。
 
+当前工作区的 SQLite 原生依赖仍存在解析冲突；以下命令未在本轮重新运行。先核对[当前依赖解析限制](development.md#当前依赖解析限制)，不要将历史运行记录作为本轮启动验收。
+
 ## 启动开发环境
 
 在仓库根目录直接使用 Cargo 选择客户端，无需安装额外任务工具：
@@ -30,6 +32,7 @@ cargo run -p agentd -- --data-dir /path/to/lyonbrown-data
 | --- | --- | --- |
 | `--listen` | `LYONBROWN_LISTEN` | `127.0.0.1:7447`；只允许回环地址 |
 | `--data-dir` | `LYONBROWN_DATA_DIR` | 系统用户本地数据目录 |
+| `--database-url` | `LYONBROWN_DATABASE_URL` | 未设置时使用数据目录中的 SQLite；可选 SQLite、PostgreSQL、MySQL，见[存储配置](persistence.md#数据库与异步事务) |
 | `--provider` | `LYONBROWN_PROVIDER` | `openai`；还支持 `openai-responses`、`openai-completions`、`anthropic` |
 | `--model` | `LYONBROWN_MODEL` | `gpt-4.1`；模型是否可用取决于提供方与凭证 |
 | `--api-base` | `LYONBROWN_API_BASE` | 未设置时使用对应提供方地址 |
@@ -68,6 +71,8 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 `--data-dir` 应指向与 daemon 相同的数据目录，或通过环境变量提供相同 token。认证失败时先核对地址与令牌，不要反复提交 prompt。
 
 连接成功后按 `Ctrl+N` 创建会话，输入消息并按 `Enter`。任务结果和审批来自 daemon。关闭客户端后可重新连接原会话查询结果。详细按键见[终端与桌面客户端](clients.md)。
+
+记忆默认只提供权威记录管理；配置 embedding 后才启用检索与向量作业，详见[长期记忆](memory.md)。
 
 配置依据：`apps/agentd/src/config.rs`、`crates/agent-config/src/load.rs`、`crates/agent-runtime/src/provider.rs` 和 `apps/agent-cli/src/config.rs`。
 

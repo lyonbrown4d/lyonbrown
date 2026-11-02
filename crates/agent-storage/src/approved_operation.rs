@@ -1,9 +1,10 @@
 use crate::{
   Store,
-  approvals::consume_approval_tx,
+  approval_consumption::consume_approval_tx,
   operations::{begin_operation_tx, validate_intent},
 };
 use anyhow::{Result, ensure};
+
 use serde_json::Value;
 
 /// Exact approval binding and bounded metadata for one durable operation intent.
@@ -48,7 +49,7 @@ impl OperationAuthorization {
 impl Store {
   /// Consume a matching approval and commit intent, events and outbox atomically.
   /// Callers must receive this proof before dispatching the native operation.
-  pub fn begin_approved_operation(
+  pub async fn begin_approved_operation(
     &self,
     input: ApprovedOperation<'_>,
   ) -> Result<OperationAuthorization> {
@@ -57,27 +58,44 @@ impl Store {
       input.arguments.get("action_id").and_then(Value::as_str) == Some(input.action_id),
       "operation identifier does not match approved action"
     );
-    self.lock()?.immediate_transaction(|connection| {
-      ensure!(
-        consume_approval_tx(
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        ensure!(
+          consume_approval_tx(
+            connection,
+            input.approval_id,
+            input.run_id,
+            Some(input.owner_epoch),
+            input.tool,
+            input.arguments,
+          )
+          .await?,
+          "operation approval is not approved"
+        );
+        begin_operation_tx(
           connection,
-          input.approval_id,
           input.run_id,
-          Some(input.owner_epoch),
+          input.owner_epoch,
+          input.action_id,
           input.tool,
-          input.arguments,
-        )?,
-        "operation approval is not approved"
-      );
-      begin_operation_tx(
-        connection,
-        input.run_id,
-        input.owner_epoch,
-        input.action_id,
-        input.tool,
-        input.summary,
-      )
-    })?;
+          input.summary,
+        )
+        .await
+      }
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }?;
     // Construct only after SQLite confirms the commit, never within the closure.
     Ok(OperationAuthorization {
       action_id: input.action_id.into(),

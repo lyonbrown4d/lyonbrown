@@ -9,14 +9,16 @@ async fn settings_reject_direct_send_action_and_preserve_the_chat_draft(cx: &mut
   let harness = support::Harness::new(cx, Vec::new());
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   cx.update_window(harness.window.into(), |_, window, cx| {
     window.press(&support::shortcut("t"), cx);
   })
   .expect("create a session before opening settings");
   let ready = harness
-    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .wait(cx, async |state| {
+      state.selected_session.is_some() && !state.busy
+    })
     .await;
   let session = ready.selected_session.expect("daemon session");
   let draft = "Keep this draft while configuring the daemon";
@@ -66,7 +68,7 @@ async fn native_enter_sends_shift_enter_edits_and_ime_composition_never_submits(
   );
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   cx.update_window(harness.window.into(), |_, window, cx| {
     window.press(&support::shortcut("l"), cx);
@@ -112,7 +114,7 @@ async fn native_enter_sends_shift_enter_edits_and_ime_composition_never_submits(
   })
   .expect("plain Enter submits committed multiline text");
   let completed = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.active_run.is_none()
         && state
           .messages
@@ -134,7 +136,7 @@ async fn native_enter_sends_shift_enter_edits_and_ime_composition_never_submits(
   })
   .expect("create new chat tab");
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.tabs.len() == 2 && state.selected_session.is_some() && !state.busy
     })
     .await;
@@ -145,7 +147,7 @@ async fn native_enter_sends_shift_enter_edits_and_ime_composition_never_submits(
   })
   .expect("new-tab composer uses the same component submission mode");
   let completed = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.active_run.is_none()
         && state
           .messages

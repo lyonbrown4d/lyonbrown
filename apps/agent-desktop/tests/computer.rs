@@ -34,11 +34,13 @@ async fn explicit_scope_attach_stays_with_original_chat_and_detach_closes_real_h
   let harness = Harness::with_computer(cx, factory.clone());
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   harness.click("new-session", cx);
   let initial = harness
-    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .wait(cx, async |state| {
+      state.selected_session.is_some() && !state.busy
+    })
     .await;
   let original = initial.selected_session.expect("selected session");
   show_computer(&harness, cx);
@@ -46,7 +48,7 @@ async fn explicit_scope_attach_stays_with_original_chat_and_detach_closes_real_h
   assert_eq!(factory.attached.load(Ordering::SeqCst), 0);
   harness.click("computer-refresh", cx);
   let catalog = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.computer.pending && !state.workbench.computer.targets.is_empty()
     })
     .await;
@@ -59,13 +61,13 @@ async fn explicit_scope_attach_stays_with_original_chat_and_detach_closes_real_h
   );
   select_scope(&harness, cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.computer.selected_scope.is_some()
     })
     .await;
   harness.click("computer-attach", cx);
   let attached = harness
-    .wait(cx, |state| state.workbench.computer.attached)
+    .wait(cx, async |state| state.workbench.computer.attached)
     .await;
   assert_eq!(
     attached.workbench.computer.bound_session.as_deref(),
@@ -83,7 +85,7 @@ async fn explicit_scope_attach_stays_with_original_chat_and_detach_closes_real_h
   assert!(!format!("{:?}", attached.workbench.computer).contains("Private fixture"));
   harness.click("new-chat-tab", cx);
   let other = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state
         .selected_session
         .as_deref()
@@ -103,13 +105,13 @@ async fn explicit_scope_attach_stays_with_original_chat_and_detach_closes_real_h
   );
   harness.click("computer-detach", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.computer.bound_session.is_none()
         && factory.dropped.load(Ordering::SeqCst) == 1
     })
     .await;
   harness
-    .wait(cx, |_| {
+    .wait(cx, async |_| {
       harness
         .runtime
         .block_on(harness.daemon.computer_runtime_info(&original))
@@ -121,23 +123,23 @@ async fn explicit_scope_attach_stays_with_original_chat_and_detach_closes_real_h
   // Attach to the second chat only after another explicit refresh and selection.
   harness.click("computer-refresh", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.computer.pending && !state.workbench.computer.targets.is_empty()
     })
     .await;
   select_scope(&harness, cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.computer.selected_scope.is_some()
     })
     .await;
   harness.click("computer-attach", cx);
   harness
-    .wait(cx, |state| state.workbench.computer.attached)
+    .wait(cx, async |state| state.workbench.computer.attached)
     .await;
   harness.connect(cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session == other.selected_session
         && !state.workbench.computer.attached
         && factory.dropped.load(Ordering::SeqCst) == 2
@@ -175,30 +177,32 @@ async fn attached_host(cx: &mut TestAppContext) -> (Harness, Arc<Factory>, Strin
   let harness = Harness::with_computer(cx, factory.clone());
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   harness.click("new-session", cx);
   let session = harness
-    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .wait(cx, async |state| {
+      state.selected_session.is_some() && !state.busy
+    })
     .await
     .selected_session
     .expect("selected chat");
   show_computer(&harness, cx);
   harness.click("computer-refresh", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.computer.pending && !state.workbench.computer.targets.is_empty()
     })
     .await;
   select_scope(&harness, cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.computer.selected_scope.is_some()
     })
     .await;
   harness.click("computer-attach", cx);
   harness
-    .wait(cx, |state| state.workbench.computer.attached)
+    .wait(cx, async |state| state.workbench.computer.attached)
     .await;
   (harness, factory, session)
 }
@@ -226,7 +230,7 @@ async fn failed_reconnect_immediately_revokes_host_and_does_not_restore_authorit
   })
   .expect("explicit failed reconnect");
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.status == "Connection or request failed"
         && factory.dropped.load(Ordering::SeqCst) == 1
         && harness
@@ -255,7 +259,7 @@ async fn detach_after_reverse_channel_failure_clears_binding_and_warns_that_nati
   // Ending the real daemon reverse channel completes the host with an error.
   harness.runtime.block_on(harness.daemon.shutdown());
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.computer.attached
         && state.workbench.computer.error.is_some()
         && factory.dropped.load(Ordering::SeqCst) == 1
@@ -263,7 +267,7 @@ async fn detach_after_reverse_channel_failure_clears_binding_and_warns_that_nati
     .await;
   harness.click("computer-detach", cx);
   let state = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.computer.bound_session.is_none() && !state.workbench.computer.pending
     })
     .await

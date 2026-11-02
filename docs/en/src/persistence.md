@@ -1,16 +1,26 @@
 # Sessions, tasks and recovery
 
-Sessions preserve the Harness semantics needed to continue a conversation. Run records preserve orchestration state for individual user requests. SQLite stores these separately and writes events and outbox records alongside critical changes.
+Sessions preserve the Harness semantics needed to continue a conversation. Run records preserve orchestration state for individual user requests. The relational database stores these separately and writes events and Outbox records alongside critical changes. Local SQLite is the default; the daemon can also select PostgreSQL or MySQL.
+
+## Databases and asynchronous transactions
+
+`agent-storage` uses pinned SeaORM 2.0.4 and native asynchronous SQLx connections. `Store::open`, `Store::connect` and read/write APIs are asynchronous; relational I/O uses no blocking-task wrapper, hidden runtime or synchronous facade. SQLite uses WAL, full synchronous writes, a five-second busy timeout and a one-connection pool.
+
+The default file is `agent.sqlite3` inside the daemon data directory. Select `sqlite:`, `postgres:` / `postgresql:` or `mysql:` through `--database-url`, `LYONBROWN_DATABASE_URL` or TOML `database_url`. Keep credential-bearing URLs in a restricted local dotenv file or process environment, outside the repository, command history and UI models. The data directory still owns node identity, authentication files and local ownership information; using a remote database does not remove those requirements.
+
+Critical writes share a `DatabaseTransaction`. A dedicated write-lock record is updated before revision, Session ownership and owner-epoch checks, and state, events and Outbox commit together. Non-MySQL backends additionally use the `one_active_run` partial unique index. MySQL enforces active-run admission through checks under the same transactional write exclusion. Driver integration does not establish runtime acceptance for all three databases or multiple nodes. Each database requires exclusive ownership by one logical daemon; multi-daemon consumption and recovery against a shared database are unsupported.
+
+Versioned Rust SeaORM migrations create and track the current initial schema. There is no legacy Diesel import, compatibility upgrade or automatic database reset. Historical databases are not substitutes for runtime acceptance of the new schema. See `crates/agent-storage/src/lib.rs`, `migration.rs` and `migration/`. [Long-term memory](memory.md) uses the same relational database for content and indexing jobs, with an independently selected vector backend.
 
 ## Submission and execution
 
-`accept_run` checks `owner_epoch` and deduplicates by `(session_id, idempotency_key)`. Repeating the same key and prompt returns the existing run; using a different prompt with that key fails. The `one_active_run` unique index prevents multiple unresolved runs within one session.
+`accept_run` checks `owner_epoch` and deduplicates by `(session_id, idempotency_key)`. Repeating the same key and prompt returns the existing run; using a different prompt with that key fails. Transactional admission checks and backend-specific constraints prevent multiple unresolved runs within one session.
 
 ```mermaid
 sequenceDiagram
     participant UI as Client
     participant D as agentd
-    participant S as SQLite
+    participant S as Relational database
     participant H as rpi-harness
     participant T as Host tool
     UI->>D: StartRun(session, prompt, key, epoch)
@@ -38,7 +48,7 @@ Harness snapshots retain original message content. The separate `entry_appended`
 
 Projection follows known message schemas rather than recursively removing arbitrary JSON `data` fields. Tool arguments and custom business data remain the responsibility of their adapters. Unrecognized queue payloads or frames expose only a `projectionOmitted` marker. Input-image Debug output includes only MIME and length.
 
-Image-bearing session recovery is unavailable. The recovery entry point retains the snapshot and returns an explicit error without calling a model or replaying a request. rpi-ai 0.5.0 emits duplicate `type` keys in raw JSON serialization; see [upstream issue #59](https://github.com/bigfish1913/pi-rust/issues/59). No snapshot normalization workaround is included. The daemon's `StartRun` still accepts text only; internal Runtime image input does not establish client image-session support.
+Image-bearing session recovery is unavailable. The recovery entry point retains the snapshot and returns an explicit error without calling a model or replaying a request. The pinned rpi-ai 0.16.0 emits duplicate `type` keys in raw JSON serialization; see [upstream issue #59](https://github.com/bigfish1913/pi-rust/issues/59). No snapshot normalization workaround is included. The daemon's `StartRun` still accepts text only; internal Runtime image input does not establish client image-session support.
 
 ## Disconnection and restart
 

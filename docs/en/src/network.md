@@ -33,7 +33,7 @@ flowchart TB
     WR <-->|Outbound mTLS connection / bidirectional ciphertext| Relay
 ```
 
-Master and Worker commit separate local SQLite transactions; they share no Session database. Control executes no models or tools and stores no task plaintext. Direct and Relay paths are configured alternatives, not automatic failover channels. Directory APIs are separate; the daemon Relay runtime does not register or renew directory leases automatically.
+Master and Worker each exclusively own their configured relational store and share no Harness Session; SQLite remains the default. See [Sessions, tasks and recovery](persistence.md) for database backends. Control executes no models or tools and stores no task plaintext. Direct and Relay paths are configured alternatives, not automatic failover channels. Directory APIs are separate; the daemon Relay runtime does not register or renew directory leases automatically.
 
 Source references: [crates/agent-distributed/src/peers.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/peers.rs), [crates/agent-distributed/src/relay_transport/mod.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/relay_transport/mod.rs), [apps/agent-control/src/](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-control/src/).
 

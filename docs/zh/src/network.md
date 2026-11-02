@@ -33,7 +33,7 @@ flowchart TB
     WR <-->|出站 mTLS 连接 / 密文双向转发| Relay
 ```
 
-Master 与 Worker 各自提交本地 SQLite 事务，没有跨节点共享的 Session 数据库。Control 不执行模型或工具，也不保存任务明文。图中直连和 Relay 是配置选择的替代路径，不是故障时自动切换的两条通道；目录 API 独立存在，daemon 的 Relay runtime 不自动注册或续租。
+Master 与 Worker 各自使用独占的关系数据库并提交各自事务，不共享 Harness Session；默认后端为 SQLite，其他选项见[会话、任务与恢复](persistence.md)。Control 不执行模型或工具，也不保存任务明文。图中直连和 Relay 是配置选择的替代路径，不是故障时自动切换的两条通道；目录 API 独立存在，daemon 的 Relay runtime 不自动注册或续租。
 
 源码核对: [crates/agent-distributed/src/peers.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/peers.rs), [crates/agent-distributed/src/relay_transport/mod.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/relay_transport/mod.rs), [apps/agent-control/src/](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-control/src/).
 

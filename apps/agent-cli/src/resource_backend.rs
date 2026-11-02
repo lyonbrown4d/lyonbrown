@@ -8,6 +8,9 @@ pub(crate) async fn execute(
   command: ResourceCommand,
 ) -> anyhow::Result<(String, String)> {
   match command {
+    ResourceCommand::Memory(command) => {
+      crate::memory_backend::execute(client, session, command).await
+    }
     ResourceCommand::Context => {
       let status = client.runtime_status(required_session(session)?).await?;
       Ok((

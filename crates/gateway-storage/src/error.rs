@@ -3,12 +3,8 @@ use thiserror::Error;
 pub enum StorageError {
   #[error("gateway file operation failed")]
   Io(#[from] std::io::Error),
-  #[error("gateway database connection failed")]
-  Connection(#[from] diesel::ConnectionError),
   #[error("gateway database operation failed")]
-  Database(#[from] diesel::result::Error),
-  #[error("gateway database migration failed")]
-  Migration(#[source] Box<dyn std::error::Error + Send + Sync>),
+  Database(#[from] sea_orm::DbErr),
   #[error("invalid storage input: {0}")]
   InvalidInput(&'static str),
   #[error("gateway storage state conflict")]

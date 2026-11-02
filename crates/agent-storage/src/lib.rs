@@ -1,224 +1,158 @@
 //! Node-local durable state. Critical writes include an event and outbox row.
 #![forbid(unsafe_code)]
+use sea_orm::sea_query::ExprTrait;
+mod approval_consumption;
 mod approvals;
 mod approved_browser_action;
 mod approved_operation;
 mod browser_actions;
+mod connection;
 mod control;
+mod error;
+pub use error::{is_database_error, public_error_message, safe_storage_error};
 mod dispatch;
 mod input_fence;
+mod memory;
+mod migration;
 mod model_bindings;
 mod operations;
-mod persistence;
+mod peers;
 mod provider_profiles;
 mod recovery;
 mod runs;
 mod schema;
 mod sessions;
-pub use model_bindings::ModelBinding;
+mod snapshots;
+mod task_acceptance;
 mod tasks;
 use agent_core::{Event, now_ms};
 use anyhow::{Context, Result};
 pub use approved_browser_action::{ApprovedBrowserAction, BrowserActionAuthorization};
 pub use approved_operation::{ApprovedOperation, OperationAuthorization};
-use diesel::{connection::SimpleConnection, prelude::*};
+pub use model_bindings::ModelBinding;
 pub use operations::{OperationRecord, OperationStatus};
 pub use provider_profiles::ProviderProfileError;
 pub use recovery::{RecoverRun, RecoveryAction, RunRecovery};
-use schema::{events, harness_sessions, outbox, runs as run_rows, sessions as session_rows};
-
-#[derive(Insertable)]
-#[diesel(table_name = events)]
-struct EventRow<'a> {
-  run_id: &'a str,
-  cursor: i64,
-  record: &'a str,
-}
-
-#[derive(Insertable)]
-#[diesel(table_name = outbox)]
-struct OutboxRow<'a> {
-  run_id: &'a str,
-  cursor: i64,
-  delivered: i32,
-}
-use std::{
-  path::Path,
-  sync::{Arc, Mutex, MutexGuard},
+use schema::{events, outbox, runs as run_rows, sessions};
+use sea_orm::{
+  DatabaseConnection, DatabaseTransaction, QueryOrder, QuerySelect, Set, TransactionTrait,
+  prelude::*, sea_query::Expr,
 };
 
 #[derive(Clone)]
 pub struct Store {
-  connection: Arc<Mutex<SqliteConnection>>,
+  connection: DatabaseConnection,
 }
 impl Store {
-  pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-    let path = path
-      .as_ref()
-      .to_str()
-      .context("database path is not UTF-8")?;
-    let mut connection = SqliteConnection::establish(path)?;
-    connection.batch_execute("PRAGMA busy_timeout=5000;")?;
-    connection.batch_execute(include_str!("schema.sql"))?;
-    browser_actions::initialize(&mut connection)?;
-    operations::initialize(&mut connection)?;
-    recovery::initialize(&mut connection)?;
-    Ok(Self {
-      connection: Arc::new(Mutex::new(connection)),
-    })
+  /// Shared native async connection for repositories participating in this store.
+  pub fn connection(&self) -> &DatabaseConnection {
+    &self.connection
   }
-  pub(crate) fn lock(&self) -> Result<MutexGuard<'_, SqliteConnection>> {
-    self
-      .connection
-      .lock()
-      .map_err(|_| anyhow::anyhow!("database lock poisoned"))
-  }
-  pub fn events(&self, run_id: &str, after: u64, limit: usize) -> Result<Vec<Event>> {
-    let records = events::table
-      .filter(events::run_id.eq(run_id))
-      .filter(events::cursor.gt(i64::try_from(after)?))
-      .order(events::cursor.asc())
-      .limit(limit.min(1000) as i64)
-      .select(events::record)
-      .load::<String>(&mut *self.lock()?)?;
-    decode(records)
-  }
-  pub fn append_event(
-    &self,
-    run_id: &str,
-    kind: &str,
-    payload: serde_json::Value,
-  ) -> Result<Event> {
-    self
-      .lock()?
-      .immediate_transaction(|connection| event_tx(connection, run_id, kind, payload))
-  }
-  pub fn append_event_owned(
-    &self,
-    run_id: &str,
-    epoch: u64,
-    kind: &str,
-    payload: serde_json::Value,
-  ) -> Result<Event> {
-    self.lock()?.immediate_transaction(|connection| {
-      let session: String = run_rows::table
-        .find(run_id)
-        .select(run_rows::session_id)
-        .first(connection)?;
-      verify_epoch(connection, &session, epoch)?;
-      event_tx(connection, run_id, kind, payload)
-    })
-  }
-  pub fn load_snapshot(&self, session_id: &str) -> Result<Option<Vec<u8>>> {
-    harness_sessions::table
-      .find(session_id)
-      .select(harness_sessions::snapshot)
-      .first(&mut *self.lock()?)
-      .optional()
-      .context("load harness snapshot")
-  }
-  pub fn commit_snapshot(
-    &self,
-    session_id: &str,
-    epoch: u64,
-    snapshot: &[u8],
-    kind: &str,
-    payload: serde_json::Value,
-  ) -> Result<()> {
-    self.commit_snapshot_with_events(session_id, epoch, snapshot, kind, payload, &[])
-  }
-  pub fn commit_snapshot_with_events(
-    &self,
-    session_id: &str,
-    epoch: u64,
-    snapshot: &[u8],
-    kind: &str,
-    payload: serde_json::Value,
-    semantic_events: &[agent_core::events::AgentEvent],
-  ) -> Result<()> {
-    self.commit_run_snapshot_with_events(
-      session_id,
-      epoch,
-      None,
-      snapshot,
-      kind,
-      payload,
-      semantic_events,
-    )
-  }
-  #[allow(clippy::too_many_arguments)]
-  pub fn commit_run_snapshot_with_events(
-    &self,
-    session_id: &str,
-    epoch: u64,
-    run_id: Option<&str>,
-    snapshot: &[u8],
-    kind: &str,
-    payload: serde_json::Value,
-    semantic_events: &[agent_core::events::AgentEvent],
-  ) -> Result<()> {
-    self.lock()?.immediate_transaction(|connection| {
-      verify_epoch(connection, session_id, epoch)?;
-      let run_id = if let Some(run_id) = run_id {
-        let actual: String = run_rows::table
-          .find(run_id)
-          .select(run_rows::session_id)
-          .first(connection)?;
-        anyhow::ensure!(
-          actual == session_id,
-          "harness run belongs to another session"
-        );
-        run_id.to_owned()
-      } else {
-        let run_id: Option<String> = run_rows::table
-          .filter(run_rows::session_id.eq(session_id))
-          .order((run_rows::created_at_ms.desc(), run_rows::id.desc()))
-          .select(run_rows::id)
-          .first(connection)
-          .optional()?;
-        run_id.context("session has no accepted run for harness mutation")?
-      };
-      diesel::insert_into(harness_sessions::table)
-        .values((
-          harness_sessions::session_id.eq(session_id),
-          harness_sessions::snapshot.eq(snapshot),
-        ))
-        .on_conflict(harness_sessions::session_id)
-        .do_update()
-        .set(harness_sessions::snapshot.eq(snapshot))
-        .execute(connection)?;
-      event_tx(connection, &run_id, kind, payload)?;
-      for event in semantic_events {
-        event_tx(
-          connection,
-          &run_id,
-          agent_core::events::AGENT_EVENT_KIND,
-          serde_json::to_value(event)?,
-        )?;
-      }
-      Ok(())
-    })
-  }
-  pub fn pending_outbox(&self, limit: usize) -> Result<Vec<Event>> {
-    let records = outbox::table
-      .inner_join(
-        events::table.on(
-          events::run_id
-            .eq(outbox::run_id)
-            .and(events::cursor.eq(outbox::cursor)),
-        ),
+  async fn begin_write(&self) -> Result<DatabaseTransaction> {
+    let transaction = self.connection.begin().await?;
+    let locked = schema::write_lock::Entity::update_many()
+      .col_expr(
+        schema::write_lock::Column::Revision,
+        Expr::col(schema::write_lock::Column::Revision).add(1),
       )
-      .filter(outbox::delivered.eq(0))
-      .order((outbox::run_id.asc(), outbox::cursor.asc()))
-      .limit(limit.min(1000) as i64)
-      .select(events::record)
-      .load::<String>(&mut *self.lock()?)?;
-    decode(records)
+      .filter(schema::write_lock::Column::Id.eq(1))
+      .exec(&transaction)
+      .await?;
+    anyhow::ensure!(locked.rows_affected == 1, "database write fence missing");
+    Ok(transaction)
   }
-  pub fn acknowledge_outbox(&self, run_id: &str, cursor: u64) -> Result<()> {
-    diesel::update(outbox::table.find((run_id, i64::try_from(cursor)?)))
-      .set(outbox::delivered.eq(1))
-      .execute(&mut *self.lock()?)?;
+  pub async fn events(&self, run_id: &str, after: u64, limit: usize) -> Result<Vec<Event>> {
+    let rows = events::Entity::find()
+      .filter(events::Column::RunId.eq(run_id))
+      .filter(events::Column::Cursor.gt(i64::try_from(after)?))
+      .order_by_asc(events::Column::Cursor)
+      .limit(limit.min(1000) as u64)
+      .select_only()
+      .column(events::Column::Record)
+      .into_tuple::<String>()
+      .all(self.connection())
+      .await?;
+    decode(rows)
+  }
+  pub async fn append_event(
+    &self,
+    run_id: &str,
+    kind: &str,
+    payload: serde_json::Value,
+  ) -> Result<Event> {
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> =
+        async { event_tx(connection, run_id, kind, payload).await }.await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
+  }
+  pub async fn append_event_owned(
+    &self,
+    run_id: &str,
+    epoch: u64,
+    kind: &str,
+    payload: serde_json::Value,
+  ) -> Result<Event> {
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        let run = run_rows::Entity::find_by_id(run_id)
+          .one(connection)
+          .await?
+          .context("run missing")?;
+        verify_epoch(connection, &run.session_id, epoch).await?;
+        event_tx(connection, run_id, kind, payload).await
+      }
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
+  }
+  pub async fn pending_outbox(&self, limit: usize) -> Result<Vec<Event>> {
+    let pending = outbox::Entity::find()
+      .filter(outbox::Column::Delivered.eq(0))
+      .order_by_asc(outbox::Column::RunId)
+      .order_by_asc(outbox::Column::Cursor)
+      .limit(limit.min(1000) as u64)
+      .all(self.connection())
+      .await?;
+    let mut result = Vec::with_capacity(pending.len());
+    for row in pending {
+      let event = events::Entity::find_by_id((row.run_id, row.cursor))
+        .one(self.connection())
+        .await?
+        .context("outbox event missing")?;
+      result.push(serde_json::from_str(&event.record)?);
+    }
+    Ok(result)
+  }
+  pub async fn acknowledge_outbox(&self, run_id: &str, cursor: u64) -> Result<()> {
+    outbox::Entity::update_many()
+      .filter(outbox::Column::RunId.eq(run_id))
+      .filter(outbox::Column::Cursor.eq(i64::try_from(cursor)?))
+      .col_expr(outbox::Column::Delivered, Expr::value(1))
+      .exec(self.connection())
+      .await?;
     Ok(())
   }
 }
@@ -228,35 +162,35 @@ pub(crate) fn decode<T: serde::de::DeserializeOwned>(records: Vec<String>) -> Re
     .map(|record| Ok(serde_json::from_str(&record)?))
     .collect()
 }
-pub(crate) fn verify_epoch(
-  connection: &mut SqliteConnection,
+pub(crate) async fn verify_epoch(
+  connection: &impl ConnectionTrait,
   session_id: &str,
   expected: u64,
 ) -> Result<()> {
-  let actual: i64 = session_rows::table
-    .find(session_id)
-    .select(session_rows::owner_epoch)
-    .first(connection)?;
+  let row = sessions::Entity::find_by_id(session_id)
+    .one(connection)
+    .await?
+    .context("session missing")?;
   anyhow::ensure!(
-    u64::try_from(actual)? == expected,
+    u64::try_from(row.owner_epoch)? == expected,
     "stale session owner epoch"
   );
   Ok(())
 }
-pub(crate) fn event_tx(
-  connection: &mut SqliteConnection,
+pub(crate) async fn event_tx(
+  connection: &impl ConnectionTrait,
   run_id: &str,
   kind: &str,
   payload: serde_json::Value,
 ) -> Result<Event> {
-  let previous: Option<i64> = events::table
-    .filter(events::run_id.eq(run_id))
-    .select(diesel::dsl::max(events::cursor))
-    .first(connection)?;
-  let cursor = previous
-    .unwrap_or(0)
-    .checked_add(1)
-    .context("event cursor exhausted")?;
+  let previous = events::Entity::find()
+    .filter(events::Column::RunId.eq(run_id))
+    .order_by_desc(events::Column::Cursor)
+    .one(connection)
+    .await?
+    .map(|row| row.cursor)
+    .unwrap_or(0);
+  let cursor = previous.checked_add(1).context("event cursor exhausted")?;
   let event = Event {
     cursor: u64::try_from(cursor)?,
     run_id: run_id.into(),
@@ -264,20 +198,19 @@ pub(crate) fn event_tx(
     payload_json: serde_json::to_string(&payload)?,
     created_at_ms: now_ms(),
   };
-  let record = serde_json::to_string(&event)?;
-  diesel::insert_into(events::table)
-    .values(EventRow {
-      run_id,
-      cursor,
-      record: &record,
-    })
-    .execute(connection)?;
-  diesel::insert_into(outbox::table)
-    .values(OutboxRow {
-      run_id,
-      cursor,
-      delivered: 0,
-    })
-    .execute(connection)?;
+  events::ActiveModel {
+    run_id: Set(run_id.into()),
+    cursor: Set(cursor),
+    record: Set(serde_json::to_string(&event)?),
+  }
+  .insert(connection)
+  .await?;
+  outbox::ActiveModel {
+    run_id: Set(run_id.into()),
+    cursor: Set(cursor),
+    delivered: Set(0),
+  }
+  .insert(connection)
+  .await?;
   Ok(event)
 }

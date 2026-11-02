@@ -29,24 +29,24 @@ impl Operation {
       self.host(tool).await? == host,
       "browser runtime binding changed"
     );
-    tool.fence(cancel)?;
+    tool.fence(cancel).await?;
     // The command and exact approval originate from this same parsed operation.
     // Capture both before committing; dispatch cannot substitute a later command.
     ensure!(exact["host_id"] == host, "browser approval host changed");
     let command = self.command(&tool.session_id);
-    let proof =
-      tool
-        .daemon
-        .store
-        .begin_approved_browser_action(agent_storage::ApprovedBrowserAction {
-          run_id: &tool.run_id,
-          owner_epoch: tool.epoch,
-          action_id: self.id(),
-          tool: tool.name,
-          arguments: exact,
-          summary: crate::browser::mutation::audit_summary(&command),
-          approval_id,
-        })?;
+    let proof = tool
+      .daemon
+      .store
+      .begin_approved_browser_action(agent_storage::ApprovedBrowserAction {
+        run_id: &tool.run_id,
+        owner_epoch: tool.epoch,
+        action_id: self.id(),
+        tool: tool.name,
+        arguments: exact,
+        summary: crate::browser::mutation::audit_summary(&command),
+        approval_id,
+      })
+      .await?;
     // No await between the commit and guard construction: dropping this future
     // after authorization always leaves a durable receipt or an Uncertain intent.
     let mutation = crate::browser::mutation::CommittedMutation::approved(

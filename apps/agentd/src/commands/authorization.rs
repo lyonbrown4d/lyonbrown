@@ -34,7 +34,7 @@ impl CommandAuthorization for Authorization {
       self.cancel.clone(),
     )
     .await?;
-    self.tool.fence(&self.cancel)?;
+    self.tool.fence(&self.cancel).await?;
     self
       .tool
       .daemon
@@ -47,7 +47,8 @@ impl CommandAuthorization for Authorization {
         arguments: &exact,
         summary: json!({}),
         approval_id: &approval_id,
-      })?;
+      })
+      .await?;
     self.began.store(true, Ordering::Release);
     self.tool.daemon.events.notify_waiters();
     Ok(true)

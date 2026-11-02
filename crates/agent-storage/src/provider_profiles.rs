@@ -4,7 +4,7 @@ use crate::{
 };
 use agent_core::provider_profiles::ProviderProfile;
 use anyhow::Result;
-use diesel::prelude::*;
+use sea_orm::{QueryOrder, QuerySelect, Set, prelude::*};
 
 /// Expected profile mutation failures, available through `anyhow::Error::downcast_ref`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,117 +28,164 @@ impl std::fmt::Display for ProviderProfileError {
 impl std::error::Error for ProviderProfileError {}
 
 impl Store {
-  pub fn provider_profiles(&self) -> Result<Vec<ProviderProfile>> {
+  pub async fn provider_profiles(&self) -> Result<Vec<ProviderProfile>> {
     decode(
-      provider_profiles::table
-        .order(provider_profiles::id.asc())
-        .limit(100)
-        .select(provider_profiles::record)
-        .load::<String>(&mut *self.lock()?)?,
+      provider_profiles::Entity::find()
+        .order_by_asc(provider_profiles::Column::Id)
+        .limit((100) as u64)
+        .select_only()
+        .column(provider_profiles::Column::Record)
+        .into_tuple::<String>()
+        .all(self.connection())
+        .await?,
     )
   }
 
-  pub fn provider_profile(&self, id: &str) -> Result<Option<ProviderProfile>> {
-    let record = provider_profiles::table
-      .find(id)
-      .select(provider_profiles::record)
-      .first::<String>(&mut *self.lock()?)
-      .optional()?;
+  pub async fn provider_profile(&self, id: &str) -> Result<Option<ProviderProfile>> {
+    let record = provider_profiles::Entity::find()
+      .filter(provider_profiles::Column::Id.eq(id))
+      .select_only()
+      .column(provider_profiles::Column::Record)
+      .into_tuple::<String>()
+      .one(self.connection())
+      .await?;
     record
       .map(|record| serde_json::from_str(&record).map_err(Into::into))
       .transpose()
   }
 
-  pub fn put_provider_profile(
+  pub async fn put_provider_profile(
     &self,
     profile: &ProviderProfile,
     expected_revision: u64,
   ) -> Result<ProviderProfile> {
     let revision = validate(profile, expected_revision)?;
-    self.lock()?.immediate_transaction(|connection| {
-      let actual = provider_profiles::table
-        .find(&profile.id)
-        .select(provider_profiles::revision)
-        .first::<i64>(connection)
-        .optional()?;
-      let record = serde_json::to_string(profile)?;
-      match actual {
-        Some(actual) if u64::try_from(actual)? == expected_revision => {
-          diesel::update(
-            provider_profiles::table
-              .find(&profile.id)
-              .filter(provider_profiles::revision.eq(actual)),
-          )
-          .set((
-            provider_profiles::revision.eq(revision),
-            provider_profiles::record.eq(&record),
-          ))
-          .execute(connection)?;
-        }
-        Some(_) => return Err(ProviderProfileError::Conflict.into()),
-        None if expected_revision == 0 => {
-          // Retained history fences deleted identities against revision reuse (ABA).
-          if events::table
-            .filter(events::run_id.eq(format!("provider:{}", profile.id)))
-            .count()
-            .get_result::<i64>(connection)?
-            > 0
-          {
-            return Err(ProviderProfileError::Conflict.into());
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        let actual = provider_profiles::Entity::find()
+          .filter(provider_profiles::Column::Id.eq(&profile.id))
+          .select_only()
+          .column(provider_profiles::Column::Revision)
+          .into_tuple::<i64>()
+          .one(connection)
+          .await?;
+        let record = serde_json::to_string(profile)?;
+        match actual {
+          Some(actual) if u64::try_from(actual)? == expected_revision => {
+            provider_profiles::Entity::update_many()
+              .filter(provider_profiles::Column::Id.eq(&profile.id))
+              .filter(provider_profiles::Column::Revision.eq(actual))
+              .col_expr(
+                provider_profiles::Column::Revision,
+                Expr::value((revision).to_owned()),
+              )
+              .col_expr(
+                provider_profiles::Column::Record,
+                Expr::value((&record).to_owned()),
+              )
+              .exec(connection)
+              .await
+              .map(|result| result.rows_affected)?;
           }
-          if provider_profiles::table
-            .count()
-            .get_result::<i64>(connection)?
-            >= 100
-          {
-            return Err(ProviderProfileError::Capacity.into());
+          Some(_) => return Err(ProviderProfileError::Conflict.into()),
+          None if expected_revision == 0 => {
+            // Retained history fences deleted identities against revision reuse (ABA).
+            if events::Entity::find()
+              .filter(events::Column::RunId.eq(format!("provider:{}", profile.id)))
+              .count(connection)
+              .await
+              .map(|value| value as i64)?
+              > 0
+            {
+              return Err(ProviderProfileError::Conflict.into());
+            }
+            if provider_profiles::Entity::find()
+              .count(connection)
+              .await
+              .map(|value| value as i64)?
+              >= 100
+            {
+              return Err(ProviderProfileError::Capacity.into());
+            }
+            provider_profiles::ActiveModel {
+              id: Set((&profile.id).to_owned()),
+              revision: Set((revision).to_owned()),
+              record: Set((&record).to_owned()),
+            }
+            .insert(connection)
+            .await?;
           }
-          diesel::insert_into(provider_profiles::table)
-            .values((
-              provider_profiles::id.eq(&profile.id),
-              provider_profiles::revision.eq(revision),
-              provider_profiles::record.eq(&record),
-            ))
-            .execute(connection)?;
+          None => return Err(ProviderProfileError::NotFound.into()),
         }
-        None => return Err(ProviderProfileError::NotFound.into()),
+        event_tx(
+          connection,
+          &format!("provider:{}", profile.id),
+          "provider_profile_changed",
+          serde_json::json!({"id": profile.id, "revision": profile.revision}),
+        )
+        .await?;
+        Ok(profile.clone())
       }
-      event_tx(
-        connection,
-        &format!("provider:{}", profile.id),
-        "provider_profile_changed",
-        serde_json::json!({"id": profile.id, "revision": profile.revision}),
-      )?;
-      Ok(profile.clone())
-    })
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
 
   /// Removes configuration only; immutable secrets and pinned model bindings survive.
-  pub fn remove_provider_profile(&self, id: &str, expected_revision: u64) -> Result<()> {
-    self.lock()?.immediate_transaction(|connection| {
-      let actual = provider_profiles::table
-        .find(id)
-        .select(provider_profiles::revision)
-        .first::<i64>(connection)
-        .optional()?
-        .ok_or(ProviderProfileError::NotFound)?;
-      if u64::try_from(actual)? != expected_revision {
-        return Err(ProviderProfileError::Conflict.into());
+  pub async fn remove_provider_profile(&self, id: &str, expected_revision: u64) -> Result<()> {
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        let actual = provider_profiles::Entity::find()
+          .filter(provider_profiles::Column::Id.eq(id))
+          .select_only()
+          .column(provider_profiles::Column::Revision)
+          .into_tuple::<i64>()
+          .one(connection)
+          .await?
+          .ok_or(ProviderProfileError::NotFound)?;
+        if u64::try_from(actual)? != expected_revision {
+          return Err(ProviderProfileError::Conflict.into());
+        }
+        provider_profiles::Entity::delete_many()
+          .filter(provider_profiles::Column::Id.eq(id))
+          .filter(provider_profiles::Column::Revision.eq(actual))
+          .exec(connection)
+          .await
+          .map(|result| result.rows_affected)?;
+        event_tx(
+          connection,
+          &format!("provider:{id}"),
+          "provider_profile_removed",
+          serde_json::json!({"id": id, "revision": expected_revision}),
+        )
+        .await?;
+        Ok(())
       }
-      diesel::delete(
-        provider_profiles::table
-          .find(id)
-          .filter(provider_profiles::revision.eq(actual)),
-      )
-      .execute(connection)?;
-      event_tx(
-        connection,
-        &format!("provider:{id}"),
-        "provider_profile_removed",
-        serde_json::json!({"id": id, "revision": expected_revision}),
-      )?;
-      Ok(())
-    })
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
 }
 

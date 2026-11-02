@@ -27,8 +27,11 @@ impl Fixture {
   }
   pub async fn with_password(model_id: &str, password: &str) -> Self {
     let directory = tempfile::tempdir().expect("directory");
-    let store =
-      Arc::new(GatewayStorage::open(directory.path().join("gateway.sqlite")).expect("store"));
+    let store = Arc::new(
+      GatewayStorage::open(directory.path().join("gateway.sqlite"))
+        .await
+        .expect("store"),
+    );
     store
       .bootstrap_super_admin(USERNAME, password)
       .await

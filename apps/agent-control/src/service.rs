@@ -38,11 +38,12 @@ impl ControlPlane {
     })
   }
 
-  pub(crate) fn allow(&self, from: &str, to: &str) -> Result<(), Status> {
+  pub(crate) async fn allow(&self, from: &str, to: &str) -> Result<(), Status> {
     for id in [from, to] {
       let trust = self
         .peers
         .trust(id)
+        .await
         .map_err(|_| Status::permission_denied("relay node is not paired or has been revoked"))?;
       if !trust.capabilities.iter().any(|cap| cap == "control.relay") {
         return Err(Status::permission_denied("node has no relay capability"));
@@ -51,6 +52,7 @@ impl ControlPlane {
     if !self
       .store
       .control_link_allowed(from, to)
+      .await
       .map_err(internal)?
     {
       return Err(Status::permission_denied(
@@ -67,7 +69,10 @@ impl ControlService for ControlPlane {
     &self,
     request: Request<v1::RegisterRequest>,
   ) -> Result<Response<v1::Node>, Status> {
-    let trust = self.peers.authorize(&request, &["control.register"])?;
+    let trust = self
+      .peers
+      .authorize(&request, &["control.register"])
+      .await?;
     let registration = request.into_inner();
     let node = registration
       .node
@@ -96,23 +101,32 @@ impl ControlService for ControlPlane {
     self
       .store
       .control_register(&node.id, &hex::encode(node.encode_to_vec()), expires)
+      .await
       .map_err(internal)?;
     tracing::info!(operation = "control.register", outcome = "persisted", node_id = %node.id, expires_at_ms = expires, "paired node directory lease updated");
     Ok(Response::new(node))
   }
 
   async fn resolve(&self, request: Request<v1::PeerRequest>) -> Result<Response<v1::Node>, Status> {
-    let trust = self.peers.authorize(&request, &["control.resolve"])?;
+    let trust = self.peers.authorize(&request, &["control.resolve"]).await?;
     let target = request.into_inner().node_id;
-    self.allow(&trust.node_id, &target)?;
+    self.allow(&trust.node_id, &target).await?;
     let record = self
       .store
       .control_resolve(&target, agent_core::now_ms())
+      .await
       .map_err(internal)?
       .ok_or_else(|| Status::not_found("node registration has expired or does not exist"))?;
     let bytes = hex::decode(record).map_err(internal)?;
     let node = v1::Node::decode(bytes.as_slice()).map_err(internal)?;
-    if self.peers.trust(&target).map_err(internal)?.fingerprint != node.fingerprint {
+    if self
+      .peers
+      .trust(&target)
+      .await
+      .map_err(internal)?
+      .fingerprint
+      != node.fingerprint
+    {
       return Err(Status::not_found("node must register its rotated identity"));
     }
     Ok(Response::new(node))
@@ -132,7 +146,7 @@ impl ControlService for ControlPlane {
     &self,
     request: Request<tonic::Streaming<v1::RelayEnvelope>>,
   ) -> Result<Response<Self::RelayStream>, Status> {
-    let trust = self.peers.authorize(&request, &["control.relay"])?;
+    let trust = self.peers.authorize(&request, &["control.relay"]).await?;
     let output = self
       .hub
       .attach(self.clone(), trust.node_id, request.into_inner())

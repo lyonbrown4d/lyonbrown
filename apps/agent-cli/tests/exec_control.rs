@@ -31,7 +31,7 @@ async fn deadline_requests_cancellation_and_waits_for_persisted_state() {
   assert_eq!(result["status"], "cancelled");
   let id = result["run_id"].as_str().unwrap();
   assert_eq!(
-    node.daemon.store.run(id).unwrap().unwrap().status,
+    node.daemon.store.run(id).await.unwrap().unwrap().status,
     "cancelled"
   );
   assert!(
@@ -39,6 +39,7 @@ async fn deadline_requests_cancellation_and_waits_for_persisted_state() {
       .daemon
       .store
       .events(id, 0, 1000)
+      .await
       .unwrap()
       .iter()
       .any(|event| event.kind == "run_cancelled")
@@ -119,7 +120,7 @@ async fn interrupt_and_terminate_cancel_only_the_acknowledged_run() {
     assert_eq!(last["reason"], "interrupted");
     assert_eq!(last["status"], "cancelled");
     assert_eq!(
-      node.daemon.store.run(&id).unwrap().unwrap().status,
+      node.daemon.store.run(&id).await.unwrap().unwrap().status,
       "cancelled"
     );
     assert_eq!(model.requests().await.len(), 1);
@@ -162,7 +163,7 @@ async fn transport_loss_does_not_replay_or_cancel_daemon_work() {
   assert_eq!(last["type"], "error");
   assert_eq!(last["phase"], "follow");
   assert_eq!(
-    node.daemon.store.run(&id).unwrap().unwrap().status,
+    node.daemon.store.run(&id).await.unwrap().unwrap().status,
     "running"
   );
   assert_eq!(model.requests().await.len(), 1);
@@ -184,6 +185,7 @@ async fn uncertain_run_is_reported_without_replaying_it() {
     .daemon
     .store
     .accept_run(&session.id, session.owner_epoch, "old prompt", "stable")
+    .await
     .unwrap();
   let before = node
     .daemon
@@ -195,6 +197,7 @@ async fn uncertain_run_is_reported_without_replaying_it() {
       "",
       "unknown effects",
     )
+    .await
     .unwrap();
   let output = invoke(
     &node,
@@ -212,7 +215,7 @@ async fn uncertain_run_is_reported_without_replaying_it() {
   .await;
   assert_eq!(output.status.code(), Some(4));
   assert_eq!(records(&output).last().unwrap()["status"], "uncertain");
-  assert_eq!(node.daemon.store.run(&run.id).unwrap(), Some(before));
+  assert_eq!(node.daemon.store.run(&run.id).await.unwrap(), Some(before));
   assert!(model.requests().await.is_empty());
   node.close().await;
 }

@@ -18,6 +18,9 @@ pub(crate) fn parse_p0(prompt: &str) -> Option<Result<P0Command, String>> {
   let root = words.first()?.as_str();
   let args = &words[1..];
   let parsed = match root {
+    "/memory" => crate::memory_command::parse(args)
+      .map(crate::resource_command::ResourceCommand::Memory)
+      .map(P0Command::Resource),
     "/new" if args.is_empty() => Ok(P0Command::New),
     "/sessions" if args.is_empty() => Ok(P0Command::Sessions),
     "/cancel" if args.is_empty() => Ok(P0Command::Cancel),

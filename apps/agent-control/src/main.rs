@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     &settings.log_filter,
   )?;
   let identity = PeerIdentity::load_or_create(&data_dir.join("identity"), &settings.node_id)?;
-  let store = Store::open(data_dir.join("control.sqlite3"))?;
+  let store = Store::open(data_dir.join("control.sqlite3")).await?;
   let manager = PeerManager::new(
     store.clone(),
     identity.clone(),
@@ -62,41 +62,45 @@ async fn main() -> Result<()> {
         public.pairing_fingerprint()? == pairing_fingerprint,
         "human-verified pairing fingerprint does not match TLS/Noise identity binding"
       );
-      manager.pair_local(
-        public,
-        ["control.register", "control.resolve", "control.relay"]
-          .map(String::from)
-          .to_vec(),
-      )?;
+      manager
+        .pair_local(
+          public,
+          ["control.register", "control.resolve", "control.relay"]
+            .map(String::from)
+            .to_vec(),
+        )
+        .await?;
       println!("Peer paired; restart the control listener to reload its mTLS trust roots.");
     }
     config::Command::Revoke { node_id } => {
-      manager.revoke_local(&node_id)?;
+      manager.revoke_local(&node_id).await?;
     }
     config::Command::Allow { source, target } => {
-      manager.trust(&source)?;
-      manager.trust(&target)?;
-      store.control_allow_link(&source, &target, true)?;
+      manager.trust(&source).await?;
+      manager.trust(&target).await?;
+      store.control_allow_link(&source, &target, true).await?;
       tracing::info!(operation = "control.policy", outcome = "allowed", source = %source, target = %target, "operator authorized a directional relay link");
     }
     config::Command::Deny { source, target } => {
-      store.control_allow_link(&source, &target, false)?;
+      store.control_allow_link(&source, &target, false).await?;
       tracing::info!(operation = "control.policy", outcome = "denied", source = %source, target = %target, "operator removed a directional relay link");
     }
     config::Command::Serve => {
       if let Some(links) = &settings.allowed_links {
         for link in links {
-          manager.trust(&link.source)?;
-          manager.trust(&link.target)?;
+          manager.trust(&link.source).await?;
+          manager.trust(&link.target).await?;
         }
-        store.control_replace_links(
-          &links
-            .iter()
-            .map(|link| (link.source.clone(), link.target.clone()))
-            .collect::<Vec<_>>(),
-        )?;
+        store
+          .control_replace_links(
+            &links
+              .iter()
+              .map(|link| (link.source.clone(), link.target.clone()))
+              .collect::<Vec<_>>(),
+          )
+          .await?;
       }
-      let tls = manager.server_tls()?;
+      let tls = manager.server_tls().await?;
       let module = composition::ControlModule::new(
         Shared::new(manager),
         Shared::new(store),

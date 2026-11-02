@@ -48,7 +48,7 @@ pub(super) fn supervise(
       let Some(context) = context.upgrade() else {
         break;
       };
-      if context.fence(&cancellation).is_err() {
+      if context.fence(&cancellation).await.is_err() {
         break;
       }
       let lease = context.lease_watch.borrow().clone();

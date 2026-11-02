@@ -137,11 +137,13 @@ async fn tui_inspects_and_continues_in_a_fresh_session_without_replaying_the_ori
       "original must never replay",
       "original-key",
     )
+    .await
     .unwrap();
   node
     .daemon
     .store
     .update_run(&original.id, RunStatus::Running, "", "")
+    .await
     .unwrap();
   node.daemon.recover().await.unwrap();
   assert_eq!(
@@ -170,6 +172,7 @@ async fn tui_inspects_and_continues_in_a_fresh_session_without_replaying_the_ori
     .daemon
     .store
     .run_recovery(&original.id)
+    .await
     .unwrap()
     .unwrap();
   let new_id = resolution.replacement_run_id.as_ref().unwrap();
@@ -229,11 +232,13 @@ async fn inspection_exposes_blocking_tasks_without_losing_empty_page_cursors() {
     .daemon
     .store
     .accept_run(&session.id, 1, "interrupted", "original")
+    .await
     .unwrap();
   node
     .daemon
     .store
     .update_run_owned(&run.id, 1, RunStatus::Uncertain, "", "unknown effects")
+    .await
     .unwrap();
   for index in 0..101 {
     let task = agent_core::TaskEnvelope {
@@ -249,12 +254,13 @@ async fn inspection_exposes_blocking_tasks_without_losing_empty_page_cursors() {
       idempotency_key: format!("task-key-{index}"),
       deadline_ms: agent_core::now_ms() + 60_000,
     };
-    node.daemon.store.accept_task(task.clone()).unwrap();
+    node.daemon.store.accept_task(task.clone()).await.unwrap();
     if index < 100 {
       node
         .daemon
         .store
         .mark_task_cancelled(&task.task_id, &task.attempt_id, 1)
+        .await
         .unwrap();
     }
   }

@@ -42,11 +42,11 @@ pub async fn ready(
 pub async fn session(harness: &Harness, cx: &mut TestAppContext) -> String {
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   harness.click("new-session", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session.is_some() && !state.busy && !state.workbench.busy
     })
     .await

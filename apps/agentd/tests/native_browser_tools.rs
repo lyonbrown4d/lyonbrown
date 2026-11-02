@@ -88,7 +88,7 @@ async fn all_protocols_harness_approve_real_cef_fill_click_and_fence_lost_receip
       assert_eq!(page.effects.lock().await.len(), 0);
       node.client.approve(&pending.id, true).await.unwrap();
       let filled = model_observation(&model, 3).await;
-      receipts::assert_receipts(&node, &pending, "consumed", Some("completed"));
+      receipts::assert_receipts(&node, &pending, "consumed", Some("completed")).await;
       assert_eq!(
         runtime.actions.lock().await[0].id,
         exact["action_id"].as_str().unwrap()
@@ -104,6 +104,7 @@ async fn all_protocols_harness_approve_real_cef_fill_click_and_fence_lost_receip
           .daemon
           .store
           .browser_action_status(exact["action_id"].as_str().unwrap())
+          .await
           .unwrap()
           .as_deref(),
         Some("completed")
@@ -147,6 +148,7 @@ async fn all_protocols_harness_approve_real_cef_fill_click_and_fence_lost_receip
             .daemon
             .store
             .browser_action_status(exact["action_id"].as_str().unwrap())
+            .await
             .unwrap()
             .as_deref(),
           Some("uncertain")
@@ -191,6 +193,7 @@ async fn all_protocols_harness_approve_real_cef_fill_click_and_fence_lost_receip
             .daemon
             .store
             .browser_action_status(exact["action_id"].as_str().unwrap())
+            .await
             .unwrap()
             .as_deref(),
           Some("completed")
@@ -213,7 +216,8 @@ async fn all_protocols_harness_approve_real_cef_fill_click_and_fence_lost_receip
         } else {
           "completed"
         }),
-      );
+      )
+      .await;
       runtime.ready(&tab.id, "Submitted").await;
       eprintln!(
         "{protocol:?}: actual CEF fill + click, exact approvals, page effect and durable {} verified",

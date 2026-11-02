@@ -17,7 +17,7 @@ impl TaskService for TaskWorker {
     &self,
     request: Request<v1::TaskEnvelope>,
   ) -> Result<Response<v1::Task>, Status> {
-    let peer = self.manager.authorize(&request, &["tasks.submit"])?;
+    let peer = self.manager.authorize(&request, &["tasks.submit"]).await?;
     let input = request.into_inner();
     if input.owner_node_id != peer.node_id {
       return Err(Status::permission_denied(
@@ -42,6 +42,7 @@ impl TaskService for TaskWorker {
         .manager
         .store
         .task(&envelope.task_id)
+        .await
         .map_err(|_| Status::internal("task store unavailable"))?
         .is_none()
     {
@@ -57,6 +58,7 @@ impl TaskService for TaskWorker {
           .to_str()
           .ok_or_else(|| Status::invalid_argument("worker workspace must be UTF-8"))?,
       )
+      .await
       .map_err(|_| Status::failed_precondition("task conflicts with existing durable state"))?;
     if created {
       let cancellation = CancellationToken::new();
@@ -83,10 +85,11 @@ impl TaskService for TaskWorker {
     &self,
     request: Request<v1::TaskRequest>,
   ) -> Result<Response<v1::Task>, Status> {
-    let peer = self.manager.authorize(&request, &["tasks.read"])?;
+    let peer = self.manager.authorize(&request, &["tasks.read"]).await?;
     Ok(Response::new(
       self
-        .owned(&request.into_inner().task_id, &peer.node_id)?
+        .owned(&request.into_inner().task_id, &peer.node_id)
+        .await?
         .into(),
     ))
   }
@@ -96,18 +99,23 @@ impl TaskService for TaskWorker {
     &self,
     request: Request<v1::WatchRequest>,
   ) -> Result<Response<Self::WatchTaskStream>, Status> {
-    let peer = self.manager.authorize(&request, &["tasks.read"])?;
+    let peer = self.manager.authorize(&request, &["tasks.read"]).await?;
     let input = request.into_inner();
-    self.owned(&input.run_id, &peer.node_id)?;
+    self.owned(&input.run_id, &peer.node_id).await?;
     let (sender, receiver) = mpsc::channel(32);
     let worker = self.clone();
     tokio::spawn(async move {
       let mut cursor = input.after_cursor;
       loop {
-        if !worker.manager.trust(&peer.node_id).is_ok_and(|trust| {
-          trust.fingerprint == peer.fingerprint
-            && require_capabilities(&trust, &["tasks.read"]).is_ok()
-        }) {
+        if !worker
+          .manager
+          .trust(&peer.node_id)
+          .await
+          .is_ok_and(|trust| {
+            trust.fingerprint == peer.fingerprint
+              && require_capabilities(&trust, &["tasks.read"]).is_ok()
+          })
+        {
           let _ = sender
             .send(Err(Status::permission_denied(
               "peer trust or capability was revoked",
@@ -115,7 +123,12 @@ impl TaskService for TaskWorker {
             .await;
           break;
         }
-        let events = match worker.manager.store.events(&input.run_id, cursor, 100) {
+        let events = match worker
+          .manager
+          .store
+          .events(&input.run_id, cursor, 100)
+          .await
+        {
           Ok(events) => events,
           Err(_) => {
             let _ = sender
@@ -125,10 +138,15 @@ impl TaskService for TaskWorker {
           }
         };
         for event in events {
-          if !worker.manager.trust(&peer.node_id).is_ok_and(|trust| {
-            trust.fingerprint == peer.fingerprint
-              && require_capabilities(&trust, &["tasks.read"]).is_ok()
-          }) {
+          if !worker
+            .manager
+            .trust(&peer.node_id)
+            .await
+            .is_ok_and(|trust| {
+              trust.fingerprint == peer.fingerprint
+                && require_capabilities(&trust, &["tasks.read"]).is_ok()
+            })
+          {
             let _ = sender
               .send(Err(Status::permission_denied(
                 "peer trust or capability was revoked",
@@ -143,6 +161,7 @@ impl TaskService for TaskWorker {
         }
         if worker
           .owned(&input.run_id, &peer.node_id)
+          .await
           .is_ok_and(|task| {
             matches!(
               task.attempt_status.as_str(),
@@ -162,8 +181,10 @@ impl TaskService for TaskWorker {
     &self,
     request: Request<v1::TaskRequest>,
   ) -> Result<Response<v1::Task>, Status> {
-    let peer = self.manager.authorize(&request, &["tasks.cancel"])?;
-    let task = self.owned(&request.into_inner().task_id, &peer.node_id)?;
+    let peer = self.manager.authorize(&request, &["tasks.cancel"]).await?;
+    let task = self
+      .owned(&request.into_inner().task_id, &peer.node_id)
+      .await?;
     let task = self
       .manager
       .store
@@ -172,6 +193,7 @@ impl TaskService for TaskWorker {
         &task.envelope.attempt_id,
         task.envelope.owner_epoch,
       )
+      .await
       .map_err(|_| {
         Status::failed_precondition("task cannot be cancelled from its current state")
       })?;
@@ -186,9 +208,9 @@ impl TaskService for TaskWorker {
     &self,
     request: Request<v1::AcceptResultRequest>,
   ) -> Result<Response<v1::Task>, Status> {
-    let peer = self.manager.authorize(&request, &["tasks.accept"])?;
+    let peer = self.manager.authorize(&request, &["tasks.accept"]).await?;
     let input = request.into_inner();
-    self.owned(&input.task_id, &peer.node_id)?;
+    self.owned(&input.task_id, &peer.node_id).await?;
     let task = self
       .manager
       .store
@@ -198,6 +220,7 @@ impl TaskService for TaskWorker {
         input.owner_epoch,
         input.accepted,
       )
+      .await
       .map_err(|_| {
         Status::failed_precondition("task attempt is stale or has no result awaiting acceptance")
       })?;

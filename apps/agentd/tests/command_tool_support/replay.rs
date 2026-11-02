@@ -36,6 +36,7 @@ async fn repeated_call_identity_never_dispatches_even_with_changed_arguments() {
       .daemon
       .store
       .operation(exact(&pending)["action_id"].as_str().unwrap())
+      .await
       .unwrap()
       .unwrap()
       .status,
@@ -70,6 +71,7 @@ async fn ownership_change_while_approval_pending_prevents_intent_and_process() {
     .daemon
     .store
     .change_owner(&node.session_id, 1, "other-owner")
+    .await
     .unwrap();
   node.client.approve(&pending.id, true).await.unwrap();
   tokio::time::timeout(std::time::Duration::from_secs(5), async {
@@ -85,6 +87,7 @@ async fn ownership_change_while_approval_pending_prevents_intent_and_process() {
       .daemon
       .store
       .operation(exact(&pending)["action_id"].as_str().unwrap())
+      .await
       .unwrap()
       .is_none()
   );

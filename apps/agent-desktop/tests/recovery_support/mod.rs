@@ -122,35 +122,37 @@ impl Scenario {
 
   pub async fn evidence(&self) -> anyhow::Result<serde_json::Value> {
     let store = &self.remote.pair.master.store;
-    let resolution = store.run_recovery(&self.original.id)?;
-    let fresh = resolution
+    let resolution = store.run_recovery(&self.original.id).await?;
+    let fresh = if let Some(id) = resolution
       .as_ref()
       .and_then(|value| value.replacement_run_id.as_ref())
-      .map(|id| store.run(id))
-      .transpose()?
-      .flatten();
+    {
+      store.run(id).await?
+    } else {
+      None
+    };
     let requests = self.model.requests().await;
-    let approvals = store.approvals(&self.original.id)?;
+    let approvals = store.approvals(&self.original.id).await?;
     let mut command_receipts = Vec::new();
     for approval in &approvals {
       let exact: serde_json::Value = serde_json::from_str(&approval.arguments_json)?;
       if let Some(id) = exact["action_id"].as_str()
-        && let Some(receipt) = store.operation(id)?
+        && let Some(receipt) = store.operation(id).await?
       {
         command_receipts.push(receipt);
       }
     }
     Ok(serde_json::json!({
       "platform":std::env::consts::OS, "arch":std::env::consts::ARCH, "version":env!("CARGO_PKG_VERSION"),
-      "original_run":store.run(&self.original.id)?, "resolution":resolution, "replacement_run":fresh,
+      "original_run":store.run(&self.original.id).await?, "resolution":resolution, "replacement_run":fresh,
       "approvals":approvals, "command_receipts":command_receipts,
-      "master_task":store.task(&self.task_id)?, "worker_task":self.remote.pair.worker.store.task(&self.task_id)?,
+      "master_task":store.task(&self.task_id).await?, "worker_task":self.remote.pair.worker.store.task(&self.task_id).await?,
       "effect":std::fs::read_to_string(self.effect()).ok(), "main_model_requests":requests.len(),
       "worker_model_requests":self.worker_model.requests().await.len(),
       "worker_dispatch_finished":self.dispatch.is_finished(),
       "fresh_request_has_old_command":requests.get(1).is_some_and(|request| request.body.to_string().contains("exec /bin/sleep")),
-      "original_events":store.events(&self.original.id, 0, 1000)?,
-      "pending_outbox":store.pending_outbox(1000)?
+      "original_events":store.events(&self.original.id, 0, 1000).await?,
+      "pending_outbox":store.pending_outbox(1000).await?
     }))
   }
 }

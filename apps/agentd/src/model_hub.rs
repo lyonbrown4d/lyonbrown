@@ -66,6 +66,7 @@ impl Daemon {
         self
           .store
           .model_job(&input.id)
+          .await
           .map_err(crate::service::db_error)?
           .unwrap_or_else(|| serde_json::json!({"id":input.id,"state":"unknown"})),
       ),

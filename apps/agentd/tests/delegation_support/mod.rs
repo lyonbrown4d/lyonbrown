@@ -66,11 +66,11 @@ impl Delegation {
   pub async fn approval(&self, run: &str, count: usize) -> Approval {
     tokio::time::timeout(Duration::from_secs(8), async {
       loop {
-        let approvals = self.pair.master.store.approvals(run).unwrap();
+        let approvals = self.pair.master.store.approvals(run).await.unwrap();
         if approvals.len() >= count {
           return approvals[count - 1].clone();
         }
-        if let Some(run) = self.pair.master.store.run(run).unwrap() {
+        if let Some(run) = self.pair.master.store.run(run).await.unwrap() {
           assert!(
             !matches!(run.status.as_str(), "completed" | "failed" | "uncertain"),
             "{run:?}"
@@ -86,7 +86,7 @@ impl Delegation {
   pub async fn terminal(&self, run: &str) -> Run {
     tokio::time::timeout(Duration::from_secs(8), async {
       loop {
-        let run = self.pair.master.store.run(run).unwrap().unwrap();
+        let run = self.pair.master.store.run(run).await.unwrap().unwrap();
         if matches!(
           run.status.as_str(),
           "completed" | "failed" | "cancelled" | "uncertain"

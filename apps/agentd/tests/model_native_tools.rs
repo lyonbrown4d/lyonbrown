@@ -181,12 +181,12 @@ async fn actual_qwen_reads_workspace_and_retains_tool_result_across_turns() -> R
     let reply = completed(&client, &run.id, fixture.run_seconds).await?;
     println!("TOOLS_MODEL_REPLY {}", reply.result);
     ensure!(reply.result.contains(&marker), "model did not report actual workspace marker: {}", reply.result);
-    let events = daemon.store.events(&run.id, 0, 1000)?;
+    let events = daemon.store.events(&run.id, 0, 1000).await?;
     let actual_read = events.iter().map(|event|decode(&event.kind, &event.payload_json)).collect::<std::result::Result<Vec<_>,_>>()?.iter().any(|event|matches!(event,
       DecodedEvent::Known(AgentEvent::ToolFinished { name, text, is_error: false, .. }) if name == "read_file" && text.contains(&marker)
     ));
     ensure!(actual_read, "no persisted successful read_file result with actual marker");
-    let stored = daemon.store.run(&run.id)?.ok_or_else(|| anyhow::anyhow!("run not persisted"))?;
+    let stored = daemon.store.run(&run.id).await?.ok_or_else(|| anyhow::anyhow!("run not persisted"))?;
     ensure!(stored.status == "completed" && stored.result == reply.result, "result differs from database");
     let followup = client.start_run(&session.id, "What exact marker did the file contain? Use our conversation history and repeat the marker only.", &agent_core::new_id()).await?;
     let recalled = completed(&client, &followup.id, fixture.run_seconds).await?;
@@ -195,22 +195,22 @@ async fn actual_qwen_reads_workspace_and_retains_tool_result_across_turns() -> R
     let listing = client.start_run(&session.id, "Call list_files with exactly these arguments: {\"path\":\".\"}. The query field is forbidden. Tell me the name of the text file you find in the tool result.", &agent_core::new_id()).await?;
     let listed = completed(&client, &listing.id, fixture.run_seconds).await?;
     println!("TOOLS_MODEL_LISTING {}", listed.result);
-    let listing_executed = daemon.store.events(&listing.id, 0, 1000)?.iter().map(|event|decode(&event.kind, &event.payload_json)).collect::<std::result::Result<Vec<_>,_>>()?.iter().any(|event|matches!(event,
+    let listing_executed = daemon.store.events(&listing.id, 0, 1000).await?.iter().map(|event|decode(&event.kind, &event.payload_json)).collect::<std::result::Result<Vec<_>,_>>()?.iter().any(|event|matches!(event,
       DecodedEvent::Known(AgentEvent::ToolFinished { name, is_error: false, .. }) if name == "list_files"
     ));
     let arithmetic = client.start_run(&session.id, "What is 2 + 2? Answer with the digit only.", &agent_core::new_id()).await?;
     let calculated = completed(&client, &arithmetic.id, fixture.run_seconds).await?;
     for turn in [&followup.id, &listing.id, &arithmetic.id] {
-      let stored = daemon.store.run(turn)?.ok_or_else(|| anyhow::anyhow!("follow-up run absent"))?;
+      let stored = daemon.store.run(turn).await?.ok_or_else(|| anyhow::anyhow!("follow-up run absent"))?;
       ensure!(stored.status == "completed" && !stored.result.trim().is_empty(), "follow-up result not persisted");
       println!("TOOLS_MODEL_TURN run={turn} result={:?}", stored.result);
     }
     println!("TOOLS_MODEL_EVIDENCE run={} followup={} model={}", run.id, followup.id, plan.id);
     let mut turns = Vec::new();
     for turn in [&run.id, &followup.id, &listing.id, &arithmetic.id] {
-      let stored = daemon.store.run(turn)?.ok_or_else(|| anyhow::anyhow!("evidence run absent"))?;
+      let stored = daemon.store.run(turn).await?.ok_or_else(|| anyhow::anyhow!("evidence run absent"))?;
       let mut tools = Vec::new();
-      for event in daemon.store.events(turn, 0, 1000)? {
+      for event in daemon.store.events(turn, 0, 1000).await? {
         if let DecodedEvent::Known(tool @ (AgentEvent::ToolStarted{..} | AgentEvent::ToolFinished{..})) = decode(&event.kind, &event.payload_json)? {
           tools.push(serde_json::json!({"kind":event.kind,"payload":tool}));
         }

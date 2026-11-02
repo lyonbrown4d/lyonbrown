@@ -7,7 +7,9 @@ const API: &str = "fixture-api-5mN9rB8cT4kY7pD1aS3fE6";
 #[tokio::test]
 async fn admin_authentication_session_expiry_and_csrf_are_bound() {
   let directory = tempfile::tempdir().expect("directory");
-  let store = GatewayStorage::open(directory.path().join("gateway.sqlite3")).expect("open");
+  let store = GatewayStorage::open(directory.path().join("gateway.sqlite3"))
+    .await
+    .expect("open");
   store
     .bootstrap_super_admin("operator", PASSWORD)
     .await
@@ -112,7 +114,7 @@ async fn admin_authentication_session_expiry_and_csrf_are_bound() {
 async fn api_tokens_are_hash_only_revocable_expiring_and_separate_from_admin() {
   let directory = tempfile::tempdir().expect("directory");
   let path = directory.path().join("gateway.sqlite3");
-  let store = GatewayStorage::open(&path).expect("open");
+  let store = GatewayStorage::open(&path).await.expect("open");
   store
     .bootstrap_super_admin("operator", PASSWORD)
     .await
@@ -185,7 +187,7 @@ async fn api_tokens_are_hash_only_revocable_expiring_and_separate_from_admin() {
   );
   let issued_token = issued.token().to_owned();
   drop(store);
-  let reopened = GatewayStorage::open(&path).expect("reopen");
+  let reopened = GatewayStorage::open(&path).await.expect("reopen");
   assert!(
     !AccessControl::authorize(&reopened, API)
       .await

@@ -2,8 +2,11 @@ use crate::{
   GatewayStorage, Result, StorageError, error::valid_key, schema::gateway_audits as audits,
 };
 use async_trait::async_trait;
-use diesel::prelude::*;
 use gateway_core::{AuditError, AuditRecord, AuditSink, AuditStatus};
+use sea_orm::{
+  ActiveModelTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, prelude::*,
+  sea_query::Expr,
+};
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -29,28 +32,30 @@ impl GatewayStorage {
     let offset = i64::try_from(offset).map_err(|_| StorageError::InvalidInput("audit offset"))?;
     self
       .run(move |connection| {
-        connection.transaction(|connection| {
-          let total = audits::table.count().get_result::<i64>(connection)?;
-          let rows = audits::table
-            .order(audits::sequence.desc())
-            .limit(i64::from(limit))
-            .offset(offset)
-            .select((
-              audits::request_id,
-              audits::model,
-              audits::status,
-              audits::elapsed_ms,
-              audits::policy_revision,
-              audits::principal,
-              audits::reserved_tokens,
-              audits::usage,
-            ))
-            .load::<Row>(connection)?;
-          let records = rows.into_iter().map(decode).collect::<Result<_>>()?;
-          Ok(AuditPage {
-            records,
-            total: u64::try_from(total).map_err(|_| StorageError::InvalidData)?,
-          })
+        Box::pin(async move {
+          let total = audits::Entity::find().count(connection).await?;
+          let rows = audits::Entity::find()
+            .order_by_desc(audits::Column::Sequence)
+            .limit(u64::from(limit))
+            .offset(offset as u64)
+            .all(connection)
+            .await?;
+          let records = rows
+            .into_iter()
+            .map(|row| {
+              decode((
+                row.request_id,
+                row.model,
+                row.status,
+                row.elapsed_ms,
+                row.policy_revision,
+                row.principal,
+                row.reserved_tokens,
+                row.usage,
+              ))
+            })
+            .collect::<Result<_>>()?;
+          Ok(AuditPage { records, total })
         })
       })
       .await
@@ -85,82 +90,64 @@ impl GatewayStorage {
     let reserved = i64::try_from(record.reserved_tokens)
       .map_err(|_| StorageError::InvalidInput("reserved tokens"))?;
     self
-      .run(move |connection| {
-        connection.immediate_transaction(|connection| {
+      .write(move |connection| {
+        Box::pin(async move {
           if status == 0 {
             if record.usage.is_some() {
               return Err(StorageError::InvalidInput("pending usage"));
             }
-            crate::budget::reserve(connection, &record)?;
-            let changed = diesel::insert_into(audits::table)
-              .values((
-                audits::request_id.eq(&record.request_id),
-                audits::model.eq(&record.model),
-                audits::status.eq(status),
-                audits::elapsed_ms.eq(elapsed),
-                audits::policy_revision.eq(&record.policy_revision),
-                audits::principal.eq(&principal),
-                audits::reserved_tokens.eq(reserved),
-              ))
-              .on_conflict_do_nothing()
-              .execute(connection)?;
-            if changed != 1 {
+            if audits::Entity::find()
+              .filter(audits::Column::RequestId.eq(&record.request_id))
+              .one(connection)
+              .await?
+              .is_some()
+            {
               return Err(StorageError::Conflict);
             }
+            crate::budget::reserve(connection, &record).await?;
+            audits::ActiveModel {
+              request_id: Set(record.request_id),
+              model: Set(record.model),
+              status: Set(status),
+              elapsed_ms: Set(elapsed),
+              policy_revision: Set(record.policy_revision),
+              principal: Set(principal),
+              reserved_tokens: Set(reserved),
+              usage: Set(None),
+              ..Default::default()
+            }
+            .insert(connection)
+            .await?;
             return Ok(());
           }
-          let previous = audits::table
-            .filter(audits::request_id.eq(&record.request_id))
-            .select((
-              audits::model,
-              audits::status,
-              audits::policy_revision,
-              audits::principal,
-              audits::reserved_tokens,
-              audits::usage,
-            ))
-            .first::<(String, i16, String, Option<String>, i64, Option<String>)>(connection)
-            .optional()?;
-          let Some((
-            model,
-            previous_status,
-            revision,
-            previous_principal,
-            previous_reserved,
-            previous_usage,
-          )) = previous
-          else {
-            return Err(StorageError::Conflict);
-          };
-          if model != record.model
-            || revision != record.policy_revision
-            || principal != previous_principal
-            || reserved != previous_reserved
+          let previous = audits::Entity::find()
+            .filter(audits::Column::RequestId.eq(&record.request_id))
+            .one(connection)
+            .await?
+            .ok_or(StorageError::Conflict)?;
+          if previous.model != record.model
+            || previous.policy_revision != record.policy_revision
+            || previous.principal != principal
+            || previous.reserved_tokens != reserved
           {
             return Err(StorageError::Conflict);
           }
-          if previous_status == status {
-            return if usage == previous_usage {
+          if previous.status == status {
+            return if previous.usage == usage {
               Ok(())
             } else {
               Err(StorageError::Conflict)
             };
           }
-          if previous_status != 0 {
+          if previous.status != 0 {
             return Err(StorageError::Conflict);
           }
-          crate::budget::settle(connection, &record)?;
-          diesel::update(
-            audits::table
-              .filter(audits::request_id.eq(&record.request_id))
-              .filter(audits::status.eq(0)),
-          )
-          .set((
-            audits::status.eq(status),
-            audits::elapsed_ms.eq(elapsed),
-            audits::usage.eq(usage),
-          ))
-          .execute(connection)?;
+          crate::budget::settle(connection, &record).await?;
+          let mut previous: audits::ActiveModel = previous.into();
+          previous.status = Set(status);
+          previous.elapsed_ms = Set(elapsed);
+          previous.usage = Set(usage);
+          previous.update(connection).await?;
           Ok(())
         })
       })
@@ -185,10 +172,12 @@ impl AuditSink for GatewayStorage {
     self.record_audit(record).await.map_err(|_| AuditError)
   }
 }
-pub(crate) fn reconcile(connection: &mut SqliteConnection) -> Result<()> {
-  diesel::update(audits::table.filter(audits::status.eq(0)))
-    .set(audits::status.eq(4))
-    .execute(connection)?;
+pub(crate) async fn reconcile(connection: &impl ConnectionTrait) -> Result<()> {
+  audits::Entity::update_many()
+    .col_expr(audits::Column::Status, Expr::value(4_i16))
+    .filter(audits::Column::Status.eq(0_i16))
+    .exec(connection)
+    .await?;
   Ok(())
 }
 fn encode(status: AuditStatus) -> i16 {

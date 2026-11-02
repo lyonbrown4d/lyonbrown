@@ -152,7 +152,7 @@ impl SkillTool {
     arguments: &serde_json::Value,
     cancellation: &CancellationToken,
   ) -> anyhow::Result<String> {
-    self.fence(cancellation)?;
+    self.fence(cancellation).await?;
     let input: LoadSkill = serde_json::from_value(arguments.clone())?;
     let binding = self
       .skills
@@ -164,24 +164,26 @@ impl SkillTool {
     let content =
       tokio::task::spawn_blocking(move || agent_workspace::Workspace::open(root)?.read(&path))
         .await??;
-    self.fence(cancellation)?;
+    self.fence(cancellation).await?;
     Ok(
       json!({"name":input.name,"scope":binding.scope,"path":input.path,"content":content})
         .to_string(),
     )
   }
 
-  fn fence(&self, cancellation: &CancellationToken) -> anyhow::Result<()> {
+  async fn fence(&self, cancellation: &CancellationToken) -> anyhow::Result<()> {
     anyhow::ensure!(!cancellation.is_cancelled(), "Skill load cancelled");
     let run = self
       .daemon
       .store
-      .run(&self.run_id)?
+      .run(&self.run_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("Skill run unavailable"))?;
     let session = self
       .daemon
       .store
-      .session(&run.session_id)?
+      .session(&run.session_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("Skill session unavailable"))?;
     anyhow::ensure!(
       session.owner_node_id == self.daemon.node_id && session.owner_epoch == self.owner_epoch,

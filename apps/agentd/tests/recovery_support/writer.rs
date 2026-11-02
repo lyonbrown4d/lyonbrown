@@ -15,10 +15,12 @@ async fn resolution_waits_for_detached_workspace_writer_before_recording_fence()
       workspace.path().to_str().unwrap(),
       &daemon.node_id,
     )
+    .await
     .unwrap();
   let (run, _) = daemon
     .store
     .accept_run(&session.id, 1, "interrupted write", "original")
+    .await
     .unwrap();
   daemon
     .store
@@ -29,6 +31,7 @@ async fn resolution_waits_for_detached_workspace_writer_before_recording_fence()
       "",
       "unknown effect",
     )
+    .await
     .unwrap();
   let writer = daemon.workspace_writes.clone().lock_owned().await;
   let resolver = daemon.clone();
@@ -52,11 +55,12 @@ async fn resolution_waits_for_detached_workspace_writer_before_recording_fence()
   })
   .await
   .unwrap();
-  assert!(daemon.store.run_recovery(&run.id).unwrap().is_none());
+  assert!(daemon.store.run_recovery(&run.id).await.unwrap().is_none());
   assert_eq!(
     daemon
       .store
       .session(&session.id)
+      .await
       .unwrap()
       .unwrap()
       .owner_epoch,
@@ -72,18 +76,19 @@ async fn resolution_waits_for_detached_workspace_writer_before_recording_fence()
     std::fs::read_to_string(marker).unwrap(),
     "verified final bytes"
   );
-  assert!(daemon.store.run_recovery(&run.id).unwrap().is_some());
+  assert!(daemon.store.run_recovery(&run.id).await.unwrap().is_some());
   assert_eq!(
     daemon
       .store
       .session(&session.id)
+      .await
       .unwrap()
       .unwrap()
       .owner_epoch,
     2
   );
   assert_eq!(
-    daemon.store.run(&run.id).unwrap().unwrap().status,
+    daemon.store.run(&run.id).await.unwrap().unwrap().status,
     "uncertain"
   );
   daemon.shutdown().await;

@@ -44,6 +44,37 @@ service ClientService {
   rpc ListApprovals(RunRequest) returns (Approvals);
   rpc ApproveAction(ApproveRequest) returns (Approval);
 }
+service MemoryService {
+  rpc ListMemories(ListMemoriesRequest) returns (Memories);
+  rpc GetMemory(GetMemoryRequest) returns (MemoryRecord);
+  rpc PutMemory(PutMemoryRequest) returns (MemoryRecord);
+  rpc ForgetMemory(ForgetMemoryRequest) returns (MemoryRecord);
+  rpc SearchMemories(SearchMemoriesRequest) returns (MemoryMatches);
+  rpc ListMemoryJobs(GetMemoryRequest) returns (MemoryJobs);
+  rpc RetryMemoryJob(RetryMemoryJobRequest) returns (Empty);
+  rpc GetMemoryStatus(Empty) returns (MemoryStatus);
+}
+enum MemoryScopeKind { MEMORY_SCOPE_KIND_UNSPECIFIED = 0; MEMORY_SCOPE_KIND_USER = 1; MEMORY_SCOPE_KIND_PROJECT = 2; MEMORY_SCOPE_KIND_SESSION = 3; }
+enum MemoryKind { MEMORY_KIND_UNSPECIFIED = 0; MEMORY_KIND_PREFERENCE = 1; MEMORY_KIND_FACT = 2; MEMORY_KIND_PROCEDURE = 3; }
+enum MemoryState { MEMORY_STATE_UNSPECIFIED = 0; MEMORY_STATE_PROPOSED = 1; MEMORY_STATE_ACTIVE = 2; MEMORY_STATE_SUPERSEDED = 3; MEMORY_STATE_REJECTED = 4; MEMORY_STATE_DELETED = 5; }
+enum MemoryJobKind { MEMORY_JOB_KIND_UNSPECIFIED = 0; MEMORY_JOB_KIND_UPSERT = 1; MEMORY_JOB_KIND_DELETE = 2; }
+enum MemoryJobState { MEMORY_JOB_STATE_UNSPECIFIED = 0; MEMORY_JOB_STATE_PENDING = 1; MEMORY_JOB_STATE_RUNNING = 2; MEMORY_JOB_STATE_COMPLETED = 3; MEMORY_JOB_STATE_FAILED = 4; MEMORY_JOB_STATE_UNCERTAIN = 5; }
+message MemoryScope { MemoryScopeKind kind = 1; string id = 2; }
+message MemoryRecord { string id = 1; MemoryScope scope = 2; MemoryKind kind = 3; MemoryState state = 4; string content = 5; uint64 revision = 6; int64 created_at_ms = 7; int64 updated_at_ms = 8; optional int64 expires_at_ms = 9; }
+message ListMemoriesRequest { string session_id = 1; repeated MemoryState states = 2; string after_id = 3; uint32 limit = 4; }
+message Memories { repeated MemoryRecord items = 1; string next_cursor = 2; }
+message GetMemoryRequest { string session_id = 1; string memory_id = 2; }
+// Scope identifiers are resolved by daemon from the authenticated owner and Session.
+message PutMemoryRequest { string session_id = 1; string id = 2; string request_id = 3; MemoryScopeKind scope_kind = 4; MemoryKind kind = 5; MemoryState state = 6; string content = 7; uint64 expected_revision = 8; optional int64 expires_at_ms = 9; }
+message ForgetMemoryRequest { string session_id = 1; string memory_id = 2; uint64 expected_revision = 3; }
+message SearchMemoriesRequest { string session_id = 1; string query = 2; uint32 limit = 3; }
+message MemoryMatch { MemoryRecord memory = 1; float score = 2; }
+message MemoryMatches { repeated MemoryMatch items = 1; }
+message MemoryJob { string id = 1; string memory_id = 2; uint64 revision = 3; MemoryJobKind kind = 4; MemoryJobState state = 5; uint32 attempts = 6; optional string error_category = 7; }
+message MemoryJobs { repeated MemoryJob jobs = 1; }
+message RetryMemoryJobRequest { string session_id = 1; string memory_id = 2; string job_id = 3; }
+message MemoryStatus { bool retrieval_ready = 1; string vector_backend = 2; string detail = 3; string embedding_model = 4; uint32 dimensions = 5; }
+
 service WorkspaceService {
   rpc ListFiles(ListFilesRequest) returns (WorkspaceFiles);
   rpc ReadFile(ReadFileRequest) returns (WorkspaceFile);

@@ -3,17 +3,15 @@ use agent_core::events::{AGENT_EVENT_KIND, AgentEvent, ExecutionPhase};
 use agent_core::{Run, RunStatus};
 use agent_runtime::{RunOutcome, Runtime, RuntimeError, RuntimeEvent};
 use anyhow::Result;
-use std::sync::{
-  Arc,
-  atomic::{AtomicBool, Ordering},
-};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 impl Daemon {
   pub(crate) async fn launch(&self, run: Run) -> Result<()> {
     let session = self
       .store
-      .session(&run.session_id)?
+      .session(&run.session_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("session missing"))?;
     let cancel = CancellationToken::new();
     self
@@ -25,10 +23,10 @@ impl Daemon {
     tokio::spawn(async move {
       let permit = tokio::select! {value=daemon.permits.clone().acquire_owned()=>value.ok(),_=cancel.cancelled()=>None};
       if permit.is_none() {
-        let _ =
-          daemon
-            .store
-            .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "");
+        let _ = daemon
+          .store
+          .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "")
+          .await;
       } else if let Err(error) = daemon
         .execute_run_scoped(&run, &session, cancel, None)
         .await
@@ -41,14 +39,18 @@ impl Daemon {
         } else {
           RunStatus::Failed
         };
-        if let Err(storage) = daemon.store.update_run_owned(
-          &run.id,
-          session.owner_epoch,
-          status,
-          "",
-          &error.to_string(),
-        ) {
-          tracing::error!(run_id=%run.id,error=%storage,"could not persist failed run");
+        if let Err(storage) = daemon
+          .store
+          .update_run_owned(
+            &run.id,
+            session.owner_epoch,
+            status,
+            "",
+            &agent_storage::public_error_message(&error),
+          )
+          .await
+        {
+          tracing::error!(run_id=%run.id,error=%agent_storage::public_error_message(&storage),"could not persist failed run");
         }
       }
       drop(permit);
@@ -64,7 +66,7 @@ impl Daemon {
     cancel: CancellationToken,
     permitted_tools: Option<&std::collections::BTreeSet<String>>,
   ) -> Result<()> {
-    let configured = self.configured_for_run(&run.id)?;
+    let configured = self.configured_for_run(&run.id).await?;
     configured
       .execute_selected_run(run, session, cancel, permitted_tools)
       .await
@@ -77,18 +79,22 @@ impl Daemon {
     permitted_tools: Option<&std::collections::BTreeSet<String>>,
   ) -> Result<()> {
     let model = self.execution_model_identity(session)?;
-    self.store.append_event_owned(
-      &run.id,
-      session.owner_epoch,
-      AGENT_EVENT_KIND,
-      serde_json::to_value(AgentEvent::PhaseChanged {
-        phase: ExecutionPhase::Preparing,
-        model: Some(model.clone()),
-      })?,
-    )?;
     self
       .store
-      .update_run_owned(&run.id, session.owner_epoch, RunStatus::Running, "", "")?;
+      .append_event_owned(
+        &run.id,
+        session.owner_epoch,
+        AGENT_EVENT_KIND,
+        serde_json::to_value(AgentEvent::PhaseChanged {
+          phase: ExecutionPhase::Preparing,
+          model: Some(model.clone()),
+        })?,
+      )
+      .await?;
+    self
+      .store
+      .update_run_owned(&run.id, session.owner_epoch, RunStatus::Running, "", "")
+      .await?;
     self.events.notify_waiters();
     self
       .record_model_route(run, session.owner_epoch, &cancel)
@@ -96,7 +102,7 @@ impl Daemon {
     let browser = self.config.browser_tools && self.browser.has_runtime().await;
     let computer = crate::computer::tools(self.clone(), run, session, cancel.clone()).await;
     let commands = crate::commands::enabled(&self.config);
-    let delegation_targets = crate::delegation::available_targets(self)?;
+    let delegation_targets = crate::delegation::available_targets(self).await?;
     let mut capabilities = [
       agent_decision::Capability::FileRead,
       agent_decision::Capability::FileWrite,
@@ -136,7 +142,8 @@ impl Daemon {
       Err(agent_decision::DecisionError::Cancelled) => {
         self
           .store
-          .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "")?;
+          .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "")
+          .await?;
         return Ok(());
       }
       Err(error) => return Err(error.into()),
@@ -154,12 +161,15 @@ impl Daemon {
         plan.allowed_tools.clear();
         plan.required_capabilities.clear();
       }
-      self.store.append_event_owned(
-        &run.id,
-        session.owner_epoch,
-        "model_selected",
-        serde_json::to_value(&info)?,
-      )?;
+      self
+        .store
+        .append_event_owned(
+          &run.id,
+          session.owner_epoch,
+          "model_selected",
+          serde_json::to_value(&info)?,
+        )
+        .await?;
       Some(backend)
     } else {
       None
@@ -170,53 +180,38 @@ impl Daemon {
       *restricted = true;
     }
     // Persist the effective, authority-clamped plan before opening the Harness.
-    self.store.append_event_owned(
-      &run.id,
-      session.owner_epoch,
-      "execution_plan",
-      serde_json::to_value(&plan)?,
-    )?;
+    self
+      .store
+      .append_event_owned(
+        &run.id,
+        session.owner_epoch,
+        "execution_plan",
+        serde_json::to_value(&plan)?,
+      )
+      .await?;
     if cancel.is_cancelled() {
       self
         .store
-        .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "")?;
+        .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "")
+        .await?;
       return Ok(());
     }
-    let persist_failed = Arc::new(AtomicBool::new(false));
-    let failed = persist_failed.clone();
-    let epoch = session.owner_epoch;
-    let store = self.store.clone();
-    let run_id = run.id.clone();
-    let notify = self.events.clone();
-    let stop = cancel.clone();
-    let last_phase = std::sync::Mutex::new(None);
-    let listener = Arc::new(move |event: RuntimeEvent| {
-      let result = (|| -> anyhow::Result<()> {
-        for event in crate::execution_events::project(event, &model, &run_id) {
-          if let agent_core::events::AgentEvent::PhaseChanged { phase, .. } = &event {
-            let mut previous = last_phase
-              .lock()
-              .map_err(|_| anyhow::anyhow!("execution phase lock unavailable"))?;
-            if *previous == Some(*phase) {
-              continue;
-            }
-            *previous = Some(*phase);
-          }
-          store.append_event_owned(
-            &run_id,
-            epoch,
-            AGENT_EVENT_KIND,
-            serde_json::to_value(event)?,
-          )?;
-        }
-        Ok(())
-      })();
-      if result.is_err() {
-        failed.store(true, Ordering::Release);
-        stop.cancel();
-      }
-      notify.notify_waiters();
-    });
+    let memory_context = self.memory_context(run, session, &cancel).await?;
+    if cancel.is_cancelled() {
+      self
+        .store
+        .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "")
+        .await?;
+      return Ok(());
+    }
+    let (event_writer, listener) = crate::execution_event_writer::EventWriter::start(
+      self.store.clone(),
+      run.id.clone(),
+      session.owner_epoch,
+      model,
+      self.events.clone(),
+      cancel.clone(),
+    );
     let mut tools =
       crate::tools::workspace_tools(self.clone(), run, &session.workspace, session.owner_epoch)?;
     let (skill_prompt, skill_tool) = crate::skill_runtime::prepare(self, run, session).await?;
@@ -287,6 +282,12 @@ impl Daemon {
         .get_or_insert_default()
         .push_str(&skill_prompt);
     }
+    if let Some(memory_context) = memory_context {
+      runtime_config
+        .system_prompt
+        .get_or_insert_default()
+        .push_str(&memory_context);
+    }
     let runtime = if let Some(backend) = backend {
       let info = self.models.info(&self.config.model)?;
       runtime_config.context_window = info.context_window;
@@ -309,7 +310,7 @@ impl Daemon {
         listener,
         backend,
       )
-      .await?
+      .await
     } else {
       Runtime::open(
         runtime_config,
@@ -320,12 +321,19 @@ impl Daemon {
         tools,
         listener,
       )
-      .await?
+      .await
     };
-    let runtime = Arc::new(runtime);
+    let runtime = match runtime {
+      Ok(runtime) => Arc::new(runtime),
+      Err(error) => {
+        event_writer.drain().await?;
+        return Err(error.into());
+      }
+    };
     {
       let mut registered = self.input_runtimes.lock().await;
       if registered.len() >= 128 && !registered.contains_key(&session.id) {
+        event_writer.drain().await?;
         anyhow::bail!(
           "input runtime capacity reached; reconcile pending queues before starting another session"
         );
@@ -341,12 +349,12 @@ impl Daemon {
     }
     let execute = runtime.execute(&run.prompt);
     tokio::pin!(execute);
-    let result = tokio::select! {
+    let result = async { tokio::select! {
       biased;
       _=cancel.cancelled()=>{runtime.cancel().await?;tokio::time::timeout(Duration::from_secs(10),&mut execute).await.map_err(|_|RuntimeError::Uncertain("cancellation did not reach a durable terminal result".into()))?},
       result=&mut execute=>result,
       _=tokio::time::sleep(Duration::from_secs(self.config.run_timeout_secs))=>{runtime.cancel().await?;tokio::time::timeout(Duration::from_secs(10),&mut execute).await.map_err(|_|RuntimeError::Uncertain("execution deadline expired with unknown outcome".into()))?},
-    };
+    }}.await;
     runtime.close_input_admission().await;
     if !runtime.has_pending_inputs().await.unwrap_or(true) {
       self.input_runtimes.lock().await.remove(&session.id);
@@ -354,15 +362,8 @@ impl Daemon {
     if let Some(computer) = &computer {
       computer.close().await;
     }
+    event_writer.drain().await?;
     let result = result?;
-    if persist_failed.load(Ordering::Acquire) {
-      return Err(
-        RuntimeError::Uncertain(
-          "runtime event persistence failed; execution requires reconciliation".into(),
-        )
-        .into(),
-      );
-    }
     let (status, error) = match result.outcome {
       RunOutcome::Completed => (RunStatus::Completed, String::new()),
       RunOutcome::Cancelled => (RunStatus::Cancelled, String::new()),
@@ -375,7 +376,8 @@ impl Daemon {
     };
     self
       .store
-      .update_run_owned(&run.id, session.owner_epoch, status, &result.text, &error)?;
+      .update_run_owned(&run.id, session.owner_epoch, status, &result.text, &error)
+      .await?;
     self.events.notify_waiters();
     Ok(())
   }

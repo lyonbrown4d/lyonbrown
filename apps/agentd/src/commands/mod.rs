@@ -83,12 +83,13 @@ impl RuntimeTool for CommandTool {
 }
 
 impl CommandTool {
-  fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
+  async fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
     ensure!(!cancel.is_cancelled(), "command cancelled before dispatch");
     let session = self
       .daemon
       .store
-      .session(&self.session_id)?
+      .session(&self.session_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("command session unavailable"))?;
     ensure!(
       session.owner_node_id == self.daemon.node_id && session.owner_epoch == self.epoch,
@@ -97,7 +98,8 @@ impl CommandTool {
     let run = self
       .daemon
       .store
-      .run(&self.run_id)?
+      .run(&self.run_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("command run unavailable"))?;
     ensure!(
       run.session_id == self.session_id
@@ -111,9 +113,15 @@ impl CommandTool {
   }
 
   async fn perform(&self, call: ToolCall, cancel: CancellationToken) -> anyhow::Result<ToolOutput> {
-    self.fence(&cancel)?;
+    self.fence(&cancel).await?;
     let request = input::request(&self.run_id, &call)?;
-    if self.daemon.store.operation(&request.action_id)?.is_some() {
+    if self
+      .daemon
+      .store
+      .operation(&request.action_id)
+      .await?
+      .is_some()
+    {
       return Err(
         RuntimeError::Uncertain(
           "command action already recorded; inspect its durable receipt before acting again".into(),
@@ -138,10 +146,16 @@ impl CommandTool {
       };
       self.daemon.store.finish_operation(&self.run_id, self.epoch, &outcome.action_id, status,
         json!({"reason":outcome.reason,"exit_code":outcome.exit_code,
-          "output_truncated":outcome.output_truncated,"stdout_bytes":outcome.stdout.len(),"stderr_bytes":outcome.stderr.len()}))
+          "output_truncated":outcome.output_truncated,"stdout_bytes":outcome.stdout.len(),"stderr_bytes":outcome.stderr.len()})).await
         .map_err(|_| RuntimeError::Uncertain("command receipt could not be persisted; reconcile before acting again".into()))?;
       self.daemon.events.notify_waiters();
-    } else if self.daemon.store.operation(&outcome.action_id)?.is_some() {
+    } else if self
+      .daemon
+      .store
+      .operation(&outcome.action_id)
+      .await?
+      .is_some()
+    {
       return Err(
         RuntimeError::Uncertain(
           "command action is already recorded; automatic replay is forbidden".into(),

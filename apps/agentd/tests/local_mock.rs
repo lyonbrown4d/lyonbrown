@@ -112,12 +112,13 @@ async fn shared_mock_local_backend_runs_through_harness_and_persists_routing() {
     daemon
       .store
       .model_binding(&run.id)
+      .await
       .unwrap()
       .unwrap()
       .model_id,
     "mock-local"
   );
-  let events = daemon.store.events(&run.id, 0, 1000).unwrap();
+  let events = daemon.store.events(&run.id, 0, 1000).await.unwrap();
   let route = events
     .iter()
     .position(|e| e.kind == "model_route_decision")
@@ -148,7 +149,7 @@ async fn shared_mock_local_backend_runs_through_harness_and_persists_routing() {
   );
   let plan: serde_json::Value = serde_json::from_str(&events[plan].payload_json).unwrap();
   assert_eq!(plan["allowed_tools"], serde_json::json!([]));
-  assert!(daemon.store.approvals(&run.id).unwrap().is_empty());
+  assert!(daemon.store.approvals(&run.id).await.unwrap().is_empty());
   let counts = backend.counts();
   assert_eq!(counts.requests, 1);
   assert_eq!(counts.completed, 1);

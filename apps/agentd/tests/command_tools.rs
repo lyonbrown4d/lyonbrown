@@ -40,7 +40,7 @@ async fn protocols_execute_only_exact_approved_commands_and_persist_receipts() {
       assert_eq!(exact["output_limit_bytes"], 16384);
       let action = exact["action_id"].as_str().unwrap();
       assert!(!node.workspace.path().join("effect").exists());
-      assert!(node.daemon.store.operation(action).unwrap().is_none());
+      assert!(node.daemon.store.operation(action).await.unwrap().is_none());
       node.client.approve(&pending.id, approved).await.unwrap();
       let terminal = node.terminal(&run.id).await;
       assert_eq!(terminal.status, "completed", "{}", terminal.error);
@@ -50,6 +50,7 @@ async fn protocols_execute_only_exact_approved_commands_and_persist_receipts() {
           .daemon
           .store
           .approval(&pending.id)
+          .await
           .unwrap()
           .unwrap()
           .status,
@@ -60,6 +61,7 @@ async fn protocols_execute_only_exact_approved_commands_and_persist_receipts() {
           .daemon
           .store
           .operation(action)
+          .await
           .unwrap()
           .map(|record| record.status),
         approved.then_some(OperationStatus::Completed)
@@ -104,7 +106,7 @@ async fn direct_arguments_selected_environment_and_output_reach_the_model() {
   }
   assert!(output.contains("untrusted_process_output"));
   assert!(!node.workspace.path().join("injected").exists());
-  let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+  let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
   let receipts: Vec<_> = events
     .iter()
     .filter(|event| event.kind.starts_with("operation_"))
@@ -147,6 +149,7 @@ async fn pending_cancel_and_unallowlisted_program_have_no_effect_or_intent() {
           .daemon
           .store
           .operation(exact(&pending)["action_id"].as_str().unwrap())
+          .await
           .unwrap()
           .is_none()
       );
@@ -201,6 +204,7 @@ async fn command_timeout_output_budget_and_dispatch_cancel_are_durably_uncertain
       .daemon
       .store
       .operation(exact(&pending)["action_id"].as_str().unwrap())
+      .await
       .unwrap()
       .unwrap();
     assert_eq!(record.status, OperationStatus::Uncertain);

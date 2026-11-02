@@ -2,6 +2,8 @@
 
 Install the Rust toolchain required by the root `Cargo.toml`. Models, native graphics and browser SDK prerequisites depend on enabled capabilities; a crate name does not establish availability without the relevant native dependencies.
 
+The current working tree has an unresolved native SQLite dependency conflict. These commands were not rerun in this iteration. Read the [dependency limit](development.md#current-dependency-resolution-limit); historical runs do not establish startup acceptance for this revision.
+
 ## Start the development environment
 
 Choose a client with Cargo from the repository root. No additional task runner is required:
@@ -30,6 +32,7 @@ Model requests originate in the daemon. Set `OPENAI_API_KEY` through the process
 | --- | --- | --- |
 | `--listen` | `LYONBROWN_LISTEN` | `127.0.0.1:7447`; loopback only |
 | `--data-dir` | `LYONBROWN_DATA_DIR` | System user-local data directory |
+| `--database-url` | `LYONBROWN_DATABASE_URL` | Defaults to the data-directory SQLite file; supports SQLite, PostgreSQL and MySQL, see [storage configuration](persistence.md#databases-and-asynchronous-transactions) |
 | `--provider` | `LYONBROWN_PROVIDER` | `openai`; also supports `openai-responses`, `openai-completions`, `anthropic` |
 | `--model` | `LYONBROWN_MODEL` | `gpt-4.1`; availability depends on provider and credentials |
 | `--api-base` | `LYONBROWN_API_BASE` | Provider-specific address when unset |
@@ -79,3 +82,5 @@ cat build.log | agent exec "Analyze these logs" --output-format jsonl --timeout 
 It creates a session by default; use `--session SESSION_ID` for an existing one. See [non-interactive execution](clients.md#non-interactive-execution-with-agent-exec) for stdout formats, exit codes and cancellation boundaries. The original agentd still makes model requests and enforces approvals.
 
 Configuration sources: `apps/agentd/src/config.rs`, `crates/agent-config/src/load.rs`, `crates/agent-runtime/src/provider.rs`, `apps/agent-cli/src/config.rs`.
+
+Memory management is available without embedding configuration; retrieval and vector jobs require an explicitly configured embedding service. See [Long-term memory](memory.md).

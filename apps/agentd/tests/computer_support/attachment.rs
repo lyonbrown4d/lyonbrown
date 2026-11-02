@@ -29,6 +29,7 @@ async fn authenticated_hello_binds_immutable_scope_and_rejects_forgery_or_duplic
       node.workspace.path().to_str().unwrap(),
       "other-node",
     )
+    .await
     .unwrap();
   let owned = node
     .client

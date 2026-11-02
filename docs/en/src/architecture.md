@@ -27,7 +27,7 @@ flowchart TB
         Model[Model registry / metadata and capability limits]
         Tools[Workspace / command / MCP / browser / delegation tools]
         Approval[Exact approval / owner_epoch / durable intent]
-        Store[Diesel / SQLite / Session / Task / Event / Outbox]
+        Store[SeaORM async / SQLite, PostgreSQL, MySQL / Session, Task, Event, Outbox]
         Dispatcher[Master Dispatcher / PeerManager]
         API --> Run
         API --> Dispatcher
@@ -55,7 +55,7 @@ flowchart TB
     subgraph GatewayService[Independent AI Gateway]
         GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
         GatewayUI[Leptos SSR / admin sessions]
-        GatewayStore[Diesel SQLite / policy / audit / credential hashes]
+        GatewayStore[SeaORM async SQLite / policy / audit / credential hashes]
         GatewayHTTP --> SharedDecision
         GatewayHTTP --> GatewayStore
         GatewayUI --> GatewayStore
@@ -207,8 +207,10 @@ ComputerRuntime provides an embeddable interactive-user host interface, attached
 - Authenticated connection: `crates/agent-client/src/lib.rs`.
 - Runtime interfaces: `crates/agent-runtime/src/contracts.rs`.
 - Native host attachment: `apps/agent-cli/src/computer_backend.rs`, `apps/agent-desktop/src/computer.rs`, `crates/agent-computer-runtime/src/client.rs`, `crates/agent-computer-runtime/src/attachment.rs`, `apps/agentd/src/computer/service.rs`, `apps/agentd/src/computer/tools/` and `apps/agentd/src/computer/mutation.rs`.
-- Durable state: `crates/agent-storage/src/schema.sql`.
+- Durable state: `crates/agent-storage/src/schema.rs`, `migration.rs` and `migration/`.
 - Reusable decisions and Agent integration: `crates/decision-core/`, `crates/decision-semantic/`, `crates/decision-model/` and `apps/agentd/src/model_routing.rs`.
 - Independent gateway and synthetic models: `apps/ai-gateway/`, `crates/gateway-core/`, `crates/gateway-storage/`, `crates/gateway-web/` and `apps/model-mock/`.
 
 A successful worker attempt and a master's acceptance of its result have different meanings. The protocol keeps `attempt_id`, `owner_epoch` and explicit `AcceptResult`; receiving a result does not establish acceptance.
+
+Memory boundaries: `memory-core` defines domain ports without ORM or vector SDK types; `agent-memory` owns scope checks, retrieval revalidation and job execution; `agent-storage` owns authoritative records; `memory-qdrant` adapts embedded and server SDKs. Memory supplies reference context without adding an Agent Loop or granting authority.

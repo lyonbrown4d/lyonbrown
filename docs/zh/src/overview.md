@@ -16,7 +16,9 @@ Lyonbrown 将 Agent 执行放在常驻的 `agentd` 进程中。终端客户端�
 | `crates/agent-client` | 客户端共用的认证连接 |
 | `crates/agent-protocol`、`proto/agent/v1` | 版本化协议与类型转换 |
 | `crates/agent-runtime` | `rpi-harness` 适配与会话恢复 |
-| `crates/agent-storage` | SQLite 状态、事件和 Outbox |
+| `crates/agent-storage` | SeaORM 异步关系存储、状态、事件和 Outbox |
+| `crates/memory-core`、`crates/agent-memory` | 记忆领域端口、管理、检索与作业编排 |
+| `crates/memory-qdrant` | 独立选择的 embedded / server 向量索引适配 |
 
 其他能力按[协议与平台能力](protocol.md)说明其边界。目录或协议消息的存在不等于对应平台能力已经接通。
 

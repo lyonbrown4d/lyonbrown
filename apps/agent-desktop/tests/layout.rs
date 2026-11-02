@@ -10,11 +10,13 @@ async fn workbench_menu_reaches_clipped_panels_and_preserves_chat(cx: &mut TestA
   let harness = Harness::new(cx, Vec::new());
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   harness.click("new-session", cx);
   let session = harness
-    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .wait(cx, async |state| {
+      state.selected_session.is_some() && !state.busy
+    })
     .await
     .selected_session;
   cx.update_window(harness.window.into(), |_, window, cx| {

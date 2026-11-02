@@ -76,7 +76,7 @@ fn service_main(arguments: Vec<OsString>) {
   let result = run(&handle, stop);
   // Log files are initialized by run; do not serialize config or credentials here.
   if let Err(error) = &result {
-    tracing::error!(error = %error, "Windows service runtime failed");
+    tracing::error!(error = %agent_storage::public_error_message(error), "Windows service runtime failed");
   }
   let _ = handle.set_service_status(status(
     ServiceState::Stopped,

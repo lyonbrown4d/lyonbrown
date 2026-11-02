@@ -36,9 +36,11 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
 ) {
   let hub = Hub::start();
   let harness = Harness::with_hub_endpoint(cx, hub.endpoint.clone());
+  let storage_runtime_0 = harness.runtime.clone();
+  let _storage_context_0 = storage_runtime_0.enter();
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   assert!(harness.snapshot(cx).selected_session.is_none());
   assert!(
@@ -102,6 +104,7 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
       .daemon
       .store
       .model_job(&inspected_id)
+      .await
       .unwrap()
       .is_none()
   );
@@ -137,6 +140,7 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
       .daemon
       .store
       .model_job(&inspected_id)
+      .await
       .unwrap()
       .is_none()
   );
@@ -161,11 +165,12 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
   );
   hub::click(&harness, "model-hub-install", cx);
   harness
-    .wait(cx, |_| {
+    .wait(cx, async |_| {
       harness
         .daemon
         .store
         .model_job(&confirmed_id)
+        .await
         .unwrap()
         .is_some_and(|job| job["state"] == "installed_unverified")
     })
@@ -251,7 +256,15 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
       .is_empty(),
     "global model management must not create a session"
   );
-  assert!(harness.daemon.store.pending_runs().unwrap().is_empty());
+  assert!(
+    harness
+      .daemon
+      .store
+      .pending_runs()
+      .await
+      .unwrap()
+      .is_empty()
+  );
   assert!(
     harness
       .runtime
@@ -269,7 +282,7 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
   harness.click("close-settings", cx);
   harness.click("new-session", cx);
   let selected = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session.is_some() && !state.busy && !state.workbench.busy
     })
     .await
@@ -300,7 +313,15 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
       .unwrap()
       .is_empty()
   );
-  assert!(harness.daemon.store.pending_runs().unwrap().is_empty());
+  assert!(
+    harness
+      .daemon
+      .store
+      .pending_runs()
+      .await
+      .unwrap()
+      .is_empty()
+  );
   assert!(
     harness
       .runtime

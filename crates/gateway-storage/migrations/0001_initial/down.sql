@@ -1,9 +1,0 @@
-DROP TABLE IF EXISTS gateway_model_head;
-DROP TABLE IF EXISTS gateway_access_tokens;
-DROP TABLE IF EXISTS gateway_admin_sessions;
-DROP TABLE IF EXISTS gateway_admin_credentials;
-DROP TABLE IF EXISTS gateway_policy_head;
-DROP TABLE IF EXISTS gateway_policy_revisions;
-DROP TABLE IF EXISTS gateway_model_snapshots;
-DROP TABLE IF EXISTS gateway_audits;
-DROP TABLE IF EXISTS gateway_migrations;

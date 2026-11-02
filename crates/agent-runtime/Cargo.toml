@@ -13,9 +13,9 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
-rpi-harness = "=0.14.0"
-rpi-agent = "=0.14.0"
-rpi-ai = { version = "=0.14.0", features = ["providers"] }
+rpi-harness = "=0.16.0"
+rpi-agent = "=0.16.0"
+rpi-ai = { version = "=0.16.0", features = ["providers"] }
 futures.workspace = true
 agent-inference = { path = "../agent-inference" }
 base64 = "0.23"

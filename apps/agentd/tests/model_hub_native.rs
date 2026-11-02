@@ -141,7 +141,8 @@ async fn downloads_loads_selects_and_converses_through_authenticated_agentd() ->
     );
     let stored = daemon
       .store
-      .run(&run.id)?
+      .run(&run.id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("run missing"))?;
     ensure!(
       stored.status == "completed" && stored.result == completed.result,
@@ -149,7 +150,8 @@ async fn downloads_loads_selects_and_converses_through_authenticated_agentd() ->
     );
     let selection = daemon
       .store
-      .model_binding(&session.id)?
+      .model_binding(&session.id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("model selection not persisted"))?;
     ensure!(selection.model_id == plan.id, "persisted selection differs");
     println!("MODEL_RESPONSE {}", completed.result);
@@ -190,13 +192,14 @@ async fn downloads_loads_selects_and_converses_through_authenticated_agentd() ->
       }
       let persisted = daemon
         .store
-        .run(&turn.id)?
+        .run(&turn.id)
+        .await?
         .ok_or_else(|| anyhow::anyhow!("turn missing"))?;
       ensure!(
         persisted.result == reply.result && persisted.status == "completed",
         "turn not persisted"
       );
-      let events = daemon.store.events(&turn.id, 0, 1000)?;
+      let events = daemon.store.events(&turn.id, 0, 1000).await?;
       let plan = events
         .iter()
         .find(|event| event.kind == "execution_plan")

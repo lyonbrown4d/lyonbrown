@@ -1,4 +1,5 @@
-//! Upstream rpi-harness 0.14.0 reproducer. No prompt or model request is made.
+//! Upstream rpi-harness cancellation reproducer (reported on 0.14.0;
+//! the warning-only failure path remains in 0.16.0). No model request is made.
 //! Remove/replace this characterization once upstream propagates cancellation storage errors.
 use std::sync::{
   Arc,

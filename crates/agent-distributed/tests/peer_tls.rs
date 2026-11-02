@@ -12,12 +12,12 @@ async fn paired_nodes_execute_once_in_isolated_session_and_master_accepts_separa
 {
   let mut master = Node::new(false).await?;
   let mut worker = Node::new(false).await?;
-  master.pair(&worker)?;
-  worker.pair(&master)?;
-  let (master_stop, master_server) = master.serve()?;
-  let (worker_stop, worker_server) = worker.serve()?;
+  master.pair(&worker).await?;
+  worker.pair(&master).await?;
+  let (master_stop, master_server) = master.serve().await?;
+  let (worker_stop, worker_server) = worker.serve().await?;
   let dispatcher = Dispatcher::new(master.manager.clone());
-  let envelope = master.envelope();
+  let envelope = master.envelope().await;
   let accepted = dispatcher
     .submit(&worker.manager.local_node(), envelope.clone().into())
     .await?;
@@ -42,7 +42,7 @@ async fn paired_nodes_execute_once_in_isolated_session_and_master_accepts_separa
   .await??;
   assert_eq!(finished.status, "awaiting_acceptance");
   assert_eq!(worker.executor.calls.load(Ordering::SeqCst), 1);
-  assert_eq!(worker.store()?.sessions()?.len(), 1);
+  assert_eq!(worker.store().await?.sessions().await?.len(), 1);
   assert_eq!(
     dispatcher
       .accept(&worker.manager.local_node(), &envelope.task_id, true)
@@ -72,11 +72,11 @@ async fn certificate_identity_owner_and_remote_pairing_are_enforced() -> Result<
   let master = Node::new(false).await?;
   let mut worker = Node::new(false).await?;
   let stranger = Node::new(false).await?;
-  master.pair(&worker)?;
-  worker.pair(&master)?;
-  let (stop, server) = worker.serve()?;
+  master.pair(&worker).await?;
+  worker.pair(&master).await?;
+  let (stop, server) = worker.serve().await?;
   let mut trusted = master.client(&worker).await?;
-  let mut spoofed = master.envelope();
+  let mut spoofed = master.envelope().await;
   spoofed.owner_node_id = stranger.identity.public.node_id.clone();
   assert_eq!(
     trusted
@@ -86,9 +86,14 @@ async fn certificate_identity_owner_and_remote_pairing_are_enforced() -> Result<
       .code(),
     tonic::Code::PermissionDenied
   );
-  assert!(worker.store()?.tasks()?.is_empty());
+  assert!(worker.store().await?.tasks().await?.is_empty());
   if let Ok(mut unpaired) = stranger.client(&worker).await {
-    assert!(unpaired.submit_task(stranger.envelope()).await.is_err());
+    assert!(
+      unpaired
+        .submit_task(stranger.envelope().await)
+        .await
+        .is_err()
+    );
   }
   let channel = tonic::transport::Endpoint::from_shared(worker.manager.local_node().endpoint)?
     .tls_config(master.identity.client_tls(&worker.identity.public)?)?
@@ -103,7 +108,7 @@ async fn certificate_identity_owner_and_remote_pairing_are_enforced() -> Result<
       .code(),
     tonic::Code::PermissionDenied
   );
-  assert_eq!(worker.store()?.peers()?.len(), 1);
+  assert_eq!(worker.store().await?.peers().await?.len(), 1);
   stop.cancel();
   server.await??;
   Ok(())
@@ -114,11 +119,11 @@ async fn revocation_denies_existing_tls_channel_stream_and_cancels_cooperative_w
 {
   let master = Node::new(false).await?;
   let mut worker = Node::new(true).await?;
-  master.pair(&worker)?;
-  worker.pair(&master)?;
-  let (stop, server) = worker.serve()?;
+  master.pair(&worker).await?;
+  worker.pair(&master).await?;
+  let (stop, server) = worker.serve().await?;
   let mut client = master.client(&worker).await?;
-  let envelope = master.envelope();
+  let envelope = master.envelope().await;
   client.submit_task(envelope.clone()).await?;
   tokio::time::timeout(Duration::from_secs(5), async {
     while worker.executor.calls.load(Ordering::SeqCst) == 0 {
@@ -136,7 +141,8 @@ async fn revocation_denies_existing_tls_channel_stream_and_cancels_cooperative_w
   assert!(stream.message().await?.is_some());
   worker
     .manager
-    .revoke_local(&master.identity.public.node_id)?;
+    .revoke_local(&master.identity.public.node_id)
+    .await?;
   assert_eq!(
     client
       .get_task(v1::TaskRequest {
@@ -160,8 +166,10 @@ async fn revocation_denies_existing_tls_channel_stream_and_cancels_cooperative_w
     }
     loop {
       if worker
-        .store()?
-        .task(&envelope.task_id)?
+        .store()
+        .await?
+        .task(&envelope.task_id)
+        .await?
         .is_some_and(|task| task.status == "cancelled")
       {
         break;
@@ -189,8 +197,9 @@ async fn ca_signed_client_leaf_does_not_inherit_the_paired_certificate_identity(
   paired.certificate_pem = certificate.pem();
   worker
     .manager
-    .pair_local(paired, vec!["tasks.submit".into(), "test.execute".into()])?;
-  let (stop, server) = worker.serve()?;
+    .pair_local(paired, vec!["tasks.submit".into(), "test.execute".into()])
+    .await?;
+  let (stop, server) = worker.serve().await?;
   let leaf_key = rcgen::KeyPair::generate()?;
   let leaf = rcgen::CertificateParams::new(vec!["different-leaf.invalid".into()])?
     .signed_by(&leaf_key, &rcgen::Issuer::from_params(&parameters, &ca_key))?;
@@ -208,11 +217,11 @@ async fn ca_signed_client_leaf_does_not_inherit_the_paired_certificate_identity(
     .await?;
   let mut client = v1::task_service_client::TaskServiceClient::new(channel);
   let error = client
-    .submit_task(master.envelope())
+    .submit_task(master.envelope().await)
     .await
     .expect_err("only the exact paired leaf is authorized");
   assert_eq!(error.code(), tonic::Code::PermissionDenied);
-  assert!(worker.store()?.tasks()?.is_empty());
+  assert!(worker.store().await?.tasks().await?.is_empty());
   stop.cancel();
   server.await??;
   Ok(())
@@ -222,11 +231,11 @@ async fn ca_signed_client_leaf_does_not_inherit_the_paired_certificate_identity(
 async fn master_cancellation_is_confirmed_from_worker_without_resubmission() -> Result<()> {
   let master = Node::new(false).await?;
   let mut worker = Node::new(true).await?;
-  master.pair(&worker)?;
-  worker.pair(&master)?;
-  let (stop, server) = worker.serve()?;
+  master.pair(&worker).await?;
+  worker.pair(&master).await?;
+  let (stop, server) = worker.serve().await?;
   let dispatcher = Dispatcher::new(master.manager.clone());
-  let envelope = master.envelope();
+  let envelope = master.envelope().await;
   dispatcher
     .submit(&worker.manager.local_node(), envelope.clone().into())
     .await?;

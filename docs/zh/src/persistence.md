@@ -1,16 +1,26 @@
 # 会话、任务与恢复
 
-会话保存可继续对话的 Harness 语义，运行记录保存一次用户请求的编排状态。SQLite 将这两类数据分开存储，并在关键写入中一并记录事件和 Outbox。
+会话保存可继续对话的 Harness 语义，运行记录保存一次用户请求的编排状态。关系数据库将这两类数据分开存储，并在关键写入中一并记录事件和 Outbox。默认后端为本机 SQLite；daemon 也可配置 PostgreSQL 或 MySQL。
+
+## 数据库与异步事务
+
+`agent-storage` 使用固定版本 SeaORM 2.0.4 与 SQLx 原生异步连接。`Store::open`、`Store::connect` 和读写接口均需等待异步结果；关系数据库操作不通过 `spawn_blocking`、隐藏运行时或同步外观执行。SQLite 启用 WAL、完整同步和 5 秒 busy timeout，连接池限制为一个连接。
+
+默认文件为 daemon 数据目录下的 `agent.sqlite3`。`--database-url`、`LYONBROWN_DATABASE_URL` 或 TOML 的 `database_url` 可选择 `sqlite:`、`postgres:` / `postgresql:`、`mysql:`。含凭据的连接地址应置于本机受限的 `.env` 或进程环境，不写入仓库、命令历史或 UI 模型。数据目录仍保存节点身份、认证文件和本机所有权信息；远程数据库不取消这些要求。
+
+关键写入使用共享 `DatabaseTransaction`。事务内更新专用写锁记录，再检查修订、Session 所有权和 `owner_epoch`，一并提交状态、事件和 Outbox。非 MySQL 后端还使用 `one_active_run` 条件唯一索引；MySQL 的活动运行限制由同一事务内的校验和写入互斥承担。接入三种驱动不代表三种数据库或多节点场景已经完成运行验收。一份数据库只支持由一个逻辑 daemon 独占；多个 daemon 共用同库的作业消费和恢复尚未支持。
+
+数据库结构由 SeaORM Migration 的版本化 Rust 迁移创建与记录，面向最新初始结构，不提供旧 Diesel 数据库的导入、兼容升级或自动清空。不要用历史数据库替代新结构的运行验收。具体实现见 `crates/agent-storage/src/lib.rs`、`migration.rs` 与 `migration/`。[长期记忆](memory.md)使用同一关系数据库保存正文和索引作业，向量后端单独配置。
 
 ## 提交与执行
 
-`accept_run` 校验 `owner_epoch`，用 `(session_id, idempotency_key)` 去重。同一键再次提交相同 prompt 会返回既有运行；换用不同 prompt 会报错。数据库的 `one_active_run` 唯一索引阻止一个会话同时拥有多个未结束运行。
+`accept_run` 校验 `owner_epoch`，用 `(session_id, idempotency_key)` 去重。同一键再次提交相同 prompt 会返回既有运行；换用不同 prompt 会报错。事务校验与对应后端的数据库约束阻止一个会话同时拥有多个未结束运行。
 
 ```mermaid
 sequenceDiagram
     participant UI as Client
     participant D as agentd
-    participant S as SQLite
+    participant S as Relational database
     participant H as rpi-harness
     participant T as Host tool
     UI->>D: StartRun(session, prompt, key, epoch)
@@ -38,7 +48,7 @@ Harness 快照保留原始消息内容。`entry_appended` 和 `record_appended` 
 
 投影按已知消息类型处理图像，不递归删除任意 JSON 中的 `data` 字段。工具参数和自定义业务数据仍由对应适配器约束；无法识别的排队载荷或消息帧只返回 `projectionOmitted` 标记。输入图像的调试输出只含 MIME 和长度。
 
-含图像会话的恢复暂不开放。恢复入口保留原快照并明确返回不可用，不调用模型或重放请求。原因是 rpi-ai 0.5.0 的原始 JSON 序列化会产生重复的 `type` 字段，见[上游问题 #59](https://github.com/bigfish1913/pi-rust/issues/59)。代码没有加入快照规范化适配。daemon 的 `StartRun` 接口仍只接收文本；Runtime 内部的图像输入不代表客户端支持图像会话。
+含图像会话的恢复暂不开放。恢复入口保留原快照并明确返回不可用，不调用模型或重放请求。原因是当前固定的 rpi-ai 0.16.0 仍保留原始 JSON 序列化产生重复 `type` 字段的限制，见[上游问题 #59](https://github.com/bigfish1913/pi-rust/issues/59)。代码没有加入快照规范化适配。daemon 的 `StartRun` 接口仍只接收文本；Runtime 内部的图像输入不代表客户端支持图像会话。
 
 ## 断线与重启
 

@@ -9,21 +9,21 @@ use crate::{
 };
 
 impl Session {
-  pub(super) fn paired(&self, peer: &str) -> Result<String> {
-    public_identity(&self.manager.trust(peer)?).pairing_fingerprint()
+  pub(super) async fn paired(&self, peer: &str) -> Result<String> {
+    public_identity(&self.manager.trust(peer).await?).pairing_fingerprint()
   }
 
-  pub(super) fn open(
+  pub(super) async fn open(
     &mut self,
     peer: String,
     reply: oneshot::Sender<Result<RelayIo>>,
   ) -> Result<()> {
-    let setup = (|| {
+    let setup = (async {
       ensure!(
         self.links.len() < MAX_LINKS && self.pending() < MAX_PENDING,
         "relay link or pending handshake limit reached"
       );
-      let paired = public_identity(&self.manager.trust(&peer)?);
+      let paired = public_identity(&self.manager.trust(&peer).await?);
       let fingerprint = paired.pairing_fingerprint()?;
       let id = uuid::Uuid::now_v7().to_string();
       let binding = LinkBinding {
@@ -34,7 +34,8 @@ impl Session {
       let mut handshake = LinkHandshake::new(&self.manager.identity, &paired, binding, true)?;
       let hello = self.handshake_frame(&id, &peer, handshake.write()?);
       Ok::<_, anyhow::Error>((id, fingerprint, handshake, hello))
-    })();
+    })
+    .await;
     let (id, fingerprint, handshake, hello) = match setup {
       Ok(setup) => setup,
       Err(error) => {
@@ -89,15 +90,17 @@ impl Session {
     )
   }
 
-  pub(super) fn send(&mut self, id: &str, tag: u8, payload: &[u8]) -> Result<()> {
+  pub(super) async fn send(&mut self, id: &str, tag: u8, payload: &[u8]) -> Result<()> {
     let Some(link) = self.links.get(id) else {
       return Ok(());
     };
     if !self
       .paired(&link.peer)
+      .await
       .is_ok_and(|fingerprint| fingerprint == link.fingerprint)
     {
-      return self.close(id, false);
+      self.remove_link(id);
+      return Ok(());
     }
     let Some(link) = self.links.get_mut(id) else {
       return Ok(());
@@ -127,15 +130,19 @@ impl Session {
     Ok(())
   }
 
-  pub(super) fn close(&mut self, id: &str, notify: bool) -> Result<()> {
+  pub(super) async fn close(&mut self, id: &str, notify: bool) -> Result<()> {
     if notify && self.outgoing.capacity() > 0 {
-      self.send(id, ABORT, &[])?;
+      self.send(id, ABORT, &[]).await?;
     }
+    self.remove_link(id);
+    Ok(())
+  }
+
+  fn remove_link(&mut self, id: &str) {
     if let Some(link) = self.links.remove(id) {
       link.stop.cancel();
       self.recent.insert(id.into());
     }
-    Ok(())
   }
 
   pub(super) fn finish(&mut self, id: &str) {
@@ -156,11 +163,12 @@ impl Session {
     }
   }
 
-  pub(super) fn expire(&mut self) -> Result<()> {
+  pub(super) async fn expire(&mut self) -> Result<()> {
     let mut expired = Vec::new();
     for (id, link) in &self.links {
       let revoked = !self
         .paired(&link.peer)
+        .await
         .is_ok_and(|value| value == link.fingerprint);
       let timeout = if matches!(link.stage, Stage::Pending { .. }) {
         CONNECT
@@ -172,7 +180,7 @@ impl Session {
       }
     }
     for (id, notify) in expired {
-      self.close(&id, notify)?;
+      self.close(&id, notify).await?;
     }
     Ok(())
   }

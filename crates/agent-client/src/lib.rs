@@ -4,6 +4,7 @@ mod computer;
 mod development;
 mod execution;
 pub mod local_state;
+mod memory;
 mod models;
 pub mod navigation;
 mod orchestration;
@@ -31,6 +32,8 @@ impl Interceptor for Authentication {
 
 #[derive(Clone)]
 pub struct AgentClient {
+  memory:
+    v1::memory_service_client::MemoryServiceClient<InterceptedService<Channel, Authentication>>,
   models: v1::model_service_client::ModelServiceClient<InterceptedService<Channel, Authentication>>,
   inner: ClientServiceClient<InterceptedService<Channel, Authentication>>,
   workspace: v1::workspace_service_client::WorkspaceServiceClient<
@@ -104,6 +107,10 @@ impl AgentClient {
         auth.clone(),
       ),
       orchestration: v1::orchestration_service_client::OrchestrationServiceClient::with_interceptor(
+        channel.clone(),
+        auth.clone(),
+      ),
+      memory: v1::memory_service_client::MemoryServiceClient::with_interceptor(
         channel.clone(),
         auth.clone(),
       ),

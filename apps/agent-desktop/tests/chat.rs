@@ -26,26 +26,26 @@ async fn real_keyboard_submission_streams_markdown_and_loads_sidebar_history(
     .expect("existing session");
   harness.connect(cx);
   harness
-    .wait(cx, |snapshot| {
+    .wait(cx, async |snapshot| {
       snapshot.status.starts_with("Connected") && snapshot.session_titles.len() == 1
     })
     .await;
   harness.click(("session", 0usize), cx);
   harness
-    .wait(cx, |snapshot| {
+    .wait(cx, async |snapshot| {
       snapshot.selected_session.is_some() && snapshot.error.is_none() && !snapshot.busy
     })
     .await;
   harness.click("new-session", cx);
   harness
-    .wait(cx, |snapshot| snapshot.session_titles.len() == 2)
+    .wait(cx, async |snapshot| snapshot.session_titles.len() == 2)
     .await;
   harness.input_prompt(
     cx,
     "请只读检查这个合成 Rust 工作区，并说明客户端与 agentd 的边界。请解释会话状态如何保存，以及任务取消和重连时应注意的行为，不要修改任何文件。请保持中文正文可读，并使用 Markdown 列出检查结果。",
   );
   let complete = harness
-    .wait(cx, |snapshot| {
+    .wait(cx, async |snapshot| {
       snapshot.active_run.is_none()
         && snapshot
           .messages
@@ -147,11 +147,13 @@ async fn approval_click_uses_exact_tool_arguments_before_real_file_effect(cx: &m
   );
   harness.connect(cx);
   harness
-    .wait(cx, |snapshot| snapshot.status.starts_with("Connected"))
+    .wait(cx, async |snapshot| {
+      snapshot.status.starts_with("Connected")
+    })
     .await;
   harness.input_prompt(cx, "Write approved.txt in this workspace.");
   let approval = harness
-    .wait(cx, |snapshot| !snapshot.approvals.is_empty())
+    .wait(cx, async |snapshot| !snapshot.approvals.is_empty())
     .await;
   assert_eq!(approval.approvals[0].1, "write_file");
   assert_eq!(
@@ -166,14 +168,14 @@ async fn approval_click_uses_exact_tool_arguments_before_real_file_effect(cx: &m
   let cursor = approval.event_cursor;
   harness.click("inspect", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.approvals.len() == 1 && state.event_cursor >= cursor
     })
     .await;
   harness.click("inspect", cx);
   harness.click(("allow", 0usize), cx);
   harness
-    .wait(cx, |snapshot| {
+    .wait(cx, async |snapshot| {
       snapshot.active_run.is_none()
         && snapshot
           .messages
@@ -212,7 +214,9 @@ async fn stop_click_cancels_real_daemon_run_without_resending_prompt(cx: &mut Te
   let harness = Harness::new(cx, vec![ScriptedReply::stall()]);
   harness.connect(cx);
   harness
-    .wait(cx, |snapshot| snapshot.status.starts_with("Connected"))
+    .wait(cx, async |snapshot| {
+      snapshot.status.starts_with("Connected")
+    })
     .await;
   harness
     .runtime
@@ -220,7 +224,7 @@ async fn stop_click_cancels_real_daemon_run_without_resending_prompt(cx: &mut Te
     .expect("private daemon enters draining state");
   harness.input_prompt(cx, "Keep this run pending until I stop it.");
   let rejected = harness
-    .wait(cx, |state| state.error.is_some() && !state.busy)
+    .wait(cx, async |state| state.error.is_some() && !state.busy)
     .await;
   assert_eq!(
     rejected.draft, "Keep this run pending until I stop it.",
@@ -243,7 +247,7 @@ async fn stop_click_cancels_real_daemon_run_without_resending_prompt(cx: &mut Te
   })
   .expect("explicit retry of retained draft");
   harness
-    .wait(cx, |snapshot| snapshot.active_run.is_some())
+    .wait(cx, async |snapshot| snapshot.active_run.is_some())
     .await;
   harness.runtime.block_on(async {
     tokio::time::timeout(
@@ -255,7 +259,7 @@ async fn stop_click_cancels_real_daemon_run_without_resending_prompt(cx: &mut Te
   });
   harness.click("cancel", cx);
   harness
-    .wait(cx, |snapshot| {
+    .wait(cx, async |snapshot| {
       snapshot.active_run.is_none() && snapshot.status.contains("cancelled")
     })
     .await;

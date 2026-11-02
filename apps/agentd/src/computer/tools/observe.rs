@@ -34,7 +34,7 @@ impl Context {
     cancellation: CancellationToken,
   ) -> Result<Value> {
     let input: input::Observe = serde_json::from_value(arguments)?;
-    self.fence(&cancellation)?;
+    self.fence(&cancellation).await?;
     let mut state = self.state.lock().await;
     state.observation = None;
     let lease = match &state.lease {
@@ -95,7 +95,7 @@ impl Context {
       ))
     })
     .await??;
-    self.fence(&cancellation)?;
+    self.fence(&cancellation).await?;
     state.observation = Some(reference);
     Ok(output)
   }

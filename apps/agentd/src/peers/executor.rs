@@ -41,19 +41,23 @@ impl WorkerExecutor for HarnessWorker {
         _ => vec![],
       })
       .collect::<BTreeSet<_>>();
-    let (run, created) = daemon.store.accept_run(
-      &job.session.id,
-      job.session.owner_epoch,
-      &job.task.instructions,
-      &job.task.attempt_id,
-    )?;
+    let (run, created) = daemon
+      .store
+      .accept_run(
+        &job.session.id,
+        job.session.owner_epoch,
+        &job.task.instructions,
+        &job.task.attempt_id,
+      )
+      .await?;
     ensure!(
       created,
       "worker run already exists; reconcile without replay"
     );
     daemon
       .store
-      .update_run_owned(&run.id, job.session.owner_epoch, RunStatus::Running, "", "")?;
+      .update_run_owned(&run.id, job.session.owner_epoch, RunStatus::Running, "", "")
+      .await?;
     let permit = tokio::select! {
       value = daemon.permits.clone().acquire_owned() => value.ok(),
       _ = cancellation.cancelled() => None,
@@ -61,13 +65,16 @@ impl WorkerExecutor for HarnessWorker {
     };
     if permit.is_none() {
       cancellation.cancel();
-      daemon.store.update_run_owned(
-        &run.id,
-        job.session.owner_epoch,
-        RunStatus::Cancelled,
-        "",
-        "",
-      )?;
+      daemon
+        .store
+        .update_run_owned(
+          &run.id,
+          job.session.owner_epoch,
+          RunStatus::Cancelled,
+          "",
+          "",
+        )
+        .await?;
       anyhow::bail!("worker task cancelled while queued");
     }
     let result = daemon
@@ -94,8 +101,9 @@ impl WorkerExecutor for HarnessWorker {
             RunStatus::Failed
           },
           "",
-          &error.to_string(),
+          &agent_storage::public_error_message(&error),
         )
+        .await
         .map_err(|_| UncertainOutcome)?;
       if uncertain {
         return Err(UncertainOutcome.into());
@@ -105,6 +113,7 @@ impl WorkerExecutor for HarnessWorker {
     let terminal = daemon
       .store
       .run(&run.id)
+      .await
       .map_err(|_| UncertainOutcome)?
       .ok_or(UncertainOutcome)?;
     match terminal.status.as_str() {

@@ -4,6 +4,14 @@ The workspace uses Rust edition 2024. Cargo workspace declarations and `Cargo.lo
 
 Async entry points prefer `#[tokio::main]`. Clap, Serde and fluxdi macros provide argument parsing, serialization and dependency injection. `RunStatus` and `Tool` use derives from fixed `strum` 0.28.0 for snake_case static-string conversion; error types reuse existing `thiserror` derives. CEF helper and Windows SCM dispatch run before runtime initialization. GPUI retains its main-thread event loop; explicitly owned or shared runtimes remain part of its composition.
 
+## Current dependency resolution limit
+
+The working tree declares rpi family 0.16.0 and SeaORM / SeaORM Migration 2.0.4. Offline dependency resolution fails explicitly: `rpi-harness 0.16.0 → rusqlite 0.31 → libsqlite3-sys 0.28`, while `SeaORM 2.0.4 → SQLx 0.9` requires `libsqlite3-sys >=0.30.1,<0.38`. Both dependencies claim the same native SQLite link name, so Cargo cannot resolve them together. Upstream `main` at `31e7ba` retains the conflicting dependency; see [pi-rust #236](https://github.com/bigfish1913/pi-rust/issues/236). Downgrading the ORM, copying the SDK, downstream forks and long-lived patches are not supported workarounds.
+
+`Cargo.lock` has not been updated to resolve these declarations. This iteration performed static source review and a failed offline dependency-resolution check, without Cargo compilation, tests, mdBook builds or new native runtime acceptance. Commands below remain development entry points and verification requirements, not successful results for the current working tree. [Historical screenshots](runtime-evidence.md) cover only their recorded platforms, versions and source identities.
+
+Relational I/O uses the native asynchronous ORM with versioned Rust migrations and no legacy Diesel compatibility. See [Long-term memory](memory.md) for backend configuration and durable jobs. Source integration for PostgreSQL, MySQL and Qdrant embedded / server does not replace execution against those databases or services.
+
 ## Run locally during development
 
 The repository's `.cargo/config.toml` defines the `dev` alias. It uses Cargo directly, with no additional task runner to install. Run one command from the repository root to build the required binaries, start a development agentd and open the client:

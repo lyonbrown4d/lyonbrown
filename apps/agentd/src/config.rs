@@ -3,6 +3,12 @@ use std::{net::SocketAddr, path::PathBuf};
 #[derive(Parser, Clone)]
 #[command(version, about = "Lyonbrown Rust agent daemon")]
 pub struct Config {
+  #[arg(skip)]
+  pub memory: agent_config::MemorySettings,
+  #[arg(skip)]
+  pub memory_embedding_api_key: Option<agent_secrets::SecretString>,
+  #[arg(skip)]
+  pub memory_vector_api_key: Option<agent_secrets::SecretString>,
   /// Explicit local model capability opt-in; daemon tool authorization still applies.
   #[arg(long, default_value_t = false)]
   pub local_model_tools: bool,
@@ -61,6 +67,8 @@ pub struct Config {
   pub log_retention: usize,
   #[arg(long, env = "LYONBROWN_DATA_DIR")]
   pub data_dir: Option<PathBuf>,
+  #[arg(long, env = "LYONBROWN_DATABASE_URL")]
+  pub database_url: Option<String>,
   #[arg(long, env = "LYONBROWN_PROVIDER", default_value = "openai")]
   pub provider: String,
   #[arg(long, env = "LYONBROWN_MODEL", default_value = "gpt-4.1")]
@@ -111,7 +119,17 @@ impl Config {
     if matches.value_source("run_timeout_secs") == Some(ValueSource::CommandLine) {
       settings.run_timeout_secs = cli.run_timeout_secs;
     }
+    if matches.value_source("database_url") == Some(ValueSource::CommandLine) {
+      settings.database_url = cli.database_url.clone().map(Into::into);
+    }
     settings.validate()?;
+    cli.database_url = settings
+      .database_url
+      .as_ref()
+      .map(|value| agent_secrets::ExposeSecret::expose_secret(value).to_owned());
+    cli.memory_embedding_api_key = settings.credential("memory_embedding").map(Into::into);
+    cli.memory_vector_api_key = settings.credential("memory_vector").map(Into::into);
+    cli.memory = settings.memory.clone();
     cli.hub_token = std::env::var("HF_TOKEN")
       .ok()
       .filter(|value| !value.is_empty());

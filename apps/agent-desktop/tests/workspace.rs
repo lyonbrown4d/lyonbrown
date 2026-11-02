@@ -50,19 +50,19 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   }
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   harness.show_workbench(cx);
   harness.click("new-session", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.paths == ["example.rs"] && !state.workbench.busy
     })
     .await;
   tab(&harness, 1, cx);
   harness.click(("workspace-file", 0usize), cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.file.as_deref() == Some("example.rs") && !state.workbench.busy
     })
     .await;
@@ -73,7 +73,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
     window.press(&support::shortcut("s"), cx);
   })
   .expect("save unchanged file through native keyboard shortcut");
-  harness.wait(cx, |state| state.workbench.busy).await;
+  harness.wait(cx, async |state| state.workbench.busy).await;
   let session_before_save = harness.snapshot(cx).selected_session;
   harness.click("open-settings", cx);
   harness.click("connect", cx);
@@ -85,7 +85,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   );
   harness.click("close-settings", cx);
   write_gate.add_permits(1);
-  harness.wait(cx, |state| !state.workbench.busy).await;
+  harness.wait(cx, async |state| !state.workbench.busy).await;
   edit(&harness, "fn saved() {}\n", cx);
   assert_eq!(harness.snapshot(cx).workbench.content, "fn saved() {}\n");
   let edited_tab = harness
@@ -97,10 +97,12 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
     .id;
   harness.click("new-chat-tab", cx);
   harness
-    .wait(cx, |state| state.selected_session.is_some() && !state.busy)
+    .wait(cx, async |state| {
+      state.selected_session.is_some() && !state.busy
+    })
     .await;
   harness.click(("chat-tab", edited_tab), cx);
-  let restored = harness.wait(cx, |state| !state.workbench.busy).await;
+  let restored = harness.wait(cx, async |state| !state.workbench.busy).await;
   assert_eq!(restored.workbench.file.as_deref(), Some("example.rs"));
   assert_eq!(
     restored.workbench.content, "fn saved() {}\n",
@@ -115,7 +117,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
     window.press(&support::shortcut("s"), cx)
   })
   .expect("native Save shortcut");
-  harness.wait(cx, |state| state.workbench.busy).await;
+  harness.wait(cx, async |state| state.workbench.busy).await;
   assert_eq!(
     std::fs::read_to_string(&path).expect("write held at RPC boundary"),
     "fn original() {}\n"
@@ -133,7 +135,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   );
   write_gate.close();
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.busy
         && std::fs::read_to_string(&path).ok().as_deref() == Some("fn saved() {}\n")
     })
@@ -142,7 +144,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   std::fs::write(&path, "fn external() {}\n").expect("competing file writer");
   harness.click("file-save", cx);
   let conflict = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state
         .workbench
         .error
@@ -160,14 +162,14 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   );
   harness.click("file-reload", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.content == "fn external() {}\n" && state.workbench.error.is_none()
     })
     .await;
   tab(&harness, 3, cx);
   harness.click("diff-refresh", cx);
   let diff = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.patch.contains("+fn external()") && !state.workbench.busy
     })
     .await;
@@ -209,7 +211,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   tab(&harness, 1, cx);
   harness.click("files-refresh", cx);
   let files = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.paths.iter().any(|path| path == "notes.txt") && !state.workbench.busy
     })
     .await;
@@ -227,7 +229,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   .expect("native file accessibility label");
   harness.click(("workspace-file", notes_index), cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.file.as_deref() == Some("notes.txt") && !state.workbench.busy
     })
     .await;
@@ -239,7 +241,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   tab(&harness, 3, cx);
   harness.click("diff-refresh", cx);
   let workspace_diff = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state
         .workbench
         .patch
@@ -278,7 +280,7 @@ async fn native_editor_save_conflict_and_diff_use_real_workspace_rpc(cx: &mut Te
   })
   .expect("reconnect keeps the previous editor read-only until authentication completes");
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.status.starts_with("Connected") && state.selected_session == selected_before_reconnect
     })
     .await;

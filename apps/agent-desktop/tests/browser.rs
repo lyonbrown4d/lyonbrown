@@ -31,7 +31,7 @@ async fn semantic_contains(harness: &Harness, cx: &mut TestAppContext, tab: &str
   });
   // Keep the real GPUI event loop moving while the serialized native input queue
   // drains; blocking this thread would prevent mouse-up and text acknowledgments.
-  harness.wait(cx, |_| observed.is_finished()).await;
+  harness.wait(cx, async |_| observed.is_finished()).await;
   harness
     .runtime
     .block_on(observed)
@@ -67,11 +67,11 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
   harness.connect(cx);
   harness.show_workbench(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   harness.click("new-session", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session.is_some() && !state.busy && !state.workbench.busy
     })
     .await;
@@ -114,7 +114,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
   })
   .expect("invalid native browser navigation input");
   let failed = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.busy && state.workbench.browser_error.is_some()
     })
     .await;
@@ -133,7 +133,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
     .expect("failed navigation retains its successfully created Space");
   assert!(failed.workbench.browser_tab.is_none());
   assert!(failed.workbench.browser_frame.is_none());
-  harness.wait(cx, |state| state.error.is_none()).await;
+  harness.wait(cx, async |state| state.error.is_none()).await;
   let original_chat = failed
     .tabs
     .iter()
@@ -142,7 +142,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
     .id;
   harness.click("new-chat-tab", cx);
   let away = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session.is_some()
         && state.selected_session != failed.selected_session
         && !state.busy
@@ -151,7 +151,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
     .await;
   assert!(away.workbench.browser_space.is_none());
   harness.click(("chat-tab", original_chat), cx);
-  let restored = harness.wait(cx, |state| !state.workbench.busy).await;
+  let restored = harness.wait(cx, async |state| !state.workbench.busy).await;
   assert_eq!(restored.workbench.browser_space.as_ref(), Some(&space));
   assert!(restored.workbench.browser_tab.is_none());
   cx.update_window(harness.window.into(), |_, window, cx| {
@@ -162,7 +162,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
   })
   .expect("native browser navigation input");
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state
         .workbench
         .browser_frame
@@ -185,7 +185,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
   semantic_contains(&harness, cx, &tab, "Human input").await;
   harness.click("browser-takeover", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.browser_human_control
         && state
           .workbench
@@ -221,7 +221,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
   );
   harness.click("browser-takeover", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.browser_human_control && state.workbench.browser_frame.is_some()
     })
     .await;
@@ -239,7 +239,7 @@ async fn native_browser_frames_human_input_and_takeover_cross_authenticated_daem
   );
   harness.click("browser-close", cx);
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.browser_space.is_none() && state.workbench.browser_frame.is_none()
     })
     .await;

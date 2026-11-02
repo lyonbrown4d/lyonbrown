@@ -16,11 +16,12 @@ async fn directory_binds_tls_and_noise_identity_and_persists_only_operator_autho
   let mut b = fixture.client(&fixture.b).await?;
   let registered = b.register(node(&fixture.b)).await?;
   assert_eq!(a.resolve("node-b").await?, registered);
-  let reopened = Store::open(fixture.directory.path().join("control.sqlite3"))?;
-  assert!(reopened.control_link_allowed("node-a", "node-b")?);
+  let reopened = Store::open(fixture.directory.path().join("control.sqlite3")).await?;
+  assert!(reopened.control_link_allowed("node-a", "node-b").await?);
   assert!(
     reopened
-      .control_resolve("node-b", agent_core::now_ms())?
+      .control_resolve("node-b", agent_core::now_ms())
+      .await?
       .is_some()
   );
   let mut raw = fixture.raw(&fixture.a).await?;
@@ -38,7 +39,8 @@ async fn directory_binds_tls_and_noise_identity_and_persists_only_operator_autho
   );
   assert!(
     reopened
-      .control_resolve("node-a", agent_core::now_ms())?
+      .control_resolve("node-a", agent_core::now_ms())
+      .await?
       .is_none()
   );
   let bad_noise = v1::RegisterRequest {
@@ -61,12 +63,16 @@ async fn directory_binds_tls_and_noise_identity_and_persists_only_operator_autho
       .code(),
     tonic::Code::PermissionDenied
   );
-  assert_eq!(fixture.store.peers()?.len(), 2);
+  assert_eq!(fixture.store.peers().await?.len(), 2);
   fixture
     .store
-    .control_allow_link("node-a", "node-b", false)?;
+    .control_allow_link("node-a", "node-b", false)
+    .await?;
   assert!(
-    fixture.store.control_link_allowed("node-b", "node-a")?,
+    fixture
+      .store
+      .control_link_allowed("node-b", "node-a")
+      .await?,
     "operator policy is directional"
   );
   assert_eq!(
@@ -79,7 +85,10 @@ async fn directory_binds_tls_and_noise_identity_and_persists_only_operator_autho
       .code(),
     tonic::Code::PermissionDenied
   );
-  fixture.store.control_allow_link("node-a", "node-b", true)?;
+  fixture
+    .store
+    .control_allow_link("node-a", "node-b", true)
+    .await?;
   tokio::time::sleep(Duration::from_millis(1100)).await;
   assert_eq!(
     raw
@@ -116,10 +125,11 @@ async fn unpaired_certificates_cannot_register_or_open_relay() -> Result<()> {
   assert!(
     fixture
       .store
-      .control_resolve("stranger", agent_core::now_ms())?
+      .control_resolve("stranger", agent_core::now_ms())
+      .await?
       .is_none()
   );
-  assert_eq!(fixture.store.peers()?.len(), 2);
+  assert_eq!(fixture.store.peers().await?.len(), 2);
   Ok(())
 }
 

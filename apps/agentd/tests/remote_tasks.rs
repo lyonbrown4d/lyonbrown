@@ -16,7 +16,7 @@ async fn authenticated_master_management_uses_worker_harness_and_requires_accept
       .await
       .unwrap();
     let remote = Remote::open(&mock, protocol).await;
-    let envelope = remote.envelope();
+    let envelope = remote.envelope().await;
     let id = envelope.task_id.clone();
     let mut target = remote.target();
     target.fingerprint = "caller fingerprint is not authority".into();
@@ -34,7 +34,15 @@ async fn authenticated_master_management_uses_worker_harness_and_requires_accept
       "awaiting_acceptance"
     );
     assert_eq!(
-      remote.pair.master.store.task(&id).unwrap().unwrap().status,
+      remote
+        .pair
+        .master
+        .store
+        .task(&id)
+        .await
+        .unwrap()
+        .unwrap()
+        .status,
       "awaiting_acceptance"
     );
     let page = remote
@@ -62,7 +70,15 @@ async fn authenticated_master_management_uses_worker_harness_and_requires_accept
       .unwrap();
     assert_eq!(accepted.status, "completed");
     assert_eq!(
-      remote.pair.worker.store.task(&id).unwrap().unwrap().status,
+      remote
+        .pair
+        .worker
+        .store
+        .task(&id)
+        .await
+        .unwrap()
+        .unwrap()
+        .status,
       "completed"
     );
     assert_eq!(mock.requests().await[0].path, protocol.path());
@@ -74,7 +90,7 @@ async fn authenticated_master_management_uses_worker_harness_and_requires_accept
 async fn invalid_scope_pairing_and_authentication_reject_before_dispatch_effects() {
   let mock = MockModelServer::start(vec![]).await.unwrap();
   let remote = Remote::open(&mock, StandardProtocol::ChatCompletions).await;
-  let envelope = remote.envelope();
+  let envelope = remote.envelope().await;
   let mut raw = OrchestrationServiceClient::connect(remote.endpoint.clone())
     .await
     .unwrap();
@@ -107,6 +123,7 @@ async fn invalid_scope_pairing_and_authentication_reject_before_dispatch_effects
       &remote.pair.session.workspace,
       &remote.pair.master.node_id,
     )
+    .await
     .unwrap();
   malformed = envelope.clone();
   malformed.session_id = other.id;
@@ -174,6 +191,7 @@ async fn invalid_scope_pairing_and_authentication_reject_before_dispatch_effects
       .master
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .is_none()
   );
@@ -183,6 +201,7 @@ async fn invalid_scope_pairing_and_authentication_reject_before_dispatch_effects
       .worker
       .store
       .task(&envelope.task_id)
+      .await
       .unwrap()
       .is_none()
   );
@@ -196,7 +215,7 @@ async fn cancel_is_target_bound_and_terminal_parent_cannot_dispatch() {
     .await
     .unwrap();
   let remote = Remote::open(&mock, StandardProtocol::ChatCompletions).await;
-  let envelope = remote.envelope();
+  let envelope = remote.envelope().await;
   let id = envelope.task_id.clone();
   remote
     .client
@@ -213,7 +232,15 @@ async fn cancel_is_target_bound_and_terminal_parent_cannot_dispatch() {
     Code::PermissionDenied
   );
   assert_eq!(
-    remote.pair.master.store.task(&id).unwrap().unwrap().status,
+    remote
+      .pair
+      .master
+      .store
+      .task(&id)
+      .await
+      .unwrap()
+      .unwrap()
+      .status,
     "running"
   );
   assert_eq!(
@@ -232,12 +259,13 @@ async fn cancel_is_target_bound_and_terminal_parent_cannot_dispatch() {
       .worker
       .store
       .task(&id)
+      .await
       .unwrap()
       .unwrap()
       .attempt_status,
     "cancelled"
   );
-  let denied = remote.envelope();
+  let denied = remote.envelope().await;
   remote
     .pair
     .master
@@ -249,6 +277,7 @@ async fn cancel_is_target_bound_and_terminal_parent_cannot_dispatch() {
       "",
       "",
     )
+    .await
     .unwrap();
   assert_eq!(
     code(
@@ -266,6 +295,7 @@ async fn cancel_is_target_bound_and_terminal_parent_cannot_dispatch() {
       .master
       .store
       .task(&denied.task_id)
+      .await
       .unwrap()
       .is_none()
   );
@@ -275,6 +305,7 @@ async fn cancel_is_target_bound_and_terminal_parent_cannot_dispatch() {
       .worker
       .store
       .task(&denied.task_id)
+      .await
       .unwrap()
       .is_none()
   );

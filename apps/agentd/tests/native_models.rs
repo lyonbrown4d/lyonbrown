@@ -56,11 +56,12 @@ async fn generate(backend: LocalModelBackend) -> anyhow::Result<()> {
   .await??;
   let result = daemon
     .store
-    .run(&run.id)?
+    .run(&run.id)
+    .await?
     .ok_or_else(|| anyhow::anyhow!("run missing"))?;
   assert_eq!(result.status, "completed", "{}", result.error);
   assert!(!result.result.trim().is_empty());
-  let events = daemon.store.events(&run.id, 0, 1000)?;
+  let events = daemon.store.events(&run.id, 0, 1000).await?;
   let plan: serde_json::Value = serde_json::from_str(
     &events
       .iter()

@@ -66,7 +66,7 @@ async fn every_protocol_observes_and_requires_exact_approval_before_computer_eff
         ))
         .await;
       let pending = approval(&node, &run.id).await;
-      let exact = exact_approval(&node, &pending, &host.host_id, &args);
+      let exact = exact_approval(&node, &pending, &host.host_id, &args).await;
       assert_eq!(runtime.effects(), 0, "no effect before human approval");
       if approved && protocol == StandardProtocol::ChatCompletions {
         // Approval latency must also refresh unchanged content before execution.
@@ -100,7 +100,8 @@ async fn every_protocol_observes_and_requires_exact_approval_before_computer_eff
         &pending,
         if approved { "consumed" } else { "denied" },
         approved.then_some("completed"),
-      );
+      )
+      .await;
       assert!(uuid::Uuid::parse_str(exact["action_id"].as_str().unwrap()).is_ok());
       let requests = model.requests().await;
       assert_eq!(requests.len(), 3);
@@ -160,7 +161,7 @@ async fn lost_or_corrupted_execute_receipt_fences_run_and_persists_uncertain_wit
       ))
       .await;
     let pending = approval(&node, &run.id).await;
-    exact_approval(&node, &pending, &host.host_id, &args);
+    exact_approval(&node, &pending, &host.host_id, &args).await;
     assert_eq!(runtime.effects(), 0);
     node.client.approve(&pending.id, true).await.unwrap();
     host.wait_lost().await;
@@ -170,7 +171,7 @@ async fn lost_or_corrupted_execute_receipt_fences_run_and_persists_uncertain_wit
     }
     let result = node.terminal(&run.id).await;
     assert_eq!(result.status, "uncertain", "{}", result.error);
-    assert_receipts(&node, &pending, "consumed", Some("uncertain"));
+    assert_receipts(&node, &pending, "consumed", Some("uncertain")).await;
     assert_eq!(runtime.effects(), 1);
     assert_eq!(
       model.requests().await.len(),
@@ -187,10 +188,17 @@ async fn lost_or_corrupted_execute_receipt_fences_run_and_persists_uncertain_wit
     node.daemon.recover().await.unwrap();
     assert_eq!(runtime.effects(), 1, "recovery must preserve effect count");
     assert_eq!(
-      node.daemon.store.run(&run.id).unwrap().unwrap().status,
+      node
+        .daemon
+        .store
+        .run(&run.id)
+        .await
+        .unwrap()
+        .unwrap()
+        .status,
       "uncertain"
     );
-    assert_receipts(&node, &pending, "consumed", Some("uncertain"));
+    assert_receipts(&node, &pending, "consumed", Some("uncertain")).await;
     drop(host);
     node.close().await;
   }
@@ -236,7 +244,7 @@ async fn classifier_cannot_grant_computer_tools_without_config_host_and_input_pe
     );
     assert_eq!(runtime.effects(), 0);
     assert_eq!(runtime.calls.captures.load(Ordering::SeqCst), 0);
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let plan: Value = serde_json::from_str(
       &events
         .iter()

@@ -102,7 +102,7 @@ async fn run(
     tracing::error!(
       operation = "daemon.serve",
       outcome = "failed",
-      error = %error,
+      error = %agent_storage::public_error_message(error),
       recovery = "Inspect daemon configuration, store permissions and listener availability",
       "Daemon startup or serving failed"
     );
@@ -117,7 +117,7 @@ async fn serve(
 ) -> Result<()> {
   let daemon = Daemon::open(config.clone()).await?;
   if let Some(command) = &config.maintenance {
-    agentd::peers::maintain(&daemon, command)?;
+    agentd::peers::maintain(&daemon, command).await?;
     return Ok(());
   }
   let incoming = tonic::transport::server::TcpIncoming::bind(config.listen)?;
@@ -133,6 +133,7 @@ async fn serve(
     .add_service(agentd::workspace_service(daemon.clone()))
     .add_service(agentd::skill_service(daemon.clone()))
     .add_service(agentd::model_service(daemon.clone()))
+    .add_service(agentd::memory_service(daemon.clone()))
     .add_service(agentd::browser_service(daemon.clone()))
     .add_service(agentd::runtime_service(daemon.clone()))
     .add_service(agentd::computer_runtime_service(daemon.clone()))

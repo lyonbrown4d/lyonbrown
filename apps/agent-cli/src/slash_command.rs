@@ -9,6 +9,11 @@ pub struct CommandSpec {
 
 pub const COMMANDS: &[CommandSpec] = &[
   CommandSpec {
+    name: "memory",
+    usage: crate::memory_command::USAGE,
+    summary: "Inspect, propose, approve, edit, or forget scoped memories; writes are never retried automatically",
+  },
+  CommandSpec {
     name: "search",
     usage: "/search TEXT",
     summary: "Search local transcript; Alt+N/P visits stable message anchors",

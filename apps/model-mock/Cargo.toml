@@ -29,5 +29,5 @@ agent-inference = { path = "../../crates/agent-inference" }
 decision-core = { path = "../../crates/decision-core" }
 decision-model = { path = "../../crates/decision-model" }
 model-provider = { path = "../../crates/model-provider" }
-rpi-ai = { version = "=0.14.0", features = ["providers"] }
+rpi-ai = { version = "=0.16.0", features = ["providers"] }
 tempfile.workspace = true

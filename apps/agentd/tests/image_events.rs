@@ -1,3 +1,5 @@
+#[path = "image_events/persistence.rs"]
+mod persistence;
 #[allow(dead_code)]
 mod support;
 
@@ -89,11 +91,12 @@ fn assert_image_events(events: &[Event]) {
   }
 }
 
-fn assert_snapshot(node: &TestNode) {
+async fn assert_snapshot(node: &TestNode) {
   let bytes = node
     .daemon
     .store
     .load_snapshot(&node.session_id)
+    .await
     .unwrap()
     .unwrap();
   let snapshot: Value = serde_json::from_slice(&bytes).unwrap();
@@ -144,6 +147,7 @@ async fn image_events_are_metadata_only_in_store_outbox_and_authenticated_watch(
     .daemon
     .store
     .session(&node.session_id)
+    .await
     .unwrap()
     .unwrap();
   let config = RuntimeConfig {
@@ -169,17 +173,19 @@ async fn image_events_are_metadata_only_in_store_outbox_and_authenticated_watch(
       PROMPT,
       &agent_core::new_id(),
     )
+    .await
     .unwrap();
   assert!(created);
   node
     .daemon
     .store
     .update_run_owned(&run.id, session.owner_epoch, RunStatus::Running, "", "")
+    .await
     .unwrap();
   let capture = runtime_events.clone();
   let runtime = Runtime::open(
     config.clone(),
-    Arc::new(node.daemon.store.clone()),
+    Arc::new(persistence::Persistence(node.daemon.store.clone())),
     Vec::new(),
     Arc::new(move |event| capture.lock().unwrap().push(event)),
   )
@@ -208,21 +214,22 @@ async fn image_events_are_metadata_only_in_store_outbox_and_authenticated_watch(
       &result.text,
       "",
     )
+    .await
     .unwrap();
-  assert_snapshot(&node);
-  let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+  assert_snapshot(&node).await;
+  let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
   assert_eq!(watch_events(&node, &run.id).await, events);
   assert_image_events(&events);
-  let outbox = node.daemon.store.pending_outbox(1000).unwrap();
+  let outbox = node.daemon.store.pending_outbox(1000).await.unwrap();
   assert_eq!(outbox, events);
   assert!(!serde_json::to_string(&outbox).unwrap().contains(PNG));
   assert!(!format!("{outbox:?}").contains(PNG));
-  let snapshot = node.daemon.store.load_snapshot(&session.id).unwrap();
+  let snapshot = node.daemon.store.load_snapshot(&session.id).await.unwrap();
   let listener_count = runtime_events.lock().unwrap().len();
   let capture = runtime_events.clone();
   let reopened = Runtime::open(
     config,
-    Arc::new(node.daemon.store.clone()),
+    Arc::new(persistence::Persistence(node.daemon.store.clone())),
     Vec::new(),
     Arc::new(move |event| capture.lock().unwrap().push(event)),
   )
@@ -238,14 +245,23 @@ async fn image_events_are_metadata_only_in_store_outbox_and_authenticated_watch(
   );
   assert!(!format!("{error:?}").contains(PNG));
   assert_eq!(
-    node.daemon.store.load_snapshot(&session.id).unwrap(),
+    node.daemon.store.load_snapshot(&session.id).await.unwrap(),
     snapshot
   );
-  assert_eq!(node.daemon.store.events(&run.id, 0, 1000).unwrap(), events);
-  assert_eq!(node.daemon.store.pending_outbox(1000).unwrap(), outbox);
-  assert_eq!(node.daemon.store.run(&run.id).unwrap(), Some(terminal));
   assert_eq!(
-    node.daemon.store.session(&session.id).unwrap(),
+    node.daemon.store.events(&run.id, 0, 1000).await.unwrap(),
+    events
+  );
+  assert_eq!(
+    node.daemon.store.pending_outbox(1000).await.unwrap(),
+    outbox
+  );
+  assert_eq!(
+    node.daemon.store.run(&run.id).await.unwrap(),
+    Some(terminal)
+  );
+  assert_eq!(
+    node.daemon.store.session(&session.id).await.unwrap(),
     Some(session)
   );
   assert_eq!(watch_events(&node, &run.id).await, events);

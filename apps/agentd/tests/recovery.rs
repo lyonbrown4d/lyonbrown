@@ -11,7 +11,7 @@ fn route(protocol: StandardProtocol) -> ScriptedReply {
   text_reply(protocol, &json!({"task_kind":"code","model_policy":"general","allowed_tools":[],"execution_mode":"local","target_hint":null,"risk_level":"low","confidence":0.99}).to_string())
 }
 
-fn interrupted(node: &TestNode) -> agent_core::Run {
+async fn interrupted(node: &TestNode) -> agent_core::Run {
   let (run, _) = node
     .daemon
     .store
@@ -21,11 +21,13 @@ fn interrupted(node: &TestNode) -> agent_core::Run {
       "Never replay interrupted side effects",
       "original",
     )
+    .await
     .unwrap();
   node
     .daemon
     .store
     .update_run_owned(&run.id, 1, RunStatus::Running, "", "")
+    .await
     .unwrap();
   node
     .daemon
@@ -37,6 +39,7 @@ fn interrupted(node: &TestNode) -> agent_core::Run {
       "snapshot",
       json!({}),
     )
+    .await
     .unwrap();
   run
 }
@@ -68,11 +71,13 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
       .daemon
       .store
       .accept_run(&node.session_id, 1, "prior history", "seed")
+      .await
       .unwrap();
     node
       .daemon
       .store
       .update_run_owned(&seed.id, 1, RunStatus::Completed, "prior result", "")
+      .await
       .unwrap();
     node
       .daemon
@@ -84,6 +89,7 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
         "snapshot",
         json!({}),
       )
+      .await
       .unwrap();
     let run = node.run("Never replay interrupted side effects").await;
     assert_eq!(node.terminal(&run.id).await.status, "uncertain");
@@ -94,7 +100,7 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
     })
     .await
     .unwrap();
-    let original = node.daemon.store.run(&run.id).unwrap().unwrap();
+    let original = node.daemon.store.run(&run.id).await.unwrap().unwrap();
     assert_eq!(original.status, "uncertain");
     let report = node.client.run_recovery(&run.id).await.unwrap();
     assert!(report.fresh_session_required);
@@ -114,9 +120,17 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
     let repeat = node.client.recover_run(request).await.unwrap();
     assert_eq!(repeat.session.unwrap().id, fresh.id);
     assert_eq!(repeat.run.unwrap().id, replacement.id);
-    assert_eq!(node.daemon.store.run(&run.id).unwrap(), Some(original));
     assert_eq!(
-      node.daemon.store.load_snapshot(&node.session_id).unwrap(),
+      node.daemon.store.run(&run.id).await.unwrap(),
+      Some(original)
+    );
+    assert_eq!(
+      node
+        .daemon
+        .store
+        .load_snapshot(&node.session_id)
+        .await
+        .unwrap(),
       Some(b"unreadable interrupted history".to_vec())
     );
     assert!(
@@ -124,6 +138,7 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
         .daemon
         .store
         .load_snapshot(&fresh.id)
+        .await
         .unwrap()
         .is_some()
     );
@@ -132,6 +147,7 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
         .daemon
         .store
         .approvals(&replacement.id)
+        .await
         .unwrap()
         .is_empty()
     );
@@ -147,7 +163,7 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
     let mut changed = recovery(&run.id);
     changed.idempotency_key = "different-recovery".into();
     assert!(node.client.recover_run(changed).await.is_err());
-    assert_eq!(node.daemon.store.sessions().unwrap().len(), 2);
+    assert_eq!(node.daemon.store.sessions().await.unwrap().len(), 2);
     node.close().await;
   }
 }
@@ -160,9 +176,9 @@ async fn committed_fresh_intent_recovers_after_restart_and_can_be_cancelled() {
     .await
     .unwrap();
   let node = TestNode::start(&main, &classifier, protocol).await;
-  let run = interrupted(&node);
+  let run = interrupted(&node).await;
   node.daemon.recover().await.unwrap();
-  let original = node.daemon.store.run(&run.id).unwrap().unwrap();
+  let original = node.daemon.store.run(&run.id).await.unwrap().unwrap();
   // Simulate a crash after durable recovery admission and before launch.
   let (resolution, _) = node
     .daemon
@@ -176,6 +192,7 @@ async fn committed_fresh_intent_recovers_after_restart_and_can_be_cancelled() {
       note: "Human verified; no replay",
       prompt: "Wait for further instructions",
     })
+    .await
     .unwrap();
   let id = resolution.replacement_run_id.unwrap();
   node.daemon.recover().await.unwrap();
@@ -186,9 +203,12 @@ async fn committed_fresh_intent_recovers_after_restart_and_can_be_cancelled() {
     .await
     .unwrap();
   assert_eq!(node.terminal(&id).await.status, "cancelled");
-  assert_eq!(node.daemon.store.run(&run.id).unwrap(), Some(original));
+  assert_eq!(
+    node.daemon.store.run(&run.id).await.unwrap(),
+    Some(original)
+  );
   assert_eq!(main.requests().await.len(), 1);
-  assert!(node.daemon.store.pending_runs().unwrap().is_empty());
+  assert!(node.daemon.store.pending_runs().await.unwrap().is_empty());
   node.close().await;
 }
 
@@ -210,16 +230,19 @@ async fn active_and_stale_recovery_requests_cannot_create_execution() {
     .daemon
     .store
     .accept_run(&node.session_id, 1, "unknown", "unknown")
+    .await
     .unwrap();
   node
     .daemon
     .store
     .update_run_owned(&unknown.id, 1, RunStatus::Uncertain, "", "unknown")
+    .await
     .unwrap();
   node
     .daemon
     .store
     .change_owner(&node.session_id, 1, &node.daemon.node_id)
+    .await
     .unwrap();
   assert!(
     node
@@ -233,10 +256,11 @@ async fn active_and_stale_recovery_requests_cannot_create_execution() {
       .daemon
       .store
       .run_recovery(&unknown.id)
+      .await
       .unwrap()
       .is_none()
   );
-  assert_eq!(node.daemon.store.sessions().unwrap().len(), 1);
+  assert_eq!(node.daemon.store.sessions().await.unwrap().len(), 1);
   assert_eq!(main.requests().await.len(), 1);
   node.close().await;
 }

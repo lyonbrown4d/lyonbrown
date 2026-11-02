@@ -104,7 +104,7 @@ impl Runtime {
       .map(|result| result.entry_id)
       .map_err(|error| RuntimeError::Harness(error.to_string()))
   }
-  /// True only after the cancellation record committed. Upstream 0.14 may
+  /// True only after the cancellation record committed. Upstream 0.16 may
   /// swallow a storage error; the persistence port fences that ambiguity here.
   /// Upstream: https://github.com/bigfish1913/pi-rust/issues/235
   pub async fn cancel_input(&self, entry_id: &str) -> Result<bool> {

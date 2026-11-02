@@ -10,6 +10,8 @@ use support::Harness;
 #[gpui_kit::test]
 async fn model_selection_is_persisted_for_the_selected_session(cx: &mut TestAppContext) {
   let harness = Harness::new(cx, Vec::new());
+  let storage_runtime_0 = harness.runtime.clone();
+  let _storage_context_0 = storage_runtime_0.enter();
   let session = resources::session(&harness, cx).await;
   resources::page(&harness, 1, cx);
   resources::ready(&harness, cx, |window, _| {
@@ -20,11 +22,12 @@ async fn model_selection_is_persisted_for_the_selected_session(cx: &mut TestAppC
   .await;
   harness.click(("model-select", 0usize), cx);
   harness
-    .wait(cx, |_| {
+    .wait(cx, async |_| {
       harness
         .daemon
         .store
         .model_binding(&session)
+        .await
         .expect("stored binding")
         .is_some()
     })
@@ -33,6 +36,7 @@ async fn model_selection_is_persisted_for_the_selected_session(cx: &mut TestAppC
     .daemon
     .store
     .model_binding(&session)
+    .await
     .unwrap()
     .unwrap();
   assert_eq!(binding.model_id, "fixture-model");
@@ -62,6 +66,8 @@ async fn skill_confirmation_uses_inspected_hash_and_source_edits_revoke_it(
   cx: &mut TestAppContext,
 ) {
   let harness = Harness::new(cx, Vec::new());
+  let storage_runtime_1 = harness.runtime.clone();
+  let _storage_context_1 = storage_runtime_1.enter();
   let session = resources::session(&harness, cx).await;
   let source = harness.directory.path().join("acceptance-skill");
   std::fs::create_dir(&source).unwrap();
@@ -184,6 +190,8 @@ async fn provider_environment_is_metadata_until_explicit_upload(cx: &mut TestApp
     return;
   }
   let harness = Harness::new(cx, Vec::new());
+  let storage_runtime_2 = harness.runtime.clone();
+  let _storage_context_2 = storage_runtime_2.enter();
   resources::session(&harness, cx).await;
   resources::page(&harness, 2, cx);
   resources::ready(&harness, cx, |window, _| {

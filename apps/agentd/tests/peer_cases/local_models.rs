@@ -13,7 +13,7 @@ async fn worker_uses_its_daemon_local_registry_without_cloud_fallback() {
   )
   .await;
   pair.serve().await;
-  let task = pair.envelope(vec!["workspace.read".into()]);
+  let task = pair.envelope(vec!["workspace.read".into()]).await;
   pair
     .dispatch
     .submit(&pair.worker_manager.local_node(), task.clone())
@@ -25,9 +25,14 @@ async fn worker_uses_its_daemon_local_registry_without_cloud_fallback() {
   assert_eq!(result.result, "local worker output");
   assert!(unused_cloud.requests().await.is_empty());
   assert!(backend.requests.lock().await[0].tools.is_empty());
-  let runs = pair.worker_runs(&task);
+  let runs = pair.worker_runs(&task).await;
   assert_eq!(runs[0].status, "completed");
-  let events = pair.worker.store.events(&runs[0].id, 0, 1000).unwrap();
+  let events = pair
+    .worker
+    .store
+    .events(&runs[0].id, 0, 1000)
+    .await
+    .unwrap();
   let model: serde_json::Value = serde_json::from_str(
     &events
       .iter()

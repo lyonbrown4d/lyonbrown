@@ -60,7 +60,8 @@ async fn opening_and_closing_require_exact_approval_and_persist_mutation_receipt
         &pending,
         if approved { "consumed" } else { "denied" },
         approved.then_some("completed"),
-      );
+      )
+      .await;
       drop(runtime);
       node.close().await;
     }
@@ -88,7 +89,7 @@ async fn cancelling_pending_browser_approval_has_no_intent_or_effect() {
   node.client.cancel_run(&run.id).await.unwrap();
   assert_eq!(node.terminal(&run.id).await.status, "cancelled");
   assert!(runtime.actions.lock().await.is_empty());
-  assert_receipts(&node, &pending, "cancelled", None);
+  assert_receipts(&node, &pending, "cancelled", None).await;
   assert_eq!(main.requests().await.len(), 1);
   drop(runtime);
   node.close().await;

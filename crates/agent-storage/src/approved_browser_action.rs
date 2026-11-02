@@ -1,8 +1,9 @@
 use crate::{
-  Store, approvals::consume_approval_tx, browser_actions::begin_browser_action_tx, schema::runs,
+  Store, approval_consumption::consume_approval_tx, browser_actions::begin_browser_action_tx,
+  schema::runs,
 };
 use anyhow::{Result, ensure};
-use diesel::prelude::*;
+use sea_orm::{QuerySelect, prelude::*};
 use serde_json::Value;
 
 /// Exact model approval binding and redacted metadata for one browser intent.
@@ -57,7 +58,7 @@ impl BrowserActionAuthorization {
 impl Store {
   /// Atomically consume exact model approval and commit browser intent and Outbox.
   /// The authenticated human browser API continues to record its own intents.
-  pub fn begin_approved_browser_action(
+  pub async fn begin_approved_browser_action(
     &self,
     input: ApprovedBrowserAction<'_>,
   ) -> Result<BrowserActionAuthorization> {
@@ -73,36 +74,57 @@ impl Store {
         && input.arguments.get("owner_epoch").and_then(Value::as_u64) == Some(input.owner_epoch),
       "browser action or owner epoch does not match approval"
     );
-    let session_id = self.lock()?.immediate_transaction(|connection| {
-      let session: String = runs::table
-        .find(input.run_id)
-        .select(runs::session_id)
-        .first(connection)?;
-      ensure!(
-        input.arguments.get("session_id").and_then(Value::as_str) == Some(session.as_str()),
-        "browser approval does not belong to the run session"
-      );
-      ensure!(
-        consume_approval_tx(
+    let session_id = {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        let session: String = runs::Entity::find()
+          .filter(runs::Column::Id.eq(input.run_id))
+          .select_only()
+          .column(runs::Column::SessionId)
+          .into_tuple::<String>()
+          .one(connection)
+          .await?
+          .ok_or_else(|| anyhow::anyhow!("runs record missing"))?;
+        ensure!(
+          input.arguments.get("session_id").and_then(Value::as_str) == Some(session.as_str()),
+          "browser approval does not belong to the run session"
+        );
+        ensure!(
+          consume_approval_tx(
+            connection,
+            input.approval_id,
+            input.run_id,
+            Some(input.owner_epoch),
+            input.tool,
+            input.arguments,
+          )
+          .await?,
+          "browser action approval is not approved"
+        );
+        begin_browser_action_tx(
           connection,
-          input.approval_id,
-          input.run_id,
-          Some(input.owner_epoch),
-          input.tool,
-          input.arguments,
-        )?,
-        "browser action approval is not approved"
-      );
-      begin_browser_action_tx(
-        connection,
-        &session,
-        input.owner_epoch,
-        input.action_id,
-        "browser_command",
-        input.summary,
-      )?;
-      Ok::<_, anyhow::Error>(session)
-    })?;
+          &session,
+          input.owner_epoch,
+          input.action_id,
+          "browser_command",
+          input.summary,
+        )
+        .await?;
+        Ok::<_, anyhow::Error>(session)
+      }
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }?;
     // A proof exists only after SQLite confirms the approval/intent commit.
     Ok(BrowserActionAuthorization {
       session_id,

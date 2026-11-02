@@ -4,8 +4,8 @@ use crate::{
   schema::{gateway_model_head as head, gateway_model_snapshots as snapshots},
 };
 use decision_core::ModelTier;
-use diesel::prelude::*;
 use gateway_core::ModelConfig;
+use sea_orm::{ActiveModelTrait, QueryFilter, Set, prelude::*, sea_query::OnConflict};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 
@@ -56,33 +56,38 @@ impl GatewayStorage {
       return Err(StorageError::InvalidInput("model snapshot size"));
     }
     self
-      .run(move |connection| {
-        connection.immediate_transaction(|connection| {
-          let existing = snapshots::table
-            .filter(snapshots::revision.eq(&revision))
-            .select(snapshots::document)
-            .first::<String>(connection)
-            .optional()?;
+      .write(move |connection| {
+        Box::pin(async move {
+          let existing = snapshots::Entity::find()
+            .filter(snapshots::Column::Revision.eq(&revision))
+            .one(connection)
+            .await?;
           if existing
             .as_ref()
-            .is_some_and(|existing| existing != &document)
+            .is_some_and(|previous| previous.document != document)
           {
             return Err(StorageError::Conflict);
           }
           if existing.is_none() {
-            diesel::insert_into(snapshots::table)
-              .values((
-                snapshots::revision.eq(&revision),
-                snapshots::document.eq(document),
-              ))
-              .execute(connection)?;
+            snapshots::ActiveModel {
+              revision: Set(revision.clone()),
+              document: Set(document),
+              ..Default::default()
+            }
+            .insert(connection)
+            .await?;
           }
-          diesel::insert_into(head::table)
-            .values((head::id.eq(1), head::revision.eq(&revision)))
-            .on_conflict(head::id)
-            .do_update()
-            .set(head::revision.eq(&revision))
-            .execute(connection)?;
+          head::Entity::insert(head::ActiveModel {
+            id: Set(1),
+            revision: Set(revision),
+          })
+          .on_conflict(
+            OnConflict::column(head::Column::Id)
+              .update_column(head::Column::Revision)
+              .to_owned(),
+          )
+          .exec(connection)
+          .await?;
           Ok(())
         })
       })
@@ -91,27 +96,23 @@ impl GatewayStorage {
   pub async fn load_models(&self) -> Result<Option<ModelSnapshot>> {
     self
       .run(|connection| {
-        let revision = head::table
-          .find(1)
-          .select(head::revision)
-          .first::<String>(connection)
-          .optional()?;
-        let Some(revision) = revision else {
-          return Ok(None);
-        };
-        let row = snapshots::table
-          .filter(snapshots::revision.eq(revision))
-          .select((snapshots::revision, snapshots::document))
-          .first::<(String, String)>(connection)
-          .optional()?;
-        row
-          .map(|(revision, document)| {
-            Ok(ModelSnapshot {
-              revision,
-              models: serde_json::from_str(&document).map_err(|_| StorageError::InvalidData)?,
+        Box::pin(async move {
+          let Some(head) = head::Entity::find_by_id(1).one(connection).await? else {
+            return Ok(None);
+          };
+          snapshots::Entity::find()
+            .filter(snapshots::Column::Revision.eq(head.revision))
+            .one(connection)
+            .await?
+            .map(|row| {
+              Ok(ModelSnapshot {
+                revision: row.revision,
+                models: serde_json::from_str(&row.document)
+                  .map_err(|_| StorageError::InvalidData)?,
+              })
             })
-          })
-          .transpose()
+            .transpose()
+        })
       })
       .await
   }

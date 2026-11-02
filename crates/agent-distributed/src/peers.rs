@@ -66,22 +66,27 @@ impl PeerManager {
     Ok(())
   }
 
-  pub(crate) fn known_peers(&self) -> Result<Vec<v1::Node>> {
-    let mut nodes = self
+  pub(crate) async fn known_peers(&self) -> Result<Vec<v1::Node>> {
+    let candidates = self
       .known_nodes
       .read()
       .map_err(|_| anyhow::anyhow!("peer directory lock is unavailable"))?
       .values()
-      .filter(|node| self.trust(&node.id).is_ok())
       .cloned()
       .collect::<Vec<_>>();
+    let mut nodes = Vec::new();
+    for node in candidates {
+      if self.trust(&node.id).await.is_ok() {
+        nodes.push(node);
+      }
+    }
     nodes.sort_by(|first, second| first.id.cmp(&second.id));
     Ok(nodes)
   }
 
   /// Call only from an explicitly authorized local human management path.
   /// An updated CA set requires reloading the peer listener.
-  pub fn pair_local(
+  pub async fn pair_local(
     &self,
     identity: PublicIdentity,
     capabilities: Vec<String>,
@@ -102,7 +107,8 @@ impl PeerManager {
     ensure!(
       !self
         .store
-        .peers()?
+        .peers()
+        .await?
         .iter()
         .any(|peer| peer.node_id != identity.node_id && peer.fingerprint == fingerprint),
       "certificate is already bound to another node identity"
@@ -115,7 +121,7 @@ impl PeerManager {
       certificate_pem: identity.certificate_pem,
       noise_public_key: identity.noise_public_key,
     };
-    self.store.trust_peer(&trust)?;
+    self.store.trust_peer(&trust).await?;
     tracing::info!(
       operation = "peer.pair",
       outcome = "persisted",
@@ -124,10 +130,10 @@ impl PeerManager {
     Ok(trust)
   }
 
-  pub fn revoke_local(&self, id: &str) -> Result<PeerTrust> {
-    let mut trust = self.store.peer(id)?.context("unknown peer")?;
+  pub async fn revoke_local(&self, id: &str) -> Result<PeerTrust> {
+    let mut trust = self.store.peer(id).await?.context("unknown peer")?;
     trust.revoked = true;
-    self.store.trust_peer(&trust)?;
+    self.store.trust_peer(&trust).await?;
     tracing::info!(
       operation = "peer.revoke",
       outcome = "persisted",
@@ -136,8 +142,12 @@ impl PeerManager {
     Ok(trust)
   }
 
-  pub fn trust(&self, id: &str) -> Result<PeerTrust> {
-    let trust = self.store.peer(id)?.context("peer has not been paired")?;
+  pub async fn trust(&self, id: &str) -> Result<PeerTrust> {
+    let trust = self
+      .store
+      .peer(id)
+      .await?
+      .context("peer has not been paired")?;
     ensure!(!trust.revoked, "peer trust is revoked");
     ensure!(
       public_identity(&trust).fingerprint()? == trust.fingerprint,
@@ -146,21 +156,22 @@ impl PeerManager {
     Ok(trust)
   }
 
-  pub fn server_tls(&self) -> Result<ServerTlsConfig> {
+  pub async fn server_tls(&self) -> Result<ServerTlsConfig> {
     let peers = self
       .store
-      .peers()?
+      .peers()
+      .await?
       .into_iter()
       .filter(|peer| !peer.revoked)
       .map(|peer| public_identity(&peer));
     self.identity.server_tls(peers)
   }
 
-  pub fn authorize<T>(
-    &self,
+  pub fn authorize<'a, T>(
+    &'a self,
     request: &Request<T>,
-    capabilities: &[&str],
-  ) -> Result<PeerTrust, Status> {
+    capabilities: &'a [&'a str],
+  ) -> impl std::future::Future<Output = Result<PeerTrust, Status>> + Send + 'a {
     let fingerprint = request
       .extensions()
       .get::<TlsConnectInfo<TcpConnectInfo>>()
@@ -170,20 +181,25 @@ impl PeerManager {
           .first()
           .map(|cert| hex::encode(Sha256::digest(cert.as_ref())))
       })
-      .ok_or_else(|| Status::unauthenticated("a paired mutual TLS client identity is required"))?;
-    let trust = self
-      .store
-      .peers()
-      .map_err(|_| Status::internal("peer trust store unavailable"))?
-      .into_iter()
-      .find(|peer| peer.fingerprint == fingerprint && !peer.revoked)
-      .ok_or_else(|| Status::permission_denied("client certificate is not an authorized peer"))?;
-    require_capabilities(&trust, capabilities)?;
-    Ok(trust)
+      .ok_or_else(|| Status::unauthenticated("a paired mutual TLS client identity is required"));
+    // Extract TLS identity before awaiting; streaming request bodies need not be Sync.
+    async move {
+      let fingerprint = fingerprint?;
+      let trust = self
+        .store
+        .peers()
+        .await
+        .map_err(|_| Status::internal("peer trust store unavailable"))?
+        .into_iter()
+        .find(|peer| peer.fingerprint == fingerprint && !peer.revoked)
+        .ok_or_else(|| Status::permission_denied("client certificate is not an authorized peer"))?;
+      require_capabilities(&trust, capabilities)?;
+      Ok(trust)
+    }
   }
 
   pub async fn connect(&self, remote: &v1::Node) -> Result<PeerConnection> {
-    let trust = self.trust(&remote.id)?;
+    let trust = self.trust(&remote.id).await?;
     ensure!(
       remote.endpoint.starts_with("https://"),
       "peer endpoints require HTTPS"

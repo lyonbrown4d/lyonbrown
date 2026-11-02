@@ -27,15 +27,19 @@ async fn local_operator_must_verify_complete_tls_and_noise_binding_before_trust_
     fingerprint: remote.fingerprint().unwrap(),
     capabilities: vec!["tasks.submit".into()],
   };
-  assert!(maintain(&daemon, &command).is_err());
-  assert!(daemon.store.peers().unwrap().is_empty());
+  assert!(maintain(&daemon, &command).await.is_err());
+  assert!(daemon.store.peers().await.unwrap().is_empty());
   let command = Maintenance::PeerPair {
     identity: path,
     fingerprint: remote.pairing_fingerprint().unwrap(),
     capabilities: vec!["tasks.submit".into()],
   };
-  maintain(&daemon, &command).unwrap();
-  let trusted = manager(&daemon).unwrap().trust(&remote.node_id).unwrap();
+  maintain(&daemon, &command).await.unwrap();
+  let trusted = manager(&daemon)
+    .unwrap()
+    .trust(&remote.node_id)
+    .await
+    .unwrap();
   assert_eq!(trusted.capabilities, vec!["tasks.submit"]);
   assert_eq!(trusted.noise_public_key, remote.noise_public_key);
   assert_eq!(trusted.certificate_pem, remote.certificate_pem);
@@ -45,7 +49,22 @@ async fn local_operator_must_verify_complete_tls_and_noise_binding_before_trust_
       node_id: remote.node_id.clone(),
     },
   )
+  .await
   .unwrap();
-  assert!(manager(&daemon).unwrap().trust(&remote.node_id).is_err());
-  assert!(daemon.store.peer(&remote.node_id).unwrap().unwrap().revoked);
+  assert!(
+    manager(&daemon)
+      .unwrap()
+      .trust(&remote.node_id)
+      .await
+      .is_err()
+  );
+  assert!(
+    daemon
+      .store
+      .peer(&remote.node_id)
+      .await
+      .unwrap()
+      .unwrap()
+      .revoked
+  );
 }

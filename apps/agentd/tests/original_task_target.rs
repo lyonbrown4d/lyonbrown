@@ -14,7 +14,7 @@ async fn original_route_survives_later_events_and_accepts_without_client_target(
     .await
     .unwrap();
   let remote = Remote::open(&mock, protocol).await;
-  let envelope = remote.envelope();
+  let envelope = remote.envelope().await;
   let id = &envelope.task_id;
   let target = remote.target();
   remote
@@ -23,7 +23,13 @@ async fn original_route_survives_later_events_and_accepts_without_client_target(
     .await
     .unwrap();
   assert_eq!(
-    remote.pair.master.store.task_target_route(id).unwrap(),
+    remote
+      .pair
+      .master
+      .store
+      .task_target_route(id)
+      .await
+      .unwrap(),
     Some((
       target.id.clone(),
       url::Url::parse(&target.endpoint).unwrap().to_string()
@@ -39,11 +45,18 @@ async fn original_route_survives_later_events_and_accepts_without_client_target(
         "another-worker",
         "https://another-worker.invalid/",
       )
+      .await
       .unwrap()
       .1
   );
   assert_eq!(
-    remote.pair.master.store.task_target_route(id).unwrap(),
+    remote
+      .pair
+      .master
+      .store
+      .task_target_route(id)
+      .await
+      .unwrap(),
     Some((
       target.id,
       url::Url::parse(&target.endpoint).unwrap().to_string()
@@ -62,11 +75,27 @@ async fn original_route_survives_later_events_and_accepts_without_client_target(
     .unwrap();
   assert_eq!(decided.status, "completed");
   assert_eq!(
-    remote.pair.master.store.task(id).unwrap().unwrap().status,
+    remote
+      .pair
+      .master
+      .store
+      .task(id)
+      .await
+      .unwrap()
+      .unwrap()
+      .status,
     "completed"
   );
   assert_eq!(
-    remote.pair.worker.store.task(id).unwrap().unwrap().status,
+    remote
+      .pair
+      .worker
+      .store
+      .task(id)
+      .await
+      .unwrap()
+      .unwrap()
+      .status,
     "completed"
   );
   assert_eq!(mock.requests().await.len(), 1);
@@ -77,16 +106,23 @@ async fn original_route_survives_later_events_and_accepts_without_client_target(
 async fn old_intent_has_no_inferred_route_and_original_operations_preserve_state() {
   let mock = MockModelServer::start(vec![]).await.unwrap();
   let remote = Remote::open(&mock, StandardProtocol::Responses).await;
-  let envelope = remote.envelope();
+  let envelope = remote.envelope().await;
   let id = &envelope.task_id;
   let (before, _) = remote
     .pair
     .master
     .store
     .accept_master_dispatched_task(envelope.clone().into(), &remote.target().id)
+    .await
     .unwrap();
   assert_eq!(
-    remote.pair.master.store.task_target_route(id).unwrap(),
+    remote
+      .pair
+      .master
+      .store
+      .task_target_route(id)
+      .await
+      .unwrap(),
     None
   );
   for error in [
@@ -100,8 +136,11 @@ async fn old_intent_has_no_inferred_route_and_original_operations_preserve_state
   ] {
     assert_eq!(code(error), Code::FailedPrecondition);
   }
-  assert_eq!(remote.pair.master.store.task(id).unwrap().unwrap(), before);
-  assert!(remote.pair.worker.store.task(id).unwrap().is_none());
+  assert_eq!(
+    remote.pair.master.store.task(id).await.unwrap().unwrap(),
+    before
+  );
+  assert!(remote.pair.worker.store.task(id).await.unwrap().is_none());
   assert!(mock.requests().await.is_empty());
   remote.close().await;
 }
@@ -111,7 +150,7 @@ async fn original_route_does_not_authorize_unpaired_revoked_or_stale_owner() {
   for rejection in ["unpaired", "revoked", "epoch"] {
     let mock = MockModelServer::start(vec![]).await.unwrap();
     let remote = Remote::open(&mock, StandardProtocol::Responses).await;
-    let envelope = remote.envelope();
+    let envelope = remote.envelope().await;
     let id = &envelope.task_id;
     let worker = if rejection == "unpaired" {
       agent_core::new_id()
@@ -123,10 +162,16 @@ async fn original_route_does_not_authorize_unpaired_revoked_or_stale_owner() {
       .master
       .store
       .accept_master_dispatched_task_at(envelope.clone().into(), &worker, &remote.target().endpoint)
+      .await
       .unwrap();
     match rejection {
       "revoked" => {
-        remote.pair.master_manager.revoke_local(&worker).unwrap();
+        remote
+          .pair
+          .master_manager
+          .revoke_local(&worker)
+          .await
+          .unwrap();
       }
       "epoch" => {
         remote
@@ -138,6 +183,7 @@ async fn original_route_does_not_authorize_unpaired_revoked_or_stale_owner() {
             remote.pair.session.owner_epoch,
             &remote.pair.master.node_id,
           )
+          .await
           .unwrap();
       }
       _ => {}
@@ -153,8 +199,11 @@ async fn original_route_does_not_authorize_unpaired_revoked_or_stale_owner() {
     ] {
       assert_eq!(code(error), Code::PermissionDenied, "{rejection}");
     }
-    assert_eq!(remote.pair.master.store.task(id).unwrap().unwrap(), before);
-    assert!(remote.pair.worker.store.task(id).unwrap().is_none());
+    assert_eq!(
+      remote.pair.master.store.task(id).await.unwrap().unwrap(),
+      before
+    );
+    assert!(remote.pair.worker.store.task(id).await.unwrap().is_none());
     assert!(mock.requests().await.is_empty());
     remote.close().await;
   }
@@ -167,7 +216,7 @@ async fn original_cancel_targets_same_attempt_and_lost_peer_never_redispatches()
       .await
       .unwrap();
     let mut remote = Remote::open(&mock, StandardProtocol::ChatCompletions).await;
-    let envelope = remote.envelope();
+    let envelope = remote.envelope().await;
     let id = &envelope.task_id;
     remote
       .client
@@ -208,9 +257,9 @@ async fn original_cancel_targets_same_attempt_and_lost_peer_never_redispatches()
       );
       assert_eq!(remote.terminal(id).await.attempt_status, "cancelled");
     }
-    let task = remote.pair.master.store.task(id).unwrap().unwrap();
+    let task = remote.pair.master.store.task(id).await.unwrap().unwrap();
     assert_eq!(task.envelope, envelope.clone().into());
-    assert_eq!(remote.pair.worker.store.tasks().unwrap().len(), 1);
+    assert_eq!(remote.pair.worker.store.tasks().await.unwrap().len(), 1);
     assert_eq!(mock.requests().await.len(), 1);
     remote.close().await;
   }

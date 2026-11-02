@@ -78,9 +78,11 @@ impl Pair {
     .to_vec();
     master_manager
       .pair_local(worker_manager.public_identity(), capabilities.clone())
+      .await
       .unwrap();
     worker_manager
       .pair_local(master_manager.public_identity(), capabilities)
+      .await
       .unwrap();
     let workspace = master_data.path().join("master-workspace");
     std::fs::create_dir(&workspace).unwrap();
@@ -88,6 +90,7 @@ impl Pair {
     let session = master
       .store
       .create_session("master", workspace.to_str().unwrap(), &master.node_id)
+      .await
       .unwrap();
     let dispatch = Dispatcher::new(master_manager.clone());
     Self {
@@ -131,15 +134,18 @@ impl Pair {
     .unwrap();
   }
 
-  pub fn envelope(&self, capabilities: Vec<String>) -> TaskEnvelope {
+  pub async fn envelope(&self, capabilities: Vec<String>) -> TaskEnvelope {
     let parent = self
       .master
       .store
       .runs(&self.session.id)
+      .await
       .unwrap()
       .into_iter()
-      .find(|run| matches!(run.status.as_str(), "accepted" | "running"))
-      .unwrap_or_else(|| {
+      .find(|run| matches!(run.status.as_str(), "accepted" | "running"));
+    let parent = match parent {
+      Some(parent) => parent,
+      None => {
         self
           .master
           .store
@@ -149,9 +155,11 @@ impl Pair {
             "coordinate Worker",
             &agent_core::new_id(),
           )
+          .await
           .unwrap()
           .0
-      });
+      }
+    };
     if parent.status == "accepted" {
       self
         .master
@@ -163,6 +171,7 @@ impl Pair {
           "",
           "",
         )
+        .await
         .unwrap();
     }
     TaskEnvelope {
@@ -207,7 +216,7 @@ impl Pair {
     .unwrap()
   }
 
-  pub fn worker_runs(&self, envelope: &TaskEnvelope) -> Vec<agent_core::Run> {
+  pub async fn worker_runs(&self, envelope: &TaskEnvelope) -> Vec<agent_core::Run> {
     self
       .worker
       .store
@@ -215,6 +224,7 @@ impl Pair {
         "worker:{}:{}",
         envelope.task_id, envelope.attempt_id
       ))
+      .await
       .unwrap()
   }
 

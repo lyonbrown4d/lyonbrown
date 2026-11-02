@@ -16,7 +16,9 @@ This guide is for local users and developers and describes the current Rust work
 | `crates/agent-client` | Shared authenticated client connection |
 | `crates/agent-protocol`, `proto/agent/v1` | Versioned protocol and conversions |
 | `crates/agent-runtime` | `rpi-harness` adapter and session recovery |
-| `crates/agent-storage` | SQLite state, events and outbox |
+| `crates/agent-storage` | Asynchronous SeaORM relational state, events and Outbox |
+| `crates/memory-core`, `crates/agent-memory` | Memory domain ports, management, retrieval and jobs |
+| `crates/memory-qdrant` | Independently selected embedded / server vector adapters |
 
 Other capability boundaries are described in [Protocol and platform capabilities](protocol.md). A directory or protocol message alone does not establish a working platform capability.
 

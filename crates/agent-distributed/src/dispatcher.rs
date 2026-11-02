@@ -22,7 +22,8 @@ impl Dispatcher {
     let session = self
       .manager
       .store
-      .session(&envelope.session_id)?
+      .session(&envelope.session_id)
+      .await?
       .context("master session does not exist")?;
     ensure!(
       session.owner_node_id == self.manager.node.id && session.owner_epoch == envelope.owner_epoch,
@@ -47,20 +48,24 @@ impl Dispatcher {
         .all(|cap| connection.node.capabilities.contains(cap)),
       "peer lacks required task capabilities"
     );
-    let (task, created) = self.manager.store.accept_master_dispatched_task_at(
-      envelope.clone(),
-      &connection.node.id,
-      endpoint.as_str(),
-    )?;
+    let (task, created) = self
+      .manager
+      .store
+      .accept_master_dispatched_task_at(envelope.clone(), &connection.node.id, endpoint.as_str())
+      .await?;
     ensure!(
       created,
       "task was already dispatched or has an unknown outcome; reconcile its existing identity instead of resubmitting"
     );
-    self.manager.store.mark_task_running(
-      &envelope.task_id,
-      &envelope.attempt_id,
-      envelope.owner_epoch,
-    )?;
+    self
+      .manager
+      .store
+      .mark_task_running(
+        &envelope.task_id,
+        &envelope.attempt_id,
+        envelope.owner_epoch,
+      )
+      .await?;
     match connection
       .tasks
       .submit_task(v1::TaskEnvelope::from(envelope.clone()))
@@ -69,21 +74,29 @@ impl Dispatcher {
       Ok(response) => {
         let value = response.into_inner();
         if let Err(error) = verify(&task, &value) {
-          self.manager.store.mark_task_uncertain(
-            &envelope.task_id,
-            &envelope.attempt_id,
-            envelope.owner_epoch,
-          )?;
+          self
+            .manager
+            .store
+            .mark_task_uncertain(
+              &envelope.task_id,
+              &envelope.attempt_id,
+              envelope.owner_epoch,
+            )
+            .await?;
           return Err(error);
         }
         Ok(value)
       }
       Err(_) => {
-        self.manager.store.mark_task_uncertain(
-          &envelope.task_id,
-          &envelope.attempt_id,
-          envelope.owner_epoch,
-        )?;
+        self
+          .manager
+          .store
+          .mark_task_uncertain(
+            &envelope.task_id,
+            &envelope.attempt_id,
+            envelope.owner_epoch,
+          )
+          .await?;
         anyhow::bail!(
           "task submission outcome is unknown; query the same task identity before taking further action"
         )
@@ -95,10 +108,11 @@ impl Dispatcher {
     let local = self
       .manager
       .store
-      .task(task_id)?
+      .task(task_id)
+      .await?
       .context("unknown local task")?;
     ensure!(
-      self.manager.store.task_target(task_id)?.as_deref() == Some(remote.id.as_str()),
+      self.manager.store.task_target(task_id).await?.as_deref() == Some(remote.id.as_str()),
       "task is assigned to another worker"
     );
     ensure!(
@@ -122,13 +136,17 @@ impl Dispatcher {
         "accepted" | "running" | "uncertain"
       )
     {
-      return self.manager.store.finish_attempt(
-        task_id,
-        &local.envelope.attempt_id,
-        local.envelope.owner_epoch,
-        &remote_task.result,
-        &remote_task.error,
-      );
+      return self
+        .manager
+        .store
+        .finish_attempt(
+          task_id,
+          &local.envelope.attempt_id,
+          local.envelope.owner_epoch,
+          &remote_task.result,
+          &remote_task.error,
+        )
+        .await;
     }
     if remote_task.attempt_status == "cancelled"
       && matches!(
@@ -136,11 +154,15 @@ impl Dispatcher {
         "accepted" | "running" | "uncertain"
       )
     {
-      return self.manager.store.mark_task_cancelled(
-        task_id,
-        &local.envelope.attempt_id,
-        local.envelope.owner_epoch,
-      );
+      return self
+        .manager
+        .store
+        .mark_task_cancelled(
+          task_id,
+          &local.envelope.attempt_id,
+          local.envelope.owner_epoch,
+        )
+        .await;
     }
     Ok(local)
   }
@@ -148,23 +170,28 @@ impl Dispatcher {
   /// Record cancellation intent before requesting the worker's cooperative cancellation.
   pub async fn cancel(&self, remote: &v1::Node, task_id: &str) -> Result<Task> {
     ensure!(
-      self.manager.store.task_target(task_id)?.as_deref() == Some(remote.id.as_str()),
+      self.manager.store.task_target(task_id).await?.as_deref() == Some(remote.id.as_str()),
       "task is assigned to another worker"
     );
     let task = self
       .manager
       .store
-      .task(task_id)?
+      .task(task_id)
+      .await?
       .context("unknown local task")?;
     ensure!(
       task.envelope.owner_node_id == self.manager.node.id,
       "task belongs to another master"
     );
-    let requested = self.manager.store.cancel_task(
-      task_id,
-      &task.envelope.attempt_id,
-      task.envelope.owner_epoch,
-    )?;
+    let requested = self
+      .manager
+      .store
+      .cancel_task(
+        task_id,
+        &task.envelope.attempt_id,
+        task.envelope.owner_epoch,
+      )
+      .await?;
     let outcome = match self.manager.connect(remote).await {
       Ok(mut connection) => connection
         .tasks
@@ -176,11 +203,15 @@ impl Dispatcher {
       Err(_) => Err(tonic::Status::unavailable("peer disconnected")),
     };
     if outcome.is_err() {
-      self.manager.store.mark_task_uncertain(
-        task_id,
-        &task.envelope.attempt_id,
-        task.envelope.owner_epoch,
-      )?;
+      self
+        .manager
+        .store
+        .mark_task_uncertain(
+          task_id,
+          &task.envelope.attempt_id,
+          task.envelope.owner_epoch,
+        )
+        .await?;
       anyhow::bail!(
         "task cancellation result is unknown; reconcile the existing task before further action"
       );
@@ -191,24 +222,29 @@ impl Dispatcher {
   /// The master's durable decision precedes the optional worker acknowledgement.
   pub async fn accept(&self, remote: &v1::Node, task_id: &str, accepted: bool) -> Result<Task> {
     ensure!(
-      self.manager.store.task_target(task_id)?.as_deref() == Some(remote.id.as_str()),
+      self.manager.store.task_target(task_id).await?.as_deref() == Some(remote.id.as_str()),
       "task is assigned to another worker"
     );
     let local = self
       .manager
       .store
-      .task(task_id)?
+      .task(task_id)
+      .await?
       .context("unknown local task")?;
     ensure!(
       local.envelope.owner_node_id == self.manager.node.id,
       "task belongs to another master"
     );
-    let decided = self.manager.store.accept_result(
-      task_id,
-      &local.envelope.attempt_id,
-      local.envelope.owner_epoch,
-      accepted,
-    )?;
+    let decided = self
+      .manager
+      .store
+      .accept_result(
+        task_id,
+        &local.envelope.attempt_id,
+        local.envelope.owner_epoch,
+        accepted,
+      )
+      .await?;
     let acknowledgement = match self.manager.connect(remote).await {
       Ok(mut connection) => connection
         .tasks

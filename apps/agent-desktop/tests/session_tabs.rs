@@ -91,7 +91,7 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
   );
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   let first = harness.snapshot(cx).tabs[0].id;
   harness.input_prompt(cx, "Write tab-a.txt after approval.");
@@ -99,7 +99,7 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
   harness.click("new-chat-tab", cx);
   let second = harness.snapshot(cx).tabs[1].id;
   let background = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.busy
         && state.selected_session.is_some()
         && state
@@ -125,7 +125,9 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
   assert_ne!(first_tab.session_id, background.selected_session);
   draft(&harness, cx, "Unsent chat B draft");
   harness.click(("chat-tab", first), cx);
-  let approval = harness.wait(cx, |state| !state.approvals.is_empty()).await;
+  let approval = harness
+    .wait(cx, async |state| !state.approvals.is_empty())
+    .await;
   assert_eq!(approval.approvals[0].1, "write_file");
   assert!(
     !harness
@@ -137,7 +139,7 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
   harness.click(("allow", 0usize), cx);
   harness.click(("chat-tab", second), cx);
   let completed = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state
         .tabs
         .iter()
@@ -184,7 +186,9 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
   })
   .expect("replace B draft");
   harness.input_prompt(cx, "Keep running after I close this tab.");
-  let running = harness.wait(cx, |state| state.active_run.is_some()).await;
+  let running = harness
+    .wait(cx, async |state| state.active_run.is_some())
+    .await;
   let running_id = running.active_run.expect("B daemon run");
   harness.runtime.block_on(async {
     tokio::time::timeout(
@@ -213,7 +217,7 @@ async fn background_session_ack_approval_and_completion_stay_in_origin_tab_and_c
     .block_on(harness.client.cancel_run(&running_id))
     .expect("explicit fixture cleanup");
   let after = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.tabs.len() == 1 && state.active_run.is_none()
     })
     .await;
@@ -244,13 +248,13 @@ async fn sidebar_reuses_open_session_tab_without_losing_other_draft(cx: &mut Tes
     .expect("saved session");
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.session_titles.len() == 1)
+    .wait(cx, async |state| state.session_titles.len() == 1)
     .await;
   let draft_id = harness.snapshot(cx).tabs[0].id;
   draft(&harness, cx, "Keep this draft");
   harness.click(("session", 0usize), cx);
   let loaded = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session.as_deref() == Some(session.id.as_str()) && !state.busy
     })
     .await;

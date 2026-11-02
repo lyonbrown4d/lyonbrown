@@ -4,15 +4,19 @@ use agent_protocol::v1;
 use std::collections::BTreeMap;
 use tonic::Status;
 impl Daemon {
-  pub(crate) fn input_receipts(&self, run_id: &str) -> Result<Vec<v1::RunInputReceipt>, Status> {
-    let (run, _) = self.input_session(run_id, None)?;
+  pub(crate) async fn input_receipts(
+    &self,
+    run_id: &str,
+  ) -> Result<Vec<v1::RunInputReceipt>, Status> {
+    let (run, _) = self.input_session(run_id, None).await?;
     let mut receipts = BTreeMap::<String, v1::RunInputReceipt>::new();
-    for source in self.store.runs(&run.session_id).map_err(failure)? {
+    for source in self.store.runs(&run.session_id).await.map_err(failure)? {
       let mut cursor = 0;
       loop {
         let batch = self
           .store
           .events(&source.id, cursor, 256)
+          .await
           .map_err(failure)?;
         for event in &batch {
           if event.kind != AGENT_EVENT_KIND {
@@ -64,8 +68,8 @@ impl Daemon {
     }
     Ok(receipts.into_values().collect())
   }
-  pub(crate) fn input_snapshot(&self, run_id: &str) -> Result<v1::RunInputs, Status> {
-    let receipts = self.input_receipts(run_id)?;
+  pub(crate) async fn input_snapshot(&self, run_id: &str) -> Result<v1::RunInputs, Status> {
+    let receipts = self.input_receipts(run_id).await?;
     let (mut pending, terminal): (Vec<_>, Vec<_>) = receipts.into_iter().partition(|receipt| {
       matches!(
         v1::RunInputState::try_from(receipt.state).ok(),

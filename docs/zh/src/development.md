@@ -4,6 +4,14 @@
 
 异步入口优先使用 `#[tokio::main]`，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。`RunStatus` 和 `Tool` 通过固定版本 `strum` 0.28.0 的派生宏生成 snake_case 静态字符串转换；错误类型复用现有 `thiserror` 派生。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。
 
+## 当前依赖解析限制
+
+当前工作区声明 rpi family 0.16.0、SeaORM / SeaORM Migration 2.0.4。本轮离线依赖解析明确失败：`rpi-harness 0.16.0 → rusqlite 0.31 → libsqlite3-sys 0.28`，而 `SeaORM 2.0.4 → SQLx 0.9` 要求 `libsqlite3-sys >=0.30.1,<0.38`。两个依赖声明同一个 SQLite 原生链接名，Cargo 不能同时解析。上游 `main` 的 `31e7ba` 源码也保留该依赖，见 [pi-rust #236](https://github.com/bigfish1913/pi-rust/issues/236)。不能通过降级 ORM、复制 SDK、下游 fork 或长期补丁掩盖冲突。
+
+`Cargo.lock` 尚未更新为这组声明的解析结果。本轮仅完成静态源码检查和失败的离线依赖解析，未运行 Cargo 编译、测试、mdBook 构建或新原生运行验收。下列命令是开发入口与验证要求，不表示当前工作区已经能成功执行；[历史截图](runtime-evidence.md)只覆盖各记录标注的平台、版本和源码。
+
+关系数据库使用原生异步 ORM，结构使用版本化 Rust 迁移；不维护旧 Diesel 数据库兼容。记忆后端配置与持久作业机制见[长期记忆](memory.md)。当前 PostgreSQL、MySQL、Qdrant embedded / server 的源码接线没有替代对应数据库或服务器的运行验收。
+
 ## 本地开发启动
 
 仓库的 `.cargo/config.toml` 定义了 `dev` 别名，直接使用 Cargo，无需安装额外任务工具。在仓库根目录执行一条命令，自动构建、启动开发 agentd 并打开客户端：

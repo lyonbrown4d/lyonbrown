@@ -48,7 +48,9 @@ async fn charged(store: &GatewayStorage) -> u64 {
 #[tokio::test]
 async fn concurrent_admission_reserves_last_budget_atomically_and_refusal_has_no_audit() {
   let dir = tempfile::tempdir().expect("directory");
-  let store = GatewayStorage::open(dir.path().join("db")).expect("open");
+  let store = GatewayStorage::open(dir.path().join("db"))
+    .await
+    .expect("open");
   let principal = principal(&store, 100).await;
   let (one, two) = tokio::join!(
     store.record_audit(intent("one", &principal, 100)),
@@ -66,7 +68,9 @@ async fn concurrent_admission_reserves_last_budget_atomically_and_refusal_has_no
 #[tokio::test]
 async fn terminal_usage_replaces_reservation_once_and_does_not_add_cached_or_reasoning_subsets() {
   let dir = tempfile::tempdir().expect("directory");
-  let store = GatewayStorage::open(dir.path().join("db")).expect("open");
+  let store = GatewayStorage::open(dir.path().join("db"))
+    .await
+    .expect("open");
   let principal = principal(&store, 100).await;
   let mut record = intent("one", &principal, 100);
   store.record_audit(record.clone()).await.expect("reserve");
@@ -103,7 +107,7 @@ async fn terminal_usage_replaces_reservation_once_and_does_not_add_cached_or_rea
 async fn missing_usage_and_restart_uncertainty_keep_conservative_reservations() {
   let dir = tempfile::tempdir().expect("directory");
   let path = dir.path().join("db");
-  let store = GatewayStorage::open(&path).expect("open");
+  let store = GatewayStorage::open(&path).await.expect("open");
   let principal = principal(&store, 100).await;
   let mut no_usage = intent("no-usage", &principal, 40);
   store.record_audit(no_usage.clone()).await.expect("intent");
@@ -114,7 +118,7 @@ async fn missing_usage_and_restart_uncertainty_keep_conservative_reservations() 
     .await
     .expect("pending");
   drop(store);
-  let reopened = GatewayStorage::open(&path).expect("reopen");
+  let reopened = GatewayStorage::open(&path).await.expect("reopen");
   assert_eq!(charged(&reopened).await, 100);
   let page = reopened.list_audits(10, 0).await.expect("audits");
   assert!(matches!(page.records[0].status, AuditStatus::Uncertain));
@@ -131,7 +135,9 @@ async fn missing_usage_and_restart_uncertainty_keep_conservative_reservations() 
 #[tokio::test]
 async fn revoked_or_forged_scope_is_rejected_at_atomic_admission() {
   let dir = tempfile::tempdir().expect("directory");
-  let store = GatewayStorage::open(dir.path().join("db")).expect("open");
+  let store = GatewayStorage::open(dir.path().join("db"))
+    .await
+    .expect("open");
   let principal = principal(&store, 100).await;
   let mut forged = principal.clone();
   forged.project_id = "other-project".into();
@@ -160,7 +166,9 @@ async fn revoked_or_forged_scope_is_rejected_at_atomic_admission() {
 #[tokio::test]
 async fn overflowing_reservations_and_usage_fail_without_mutating_balance_or_audit() {
   let dir = tempfile::tempdir().expect("directory");
-  let store = GatewayStorage::open(dir.path().join("db")).expect("open");
+  let store = GatewayStorage::open(dir.path().join("db"))
+    .await
+    .expect("open");
   let principal = principal(&store, i64::MAX as u64).await;
   assert!(
     store
@@ -187,7 +195,9 @@ async fn overflowing_reservations_and_usage_fail_without_mutating_balance_or_aud
 #[tokio::test]
 async fn legacy_key_defaults_and_expiration_remain_compatible() {
   let dir = tempfile::tempdir().expect("directory");
-  let store = GatewayStorage::open(dir.path().join("db")).expect("open");
+  let store = GatewayStorage::open(dir.path().join("db"))
+    .await
+    .expect("open");
   let key = store
     .create_access_token("legacy", 1000, 60)
     .await
@@ -219,7 +229,9 @@ async fn legacy_key_defaults_and_expiration_remain_compatible() {
 #[tokio::test]
 async fn duplicate_intent_rolls_back_reservation_and_explicit_uncertainty_keeps_it() {
   let dir = tempfile::tempdir().expect("directory");
-  let store = GatewayStorage::open(dir.path().join("db")).expect("open");
+  let store = GatewayStorage::open(dir.path().join("db"))
+    .await
+    .expect("open");
   let principal = principal(&store, 100).await;
   let mut record = intent("one", &principal, 40);
   store.record_audit(record.clone()).await.expect("intent");

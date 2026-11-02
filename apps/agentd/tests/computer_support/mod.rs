@@ -86,16 +86,18 @@ pub fn runtime(session: DesktopSession) -> (Arc<ComputerRuntime>, Arc<Calls>) {
     calls,
   )
 }
-pub fn binding(node: &TestNode, session: &str) -> RunBinding {
+pub async fn binding(node: &TestNode, session: &str) -> RunBinding {
   let (run, _) = node
     .daemon
     .store
     .accept_run(session, 1, "inspect capabilities", &agent_core::new_id())
+    .await
     .unwrap();
   node
     .daemon
     .store
     .update_run_owned(&run.id, 1, agent_core::RunStatus::Running, "", "")
+    .await
     .unwrap();
   RunBinding {
     daemon_session_id: session.into(),

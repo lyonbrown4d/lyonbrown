@@ -63,7 +63,9 @@ impl ComputerRuntimeService for Daemon {
     if self.draining.load(std::sync::atomic::Ordering::Acquire) {
       return Err(Status::unavailable("daemon is draining"));
     }
-    let epoch = self.computer_session_epoch(&hello.daemon_session_id)?;
+    let epoch = self
+      .computer_session_epoch(&hello.daemon_session_id)
+      .await?;
     let session = hello.daemon_session_id;
     let (outgoing, mut receiver) = mpsc::channel(1);
     let stop = CancellationToken::new();

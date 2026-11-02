@@ -15,19 +15,17 @@ mod sessions;
 pub use access::{AccessTokenMetadata, IssuedAccessToken};
 pub use audit::AuditPage;
 pub use catalog::{ModelMetadata, ModelSnapshot};
-use diesel::{connection::SimpleConnection, prelude::*};
 pub use error::{Result, StorageError};
-pub use sessions::{AdminIdentity, AdminRole, AdminSession};
-use std::{
-  fs::File,
-  path::Path,
-  sync::{Arc, Mutex},
+use sea_orm::{
+  ConnectOptions, Database, DatabaseConnection, DatabaseTransaction, TransactionTrait,
 };
+use sea_orm_migration::MigratorTrait;
+pub use sessions::{AdminIdentity, AdminRole, AdminSession};
+use std::{fs::File, path::Path, sync::Arc};
 use tokio::sync::Semaphore;
 
 struct Inner {
-  connection: Mutex<SqliteConnection>,
-  permits: Arc<Semaphore>,
+  connection: DatabaseConnection,
   password_permits: Arc<Semaphore>,
   _ownership: File,
 }
@@ -36,26 +34,35 @@ pub struct GatewayStorage {
   inner: Arc<Inner>,
 }
 impl GatewayStorage {
-  /// Startup-only blocking open. An exclusive file lock prevents another owner from reconciling live intents.
-  pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-    let path = path.as_ref();
-    let ownership = files::prepare(path)?;
-    let path = path
-      .to_str()
-      .ok_or(StorageError::InvalidInput("non-UTF-8 database path"))?;
-    let mut connection = SqliteConnection::establish(path)?;
-    connection.batch_execute(
-      "PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;",
-    )?;
-    connection.immediate_transaction::<_, StorageError, _>(|connection| {
-      migrations::run(connection)?;
-      audit::reconcile(connection)?;
-      Ok(())
-    })?;
+  /// Open the asynchronous SQLite pool and apply the current versioned schema.
+  pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
+    let path = path.as_ref().to_path_buf();
+    let prepared = path.clone();
+    let ownership = tokio::task::spawn_blocking(move || files::prepare(&prepared))
+      .await
+      .map_err(|_| StorageError::Worker)??;
+    // The public driver-options hook keeps filesystem paths out of URL parsing
+    // and applies durability settings to every pooled connection.
+    let mut options = ConnectOptions::new("sqlite://gateway.sqlite?mode=rwc");
+    options
+      .max_connections(1)
+      .min_connections(1)
+      .sqlx_logging(false)
+      .record_stmt_in_spans(false)
+      .map_sqlx_sqlite_opts(move |options| {
+        options
+          .filename(&path)
+          .create_if_missing(true)
+          .busy_timeout(std::time::Duration::from_secs(5))
+          .journal_mode(sea_orm::sqlx::sqlite::SqliteJournalMode::Wal)
+          .synchronous(sea_orm::sqlx::sqlite::SqliteSynchronous::Full)
+      });
+    let connection = Database::connect(options).await?;
+    migrations::Migrator::up(&connection, None).await?;
+    audit::reconcile(&connection).await?;
     Ok(Self {
       inner: Arc::new(Inner {
-        connection: Mutex::new(connection),
-        permits: Arc::new(Semaphore::new(1)),
+        connection,
         password_permits: Arc::new(Semaphore::new(1)),
         _ownership: ownership,
       }),
@@ -63,23 +70,57 @@ impl GatewayStorage {
   }
   pub(crate) async fn run<T, F>(&self, operation: F) -> Result<T>
   where
-    T: Send + 'static,
-    F: FnOnce(&mut SqliteConnection) -> Result<T> + Send + 'static,
+    T: Send,
+    F: for<'a> FnOnce(
+        &'a DatabaseTransaction,
+      )
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + 'a>>
+      + Send,
   {
-    let permit = self
+    self.transact(false, operation).await
+  }
+  pub(crate) async fn write<T, F>(&self, operation: F) -> Result<T>
+  where
+    T: Send,
+    F: for<'a> FnOnce(
+        &'a DatabaseTransaction,
+      )
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + 'a>>
+      + Send,
+  {
+    self.transact(true, operation).await
+  }
+  async fn transact<T, F>(&self, write: bool, operation: F) -> Result<T>
+  where
+    T: Send,
+    F: for<'a> FnOnce(
+        &'a DatabaseTransaction,
+      )
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<T>> + Send + 'a>>
+      + Send,
+  {
+    // Immediate write transactions acquire the reservation lock before reading budget/CAS state.
+    let transaction = self
       .inner
-      .permits
-      .clone()
-      .acquire_owned()
-      .await
-      .map_err(|_| StorageError::Worker)?;
-    let inner = self.inner.clone();
-    tokio::task::spawn_blocking(move || {
-      let _permit = permit;
-      let mut connection = inner.connection.lock().map_err(|_| StorageError::Worker)?;
-      operation(&mut connection)
-    })
-    .await
-    .map_err(|_| StorageError::Worker)?
+      .connection
+      .begin_with_options(sea_orm::TransactionOptions {
+        sqlite_transaction_mode: Some(if write {
+          sea_orm::SqliteTransactionMode::Immediate
+        } else {
+          sea_orm::SqliteTransactionMode::Deferred
+        }),
+        ..Default::default()
+      })
+      .await?;
+    match operation(&transaction).await {
+      Ok(value) => {
+        transaction.commit().await?;
+        Ok(value)
+      }
+      Err(error) => {
+        transaction.rollback().await?;
+        Err(error)
+      }
+    }
   }
 }

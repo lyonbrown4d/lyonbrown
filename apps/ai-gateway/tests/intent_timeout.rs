@@ -1,8 +1,8 @@
 use axum::{Json, Router, routing::post};
 use decision_core::{DecisionEngine, ModelTier, Policy};
-use diesel::{Connection, SqliteConnection};
 use gateway_core::{AuditStatus, Gateway, GatewayConfig, Limits, ModelConfig, Secret};
 use gateway_storage::GatewayStorage;
+use sea_orm::{Database, SqliteTransactionMode, TransactionOptions, TransactionTrait};
 use serde_json::json;
 use std::{
   collections::BTreeSet,
@@ -18,7 +18,7 @@ const TOKEN: &str = "intent-timeout-test-access-with-at-least-32-bytes";
 async fn timed_out_pending_insert_still_reaches_terminal_without_upstream_dispatch() {
   let directory = tempfile::tempdir().expect("tempdir");
   let path = directory.path().join("gateway.sqlite");
-  let store = Arc::new(GatewayStorage::open(&path).expect("store"));
+  let store = Arc::new(GatewayStorage::open(&path).await.expect("store"));
   store
     .bootstrap_access_token(TOKEN)
     .await
@@ -69,18 +69,24 @@ async fn timed_out_pending_insert_still_reaches_terminal_without_upstream_dispat
     axum::serve(listener, router).await.expect("gateway server");
   });
   let (locked, ready) = tokio::sync::oneshot::channel();
-  let (release, wait) = std::sync::mpsc::channel();
-  let writer = tokio::task::spawn_blocking(move || {
-    let mut connection = SqliteConnection::establish(path.to_str().expect("path")).expect("writer");
-    connection
-      .immediate_transaction::<_, diesel::result::Error, _>(|_| {
-        locked.send(()).expect("lock notification");
-        wait
-          .recv_timeout(Duration::from_secs(5))
-          .expect("release writer");
-        Ok(())
+  let (release, wait) = tokio::sync::oneshot::channel();
+  let writer = tokio::spawn(async move {
+    let connection = Database::connect(format!("sqlite://{}", path.display()))
+      .await
+      .expect("writer");
+    let transaction = connection
+      .begin_with_options(TransactionOptions {
+        sqlite_transaction_mode: Some(SqliteTransactionMode::Immediate),
+        ..Default::default()
       })
-      .expect("writer transaction");
+      .await
+      .expect("lock writer");
+    locked.send(()).expect("lock notification");
+    tokio::time::timeout(Duration::from_secs(5), wait)
+      .await
+      .expect("release deadline")
+      .expect("release writer");
+    transaction.commit().await.expect("writer commit");
   });
   ready.await.expect("writer lock");
   let client = reqwest::Client::builder()

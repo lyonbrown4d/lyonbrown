@@ -20,10 +20,11 @@ fn failure(_: anyhow::Error) -> Status {
   )
 }
 impl Daemon {
-  fn workspace_path(&self, session_id: &str) -> Result<String, Status> {
+  async fn workspace_path(&self, session_id: &str) -> Result<String, Status> {
     self
       .store
       .session(session_id)
+      .await
       .map_err(failure)?
       .map(|session| session.workspace)
       .ok_or_else(|| Status::not_found("session not found"))
@@ -36,7 +37,7 @@ impl WorkspaceService for Daemon {
     request: Request<v1::ListFilesRequest>,
   ) -> Result<Response<v1::WorkspaceFiles>, Status> {
     let input = request.into_inner();
-    let path = self.workspace_path(&input.session_id)?;
+    let path = self.workspace_path(&input.session_id).await?;
     let entries =
       tokio::task::spawn_blocking(move || Workspace::open(path)?.list(&input.directory))
         .await
@@ -58,7 +59,7 @@ impl WorkspaceService for Daemon {
     request: Request<v1::ReadFileRequest>,
   ) -> Result<Response<v1::WorkspaceFile>, Status> {
     let input = request.into_inner();
-    let path = self.workspace_path(&input.session_id)?;
+    let path = self.workspace_path(&input.session_id).await?;
     let file = input.path.clone();
     let (content, revision) =
       tokio::task::spawn_blocking(move || Workspace::open(path)?.read_revision(&input.path))
@@ -76,7 +77,7 @@ impl WorkspaceService for Daemon {
     request: Request<v1::WriteFileRequest>,
   ) -> Result<Response<v1::WorkspaceFile>, Status> {
     let input = request.into_inner();
-    let path = self.workspace_path(&input.session_id)?;
+    let path = self.workspace_path(&input.session_id).await?;
     let write = self.workspace_writes.clone().lock_owned().await;
     let file = input.path.clone();
     let content = input.content.clone();
@@ -98,7 +99,7 @@ impl WorkspaceService for Daemon {
     request: Request<v1::DiffRequest>,
   ) -> Result<Response<v1::WorkspaceDiff>, Status> {
     let input = request.into_inner();
-    let path = self.workspace_path(&input.session_id)?;
+    let path = self.workspace_path(&input.session_id).await?;
     let patch = diff(path, input.path).await.map_err(failure)?;
     Ok(Response::new(v1::WorkspaceDiff { patch }))
   }
@@ -106,7 +107,9 @@ impl WorkspaceService for Daemon {
     &self,
     request: Request<v1::SessionRequest>,
   ) -> Result<Response<v1::GitStatus>, Status> {
-    let workspace = self.workspace_path(&request.into_inner().session_id)?;
+    let workspace = self
+      .workspace_path(&request.into_inner().session_id)
+      .await?;
     Ok(Response::new(git_status(workspace).await.map_err(failure)?))
   }
   type WatchFilesStream =
@@ -115,7 +118,9 @@ impl WorkspaceService for Daemon {
     &self,
     request: Request<v1::SessionRequest>,
   ) -> Result<Response<Self::WatchFilesStream>, Status> {
-    let path = self.workspace_path(&request.into_inner().session_id)?;
+    let path = self
+      .workspace_path(&request.into_inner().session_id)
+      .await?;
     let mut watcher = WorkspaceWatch::open(std::path::Path::new(&path)).map_err(failure)?;
     let stop = self.stopping.clone();
     let stream = async_stream::stream! {

@@ -1,8 +1,9 @@
 use std::{collections::HashMap, pin::Pin, sync::Arc, time::Duration};
 
 use agent_protocol::v1::RelayEnvelope;
+use futures::{Stream, StreamExt};
 use tokio::sync::{Mutex, mpsc, watch};
-use tokio_stream::{Stream, StreamExt, wrappers::ReceiverStream};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::Status;
 
 use crate::ControlPlane;
@@ -74,7 +75,7 @@ impl RelayHub {
           _ = sender.closed() => break None,
           _ = shutdown.changed() => break Some(Status::unavailable("control is shutting down; reconnect without replay")),
           _ = revoke.tick() => {
-            let authorized = control.peers.trust(&node).is_ok_and(|trust| trust.capabilities.iter().any(|cap| cap == "control.relay"));
+            let authorized = control.peers.trust(&node).await.is_ok_and(|trust| trust.capabilities.iter().any(|cap| cap == "control.relay"));
             if !authorized { break Some(Status::permission_denied("relay identity was revoked")); }
           }
           message = input.message() => match message {
@@ -101,11 +102,15 @@ impl RelayHub {
         tracing::info!(operation = "control.relay", outcome = "detached", connection_id = %generation, node_id = %node, "outbound relay disconnected");
       }
     });
-    let verifier = ReceiverStream::new(receiver).map(move |item| {
-      item.and_then(|frame| {
-        output_control.allow(&frame.source_node_id, &frame.target_node_id)?;
+    let verifier = ReceiverStream::new(receiver).then(move |item| {
+      let output_control = output_control.clone();
+      async move {
+        let frame = item?;
+        output_control
+          .allow(&frame.source_node_id, &frame.target_node_id)
+          .await?;
         Ok(frame)
-      })
+      }
     });
     Ok(Box::pin(verifier))
   }
@@ -136,7 +141,7 @@ impl RelayHub {
         "invalid link, target identity or opaque ciphertext size",
       ));
     }
-    control.allow(node, &frame.target_node_id)?;
+    control.allow(node, &frame.target_node_id).await?;
     let sender = self
       .connections
       .lock()
@@ -167,7 +172,7 @@ impl RelayHub {
           "target relay remained backpressured for two seconds; delivery was not accepted")),
         _ = shutdown.changed() => return Err(Status::unavailable(
           "control is shutting down; delivery was not accepted")),
-        _ = recheck.tick() => control.allow(&source, &target)?,
+        _ = recheck.tick() => control.allow(&source, &target).await?,
       }
     }
   }

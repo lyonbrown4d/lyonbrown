@@ -35,7 +35,12 @@ async fn inherited_input_cannot_be_cancelled_through_a_stale_runtime_during_hand
   assert_eq!(node.terminal(&first.id).await.status, "cancelled");
   let next = node.run("explicit next run").await;
   requested(&classifier, 2).await;
-  let before = node.daemon.store.load_snapshot(&node.session_id).unwrap();
+  let before = node
+    .daemon
+    .store
+    .load_snapshot(&node.session_id)
+    .await
+    .unwrap();
   assert!(
     node
       .client
@@ -44,7 +49,12 @@ async fn inherited_input_cannot_be_cancelled_through_a_stale_runtime_during_hand
       .is_err()
   );
   assert_eq!(
-    node.daemon.store.load_snapshot(&node.session_id).unwrap(),
+    node
+      .daemon
+      .store
+      .load_snapshot(&node.session_id)
+      .await
+      .unwrap(),
     before
   );
   let inherited = node.client.list_run_inputs(&next.id).await.unwrap();
@@ -116,7 +126,12 @@ async fn queue_snapshot_previews_are_utf8_safe_and_pending_bytes_are_bounded() {
   assert_eq!(snapshot.inputs.len(), 1);
   assert!(snapshot.inputs[0].prompt_truncated);
   assert_eq!(snapshot.inputs[0].prompt, "界".repeat(1365));
-  let before = node.daemon.store.load_snapshot(&node.session_id).unwrap();
+  let before = node
+    .daemon
+    .store
+    .load_snapshot(&node.session_id)
+    .await
+    .unwrap();
   assert!(
     node
       .client
@@ -131,7 +146,12 @@ async fn queue_snapshot_previews_are_utf8_safe_and_pending_bytes_are_bounded() {
       .is_err()
   );
   assert_eq!(
-    node.daemon.store.load_snapshot(&node.session_id).unwrap(),
+    node
+      .daemon
+      .store
+      .load_snapshot(&node.session_id)
+      .await
+      .unwrap(),
     before
   );
   node

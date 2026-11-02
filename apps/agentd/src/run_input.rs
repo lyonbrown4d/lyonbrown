@@ -24,6 +24,7 @@ impl SessionPersistence for RunPersistence {
     self
       .store
       .load_snapshot(session)
+      .await
       .map_err(|_| RuntimeError::Persistence("session snapshot unavailable".into()))
   }
   async fn commit(
@@ -44,11 +45,12 @@ impl SessionPersistence for RunPersistence {
         mutation.payload,
         &mutation.events,
       )
+      .await
       .map_err(|_| RuntimeError::Persistence("session commit could not be confirmed".into()))
   }
 }
 impl Daemon {
-  fn input_session(
+  async fn input_session(
     &self,
     run_id: &str,
     epoch: Option<u64>,
@@ -56,11 +58,13 @@ impl Daemon {
     let run = self
       .store
       .run(run_id)
+      .await
       .map_err(failure)?
       .ok_or_else(|| Status::not_found("run not found"))?;
     let session = self
       .store
       .session(&run.session_id)
+      .await
       .map_err(failure)?
       .ok_or_else(|| Status::not_found("session not found"))?;
     if session.owner_node_id != self.node_id
@@ -80,7 +84,9 @@ impl Daemon {
     if self.stopping.is_cancelled() || self.draining.load(std::sync::atomic::Ordering::Acquire) {
       return Err(Status::unavailable("daemon is draining"));
     }
-    let (run, session) = self.input_session(&input.run_id, Some(input.owner_epoch))?;
+    let (run, session) = self
+      .input_session(&input.run_id, Some(input.owner_epoch))
+      .await?;
     if uuid::Uuid::parse_str(&input.request_id).is_err()
       || input.prompt.trim().is_empty()
       || input.prompt.len() > 1_048_576
@@ -98,7 +104,7 @@ impl Daemon {
         ));
       }
     };
-    let receipts = self.input_receipts(&input.run_id)?;
+    let receipts = self.input_receipts(&input.run_id).await?;
     if let Some(receipt) = receipts
       .iter()
       .find(|receipt| receipt.request_id == input.request_id)
@@ -166,7 +172,8 @@ impl Daemon {
     }
     self.events.notify_waiters();
     self
-      .input_receipts(&input.run_id)?
+      .input_receipts(&input.run_id)
+      .await?
       .into_iter()
       .find(|receipt| receipt.request_id == input.request_id)
       .ok_or_else(|| {
@@ -178,9 +185,12 @@ impl Daemon {
     input: v1::CancelRunInputRequest,
   ) -> Result<v1::RunInputReceipt, Status> {
     let _submission = self.submission.lock().await;
-    let (_run, session) = self.input_session(&input.run_id, Some(input.owner_epoch))?;
+    let (_run, session) = self
+      .input_session(&input.run_id, Some(input.owner_epoch))
+      .await?;
     let receipt = self
-      .input_receipts(&input.run_id)?
+      .input_receipts(&input.run_id)
+      .await?
       .into_iter()
       .find(|receipt| receipt.entry_id == input.entry_id)
       .ok_or_else(|| Status::not_found("input entry not found"))?;
@@ -210,6 +220,7 @@ impl Daemon {
     if let Some(current) = self
       .store
       .runs(&session.id)
+      .await
       .map_err(failure)?
       .iter()
       .find(|run| {
@@ -244,6 +255,7 @@ impl Daemon {
         })
         .map_err(|_| Status::internal("input cancellation intent unavailable"))?,
       )
+      .await
       .map_err(failure)?;
     match registered.runtime.cancel_input(&input.entry_id).await {
       Ok(true) => {}
@@ -269,6 +281,7 @@ impl Daemon {
             })
             .map_err(|_| Status::internal("input consumption confirmation unavailable"))?,
           )
+          .await
           .map_err(failure)?;
       }
       _ => {
@@ -278,6 +291,7 @@ impl Daemon {
         if self
           .store
           .fence_run_input_failure(&registered.run_id, session.owner_epoch)
+          .await
           .is_err()
         {
           tracing::warn!(operation="run.input.cancel",outcome="unconfirmed",run_id=%registered.run_id,"Durable cancellation intent remains unresolved; session admission is fenced");
@@ -299,7 +313,8 @@ impl Daemon {
       self.input_runtimes.lock().await.remove(&session.id);
     }
     self
-      .input_receipts(&input.run_id)?
+      .input_receipts(&input.run_id)
+      .await?
       .into_iter()
       .find(|receipt| receipt.entry_id == input.entry_id)
       .ok_or_else(|| Status::internal("input state unavailable"))

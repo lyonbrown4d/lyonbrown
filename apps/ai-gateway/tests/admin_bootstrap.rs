@@ -36,7 +36,7 @@ context_tokens = 65536
     AppConfig::load_with_environment(directory.path(), Some(&config_path), &environment)
       .expect("environment credentials");
   let path = settings.data_dir.join("gateway.sqlite");
-  let store = GatewayStorage::open(&path).expect("store");
+  let store = GatewayStorage::open(&path).await.expect("store");
   store
     .bootstrap_super_admin(
       &settings.admin_username,
@@ -64,7 +64,7 @@ context_tokens = 65536
   assert_eq!(session.identity.role, AdminRole::SuperAdmin);
   drop(session);
   drop(store);
-  let reopened = GatewayStorage::open(&path).expect("reopen");
+  let reopened = GatewayStorage::open(&path).await.expect("reopen");
   for (username, password) in [
     ("different-admin", settings.admin_password.expose_secret()),
     (

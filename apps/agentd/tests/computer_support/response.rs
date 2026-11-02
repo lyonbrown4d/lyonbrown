@@ -32,12 +32,13 @@ fn inspect(
   })
 }
 
-fn assert_running(node: &TestNode, binding: &RunBinding) {
+async fn assert_running(node: &TestNode, binding: &RunBinding) {
   assert_eq!(
     node
       .daemon
       .store
       .run(&binding.run_id)
+      .await
       .unwrap()
       .unwrap()
       .status,
@@ -49,7 +50,7 @@ fn assert_running(node: &TestNode, binding: &RunBinding) {
 async fn queued_inspection_cancellation_preserves_active_request_and_abort_releases_attachment() {
   let (node, _mock) = node().await;
   let desktop = desktop(&node);
-  let binding = binding(&node, &node.session_id);
+  let binding = binding(&node, &node.session_id).await;
   let mut host = RawHost::attach(&node, &desktop).await;
   let pending = inspect(&node, &binding);
   let first = host.next().await;
@@ -121,7 +122,7 @@ async fn queued_inspection_cancellation_preserves_active_request_and_abort_relea
   assert_eq!(observed.identity, desktop.identity);
   assert_eq!(calls.capabilities.load(Ordering::SeqCst), 1);
   assert_eq!(calls.effects.load(Ordering::SeqCst), 0);
-  assert_running(&node, &binding);
+  assert_running(&node, &binding).await;
   tokio::time::timeout(DEADLINE, replacement.shutdown())
     .await
     .unwrap()
@@ -133,7 +134,7 @@ async fn queued_inspection_cancellation_preserves_active_request_and_abort_relea
 async fn forged_response_binding_identity_or_size_disconnects_without_advancing_run() {
   let (node, _mock) = node().await;
   let desktop = desktop(&node);
-  let binding = binding(&node, &node.session_id);
+  let binding = binding(&node, &node.session_id).await;
   for corruption in [
     "host",
     "session",
@@ -197,7 +198,7 @@ async fn forged_response_binding_identity_or_size_disconnects_without_advancing_
       Ok(None) | Err(_) => {}
       Ok(Some(_)) => panic!("{corruption} must disconnect without another native command"),
     }
-    assert_running(&node, &binding);
+    assert_running(&node, &binding).await;
   }
   tokio::time::timeout(DEADLINE, node.close()).await.unwrap();
 }

@@ -39,6 +39,7 @@ async fn cancellation_after_approved_dispatch_is_durable_uncertain_and_never_rep
       .daemon
       .store
       .run(&run.id)
+      .await
       .expect("run row")
       .expect("persisted run")
       .status,
@@ -49,6 +50,7 @@ async fn cancellation_after_approved_dispatch_is_durable_uncertain_and_never_rep
       .daemon
       .store
       .approval(&approval.id)
+      .await
       .expect("approval row")
       .expect("persisted approval")
       .status,
@@ -109,6 +111,7 @@ async fn cancelling_pending_mcp_approval_never_dispatches_and_cannot_be_approved
       .daemon
       .store
       .approval(&approval.id)
+      .await
       .expect("approval row")
       .expect("closed approval")
       .status,

@@ -20,7 +20,7 @@ async fn tui_task_commands_drive_one_paired_worker_attempt_to_durable_acceptance
     .await
     .unwrap();
   let remote = remote_support::Remote::open(&mock, protocol).await;
-  let envelope = remote.pair.envelope(vec!["workspace.read".into()]);
+  let envelope = remote.pair.envelope(vec!["workspace.read".into()]).await;
   let task_id = uuid::Uuid::parse_str(&envelope.task_id)
     .expect("fixture task ID")
     .to_string();
@@ -32,6 +32,7 @@ async fn tui_task_commands_drive_one_paired_worker_attempt_to_durable_acceptance
     .master
     .store
     .runs(&remote.pair.session.id)
+    .await
     .expect("existing parent run");
   assert_eq!(baseline_master_runs.len(), 1);
   assert_eq!(baseline_master_runs[0].id, envelope.parent_run_id);
@@ -72,6 +73,7 @@ async fn tui_task_commands_drive_one_paired_worker_attempt_to_durable_acceptance
         .worker
         .store
         .task(&task_id)
+        .await
         .ok()
         .flatten()
         .is_some_and(|task| task.attempt_status == "succeeded")
@@ -114,6 +116,7 @@ async fn tui_task_commands_drive_one_paired_worker_attempt_to_durable_acceptance
       .worker
       .store
       .task(&task_id)
+      .await
       .expect("Worker task read")
       .expect("Worker task exists")
       .status,
@@ -130,6 +133,7 @@ async fn tui_task_commands_drive_one_paired_worker_attempt_to_durable_acceptance
       .master
       .store
       .runs(&remote.pair.session.id)
+      .await
       .expect("Master runs after task")
       .len(),
     baseline_master_runs.len(),
@@ -156,6 +160,7 @@ async fn wait_store_task(
         .master
         .store
         .task(task_id)
+        .await
         .ok()
         .flatten()
         .is_some_and(|task| ready(&task))

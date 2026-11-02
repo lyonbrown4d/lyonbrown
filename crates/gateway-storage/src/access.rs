@@ -5,8 +5,10 @@ use crate::{
   schema::gateway_access_tokens as tokens,
 };
 use async_trait::async_trait;
-use diesel::prelude::*;
 use gateway_core::{AccessControl, AccessError, AccessPrincipal};
+use sea_orm::{
+  ActiveModelTrait, QueryFilter, QueryOrder, QuerySelect, Set, prelude::*, sea_query::OnConflict,
+};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 use std::collections::BTreeSet;
@@ -44,20 +46,31 @@ impl GatewayStorage {
     let id = format!("bootstrap-{}", &digest("access-id", token)[..32]);
     let now = signed_time(now_seconds()?)?;
     self
-      .run(move |connection| {
-        // Revoked bootstrap keys stay revoked across restarts.
-        diesel::insert_into(tokens::table)
-          .values((
-            tokens::id.eq(id),
-            tokens::label.eq("bootstrap"),
-            tokens::token_hash.eq(token_hash),
-            tokens::created_at.eq(now),
-            tokens::expires_at.eq(i64::MAX),
-            tokens::revoked.eq(false),
-          ))
-          .on_conflict_do_nothing()
-          .execute(connection)?;
-        Ok(())
+      .write(move |connection| {
+        Box::pin(async move {
+          tokens::Entity::insert(tokens::ActiveModel {
+            id: Set(id),
+            label: Set("bootstrap".into()),
+            token_hash: Set(token_hash),
+            created_at: Set(now),
+            expires_at: Set(i64::MAX),
+            revoked: Set(false),
+            project_id: Set("default".into()),
+            allowed_models: Set("[]".into()),
+            max_output_tokens: Set(None),
+            token_budget: Set(None),
+            tokens_charged: Set(0),
+          })
+          .on_conflict(
+            OnConflict::column(tokens::Column::Id)
+              .do_nothing()
+              .to_owned(),
+          )
+          .try_insert()
+          .exec(connection)
+          .await?;
+          Ok(())
+        })
       })
       .await
   }
@@ -125,22 +138,25 @@ impl GatewayStorage {
     let created_at = signed_time(metadata.created_at)?;
     let expires_at = signed_time(metadata.expires_at)?;
     self
-      .run(move |connection| {
-        diesel::insert_into(tokens::table)
-          .values((
-            tokens::project_id.eq(metadata.project_id),
-            tokens::allowed_models.eq(models),
-            tokens::max_output_tokens.eq(output_limit),
-            tokens::token_budget.eq(budget),
-            tokens::id.eq(metadata.id),
-            tokens::label.eq(metadata.label),
-            tokens::token_hash.eq(token_hash),
-            tokens::created_at.eq(created_at),
-            tokens::expires_at.eq(expires_at),
-            tokens::revoked.eq(false),
-          ))
-          .execute(connection)?;
-        Ok(())
+      .write(move |connection| {
+        Box::pin(async move {
+          tokens::ActiveModel {
+            id: Set(metadata.id),
+            label: Set(metadata.label),
+            token_hash: Set(token_hash),
+            created_at: Set(created_at),
+            expires_at: Set(expires_at),
+            revoked: Set(false),
+            project_id: Set(metadata.project_id),
+            allowed_models: Set(models),
+            max_output_tokens: Set(output_limit),
+            token_budget: Set(budget),
+            tokens_charged: Set(0),
+          }
+          .insert(connection)
+          .await?;
+          Ok(())
+        })
       })
       .await?;
     Ok(issued)
@@ -148,63 +164,31 @@ impl GatewayStorage {
   pub async fn list_access_tokens(&self) -> Result<Vec<AccessTokenMetadata>> {
     self
       .run(|connection| {
-        tokens::table
-          .order((tokens::created_at.desc(), tokens::id.asc()))
-          .limit(1000)
-          .select((
-            tokens::id,
-            tokens::label,
-            tokens::created_at,
-            tokens::expires_at,
-            tokens::revoked,
-            tokens::project_id,
-            tokens::allowed_models,
-            tokens::max_output_tokens,
-            tokens::token_budget,
-            tokens::tokens_charged,
-          ))
-          .load::<(
-            String,
-            String,
-            i64,
-            i64,
-            bool,
-            String,
-            String,
-            Option<i64>,
-            Option<i64>,
-            i64,
-          )>(connection)?
-          .into_iter()
-          .map(
-            |(
-              id,
-              label,
-              created_at,
-              expires_at,
-              revoked,
-              project_id,
-              allowed_models,
-              max_output_tokens,
-              token_budget,
-              tokens_charged,
-            )| {
+        Box::pin(async move {
+          tokens::Entity::find()
+            .order_by_desc(tokens::Column::CreatedAt)
+            .order_by_asc(tokens::Column::Id)
+            .limit(1000)
+            .all(connection)
+            .await?
+            .into_iter()
+            .map(|row| {
               Ok(AccessTokenMetadata {
-                id,
-                label,
-                created_at: u64::try_from(created_at).map_err(|_| StorageError::InvalidData)?,
-                expires_at: u64::try_from(expires_at).map_err(|_| StorageError::InvalidData)?,
-                revoked,
-                project_id,
-                allowed_models: serde_json::from_str(&allowed_models)
+                id: row.id,
+                label: row.label,
+                created_at: unsigned(row.created_at)?,
+                expires_at: unsigned(row.expires_at)?,
+                revoked: row.revoked,
+                project_id: row.project_id,
+                allowed_models: serde_json::from_str(&row.allowed_models)
                   .map_err(|_| StorageError::InvalidData)?,
-                max_output_tokens: max_output_tokens.map(unsigned).transpose()?,
-                token_budget: token_budget.map(unsigned).transpose()?,
-                tokens_charged: unsigned(tokens_charged)?,
+                max_output_tokens: row.max_output_tokens.map(unsigned).transpose()?,
+                token_budget: row.token_budget.map(unsigned).transpose()?,
+                tokens_charged: unsigned(row.tokens_charged)?,
               })
-            },
-          )
-          .collect()
+            })
+            .collect()
+        })
       })
       .await
   }
@@ -214,11 +198,18 @@ impl GatewayStorage {
     }
     let id = id.to_owned();
     self
-      .run(move |connection| {
-        diesel::update(tokens::table.find(id))
-          .set(tokens::revoked.eq(true))
-          .execute(connection)?;
-        Ok(())
+      .write(move |connection| {
+        Box::pin(async move {
+          tokens::Entity::update_many()
+            .col_expr(
+              tokens::Column::Revoked,
+              sea_orm::sea_query::Expr::value(true),
+            )
+            .filter(tokens::Column::Id.eq(id))
+            .exec(connection)
+            .await?;
+          Ok(())
+        })
       })
       .await
   }
@@ -237,32 +228,28 @@ impl GatewayStorage {
     let now = signed_time(now)?;
     self
       .run(move |connection| {
-        let stored = tokens::table
-          .filter(tokens::token_hash.eq(&hash))
-          .filter(tokens::revoked.eq(false))
-          .filter(tokens::created_at.le(now))
-          .filter(tokens::expires_at.gt(now))
-          .select((
-            tokens::token_hash,
-            tokens::id,
-            tokens::project_id,
-            tokens::allowed_models,
-            tokens::max_output_tokens,
-          ))
-          .first::<(String, String, String, String, Option<i64>)>(connection)
-          .optional()?;
-        let Some((stored, key_id, project_id, models, output_limit)) = stored else {
-          return Ok(None);
-        };
-        if !equal(&stored, &hash) {
-          return Ok(None);
-        }
-        Ok(Some(AccessPrincipal {
-          key_id,
-          project_id,
-          allowed_models: serde_json::from_str(&models).map_err(|_| StorageError::InvalidData)?,
-          max_output_tokens: output_limit.map(unsigned).transpose()?,
-        }))
+        Box::pin(async move {
+          let stored = tokens::Entity::find()
+            .filter(tokens::Column::TokenHash.eq(&hash))
+            .filter(tokens::Column::Revoked.eq(false))
+            .filter(tokens::Column::CreatedAt.lte(now))
+            .filter(tokens::Column::ExpiresAt.gt(now))
+            .one(connection)
+            .await?;
+          let Some(stored) = stored else {
+            return Ok(None);
+          };
+          if !equal(&stored.token_hash, &hash) {
+            return Ok(None);
+          }
+          Ok(Some(AccessPrincipal {
+            key_id: stored.id,
+            project_id: stored.project_id,
+            allowed_models: serde_json::from_str(&stored.allowed_models)
+              .map_err(|_| StorageError::InvalidData)?,
+            max_output_tokens: stored.max_output_tokens.map(unsigned).transpose()?,
+          }))
+        })
       })
       .await
   }

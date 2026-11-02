@@ -51,11 +51,11 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   std::fs::write(workspace.join("a.txt"), "Changed sibling file\n").unwrap();
   harness.connect(cx);
   harness
-    .wait(cx, |state| state.status.starts_with("Connected"))
+    .wait(cx, async |state| state.status.starts_with("Connected"))
     .await;
   harness.click("new-session", cx);
   let original = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session.is_some() && !state.workbench.busy && !state.busy
     })
     .await;
@@ -66,7 +66,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   panel(&harness, 3, cx);
   harness.click("diff-refresh", cx);
   let diff = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.patch.contains("+fn after()") && !state.workbench.busy
     })
     .await
@@ -75,7 +75,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   panel(&harness, 6, cx);
   harness.click("git-refresh", cx);
   let status = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.git.status.is_some() && !state.workbench.git.busy
     })
     .await
@@ -118,7 +118,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   .unwrap();
   harness.click(("git-file", modified), cx);
   let patch = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.git.busy && state.workbench.git.path == "tracked.rs"
     })
     .await;
@@ -132,7 +132,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   );
   harness.click(("git-file", deleted), cx);
   let deletion = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.git.busy && state.workbench.git.path == "deleted.txt"
     })
     .await;
@@ -151,7 +151,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
     .unwrap();
   harness.click(("git-file", literal), cx);
   let literal_patch = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.git.busy && state.workbench.git.path == "[abc].txt"
     })
     .await;
@@ -173,7 +173,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   );
   harness.click("git-patch", cx);
   let all = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.git.busy && state.workbench.git.rendered_files == 4
     })
     .await;
@@ -181,7 +181,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   assert!(all.workbench.git.path.is_empty());
   harness.click("new-chat-tab", cx);
   let switched = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state
         .selected_session
         .as_deref()
@@ -196,7 +196,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   assert!(switched.workbench.patch.is_empty());
   harness.click(("chat-tab", original_tab), cx);
   let returned = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.selected_session.as_deref() == Some(&original_session) && !state.workbench.busy
     })
     .await;
@@ -208,7 +208,7 @@ async fn git_status_file_patch_and_diff_are_isolated_and_cleared_when_switching_
   assert_eq!(returned.workbench.git.rendered_files, 0);
   harness.click("git-refresh", cx);
   let refreshed = harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       state.workbench.git.status.is_some() && !state.workbench.git.busy
     })
     .await;

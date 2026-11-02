@@ -5,12 +5,15 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+memory-core = { path = "../memory-core" }
+sha2.workspace = true
+hex.workspace = true
+uuid.workspace = true
 agent-core = { path = "../agent-core" }
-agent-runtime = { path = "../agent-runtime" }
 anyhow.workspace = true
 async-trait.workspace = true
-diesel.workspace = true
-libsqlite3-sys.workspace = true
+sea-orm.workspace = true
+sea-orm-migration.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 

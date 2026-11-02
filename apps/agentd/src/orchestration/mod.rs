@@ -23,7 +23,7 @@ pub fn orchestration_service(
 
 fn failure(error: anyhow::Error) -> Status {
   // Payloads and credentials are never included in the management error.
-  tracing::warn!(operation = "task.manage", outcome = "unconfirmed", error = %error);
+  tracing::warn!(operation = "task.manage", outcome = "unconfirmed", error = %agent_storage::public_error_message(&error));
   Status::failed_precondition(
     "task operation could not be confirmed; reconcile the existing task identity before further action",
   )
@@ -52,7 +52,7 @@ impl OrchestrationService for Daemon {
     let envelope = input
       .envelope
       .ok_or_else(|| Status::invalid_argument("task envelope is required"))?;
-    self.validate_dispatch(&target, &envelope)?;
+    self.validate_dispatch(&target, &envelope).await?;
     let value = self
       .dispatcher()?
       .submit(&target, envelope.into())
@@ -64,7 +64,7 @@ impl OrchestrationService for Daemon {
       .envelope
       .ok_or_else(|| Status::internal("worker omitted task identity"))?
       .task_id;
-    Ok(Response::new(self.master_task(&task_id)?.into()))
+    Ok(Response::new(self.master_task(&task_id).await?.into()))
   }
 
   async fn get_task(
@@ -72,7 +72,10 @@ impl OrchestrationService for Daemon {
     request: Request<v1::TaskRequest>,
   ) -> Result<Response<v1::Task>, Status> {
     Ok(Response::new(
-      self.master_task(&request.into_inner().task_id)?.into(),
+      self
+        .master_task(&request.into_inner().task_id)
+        .await?
+        .into(),
     ))
   }
 
@@ -95,10 +98,11 @@ impl OrchestrationService for Daemon {
         "task page size must be at most 500",
       ));
     }
-    let session = self.master_session(&id)?;
+    let session = self.master_session(&id).await?;
     let mut tasks = self
       .store
       .tasks_for_session(&id, &input.after_task_id, page_size + 1)
+      .await
       .map_err(failure)?;
     let next_task_id = if tasks.len() > page_size {
       tasks.truncate(page_size);
@@ -128,7 +132,9 @@ impl OrchestrationService for Daemon {
     request: Request<v1::RemoteTaskRequest>,
   ) -> Result<Response<v1::Task>, Status> {
     let input = request.into_inner();
-    let target = self.resolve_master_task_target(&input.task_id, input.target)?;
+    let target = self
+      .resolve_master_task_target(&input.task_id, input.target)
+      .await?;
     let value = self
       .dispatcher()?
       .reconcile(&target, &input.task_id)
@@ -143,7 +149,9 @@ impl OrchestrationService for Daemon {
     request: Request<v1::RemoteTaskRequest>,
   ) -> Result<Response<v1::Task>, Status> {
     let input = request.into_inner();
-    let target = self.resolve_master_task_target(&input.task_id, input.target)?;
+    let target = self
+      .resolve_master_task_target(&input.task_id, input.target)
+      .await?;
     let value = self
       .dispatcher()?
       .cancel(&target, &input.task_id)
@@ -158,7 +166,9 @@ impl OrchestrationService for Daemon {
     request: Request<v1::AcceptRemoteResultRequest>,
   ) -> Result<Response<v1::Task>, Status> {
     let input = request.into_inner();
-    let target = self.resolve_master_task_target(&input.task_id, input.target)?;
+    let target = self
+      .resolve_master_task_target(&input.task_id, input.target)
+      .await?;
     let value = self
       .dispatcher()?
       .accept(&target, &input.task_id, input.accepted)

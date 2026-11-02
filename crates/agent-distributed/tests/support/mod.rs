@@ -54,7 +54,7 @@ impl Node {
     let directory = tempfile::tempdir()?;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
     let identity = PeerIdentity::generate(&uuid::Uuid::now_v7().to_string())?;
-    let store = Store::open(directory.path().join("state.db"))?;
+    let store = Store::open(directory.path().join("state.db")).await?;
     let node = v1::Node {
       id: identity.public.node_id.clone(),
       endpoint: format!("https://{}", listener.local_addr()?),
@@ -84,25 +84,28 @@ impl Node {
       listener: Some(listener),
     })
   }
-  pub fn store(&self) -> Result<Store> {
-    Store::open(self.directory.path().join("state.db"))
+  pub async fn store(&self) -> Result<Store> {
+    Store::open(self.directory.path().join("state.db")).await
   }
-  pub fn pair(&self, other: &Self) -> Result<()> {
-    self.manager.pair_local(
-      other.identity.public.clone(),
-      [
-        "tasks.submit",
-        "tasks.read",
-        "tasks.cancel",
-        "tasks.accept",
-        "test.execute",
-      ]
-      .map(String::from)
-      .to_vec(),
-    )?;
+  pub async fn pair(&self, other: &Self) -> Result<()> {
+    self
+      .manager
+      .pair_local(
+        other.identity.public.clone(),
+        [
+          "tasks.submit",
+          "tasks.read",
+          "tasks.cancel",
+          "tasks.accept",
+          "test.execute",
+        ]
+        .map(String::from)
+        .to_vec(),
+      )
+      .await?;
     Ok(())
   }
-  pub fn serve(
+  pub async fn serve(
     &mut self,
   ) -> Result<(
     CancellationToken,
@@ -113,7 +116,7 @@ impl Node {
     let worker = self.worker.clone();
     let shutdown = CancellationToken::new();
     let stop = shutdown.clone();
-    let mut server = tonic::transport::Server::builder().tls_config(manager.server_tls()?)?;
+    let mut server = tonic::transport::Server::builder().tls_config(manager.server_tls().await?)?;
     let task = tokio::spawn(async move {
       server
         .add_service(PeerServiceServer::new(manager))
@@ -123,18 +126,21 @@ impl Node {
     });
     Ok((shutdown, task))
   }
-  pub fn envelope(&self) -> v1::TaskEnvelope {
+  pub async fn envelope(&self) -> v1::TaskEnvelope {
     let session = self
       .store()
+      .await
       .expect("test store")
       .create_session(
         "Master",
         "/master/absolute/path/must/not/be/reused",
         &self.identity.public.node_id,
       )
+      .await
       .expect("test master session");
     let parent = self
       .store()
+      .await
       .expect("test store")
       .accept_run(
         &session.id,
@@ -142,12 +148,15 @@ impl Node {
         "Master task orchestration",
         &uuid::Uuid::now_v7().to_string(),
       )
+      .await
       .expect("test parent Run")
       .0;
     self
       .store()
+      .await
       .expect("test store")
       .update_run_owned(&parent.id, 1, agent_core::RunStatus::Running, "", "")
+      .await
       .expect("active parent Run");
     v1::TaskEnvelope {
       task_id: uuid::Uuid::now_v7().to_string(),

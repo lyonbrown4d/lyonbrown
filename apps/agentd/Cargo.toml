@@ -10,6 +10,9 @@ local-llama = ["agent-inference/llama"]
 local-mistral = ["agent-inference/mistral"]
 
 [dependencies]
+agent-memory = { path = "../../crates/agent-memory" }
+memory-core = { path = "../../crates/memory-core" }
+memory-qdrant = { path = "../../crates/memory-qdrant" }
 decision-core = { path = "../../crates/decision-core" }
 sha2.workspace = true
 hex.workspace = true
@@ -53,7 +56,7 @@ async-stream = "0.3.6"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
 
 [dev-dependencies]
-diesel.workspace = true
+sea-orm.workspace = true
 agent-test-support = { path = "../../crates/agent-test-support" }
 agent-client = { path = "../../crates/agent-client" }
 tempfile.workspace = true

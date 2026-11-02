@@ -97,6 +97,7 @@ async fn responses_native_poison_click_stops_after_one_effect_with_uncertain_rec
     .daemon
     .store
     .browser_action_status(exact["action_id"].as_str().unwrap())
+    .await
     .unwrap();
   eprintln!(
     "synthetic poison click: terminal={}, requests={}, action_status={action_status:?}, actions={}, effects={}",
@@ -141,7 +142,7 @@ async fn responses_native_poison_click_stops_after_one_effect_with_uncertain_rec
   assert_eq!(actions.len(), 1, "one actual native action");
   assert_eq!(actions[0].id, exact["action_id"].as_str().unwrap());
   assert_eq!(action_status.as_deref(), Some("uncertain"));
-  receipts::assert_receipts(&node, &pending, "consumed", Some("uncertain"));
+  receipts::assert_receipts(&node, &pending, "consumed", Some("uncertain")).await;
   assert!(
     recovered.is_ok(),
     "recovery must preserve uncertain outcome"

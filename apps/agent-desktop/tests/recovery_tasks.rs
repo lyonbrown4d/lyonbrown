@@ -21,6 +21,7 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
     .enable_all()
     .build()
     .unwrap();
+  let _storage_context = runtime.enter();
   let scenario = runtime.block_on(recovery_support::Scenario::open(5000));
   let remote = &scenario.remote;
   let ui = task_support::TaskUi::new(cx, &remote.endpoint, remote.pair.master.auth_token());
@@ -44,16 +45,18 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
     .master
     .store
     .run(&scenario.original.id)
+    .await
     .unwrap()
     .unwrap();
   assert_eq!(before.status, "uncertain");
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     scenario.dispatch.is_finished()
       && remote
         .pair
         .master
         .store
         .task(&scenario.task_id)
+        .await
         .unwrap()
         .is_some_and(|task| task.status == "awaiting_acceptance")
   })
@@ -80,6 +83,7 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
       .master
       .store
       .run_recovery(&scenario.original.id)
+      .await
       .unwrap()
       .is_none()
   );
@@ -96,12 +100,13 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
     cx,
     gpui_kit::SharedString::from(format!("task-reconcile-{}", scenario.task_id)),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .task(&scenario.task_id)
+      .await
       .unwrap()
       .unwrap()
       .status
@@ -112,12 +117,13 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
     cx,
     gpui_kit::SharedString::from(format!("task-accept-{}", scenario.task_id)),
   );
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .task(&scenario.task_id)
+      .await
       .unwrap()
       .unwrap()
       .status
@@ -138,6 +144,7 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
       .master
       .store
       .run_recovery(&scenario.original.id)
+      .await
       .unwrap()
       .is_none()
   );
@@ -155,17 +162,19 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
     .master
     .store
     .run_recovery(&scenario.original.id)
+    .await
     .unwrap()
     .unwrap();
   let fresh_id = resolution.session_id.clone().unwrap();
   ui.click(cx, "recovery-open-session");
   ui.wait_selected_session(cx, &fresh_id).await;
-  ui.wait(cx, || {
+  ui.wait(cx, async || {
     remote
       .pair
       .master
       .store
       .run(resolution.replacement_run_id.as_ref().unwrap())
+      .await
       .unwrap()
       .unwrap()
       .status
@@ -173,7 +182,13 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
   })
   .await;
   assert_eq!(
-    remote.pair.master.store.run(&scenario.original.id).unwrap(),
+    remote
+      .pair
+      .master
+      .store
+      .run(&scenario.original.id)
+      .await
+      .unwrap(),
     Some(before)
   );
   assert_eq!(
@@ -191,6 +206,7 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
     .master
     .store
     .events(&scenario.original.id, 0, 1000)
+    .await
     .unwrap()
     .into_iter()
     .find(|event| event.kind == "run_recovery_recorded")
@@ -201,6 +217,7 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
       .master
       .store
       .pending_outbox(1000)
+      .await
       .unwrap()
       .iter()
       .any(|pending| pending.run_id == event.run_id && pending.cursor == event.cursor)
@@ -211,6 +228,7 @@ async fn desktop_verifies_real_effect_and_worker_before_fresh_continuation(
       .master
       .store
       .session(&scenario.original.session_id)
+      .await
       .unwrap()
       .unwrap()
       .owner_epoch,

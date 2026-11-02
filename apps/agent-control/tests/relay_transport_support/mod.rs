@@ -28,11 +28,15 @@ impl Tunnels {
   pub async fn with_queue(queue: usize) -> Result<Self> {
     logging();
     let fixture = Fixture::new(queue).await?;
-    let a_manager = manager(&fixture, &fixture.a, "a.sqlite3")?;
-    let b_manager = manager(&fixture, &fixture.b, "b.sqlite3")?;
+    let a_manager = manager(&fixture, &fixture.a, "a.sqlite3").await?;
+    let b_manager = manager(&fixture, &fixture.b, "b.sqlite3").await?;
     for (manager, peer) in [(&a_manager, &fixture.b), (&b_manager, &fixture.a)] {
-      manager.pair_local(peer.public.clone(), vec!["tasks.read".into()])?;
-      manager.pair_local(fixture.control.public.clone(), Vec::new())?;
+      manager
+        .pair_local(peer.public.clone(), vec!["tasks.read".into()])
+        .await?;
+      manager
+        .pair_local(fixture.control.public.clone(), Vec::new())
+        .await?;
     }
     let stop = CancellationToken::new();
     let (a, incoming_a, a_runtime) = RelayTransport::new(
@@ -41,14 +45,16 @@ impl Tunnels {
       fixture.endpoint.clone(),
       ["node-b".into()].into(),
       stop.child_token(),
-    )?;
+    )
+    .await?;
     let (b, incoming_b, b_runtime) = RelayTransport::new(
       b_manager.clone(),
       "control".into(),
       fixture.endpoint.clone(),
       ["node-a".into()].into(),
       stop.child_token(),
-    )?;
+    )
+    .await?;
     let tasks = vec![tokio::spawn(a_runtime.run()), tokio::spawn(b_runtime.run())];
     connected(&[&a, &b]).await?;
     Ok(Self {
@@ -72,12 +78,12 @@ impl Tunnels {
   }
 }
 
-pub fn manager(
+pub async fn manager(
   fixture: &Fixture,
   identity: &agent_distributed::identity::PeerIdentity,
   file: &str,
 ) -> Result<PeerManager> {
-  let store = Store::open(fixture.directory.path().join(file))?;
+  let store = Store::open(fixture.directory.path().join(file)).await?;
   let mut info = node(identity);
   // No listener exists here. Successful PeerManager::connect must use the relay route.
   info.endpoint = "https://127.0.0.1:1".into();
@@ -106,9 +112,13 @@ impl RawPeer {
   pub async fn start() -> Result<Self> {
     logging();
     let fixture = Fixture::new(64).await?;
-    let manager = manager(&fixture, &fixture.a, "manual-a.sqlite3")?;
-    manager.pair_local(fixture.b.public.clone(), Vec::new())?;
-    manager.pair_local(fixture.control.public.clone(), Vec::new())?;
+    let manager = manager(&fixture, &fixture.a, "manual-a.sqlite3").await?;
+    manager
+      .pair_local(fixture.b.public.clone(), Vec::new())
+      .await?;
+    manager
+      .pair_local(fixture.control.public.clone(), Vec::new())
+      .await?;
     let remote = fixture.client(&fixture.b).await?.open(64).await?;
     let stop = CancellationToken::new();
     let (a, incoming, runtime) = RelayTransport::new(
@@ -117,7 +127,8 @@ impl RawPeer {
       fixture.endpoint.clone(),
       ["node-b".into()].into(),
       stop.child_token(),
-    )?;
+    )
+    .await?;
     let task = tokio::spawn(runtime.run());
     connected(&[&a]).await?;
     Ok(Self {

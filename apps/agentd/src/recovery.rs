@@ -18,29 +18,32 @@ fn action(value: RecoveryAction) -> v1::RunRecoveryAction {
 }
 
 impl Daemon {
-  fn recovery_result(&self, resolution: RunRecovery) -> Result<v1::RunRecoveryResult, Status> {
+  async fn recovery_result(
+    &self,
+    resolution: RunRecovery,
+  ) -> Result<v1::RunRecoveryResult, Status> {
+    let session = match resolution.session_id.as_deref() {
+      Some(id) => self
+        .store
+        .session(id)
+        .await
+        .map_err(db_error)?
+        .map(Into::into),
+      None => None,
+    };
+    let run = match resolution.replacement_run_id.as_deref() {
+      Some(id) => self.store.run(id).await.map_err(db_error)?.map(Into::into),
+      None => None,
+    };
     Ok(v1::RunRecoveryResult {
       original_run: self
         .store
         .run(&resolution.run_id)
+        .await
         .map_err(db_error)?
         .map(Into::into),
-      session: resolution
-        .session_id
-        .as_deref()
-        .map(|id| self.store.session(id))
-        .transpose()
-        .map_err(db_error)?
-        .flatten()
-        .map(Into::into),
-      run: resolution
-        .replacement_run_id
-        .as_deref()
-        .map(|id| self.store.run(id))
-        .transpose()
-        .map_err(db_error)?
-        .flatten()
-        .map(Into::into),
+      session,
+      run,
       action: action(resolution.action).into(),
       note: resolution.note,
       owner_epoch: resolution.requested_owner_epoch,
@@ -52,23 +55,27 @@ impl Daemon {
     let run = self
       .store
       .run(id)
+      .await
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("run not found"))?;
     let session = self
       .store
       .session(&run.session_id)
+      .await
       .map_err(db_error)?
       .ok_or_else(|| Status::not_found("session not found"))?;
-    let resolution = self
-      .store
-      .run_recovery(id)
-      .map_err(db_error)?
-      .map(|resolution| self.recovery_result(resolution))
-      .transpose()?;
+    let resolution = self.store.run_recovery(id).await.map_err(db_error)?;
+    let resolution = match resolution {
+      Some(resolution) => Some(self.recovery_result(resolution).await?),
+      None => None,
+    };
     let report = agent_runtime::inspect_recovery(
       &session.id,
       session.owner_epoch,
-      Arc::new(self.store.clone()),
+      Arc::new(crate::run_input::RunPersistence {
+        store: self.store.clone(),
+        run_id: run.id.clone(),
+      }),
     )
     .await;
     let mut reason = run.error.clone();
@@ -98,6 +105,7 @@ impl Daemon {
     let unresolved_tasks = self
       .store
       .unresolved_recovery_tasks(&session.id)
+      .await
       .map_err(db_error)?;
     if unresolved_tasks > 0 {
       reason
@@ -165,6 +173,7 @@ impl Daemon {
         note: &input.note,
         prompt: &input.prompt,
       })
+      .await
       .map_err(db_error)?;
     drop(active);
     drop(writes);
@@ -172,11 +181,12 @@ impl Daemon {
       let run = self
         .store
         .run(id)
+        .await
         .map_err(db_error)?
         .ok_or_else(|| Status::internal("recovery execution intent missing"))?;
       self.launch(run).await.map_err(db_error)?;
     }
     self.events.notify_waiters();
-    self.recovery_result(resolution)
+    self.recovery_result(resolution).await
   }
 }

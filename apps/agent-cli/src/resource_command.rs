@@ -3,6 +3,7 @@ use agent_protocol::v1;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResourceCommand {
+  Memory(crate::memory_command::MemoryCommand),
   Status,
   Context,
   Permissions,

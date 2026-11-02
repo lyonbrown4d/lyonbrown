@@ -12,33 +12,53 @@ impl TaskWorker {
       let task = &job.task;
       let result = worker.run_job(job.clone(), cancellation.clone()).await;
       let update = match result {
-        Ok(Some(Ok(output))) => worker.manager.store.finish_attempt(
-          &task.task_id,
-          &task.attempt_id,
-          task.owner_epoch,
-          &output,
-          "",
-        ),
-        Ok(Some(Err(error))) if error.is::<crate::worker::UncertainOutcome>() => worker
-          .manager
-          .store
-          .mark_task_uncertain(&task.task_id, &task.attempt_id, task.owner_epoch),
-        Ok(Some(Err(_))) if cancellation.is_cancelled() => worker
-          .manager
-          .store
-          .mark_task_cancelled(&task.task_id, &task.attempt_id, task.owner_epoch),
-        Ok(Some(Err(_))) => worker.manager.store.finish_attempt(
-          &task.task_id,
-          &task.attempt_id,
-          task.owner_epoch,
-          "",
-          "worker execution failed; inspect worker logs",
-        ),
-        Ok(None) | Err(_) => worker.manager.store.mark_task_uncertain(
-          &task.task_id,
-          &task.attempt_id,
-          task.owner_epoch,
-        ),
+        Ok(Some(Ok(output))) => {
+          worker
+            .manager
+            .store
+            .finish_attempt(
+              &task.task_id,
+              &task.attempt_id,
+              task.owner_epoch,
+              &output,
+              "",
+            )
+            .await
+        }
+        Ok(Some(Err(error))) if error.is::<crate::worker::UncertainOutcome>() => {
+          worker
+            .manager
+            .store
+            .mark_task_uncertain(&task.task_id, &task.attempt_id, task.owner_epoch)
+            .await
+        }
+        Ok(Some(Err(_))) if cancellation.is_cancelled() => {
+          worker
+            .manager
+            .store
+            .mark_task_cancelled(&task.task_id, &task.attempt_id, task.owner_epoch)
+            .await
+        }
+        Ok(Some(Err(_))) => {
+          worker
+            .manager
+            .store
+            .finish_attempt(
+              &task.task_id,
+              &task.attempt_id,
+              task.owner_epoch,
+              "",
+              "worker execution failed; inspect worker logs",
+            )
+            .await
+        }
+        Ok(None) | Err(_) => {
+          worker
+            .manager
+            .store
+            .mark_task_uncertain(&task.task_id, &task.attempt_id, task.owner_epoch)
+            .await
+        }
       };
       if update.is_err() {
         tracing::error!(task_id = %task.task_id,
@@ -57,14 +77,18 @@ impl TaskWorker {
     job: WorkerJob,
     cancellation: CancellationToken,
   ) -> Result<Option<Result<String>>> {
-    self.manager.store.mark_task_running(
-      &job.task.task_id,
-      &job.task.attempt_id,
-      job.task.owner_epoch,
-    )?;
+    self
+      .manager
+      .store
+      .mark_task_running(
+        &job.task.task_id,
+        &job.task.attempt_id,
+        job.task.owner_epoch,
+      )
+      .await?;
     create_workspace(&job.workspace)?;
     let owner = job.task.owner_node_id.clone();
-    let owner_fingerprint = self.manager.trust(&owner)?.fingerprint;
+    let owner_fingerprint = self.manager.trust(&owner).await?.fingerprint;
     let remaining = job
       .task
       .deadline_ms
@@ -81,7 +105,7 @@ impl TaskWorker {
         _ = cancellation.cancelled() => break,
         _ = &mut deadline => { cancellation.cancel(); break; },
         _ = trust_check.tick() => {
-          if !self.manager.trust(&owner).is_ok_and(|trust| trust.fingerprint == owner_fingerprint) {
+          if !self.manager.trust(&owner).await.is_ok_and(|trust| trust.fingerprint == owner_fingerprint) {
             cancellation.cancel(); break;
           }
         }

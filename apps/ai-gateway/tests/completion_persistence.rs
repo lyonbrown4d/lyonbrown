@@ -89,7 +89,7 @@ async fn upstream(
 async fn real_http_obeys_database_access_and_persists_intent_before_upstream() {
   let directory = tempfile::tempdir().expect("tempdir");
   let path = directory.path().join("gateway.sqlite");
-  let store = Arc::new(GatewayStorage::open(&path).expect("store"));
+  let store = Arc::new(GatewayStorage::open(&path).await.expect("store"));
   store
     .bootstrap_access_token(TOKEN)
     .await
@@ -266,7 +266,9 @@ async fn real_http_obeys_database_access_and_persists_intent_before_upstream() {
   drop(gateway);
   mock.stop().await;
   drop(store);
-  let reopened = GatewayStorage::open(&path).expect("reopen persistent store");
+  let reopened = GatewayStorage::open(&path)
+    .await
+    .expect("reopen persistent store");
   let audits = reopened.list_audits(20, 0).await.expect("persisted audit");
   assert_eq!(audits.total, 1);
   assert_eq!(audits.records[0].request_id, id);

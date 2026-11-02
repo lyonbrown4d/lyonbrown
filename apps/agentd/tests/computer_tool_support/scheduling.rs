@@ -130,7 +130,7 @@ async fn approved_execute_waits_for_host_inspection_then_completes_once() {
     ))
     .await;
   let pending = approval(&node, &run.id).await;
-  let exact = exact_approval(&node, &pending, &host.host_id, &args);
+  let exact = exact_approval(&node, &pending, &host.host_id, &args).await;
   host.hold.store(true, Ordering::SeqCst);
   let daemon = node.daemon.clone();
   let binding = RunBinding {
@@ -151,7 +151,7 @@ async fn approved_execute_waits_for_host_inspection_then_completes_once() {
   tokio::time::timeout(Duration::from_secs(5), async {
     let mut events = node.client.watch_run(&run.id, 0).await.unwrap();
     loop {
-      if node.daemon.store.operation(action).unwrap().is_some() {
+      if node.daemon.store.operation(action).await.unwrap().is_some() {
         break;
       }
       assert!(events.message().await.unwrap().is_some());
@@ -166,6 +166,7 @@ async fn approved_execute_waits_for_host_inspection_then_completes_once() {
       .daemon
       .store
       .operation(action)
+      .await
       .unwrap()
       .unwrap()
       .status
@@ -186,13 +187,13 @@ async fn approved_execute_waits_for_host_inspection_then_completes_once() {
       .is_ok(),
     "no continuation: run={:?}, events={:?}",
     node.client.get_run(&run.id).await.unwrap(),
-    node.daemon.store.events(&run.id, 0, 1000).unwrap()
+    node.daemon.store.events(&run.id, 0, 1000).await.unwrap()
   );
   model
     .push_reply(text_reply(protocol, "Queued input completed"))
     .await;
   assert_eq!(node.terminal(&run.id).await.status, "completed");
-  assert_receipts(&node, &pending, "consumed", Some("completed"));
+  assert_receipts(&node, &pending, "consumed", Some("completed")).await;
   assert_eq!(runtime.effects(), 1);
   drop(host);
   node.close().await;

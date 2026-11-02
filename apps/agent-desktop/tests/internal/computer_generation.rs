@@ -177,7 +177,7 @@ async fn obsolete_attachment_reply_is_dropped_and_revokes_authenticated_host(
     cx,
   );
   harness
-    .wait(cx, |state| {
+    .wait(cx, async |state| {
       !state.workbench.computer.attached
         && state.workbench.computer.bound_session.is_none()
         && factory.dropped.load(Ordering::SeqCst) == 1

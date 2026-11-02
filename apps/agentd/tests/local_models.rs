@@ -77,7 +77,7 @@ async fn daemon_uses_registered_model_and_persists_tool_free_plan() {
   assert_eq!(requests.len(), 1);
   assert!(requests[0].tools.is_empty());
   assert!(requests[0].max_tokens < backend.info().context_window);
-  let events = daemon.store.events(&run.id, 0, 1000).unwrap();
+  let events = daemon.store.events(&run.id, 0, 1000).await.unwrap();
   let event = |kind| {
     serde_json::from_str::<serde_json::Value>(
       &events
@@ -92,7 +92,7 @@ async fn daemon_uses_registered_model_and_persists_tool_free_plan() {
   assert_eq!(event("execution_plan")["required_capabilities"], json!([]));
   assert_eq!(event("model_selected")["supports_tools"], false);
   assert_eq!(daemon.local_models()[0].backend, "synthetic");
-  assert!(daemon.store.approvals(&run.id).unwrap().is_empty());
+  assert!(daemon.store.approvals(&run.id).await.unwrap().is_empty());
   daemon.shutdown().await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -115,7 +115,7 @@ async fn decision_local_profile_is_independent_and_only_reduces_execution_author
     let decisions = classifier.requests.lock().await;
     assert_eq!(decisions.len(), 1);
     assert!(decisions[0].tools.is_empty());
-    let events = daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let plan: serde_json::Value = serde_json::from_str(
       &events
         .iter()
@@ -220,7 +220,7 @@ async fn local_model_cancellation_persists_cancelled_for_classifier_and_harness(
     .await
     .unwrap();
     assert_eq!(
-      daemon.store.run(&run.id).unwrap().unwrap().status,
+      daemon.store.run(&run.id).await.unwrap().unwrap().status,
       "cancelled"
     );
     assert_eq!(main.requests.lock().await.is_empty(), during_classification);
@@ -228,6 +228,7 @@ async fn local_model_cancellation_persists_cancelled_for_classifier_and_harness(
       daemon
         .store
         .events(&run.id, 0, 1000)
+        .await
         .unwrap()
         .iter()
         .any(|event| matches!(

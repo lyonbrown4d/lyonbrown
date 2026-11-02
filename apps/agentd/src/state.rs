@@ -12,6 +12,7 @@ use tokio_util::sync::CancellationToken;
 pub struct Daemon {
   pub config: Config,
   pub store: Store,
+  pub(crate) memory: Arc<agent_memory::MemoryService>,
   pub node_id: String,
   pub(crate) token: Arc<String>,
   pub(crate) services: fluxdi::Shared<RuntimeServices>,
@@ -24,8 +25,9 @@ pub struct Daemon {
 impl Daemon {
   pub async fn open(config: Config) -> Result<Self> {
     let models = crate::models::Models::load(&config).await?;
-    let daemon = crate::composition::build(config, models)?;
+    let daemon = crate::composition::build(config, models).await?;
     daemon.mcp.initialize(&daemon.config).await?;
+    daemon.start_memory_worker().await?;
     Ok(daemon)
   }
   /// Embed an explicitly loaded inference registry; no global registry or hidden test mode.
@@ -35,37 +37,41 @@ impl Daemon {
   ) -> Result<Self> {
     agent_config::validate_local_models(&config.local_models)?;
     let models = crate::models::Models::from_registry(&config, registry).await?;
-    let daemon = crate::composition::build(config, models)?;
+    let daemon = crate::composition::build(config, models).await?;
     daemon.mcp.initialize(&daemon.config).await?;
+    daemon.start_memory_worker().await?;
     Ok(daemon)
   }
   pub fn local_models(&self) -> Vec<agent_inference::ModelInfo> {
     self.models.all()
   }
   pub async fn recover(&self) -> Result<()> {
-    let operations_uncertain = self.store.recover_operations()?;
+    let operations_uncertain = self.store.recover_operations().await?;
     tracing::info!(
       operations_uncertain,
       "reconciled interrupted native operations"
     );
-    let browser_uncertain = self.store.recover_browser_actions()?;
+    let browser_uncertain = self.store.recover_browser_actions().await?;
     tracing::info!(browser_uncertain, "reconciled interrupted browser actions");
-    let interrupted = self.store.recover_interrupted()?;
-    self.store.recover_model_jobs()?;
-    let inputs_uncertain = self.store.recover_input_cancellations()?;
+    let interrupted = self.store.recover_interrupted().await?;
+    self.store.recover_model_jobs().await?;
+    let inputs_uncertain = self.store.recover_input_cancellations().await?;
     tracing::info!(
       inputs_uncertain,
       "reconciled unconfirmed input cancellations"
     );
     tracing::info!(uncertain = interrupted.len(), "reconciled interrupted runs");
-    for run in self.store.pending_runs()? {
+    for run in self.store.pending_runs().await? {
       if run.session_id.starts_with("worker:") {
-        self.store.update_run(
-          &run.id,
-          agent_core::RunStatus::Uncertain,
-          "",
-          "worker task interrupted before execution; reconcile without replay",
-        )?;
+        self
+          .store
+          .update_run(
+            &run.id,
+            agent_core::RunStatus::Uncertain,
+            "",
+            "worker task interrupted before execution; reconcile without replay",
+          )
+          .await?;
       } else {
         self.launch(run).await?;
       }
@@ -97,11 +103,15 @@ impl Daemon {
       }
     };
     let drain = async {
-      tokio::join!(wait, async {
-        if let Some(worker) = worker {
-          worker.shutdown().await;
-        }
-      });
+      tokio::join!(
+        wait,
+        async {
+          if let Some(worker) = worker {
+            worker.shutdown().await;
+          }
+        },
+        self.stop_memory_worker()
+      );
     };
     if tokio::time::timeout(std::time::Duration::from_secs(17), drain)
       .await
@@ -119,8 +129,8 @@ impl Daemon {
   pub(crate) async fn active_count(&self) -> usize {
     let local = self.active.lock().await.len();
     // Unknown remote outcomes also defer upgrades until explicit reconciliation.
-    let remote = self.store.active_master_tasks(&self.node_id).unwrap_or_else(|error| {
-      tracing::error!(error=%error, "could not determine in-flight Master tasks; deferring idle maintenance");
+    let remote = self.store.active_master_tasks(&self.node_id).await.unwrap_or_else(|error| {
+      tracing::error!(error=%agent_storage::public_error_message(&error), "could not determine in-flight Master tasks; deferring idle maintenance");
       1
     });
     let peer = self.peer_worker.lock().await.clone();
@@ -134,6 +144,7 @@ impl Daemon {
 
 #[doc(hidden)]
 pub struct RuntimeServices {
+  pub(crate) memory_worker: Mutex<Option<tokio::task::JoinHandle<()>>>,
   pub(crate) model_jobs: Mutex<HashMap<String, CancellationToken>>,
   pub(crate) browser: Arc<crate::browser::BrowserRouter>,
   pub(crate) computer: Arc<crate::computer::ComputerRouter>,
@@ -152,6 +163,7 @@ pub struct RuntimeServices {
 impl RuntimeServices {
   pub(crate) fn new(max_runs: usize) -> Self {
     Self {
+      memory_worker: Mutex::new(None),
       model_jobs: Mutex::new(HashMap::new()),
       browser: Arc::new(Default::default()),
       computer: Arc::new(Default::default()),
@@ -167,6 +179,13 @@ impl RuntimeServices {
       relay: OnceLock::new(),
       submission: Arc::new(Mutex::new(())),
     }
+  }
+}
+impl Drop for RuntimeServices {
+  fn drop(&mut self) {
+    // Background workers retain ports, never RuntimeServices. Final owner drop
+    // therefore revokes their tokens even when explicit shutdown was skipped.
+    self.stopping.cancel();
   }
 }
 impl std::ops::Deref for Daemon {

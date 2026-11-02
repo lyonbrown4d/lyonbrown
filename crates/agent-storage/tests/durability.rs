@@ -1,37 +1,49 @@
 use agent_core::{RunStatus, TaskEnvelope};
 use agent_storage::Store;
-use diesel::{connection::SimpleConnection, prelude::*};
+use sea_orm::prelude::*;
 use serde_json::json;
 
-#[test]
-fn restart_preserves_safe_pending_and_marks_interrupted_uncertain() -> anyhow::Result<()> {
+#[tokio::test]
+async fn restart_preserves_safe_pending_and_marks_interrupted_uncertain() -> anyhow::Result<()> {
   let directory = tempfile::tempdir()?;
   let path = directory.path().join("state.sqlite");
-  let store = Store::open(&path)?;
-  let session = store.create_session("running", "/tmp", "local")?;
-  let (running, _) = store.accept_run(&session.id, 1, "act", "first")?;
-  store.update_run_owned(&running.id, 1, RunStatus::Running, "", "")?;
-  let approval = store.request_approval_owned(&running.id, 1, "write_file", &json!({}))?;
-  let before = store.events(&running.id, 0, 100)?;
-  let other = store.create_session("pending", "/tmp", "local")?;
-  let (pending, _) = store.accept_run(&other.id, 1, "wait", "second")?;
+  let store = Store::open(&path).await?;
+  let session = store.create_session("running", "/tmp", "local").await?;
+  let (running, _) = store.accept_run(&session.id, 1, "act", "first").await?;
+  store
+    .update_run_owned(&running.id, 1, RunStatus::Running, "", "")
+    .await?;
+  let approval = store
+    .request_approval_owned(&running.id, 1, "write_file", &json!({}))
+    .await?;
+  let before = store.events(&running.id, 0, 100).await?;
+  let other = store.create_session("pending", "/tmp", "local").await?;
+  let (pending, _) = store.accept_run(&other.id, 1, "wait", "second").await?;
   drop(store);
-  let restored = Store::open(&path)?;
+  let restored = Store::open(&path).await?;
   assert_eq!(
     restored
-      .recover_interrupted()?
+      .recover_interrupted()
+      .await?
       .iter()
       .map(|run| &run.id)
       .collect::<Vec<_>>(),
     [&running.id]
   );
-  assert_eq!(restored.run(&running.id)?.expect("run").status, "uncertain");
   assert_eq!(
-    restored.approval(&approval.id)?.expect("approval").status,
+    restored.run(&running.id).await?.expect("run").status,
+    "uncertain"
+  );
+  assert_eq!(
+    restored
+      .approval(&approval.id)
+      .await?
+      .expect("approval")
+      .status,
     "cancelled"
   );
-  assert!(restored.decide_approval(&approval.id, true).is_err());
-  let events = restored.events(&running.id, 0, 100)?;
+  assert!(restored.decide_approval(&approval.id, true).await.is_err());
+  let events = restored.events(&running.id, 0, 100).await?;
   let recovery_events = &events[before.len()..];
   assert_eq!(
     recovery_events
@@ -44,7 +56,7 @@ fn restart_preserves_safe_pending_and_marks_interrupted_uncertain() -> anyhow::R
     serde_json::from_str::<serde_json::Value>(&recovery_events[0].payload_json)?,
     json!({"approval_id":approval.id,"status":"cancelled"})
   );
-  let outbox = restored.pending_outbox(100)?;
+  let outbox = restored.pending_outbox(100).await?;
   assert_eq!(
     outbox
       .iter()
@@ -53,108 +65,139 @@ fn restart_preserves_safe_pending_and_marks_interrupted_uncertain() -> anyhow::R
       .collect::<Vec<_>>(),
     events
   );
-  assert_eq!(restored.pending_runs()?, [pending]);
+  assert_eq!(restored.pending_runs().await?, [pending]);
   assert!(
     restored
       .accept_run(&session.id, 1, "retry blindly", "third")
+      .await
       .is_err()
   );
-  assert!(restored.recover_interrupted()?.is_empty());
-  assert_eq!(restored.events(&running.id, 0, 100)?, events);
-  assert_eq!(restored.pending_outbox(100)?, outbox);
+  assert!(restored.recover_interrupted().await?.is_empty());
+  assert_eq!(restored.events(&running.id, 0, 100).await?, events);
+  assert_eq!(restored.pending_outbox(100).await?, outbox);
   Ok(())
 }
 
-#[test]
-fn interrupted_approval_recovery_outbox_failure_rolls_back_all_state() -> anyhow::Result<()> {
+#[tokio::test]
+async fn interrupted_approval_recovery_outbox_failure_rolls_back_all_state() -> anyhow::Result<()> {
   let directory = tempfile::tempdir()?;
   let path = directory.path().join("state.sqlite");
-  let store = Store::open(&path)?;
-  let session = store.create_session("approval", "/tmp", "local")?;
-  let (run, _) = store.accept_run(&session.id, 1, "act", "first")?;
-  store.update_run_owned(&run.id, 1, RunStatus::Running, "", "")?;
-  let approval = store.request_approval_owned(&run.id, 1, "write_file", &json!({}))?;
-  let before = store.run(&run.id)?.expect("run");
-  let events = store.events(&run.id, 0, 100)?;
-  let outbox = store.pending_outbox(100)?;
+  let store = Store::open(&path).await?;
+  let session = store.create_session("approval", "/tmp", "local").await?;
+  let (run, _) = store.accept_run(&session.id, 1, "act", "first").await?;
+  store
+    .update_run_owned(&run.id, 1, RunStatus::Running, "", "")
+    .await?;
+  let approval = store
+    .request_approval_owned(&run.id, 1, "write_file", &json!({}))
+    .await?;
+  let before = store.run(&run.id).await?.expect("run");
+  let events = store.events(&run.id, 0, 100).await?;
+  let outbox = store.pending_outbox(100).await?;
   drop(store);
-  let restored = Store::open(&path)?;
-  let mut injected = SqliteConnection::establish(path.to_str().expect("path"))?;
+  let restored = Store::open(&path).await?;
+  let injected = store.connection();
   // Fail after the approval closure and its event/Outbox have already been written.
-  injected.batch_execute("CREATE TRIGGER reject_recovery_outbox BEFORE INSERT ON outbox WHEN EXISTS (SELECT 1 FROM events WHERE run_id = NEW.run_id AND cursor = NEW.cursor AND json_extract(record, '$.kind') = 'run_uncertain') BEGIN SELECT RAISE(ABORT, 'injected storage fault'); END;")?;
+  injected.execute_unprepared("CREATE TRIGGER reject_recovery_outbox BEFORE INSERT ON outbox WHEN EXISTS (SELECT 1 FROM events WHERE run_id = NEW.run_id AND cursor = NEW.cursor AND json_extract(record, '$.kind') = 'run_uncertain') BEGIN SELECT RAISE(ABORT, 'injected storage fault'); END;").await?;
   let error = restored
     .recover_interrupted()
+    .await
     .expect_err("recovery must fail");
   assert!(error.to_string().contains("injected storage fault"));
-  assert_eq!(restored.run(&run.id)?.expect("run"), before);
+  assert_eq!(restored.run(&run.id).await?.expect("run"), before);
   assert_eq!(
-    restored.approval(&approval.id)?.expect("approval"),
+    restored.approval(&approval.id).await?.expect("approval"),
     approval
   );
-  assert_eq!(restored.events(&run.id, 0, 100)?, events);
-  assert_eq!(restored.pending_outbox(100)?, outbox);
-  injected.batch_execute("DROP TRIGGER reject_recovery_outbox;")?;
-  assert_eq!(restored.recover_interrupted()?.len(), 1);
-  assert_eq!(restored.run(&run.id)?.expect("run").status, "uncertain");
+  assert_eq!(restored.events(&run.id, 0, 100).await?, events);
+  assert_eq!(restored.pending_outbox(100).await?, outbox);
+  injected
+    .execute_unprepared("DROP TRIGGER reject_recovery_outbox;")
+    .await?;
+  assert_eq!(restored.recover_interrupted().await?.len(), 1);
   assert_eq!(
-    restored.approval(&approval.id)?.expect("approval").status,
+    restored.run(&run.id).await?.expect("run").status,
+    "uncertain"
+  );
+  assert_eq!(
+    restored
+      .approval(&approval.id)
+      .await?
+      .expect("approval")
+      .status,
     "cancelled"
   );
   Ok(())
 }
 
-#[test]
-fn idempotency_owner_fencing_and_atomic_snapshot_outbox() -> anyhow::Result<()> {
+#[tokio::test]
+async fn idempotency_owner_fencing_and_atomic_snapshot_outbox() -> anyhow::Result<()> {
   let directory = tempfile::tempdir()?;
   let path = directory.path().join("state.sqlite");
-  let store = Store::open(&path)?;
-  let session = store.create_session("test", "/tmp", "local")?;
-  let (run, created) = store.accept_run(&session.id, 1, "hello", "key")?;
+  let store = Store::open(&path).await?;
+  let session = store.create_session("test", "/tmp", "local").await?;
+  let (run, created) = store.accept_run(&session.id, 1, "hello", "key").await?;
   assert!(created);
   assert_eq!(
-    store.accept_run(&session.id, 1, "hello", "key")?,
+    store.accept_run(&session.id, 1, "hello", "key").await?,
     (run.clone(), false)
   );
   assert!(
     store
       .accept_run(&session.id, 1, "different", "key")
+      .await
       .is_err()
   );
   assert!(
     store
       .accept_run(&session.id, 1, "parallel", "other")
+      .await
       .is_err()
   );
-  store.commit_snapshot(&session.id, 1, b"first", "snapshot", json!({"revision":1}))?;
-  assert_eq!(store.load_snapshot(&session.id)?, Some(b"first".to_vec()));
-  let events = store.events(&run.id, 0, 100)?;
+  store
+    .commit_snapshot(&session.id, 1, b"first", "snapshot", json!({"revision":1}))
+    .await?;
+  assert_eq!(
+    store.load_snapshot(&session.id).await?,
+    Some(b"first".to_vec())
+  );
+  let events = store.events(&run.id, 0, 100).await?;
   assert_eq!(events.len(), 2);
-  assert_eq!(store.pending_outbox(100)?, events);
-  let mut injected = SqliteConnection::establish(path.to_str().expect("path"))?;
-  injected.batch_execute("CREATE TRIGGER reject_outbox BEFORE INSERT ON outbox BEGIN SELECT RAISE(ABORT, 'injected storage fault'); END;")?;
+  assert_eq!(store.pending_outbox(100).await?, events);
+  let injected = store.connection();
+  injected.execute_unprepared("CREATE TRIGGER reject_outbox BEFORE INSERT ON outbox BEGIN SELECT RAISE(ABORT, 'injected storage fault'); END;").await?;
   assert!(
     store
       .commit_snapshot(&session.id, 1, b"second", "snapshot", json!({}))
+      .await
       .is_err()
   );
-  assert_eq!(store.load_snapshot(&session.id)?, Some(b"first".to_vec()));
-  assert_eq!(store.events(&run.id, 0, 100)?, events);
-  injected.batch_execute("DROP TRIGGER reject_outbox;")?;
-  store.change_owner(&session.id, 1, "new-master")?;
+  assert_eq!(
+    store.load_snapshot(&session.id).await?,
+    Some(b"first".to_vec())
+  );
+  assert_eq!(store.events(&run.id, 0, 100).await?, events);
+  injected
+    .execute_unprepared("DROP TRIGGER reject_outbox;")
+    .await?;
+  store.change_owner(&session.id, 1, "new-master").await?;
   assert!(
     store
       .commit_snapshot(&session.id, 1, b"stale", "snapshot", json!({}))
+      .await
       .is_err()
   );
   assert!(
     store
       .update_run_owned(&run.id, 1, RunStatus::Completed, "stale", "")
+      .await
       .is_err()
   );
-  assert_eq!(store.events(&run.id, 0, 100)?, events);
-  store.acknowledge_outbox(&run.id, 1)?;
+  assert_eq!(store.events(&run.id, 0, 100).await?, events);
+  store.acknowledge_outbox(&run.id, 1).await?;
   let pending_for_run: Vec<_> = store
-    .pending_outbox(100)?
+    .pending_outbox(100)
+    .await?
     .into_iter()
     .filter(|event| event.run_id == run.id)
     .collect();
@@ -162,9 +205,9 @@ fn idempotency_owner_fencing_and_atomic_snapshot_outbox() -> anyhow::Result<()> 
   Ok(())
 }
 
-#[test]
-fn worker_success_requires_master_acceptance_and_current_attempt() -> anyhow::Result<()> {
-  let store = Store::open(":memory:")?;
+#[tokio::test]
+async fn worker_success_requires_master_acceptance_and_current_attempt() -> anyhow::Result<()> {
+  let store = Store::open(":memory:").await?;
   let envelope = TaskEnvelope {
     task_id: "task".into(),
     parent_run_id: "parent".into(),
@@ -178,91 +221,116 @@ fn worker_success_requires_master_acceptance_and_current_attempt() -> anyhow::Re
     idempotency_key: "task-key".into(),
     deadline_ms: i64::MAX,
   };
-  assert!(store.accept_task(envelope.clone())?.1);
-  assert!(!store.accept_task(envelope.clone())?.1);
+  assert!(store.accept_task(envelope.clone()).await?.1);
+  assert!(!store.accept_task(envelope.clone()).await?.1);
   let mut conflicting = envelope;
   conflicting.instructions = "different".into();
-  assert!(store.accept_task(conflicting).is_err());
+  assert!(store.accept_task(conflicting).await.is_err());
   assert!(
     store
       .finish_attempt("task", "stale", 3, "answer", "")
+      .await
       .is_err()
   );
-  let succeeded = store.finish_attempt("task", "attempt", 3, "answer", "")?;
+  let succeeded = store
+    .finish_attempt("task", "attempt", 3, "answer", "")
+    .await?;
   assert_eq!(succeeded.attempt_status, "succeeded");
   assert_eq!(succeeded.status, "awaiting_acceptance");
-  assert!(store.accept_result("task", "attempt", 2, true).is_err());
+  assert!(
+    store
+      .accept_result("task", "attempt", 2, true)
+      .await
+      .is_err()
+  );
   assert_eq!(
-    store.accept_result("task", "attempt", 3, true)?.status,
+    store
+      .accept_result("task", "attempt", 3, true)
+      .await?
+      .status,
     "completed"
   );
-  assert!(store.accept_result("task", "attempt", 3, true).is_err());
+  assert!(
+    store
+      .accept_result("task", "attempt", 3, true)
+      .await
+      .is_err()
+  );
   Ok(())
 }
 
-#[test]
-fn concurrent_resubmission_commits_one_run_and_one_acceptance_event() -> anyhow::Result<()> {
+#[tokio::test]
+async fn concurrent_resubmission_commits_one_run_and_one_acceptance_event() -> anyhow::Result<()> {
   let directory = tempfile::tempdir()?;
   let path = directory.path().join("state.sqlite");
-  let store = Store::open(&path)?;
-  let session = store.create_session("concurrent", "/tmp", "local")?;
-  let left = Store::open(&path)?;
-  let right = Store::open(&path)?;
-  let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
-  let results = std::thread::scope(|scope| {
-    let first_barrier = barrier.clone();
-    let id = &session.id;
-    let first = scope.spawn(move || {
-      first_barrier.wait();
-      left.accept_run(id, 1, "same prompt", "same-key")
-    });
-    let second = scope.spawn(move || {
-      barrier.wait();
-      right.accept_run(id, 1, "same prompt", "same-key")
-    });
-    [
-      first.join().expect("first writer"),
-      second.join().expect("second writer"),
-    ]
-  });
+  let store = Store::open(&path).await?;
+  let session = store.create_session("concurrent", "/tmp", "local").await?;
+  let left = Store::open(&path).await?;
+  let right = Store::open(&path).await?;
+  let id = &session.id;
+  let (first, second) = tokio::join!(
+    async { left.accept_run(id, 1, "same prompt", "same-key").await },
+    async { right.accept_run(id, 1, "same prompt", "same-key").await }
+  );
+  let results = [first, second];
   let [left, right] = results;
   let (left, left_created) = left?;
   let (right, right_created) = right?;
   assert_eq!(left.id, right.id);
   assert_eq!(usize::from(left_created) + usize::from(right_created), 1);
-  assert_eq!(store.runs(&session.id)?.len(), 1);
-  assert_eq!(store.events(&left.id, 0, 100)?.len(), 1);
-  assert_eq!(store.pending_outbox(100)?.len(), 1);
+  assert_eq!(store.runs(&session.id).await?.len(), 1);
+  assert_eq!(store.events(&left.id, 0, 100).await?.len(), 1);
+  assert_eq!(store.pending_outbox(100).await?.len(), 1);
   Ok(())
 }
 
-#[test]
-fn accepted_cancel_wins_completion_commit_and_unknown_outcomes_stay_fenced() -> anyhow::Result<()> {
-  let store = Store::open(":memory:")?;
-  let session = store.create_session("cancel", "/workspace", "local")?;
-  let (run, _) = store.accept_run(&session.id, 1, "act", "cancel-key")?;
-  store.update_run_owned(&run.id, 1, RunStatus::Running, "", "")?;
-  store.update_run_owned(&run.id, 1, RunStatus::CancelRequested, "", "")?;
-  let terminal = store.update_run_owned(&run.id, 1, RunStatus::Completed, "partial", "")?;
+#[tokio::test]
+async fn accepted_cancel_wins_completion_commit_and_unknown_outcomes_stay_fenced()
+-> anyhow::Result<()> {
+  let store = Store::open(":memory:").await?;
+  let session = store
+    .create_session("cancel", "/workspace", "local")
+    .await?;
+  let (run, _) = store
+    .accept_run(&session.id, 1, "act", "cancel-key")
+    .await?;
+  store
+    .update_run_owned(&run.id, 1, RunStatus::Running, "", "")
+    .await?;
+  store
+    .update_run_owned(&run.id, 1, RunStatus::CancelRequested, "", "")
+    .await?;
+  let terminal = store
+    .update_run_owned(&run.id, 1, RunStatus::Completed, "partial", "")
+    .await?;
   assert_eq!(terminal.status, "cancelled");
   assert_eq!(
     store
-      .events(&run.id, 0, 100)?
+      .events(&run.id, 0, 100)
+      .await?
       .last()
       .expect("terminal event")
       .kind,
     "run_cancelled"
   );
-  let (unknown, _) = store.accept_run(&session.id, 1, "external action", "unknown-key")?;
-  store.update_run_owned(&unknown.id, 1, RunStatus::Running, "", "")?;
-  store.update_run_owned(&unknown.id, 1, RunStatus::CancelRequested, "", "")?;
-  store.update_run_owned(
-    &unknown.id,
-    1,
-    RunStatus::Uncertain,
-    "",
-    "external result unknown",
-  )?;
+  let (unknown, _) = store
+    .accept_run(&session.id, 1, "external action", "unknown-key")
+    .await?;
+  store
+    .update_run_owned(&unknown.id, 1, RunStatus::Running, "", "")
+    .await?;
+  store
+    .update_run_owned(&unknown.id, 1, RunStatus::CancelRequested, "", "")
+    .await?;
+  store
+    .update_run_owned(
+      &unknown.id,
+      1,
+      RunStatus::Uncertain,
+      "",
+      "external result unknown",
+    )
+    .await?;
   for status in [
     RunStatus::Completed,
     RunStatus::Cancelled,
@@ -271,13 +339,18 @@ fn accepted_cancel_wins_completion_commit_and_unknown_outcomes_stay_fenced() -> 
     assert!(
       store
         .update_run_owned(&unknown.id, 1, status, "", "")
+        .await
         .is_err()
     );
   }
-  assert_eq!(store.run(&unknown.id)?.expect("run").status, "uncertain");
+  assert_eq!(
+    store.run(&unknown.id).await?.expect("run").status,
+    "uncertain"
+  );
   assert!(
     store
       .accept_run(&session.id, 1, "blind replay", "other-key")
+      .await
       .is_err()
   );
   Ok(())

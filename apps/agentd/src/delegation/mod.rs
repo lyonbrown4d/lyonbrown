@@ -24,17 +24,15 @@ struct DelegationTool {
   capabilities: BTreeSet<String>,
 }
 
-pub(crate) fn available_targets(daemon: &Daemon) -> anyhow::Result<BTreeSet<String>> {
+pub(crate) async fn available_targets(daemon: &Daemon) -> anyhow::Result<BTreeSet<String>> {
   let manager = crate::peers::manager(daemon)?;
-  Ok(
-    daemon
-      .config
-      .delegation_targets
-      .iter()
-      .filter(|target| manager.trust(&target.node_id).is_ok())
-      .map(|target| target.node_id.clone())
-      .collect(),
-  )
+  let mut targets = BTreeSet::new();
+  for target in &daemon.config.delegation_targets {
+    if manager.trust(&target.node_id).await.is_ok() {
+      targets.insert(target.node_id.clone());
+    }
+  }
+  Ok(targets)
 }
 
 pub(crate) fn tools(
@@ -89,7 +87,7 @@ impl RuntimeTool for DelegationTool {
 }
 
 impl DelegationTool {
-  fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
+  async fn fence(&self, cancel: &CancellationToken) -> anyhow::Result<()> {
     ensure!(
       !cancel.is_cancelled(),
       "delegation cancelled before dispatch"
@@ -97,7 +95,8 @@ impl DelegationTool {
     let session = self
       .daemon
       .store
-      .session(&self.session_id)?
+      .session(&self.session_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("delegation session unavailable"))?;
     ensure!(
       session.owner_node_id == self.daemon.node_id
@@ -108,7 +107,8 @@ impl DelegationTool {
     let run = self
       .daemon
       .store
-      .run(&self.run_id)?
+      .run(&self.run_id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("delegation parent run unavailable"))?;
     ensure!(
       run.session_id == self.session_id && run.status == "running",
@@ -117,7 +117,7 @@ impl DelegationTool {
     Ok(())
   }
 
-  fn target(&self, id: &str) -> anyhow::Result<agent_protocol::v1::Node> {
+  async fn target(&self, id: &str) -> anyhow::Result<agent_protocol::v1::Node> {
     ensure!(
       self.targets.contains(id),
       "delegation target is outside the execution plan"
@@ -130,7 +130,7 @@ impl DelegationTool {
       .find(|target| target.node_id == id)
       .ok_or_else(|| anyhow::anyhow!("delegation target is not configured"))?;
     agent_config::validate_delegation_targets(std::slice::from_ref(config))?;
-    let trust = crate::peers::manager(&self.daemon)?.trust(id)?;
+    let trust = crate::peers::manager(&self.daemon)?.trust(id).await?;
     let fingerprint = agent_distributed::identity::PublicIdentity {
       node_id: trust.node_id,
       certificate_pem: trust.certificate_pem,
@@ -145,27 +145,28 @@ impl DelegationTool {
     })
   }
 
-  fn revalidate_target(&self, target: &agent_protocol::v1::Node) -> anyhow::Result<()> {
+  async fn revalidate_target(&self, target: &agent_protocol::v1::Node) -> anyhow::Result<()> {
     ensure!(
-      self.target(&target.id)? == *target,
+      self.target(&target.id).await? == *target,
       "delegation pairing changed after approval"
     );
     Ok(())
   }
 
-  fn task(&self, id: &str, target: &str) -> anyhow::Result<Task> {
+  async fn task(&self, id: &str, target: &str) -> anyhow::Result<Task> {
     ensure!(id.len() <= 256, "invalid task identifier");
     let task = self
       .daemon
       .store
-      .task(id)?
+      .task(id)
+      .await?
       .ok_or_else(|| anyhow::anyhow!("delegation task unavailable"))?;
     ensure!(
       task.envelope.parent_run_id == self.run_id
         && task.envelope.session_id == self.session_id
         && task.envelope.owner_node_id == self.daemon.node_id
         && task.envelope.owner_epoch == self.epoch
-        && self.daemon.store.task_target(id)?.as_deref() == Some(target),
+        && self.daemon.store.task_target(id).await?.as_deref() == Some(target),
       "delegation task is outside this parent run"
     );
     Ok(task)
@@ -181,7 +182,7 @@ impl DelegationTool {
       cancel.clone(),
     )
     .await?;
-    self.fence(cancel)
+    self.fence(cancel).await
   }
 }
 

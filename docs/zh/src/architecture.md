@@ -27,7 +27,7 @@ flowchart TB
         Model[模型 Registry / 元数据与能力限制]
         Tools[工作区 / 命令 / MCP / 浏览器 / 委派工具]
         Approval[精确动作审批 / owner_epoch / 持久意图]
-        Store[Diesel / SQLite / Session / Task / Event / Outbox]
+        Store[SeaORM async / SQLite, PostgreSQL, MySQL / Session, Task, Event, Outbox]
         Dispatcher[Master Dispatcher / PeerManager]
         API --> Run
         API --> Dispatcher
@@ -55,7 +55,7 @@ flowchart TB
     subgraph GatewayService[独立 AI Gateway]
         GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
         GatewayUI[Leptos SSR / 管理会话]
-        GatewayStore[Diesel SQLite / 策略 / 审计 / 凭据摘要]
+        GatewayStore[SeaORM async SQLite / 策略 / 审计 / 凭据摘要]
         GatewayHTTP --> SharedDecision
         GatewayHTTP --> GatewayStore
         GatewayUI --> GatewayStore
@@ -86,7 +86,7 @@ flowchart TB
     WorkerRelay <-->|Noise IK / 出站 mTLS| Relay
 ```
 
-组合根通过 FluxDI 的类型化模块注入配置、身份、存储、模型、决策和运行资源。业务模块显式接收依赖；客户端不能自行构造模型连接、审批结果或 Worker 信任记录。
+组合根通过 FluxDI 的类型化模块注入配置、身份、存储、模型、决策、记忆服务和运行资源。数据库、Qdrant 与 embedding 只在组合边界选择；[长期记忆](memory.md)的关系数据与向量索引独立。业务模块显式接收依赖；客户端不能自行构造模型连接、审批结果或 Worker 信任记录。
 
 控制面目录、Noise 链路与 TaskService 是不同的协议边界。配置指定节点使用直连或中继，派发后不会因失败自动切换路由。中继承载同一套 mTLS 任务协议，保留 Worker 的身份、能力和所有者校验；控制面只转发加密帧，不保存 Agent Session 或解释任务内容。加密链路建立成功本身不能证明任务已经送达或执行。
 
@@ -207,8 +207,10 @@ ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon �
 - 认证连接：`crates/agent-client/src/lib.rs`。
 - Runtime 接口：`crates/agent-runtime/src/contracts.rs`。
 - 原生宿主挂接：`apps/agent-cli/src/computer_backend.rs`、`apps/agent-desktop/src/computer.rs`、`crates/agent-computer-runtime/src/client.rs`、`crates/agent-computer-runtime/src/attachment.rs`、`apps/agentd/src/computer/service.rs`、`apps/agentd/src/computer/tools/` 与 `apps/agentd/src/computer/mutation.rs`。
-- 持久状态：`crates/agent-storage/src/schema.sql`。
+- 持久状态：`crates/agent-storage/src/schema.rs`、`migration.rs` 与 `migration/`。
 - 通用决策与 Agent 接入：`crates/decision-core/`、`crates/decision-semantic/`、`crates/decision-model/` 与 `apps/agentd/src/model_routing.rs`。
 - 独立网关与合成模型：`apps/ai-gateway/`、`crates/gateway-core/`、`crates/gateway-storage/`、`crates/gateway-web/` 和 `apps/model-mock/`。
 
 跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 `attempt_id`、`owner_epoch` 和显式 `AcceptResult`，不能把收到结果当成已经采纳。
+
+记忆边界：`memory-core` 定义不依赖 ORM 或向量 SDK 的领域端口，`agent-memory` 负责范围校验、检索复核和作业执行，`agent-storage` 保存权威记录，`memory-qdrant` 封装 embedded 与 server 两种 SDK。记忆只提供参考上下文，不创建 Agent Loop 或授予权限。

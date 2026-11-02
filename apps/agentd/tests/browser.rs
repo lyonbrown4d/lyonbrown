@@ -112,6 +112,7 @@ async fn authenticated_reverse_channel_routes_frames_screenshots_and_takeover() 
       .daemon
       .store
       .browser_action_status(&id)
+      .await
       .unwrap()
       .as_deref(),
     Some("completed")
@@ -138,6 +139,7 @@ async fn lost_browser_action_is_uncertain_and_not_replayed_after_reconnect() {
       .daemon
       .store
       .browser_action_status(&id)
+      .await
       .unwrap()
       .as_deref(),
     Some("uncertain")
@@ -151,6 +153,7 @@ async fn lost_browser_action_is_uncertain_and_not_replayed_after_reconnect() {
       .daemon
       .store
       .browser_action_status(&id)
+      .await
       .unwrap()
       .as_deref(),
     Some("uncertain")

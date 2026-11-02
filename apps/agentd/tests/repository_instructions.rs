@@ -56,6 +56,7 @@ async fn repository_rules_reach_each_protocol_but_cannot_bypass_write_approval()
         .daemon
         .store
         .approval(&approval.id)
+        .await
         .unwrap()
         .unwrap()
         .status,

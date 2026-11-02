@@ -58,6 +58,7 @@ async fn provider_dialog_probes_saves_and_explicitly_selects_the_real_daemon_bin
     .daemon
     .store
     .events(&format!("provider:{}", profiles[0].id), 0, 100)
+    .await
     .unwrap();
   assert_eq!(events.len(), 1);
   assert!(!serde_json::to_string(&events).unwrap().contains(key));

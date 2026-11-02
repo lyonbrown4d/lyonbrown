@@ -3,7 +3,7 @@ use crate::{
   schema::{model_bindings, runs},
   verify_epoch,
 };
-use diesel::prelude::*;
+use sea_orm::{QuerySelect, Set, prelude::*, sea_query::OnConflict};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -16,11 +16,15 @@ pub struct ModelBinding {
   pub credential_id: String,
 }
 impl Store {
-  pub fn recover_model_jobs(&self) -> anyhow::Result<usize> {
+  pub async fn recover_model_jobs(&self) -> anyhow::Result<usize> {
     use crate::schema::model_jobs;
-    let records = model_jobs::table
-      .select((model_jobs::id, model_jobs::record))
-      .load::<(String, String)>(&mut *self.lock()?)?;
+    let records = model_jobs::Entity::find()
+      .select_only()
+      .column(model_jobs::Column::Id)
+      .column(model_jobs::Column::Record)
+      .into_tuple::<(String, String)>()
+      .all(self.connection())
+      .await?;
     let mut recovered = 0;
     for (id, record) in records {
       let mut value: serde_json::Value = serde_json::from_str(&record)?;
@@ -31,80 +35,123 @@ impl Store {
         value["state"] = "uncertain".into();
         value["reason"] =
           "daemon restarted; inspect artifacts and explicitly resume installation".into();
-        self.record_model_job(&id, value)?;
+        self.record_model_job(&id, value).await?;
         recovered += 1;
       }
     }
     Ok(recovered)
   }
-  pub fn model_job(&self, id: &str) -> anyhow::Result<Option<serde_json::Value>> {
+  pub async fn model_job(&self, id: &str) -> anyhow::Result<Option<serde_json::Value>> {
     use crate::schema::model_jobs;
-    let record = model_jobs::table
-      .find(id)
-      .select(model_jobs::record)
-      .first::<String>(&mut *self.lock()?)
-      .optional()?;
+    let record = model_jobs::Entity::find()
+      .filter(model_jobs::Column::Id.eq(id))
+      .select_only()
+      .column(model_jobs::Column::Record)
+      .into_tuple::<String>()
+      .one(self.connection())
+      .await?;
     record
       .map(|value| serde_json::from_str(&value).map_err(Into::into))
       .transpose()
   }
-  pub fn record_model_job(&self, id: &str, state: serde_json::Value) -> anyhow::Result<()> {
+  pub async fn record_model_job(&self, id: &str, state: serde_json::Value) -> anyhow::Result<()> {
     use crate::schema::model_jobs;
-    self.lock()?.immediate_transaction(|connection| {
-      let record = serde_json::to_string(&state)?;
-      diesel::insert_into(model_jobs::table)
-        .values((model_jobs::id.eq(id), model_jobs::record.eq(&record)))
-        .on_conflict(model_jobs::id)
-        .do_update()
-        .set(model_jobs::record.eq(&record))
-        .execute(connection)?;
-      event_tx(connection, id, "model_job_changed", state)?;
-      Ok(())
-    })
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        let record = serde_json::to_string(&state)?;
+        model_jobs::Entity::insert(model_jobs::ActiveModel {
+          id: Set((id).to_owned()),
+          record: Set((&record).to_owned()),
+        })
+        .on_conflict(
+          OnConflict::columns([model_jobs::Column::Id])
+            .update_columns([model_jobs::Column::Record])
+            .to_owned(),
+        )
+        .exec_without_returning(connection)
+        .await?;
+        event_tx(connection, id, "model_job_changed", state).await?;
+        Ok(())
+      }
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
-  pub fn model_binding(&self, scope: &str) -> anyhow::Result<Option<ModelBinding>> {
-    let record: Option<String> = model_bindings::table
-      .find(scope)
-      .select(model_bindings::record)
-      .first(&mut *self.lock()?)
-      .optional()?;
+  pub async fn model_binding(&self, scope: &str) -> anyhow::Result<Option<ModelBinding>> {
+    let record: Option<String> = model_bindings::Entity::find()
+      .filter(model_bindings::Column::ScopeId.eq(scope))
+      .select_only()
+      .column(model_bindings::Column::Record)
+      .into_tuple::<String>()
+      .one(self.connection())
+      .await?;
     record
       .map(|text| serde_json::from_str(&text).map_err(Into::into))
       .transpose()
   }
-  pub fn select_model(
+  pub async fn select_model(
     &self,
     session: &str,
     epoch: u64,
     binding: &ModelBinding,
   ) -> anyhow::Result<()> {
-    self.lock()?.immediate_transaction(|connection| {
-      verify_epoch(connection, session, epoch)?;
-      let active = runs::table
-        .filter(runs::session_id.eq(session))
-        .filter(runs::status.ne_all(["completed", "failed", "cancelled"]))
-        .count()
-        .get_result::<i64>(connection)?;
-      anyhow::ensure!(
-        active == 0,
-        "cannot change model while a run is active or uncertain"
-      );
-      diesel::insert_into(model_bindings::table)
-        .values((
-          model_bindings::scope_id.eq(session),
-          model_bindings::record.eq(serde_json::to_string(binding)?),
-        ))
-        .on_conflict(model_bindings::scope_id)
-        .do_update()
-        .set(model_bindings::record.eq(serde_json::to_string(binding)?))
-        .execute(connection)?;
-      event_tx(
-        connection,
-        session,
-        "model_selected",
-        serde_json::to_value(binding)?,
-      )?;
-      Ok(())
-    })
+    {
+      let transaction = self.begin_write().await?;
+      let connection = &transaction;
+      let result: anyhow::Result<_> = async {
+        verify_epoch(connection, session, epoch).await?;
+        let active = runs::Entity::find()
+          .filter(runs::Column::SessionId.eq(session))
+          .filter(runs::Column::Status.is_not_in(["completed", "failed", "cancelled"]))
+          .count(connection)
+          .await
+          .map(|value| value as i64)?;
+        anyhow::ensure!(
+          active == 0,
+          "cannot change model while a run is active or uncertain"
+        );
+        model_bindings::Entity::insert(model_bindings::ActiveModel {
+          scope_id: Set((session).to_owned()),
+          record: Set((serde_json::to_string(binding)?).to_owned()),
+        })
+        .on_conflict(
+          OnConflict::columns([model_bindings::Column::ScopeId])
+            .update_columns([model_bindings::Column::Record])
+            .to_owned(),
+        )
+        .exec_without_returning(connection)
+        .await?;
+        event_tx(
+          connection,
+          session,
+          "model_selected",
+          serde_json::to_value(binding)?,
+        )
+        .await?;
+        Ok(())
+      }
+      .await;
+      match result {
+        Ok(value) => {
+          transaction.commit().await?;
+          Ok::<_, anyhow::Error>(value)
+        }
+        Err(error) => {
+          transaction.rollback().await?;
+          Err(error)
+        }
+      }
+    }
   }
 }

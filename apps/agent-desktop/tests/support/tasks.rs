@@ -165,9 +165,9 @@ impl TaskUi {
     cx.executor().timer(Duration::from_millis(30)).await;
   }
 
-  pub async fn wait(&self, cx: &mut TestAppContext, mut ready: impl FnMut() -> bool) {
+  pub async fn wait(&self, cx: &mut TestAppContext, mut ready: impl AsyncFnMut() -> bool) {
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !ready() || cx.update(|cx| self.view.read(cx).snapshot(cx).workbench.task_pending) {
+    while !ready().await || cx.update(|cx| self.view.read(cx).snapshot(cx).workbench.task_pending) {
       assert!(
         Instant::now() < deadline,
         "task UI operation did not reach expected durable state: {:?}",
@@ -254,6 +254,7 @@ pub async fn task_ids(remote: &Remote) -> Vec<String> {
     .master
     .store
     .tasks()
+    .await
     .expect("master task records")
     .into_iter()
     .filter(|task| task.envelope.session_id == remote.pair.session.id)

@@ -20,7 +20,9 @@ pub struct Control {
 impl Control {
   pub async fn new() -> Self {
     let directory = tempfile::tempdir().unwrap();
-    let store = Store::open(directory.path().join("control.sqlite3")).unwrap();
+    let store = Store::open(directory.path().join("control.sqlite3"))
+      .await
+      .unwrap();
     let identity = PeerIdentity::generate("relay-control").unwrap();
     let manager = PeerManager::new(
       store.clone(),
@@ -59,7 +61,7 @@ impl Control {
     )
     .unwrap();
     let service = plane.clone();
-    let tls = self.manager.server_tls().unwrap();
+    let tls = self.manager.server_tls().await.unwrap();
     self.server = Some(tokio::spawn(async move {
       tonic::transport::Server::builder()
         .tls_config(tls)
@@ -80,9 +82,9 @@ impl Control {
       let _ = server.await;
     }
   }
-  pub fn assert_no_task_plaintext(&self, task: &TaskEnvelope) {
-    assert!(self.store.tasks().unwrap().is_empty());
-    assert!(self.store.sessions().unwrap().is_empty());
+  pub async fn assert_no_task_plaintext(&self, task: &TaskEnvelope) {
+    assert!(self.store.tasks().await.unwrap().is_empty());
+    assert!(self.store.sessions().await.unwrap().is_empty());
     for entry in std::fs::read_dir(self.directory.path()).unwrap() {
       let entry = entry.unwrap();
       if !entry.file_type().unwrap().is_file() {

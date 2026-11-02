@@ -45,8 +45,12 @@ impl Remote {
     }
   }
 
-  pub fn envelope(&self) -> v1::TaskEnvelope {
-    self.pair.envelope(vec!["workspace.read".into()]).into()
+  pub async fn envelope(&self) -> v1::TaskEnvelope {
+    self
+      .pair
+      .envelope(vec!["workspace.read".into()])
+      .await
+      .into()
   }
 
   pub fn target(&self) -> v1::Node {

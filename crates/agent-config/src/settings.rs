@@ -11,6 +11,10 @@ pub(crate) struct Credentials(pub BTreeMap<String, SecretString>);
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Settings {
+  #[serde(default)]
+  pub database_url: Option<SecretString>,
+  #[serde(default)]
+  pub memory: crate::MemorySettings,
   pub listen: SocketAddr,
   pub endpoint: String,
   pub provider: String,
@@ -84,6 +88,17 @@ impl Settings {
 
   /// Revalidate after applying explicit command-line overrides.
   pub fn validate(&self) -> Result<()> {
+    self.memory.validate()?;
+    if let Some(url) = &self.database_url {
+      let value = url.expose_secret();
+      ensure!(
+        value.starts_with("sqlite:")
+          || value.starts_with("postgres:")
+          || value.starts_with("postgresql:")
+          || value.starts_with("mysql:"),
+        "unsupported database backend"
+      );
+    }
     ensure!(
       (10..=300).contains(&self.computer_lease_secs),
       "computer lease must be within 10..=300 seconds"
@@ -161,6 +176,17 @@ impl Default for DecisionSettings {
 }
 impl DecisionSettings {
   pub fn validate(&self) -> Result<()> {
+    self.memory.validate()?;
+    if let Some(url) = &self.database_url {
+      let value = url.expose_secret();
+      ensure!(
+        value.starts_with("sqlite:")
+          || value.starts_with("postgres:")
+          || value.starts_with("postgresql:")
+          || value.starts_with("mysql:"),
+        "unsupported database backend"
+      );
+    }
     if let Some(policy) = &self.policy {
       decision_core::PolicySnapshot::new(policy.clone())?;
     }

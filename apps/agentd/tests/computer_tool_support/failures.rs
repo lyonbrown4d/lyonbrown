@@ -41,7 +41,7 @@ async fn content_drift_before_preparation_or_execution_never_sends_input() {
       .await;
     let pending = if after_approval_requested {
       let pending = approval(&node, &run.id).await;
-      exact_approval(&node, &pending, &host.host_id, &args);
+      exact_approval(&node, &pending, &host.host_id, &args).await;
       assert_eq!(runtime.effects(), 0);
       runtime.calls.content_changed.store(true, Ordering::SeqCst);
       node.client.approve(&pending.id, true).await.unwrap();
@@ -64,7 +64,7 @@ async fn content_drift_before_preparation_or_execution_never_sends_input() {
     let result = node.terminal(&run.id).await;
     assert_eq!(result.status, "completed", "{}", result.error);
     assert!(result.result.contains("desktop changed"));
-    let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+    let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
     let failed: Vec<_> = events
       .iter()
       .filter_map(
@@ -81,7 +81,7 @@ async fn content_drift_before_preparation_or_execution_never_sends_input() {
     assert_eq!(failed.len(), 1);
     assert!(failed[0]);
     if let Some(pending) = pending {
-      assert_receipts(&node, &pending, "consumed", Some("failed"));
+      assert_receipts(&node, &pending, "consumed", Some("failed")).await;
     } else {
       assert!(
         node
@@ -91,7 +91,7 @@ async fn content_drift_before_preparation_or_execution_never_sends_input() {
           .unwrap()
           .is_empty()
       );
-      let events = node.daemon.store.events(&run.id, 0, 1000).unwrap();
+      let events = node.daemon.store.events(&run.id, 0, 1000).await.unwrap();
       assert!(!events.iter().any(|event| matches!(
         event.kind.as_str(),
         "operation_intent" | "operation_finished" | "tool_authorized"

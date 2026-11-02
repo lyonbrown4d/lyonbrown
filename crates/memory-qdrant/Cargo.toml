@@ -1,0 +1,24 @@
+[package]
+name = "memory-qdrant"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+memory-core = { path = "../memory-core" }
+async-trait.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+sha2.workspace = true
+fs2.workspace = true
+secrecy.workspace = true
+qdrant-edge.workspace = true
+qdrant-client.workspace = true
+tempfile.workspace = true
+tonic = { workspace = true, features = ["tls-native-roots"] }
+
+[dev-dependencies]
+tokio-stream.workspace = true

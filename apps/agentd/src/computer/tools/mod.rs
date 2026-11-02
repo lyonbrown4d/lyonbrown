@@ -58,7 +58,7 @@ pub(crate) async fn tools(
     run_id: run.id.clone(),
     owner_epoch: session.owner_epoch,
   };
-  daemon.validate_computer_run(&binding).ok()?;
+  daemon.validate_computer_run(&binding).await.ok()?;
   // Permission inspection has no capture or input and cannot prompt the OS.
   // Presence alone is insufficient to offer control to the decision model.
   let Ok(Reply::Capabilities(capabilities)) = daemon
@@ -77,7 +77,7 @@ pub(crate) async fn tools(
   if !capabilities.can_control() || cancellation.is_cancelled() {
     return None;
   }
-  daemon.validate_computer_run(&binding).ok()?;
+  daemon.validate_computer_run(&binding).await.ok()?;
   let lease_ms = daemon.config.computer_lease_secs.checked_mul(1000)?;
   if !(10_000..=300_000).contains(&lease_ms) {
     return None;
@@ -175,13 +175,13 @@ impl RuntimeTool for ComputerTool {
   }
 }
 impl Context {
-  fn fence(&self, cancellation: &CancellationToken) -> Result<()> {
+  async fn fence(&self, cancellation: &CancellationToken) -> Result<()> {
     ensure!(!cancellation.is_cancelled(), "computer operation cancelled");
-    self.daemon.validate_computer_run(&self.binding)?;
+    self.daemon.validate_computer_run(&self.binding).await?;
     Ok(())
   }
   async fn request(&self, operation: Operation, cancellation: CancellationToken) -> Result<Reply> {
-    self.fence(&cancellation)?;
+    self.fence(&cancellation).await?;
     let result = self
       .daemon
       .computer
@@ -192,7 +192,7 @@ impl Context {
         cancellation.clone(),
       )
       .await?;
-    self.fence(&cancellation)?;
+    self.fence(&cancellation).await?;
     Ok(result?)
   }
 }

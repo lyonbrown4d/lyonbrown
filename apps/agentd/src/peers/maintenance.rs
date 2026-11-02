@@ -26,7 +26,7 @@ pub enum Maintenance {
   },
 }
 
-pub fn maintain(daemon: &Daemon, command: &Maintenance) -> Result<()> {
+pub async fn maintain(daemon: &Daemon, command: &Maintenance) -> Result<()> {
   let manager = super::manager(daemon)?;
   match command {
     Maintenance::PeerIdentity => {
@@ -48,11 +48,11 @@ pub fn maintain(daemon: &Daemon, command: &Maintenance) -> Result<()> {
         identity.pairing_fingerprint()? == *fingerprint,
         "full pairing fingerprint differs; trust was not changed"
       );
-      manager.pair_local(identity, capabilities.clone())?;
+      manager.pair_local(identity, capabilities.clone()).await?;
       println!("Peer paired; restart the peer listener to reload its trust roots.");
     }
     Maintenance::PeerRevoke { node_id } => {
-      manager.revoke_local(node_id)?;
+      manager.revoke_local(node_id).await?;
       println!("Peer revoked; restart the peer listener to reload its trust roots.");
     }
   }
