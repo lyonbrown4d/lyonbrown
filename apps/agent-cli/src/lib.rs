@@ -32,6 +32,8 @@ pub mod view;
 pub mod view_model;
 
 mod entry;
+mod exec;
+pub mod exec_command;
 pub mod task_command;
 pub mod task_management;
 mod terminal;

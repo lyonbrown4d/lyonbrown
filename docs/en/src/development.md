@@ -177,6 +177,14 @@ LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test
 
 The test uses disjoint calibration and replay fixtures to check real loading, dimensions, thresholds and Unknown behavior. Its small sample is not a production multilingual accuracy benchmark. See [Reusable decision engine](decision-engine.md) for APIs and [AI Gateway](gateway.md) for startup, keys and Swagger.
 
+## Non-interactive CLI verification
+
+```sh
+cargo test --locked -p agent-cli --test exec --test exec_control
+```
+
+Tests launch real CLI subprocesses, an authenticated agentd and loopback model mocks. They check stdin, JSONL against persisted events, current session fencing, explicit idempotent reuse, pending approvals, failed/Uncertain exit codes, deadline cancellation, no replay on disconnection, and exit with blocked stdin/stdout. Unix additionally exercises SIGINT and SIGTERM. Assertions cover persisted state and file effects without paid model calls. Passing does not establish real-inference quality or runtime acceptance on all three platforms.
+
 ## Interrupted Run recovery acceptance
 
 ```sh

@@ -70,3 +70,12 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 连接成功后按 `Ctrl+N` 创建会话，输入消息并按 `Enter`。任务结果和审批来自 daemon。关闭客户端后可重新连接原会话查询结果。详细按键见[终端与桌面客户端](clients.md)。
 
 配置依据：`apps/agentd/src/config.rs`、`crates/agent-config/src/load.rs`、`crates/agent-runtime/src/provider.rs` 和 `apps/agent-cli/src/config.rs`。
+
+脚本和管道可使用非交互入口：
+
+```sh
+agent exec "说明这个仓库"
+cat build.log | agent exec "分析日志" --output-format jsonl --timeout 120
+```
+
+默认创建新会话；已有会话通过 `--session SESSION_ID` 指定。stdout 的结果格式、退出码和取消边界见[非交互执行](clients.md#非交互执行-agent-exec)。模型请求仍由原 agentd 发出，审批不会被跳过。

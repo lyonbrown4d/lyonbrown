@@ -13,7 +13,7 @@ pub async fn execute(client: &AgentClient, command: Command) -> Result<Value> {
     return crate::run_management::execute(client, command).await;
   }
   let Command::Task { command } = command else {
-    anyhow::bail!("computer commands require the interactive runtime entry");
+    anyhow::bail!("command requires its dedicated client entry");
   };
   let node = client.node().await?;
   ensure!(

@@ -2,6 +2,7 @@
 mod browser;
 mod computer;
 mod development;
+mod execution;
 pub mod local_state;
 mod models;
 pub mod navigation;
@@ -250,19 +251,9 @@ impl AgentClient {
     prompt: &str,
     idempotency_key: &str,
   ) -> Result<v1::Run> {
-    Ok(
-      self
-        .inner
-        .clone()
-        .start_run(v1::StartRunRequest {
-          session_id: session_id.into(),
-          prompt: prompt.into(),
-          idempotency_key: idempotency_key.into(),
-          owner_epoch: 1,
-        })
-        .await?
-        .into_inner(),
-    )
+    self
+      .start_run_owned(session_id, 1, prompt, idempotency_key)
+      .await
   }
   pub async fn get_run(&self, run_id: &str) -> Result<v1::Run> {
     Ok(

@@ -32,6 +32,48 @@ PKG 将应用文件放在 `/Library/Application Support/Lyonbrown/Clients/{cli|d
 
 共享 launcher 和 CEF 宿主使用 macOS 内核报告的已加载主程序路径，从对应应用目录查找随附的 agentd、framework 和 Helper。公共入口切换版本后，旧进程仍使用原版本的配套文件。Helper 是包内复制的可执行文件；沙箱入口在调用 cef-rs 前，按该加载器使用的同一路径校验沙箱库。包内容校验与操作系统安装、升级、回滚验收分别进行，详见[本地分发说明](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md)。
 
+## 非交互执行 `agent exec`
+
+`agent exec` 经认证连接现有 agentd，使用同一套提交、事件订阅和取消接口，不进入 TUI。默认新建 `CLI exec` 会话；本地连接仍由共享 launcher 检测和复用原生服务。模型、工具、审批和执行状态均由 daemon 持有。
+
+```sh
+agent exec "说明这个仓库的结构"
+cat build.log | agent exec "分析这份构建日志" --output-format jsonl
+agent exec - --workspace /absolute/workspace --timeout 120 < prompt.txt
+agent exec "继续检查" --session SESSION_ID --output-format jsonl
+```
+
+位置参数为文本；`-` 表示显式读取 stdin。非终端 stdin 会自动读取，并用两个换行追加到位置参数后。省略位置参数时可只提供 stdin；输入须为 UTF-8，合并后最多 1 MiB，且不能全为空白。`--workspace` 只用于新会话，默认当前目录，相对路径按 CLI 当前目录展开；实际目录由 daemon 校验。`--session` 与 `--workspace` 互斥，已有会话沿用其工作区，并使用服务端返回的当前 `owner_epoch` 提交。
+
+默认 `--output-format text` 只向 stdout 写最终模型结果；连接、会话、运行标识和诊断写入 stderr。`--output-format jsonl` 向 stdout 连续写入单行 JSON，无终端控制序列；每条记录包含 `schema_version: 1`：
+
+| `type` | 含义与主要字段 |
+| --- | --- |
+| `submission` | 提交前记录 `session_id`、`owner_epoch`、`idempotency_key` |
+| `accepted` | daemon 已确认接受，包含 `session_id` 和 `run_id` |
+| `event` | daemon 持久事件，包含 `run_id`、递增的 `cursor`、`kind`、`payload`、`created_at_ms` |
+| `result` | 最终查询结果或等待审批状态，包含 `status`、`result`、`error`、`exit_code`、`reason` |
+| `error` | 输入或执行失败，包含 `phase`、`message`、已知标识和 `submission_outcome_unknown` |
+| `stopped` | 超时或中断后未能确认取消结果，包含 `reason`、`exit_code`、已知标识及 `cancellation_confirmed: false` |
+
+正常完成时，CLI 查询最终 Run，并按游标补读已持久化的尾部事件。超时、中断或等待审批可能提前结束事件订阅；`result` 的 `status` 才是所查询的 daemon 状态。参数解析、配置加载失败可能尚未进入 JSONL 输出阶段；输出端阻塞或进程被强制结束也可能留下不完整尾行。缺少成功 `result` 不能视为执行成功。
+
+| 退出码 | 含义 |
+| --- | --- |
+| `0` | daemon Run 为 `completed`，且结果已输出 |
+| `1` | 连接、会话准备、提交、事件流或输出失败，或 Run 为 `failed` |
+| `2` | CLI 参数解析或 Prompt/stdin 文本输入无效 |
+| `3` | Run 等待人工审批；CLI 不批准也不取消该运行 |
+| `4` | Run 为 `uncertain`，须人工核对 |
+| `124` | CLI 执行超时 |
+| `130` | CLI 收到中断，或 daemon Run 为 `cancelled` |
+
+`--timeout` 默认 600 秒，可设 1–86400 秒，从读取输入开始计时，覆盖连接、会话创建、提交和订阅。Ctrl+C 和 Unix 的 SIGTERM 会请求取消已确认接受的本次 Run。超时也发送同样的取消请求，最多等待 5 秒确认最终状态，再最多等待 1 秒输出结束记录；最终退出码保留超时或中断原因。stdin 未关闭或 stdout 下游暂停读取不阻止该等待上限。daemon 自身的运行超时仍独立生效。
+
+取消不撤销已经发生的工具副作用，最终状态可能是 `uncertain`。若提交响应尚未返回，CLI 无法确认 Run ID，也不能声称已取消；`submission_outcome_unknown` 会标记该情况。普通断线或输出错误不会自动重放提交，也不会隐式取消 daemon 作业。人工审批可在 TUI 或 Desktop 中继续处理。`exec` 不自动挂接本机 Browser 或 Computer 宿主；这些能力仍需交互客户端显式连接。
+
+可用 `--idempotency-key KEY` 显式指定提交身份；默认生成 UUID。保存 `submission` 与 `accepted` 中的标识。结果未知时先在原会话中核对；如需显式重复同一提交，必须同时复用原 `--session`、幂等键和完全相同的合并输入。仅复用幂等键而新建会话不能去重。已有运行的继续执行和异常恢复仍使用 `agent run`，不会由 `exec` 自动处理。
+
 ## 终端工作台
 
 ```sh

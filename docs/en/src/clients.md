@@ -32,6 +32,48 @@ PKGs place each app under `/Library/Application Support/Lyonbrown/Clients/{cli|d
 
 The shared launcher and CEF host use the loaded main executable path reported by the macOS kernel to locate the corresponding bundled agentd, framework and Helpers. After the public entry selects another version, an existing process continues to use its original version's companion files. Helpers are copied executables inside the maintained app layout; sandbox entry validates the same library location used by cef-rs before invoking its loader. Package payload checks and OS installation, upgrade and rollback acceptance are separate. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md).
 
+## Non-interactive execution with `agent exec`
+
+`agent exec` authenticates to the existing agentd and reuses its submission, event subscription and cancellation interfaces without entering the TUI. It creates a `CLI exec` session by default. Local connections still use the shared launcher to detect and reuse the native service. The daemon owns models, tools, approvals and execution state.
+
+```sh
+agent exec "Explain this repository"
+cat build.log | agent exec "Analyze this build log" --output-format jsonl
+agent exec - --workspace /absolute/workspace --timeout 120 < prompt.txt
+agent exec "Continue checking" --session SESSION_ID --output-format jsonl
+```
+
+The positional argument is text; `-` explicitly reads stdin. Non-terminal stdin is read automatically and appended to a positional prompt with two newlines. Stdin alone is supported. Combined input must be nonblank UTF-8 and at most 1 MiB. `--workspace` applies only to a new session and defaults to the current directory; relative paths are expanded against the CLI directory, while the daemon validates the actual directory. It conflicts with `--session`. Existing sessions keep their workspace and submissions use the current server-provided `owner_epoch`.
+
+The default `--output-format text` writes only the final model result to stdout. Connection, session/run identifiers and diagnostics go to stderr. `--output-format jsonl` streams one JSON object per stdout line without terminal control sequences. Every record contains `schema_version: 1`:
+
+| `type` | Meaning and main fields |
+| --- | --- |
+| `submission` | Before submission: `session_id`, `owner_epoch`, `idempotency_key` |
+| `accepted` | Daemon acknowledgment: `session_id`, `run_id` |
+| `event` | Persisted daemon event: `run_id`, increasing `cursor`, `kind`, `payload`, `created_at_ms` |
+| `result` | Final queried Run or approval-waiting state: `status`, `result`, `error`, `exit_code`, `reason` |
+| `error` | Invalid input or execution failure: `phase`, `message`, known identifiers, `submission_outcome_unknown` |
+| `stopped` | Cancellation could not be confirmed after timeout/interruption: `reason`, `exit_code`, known identifiers, `cancellation_confirmed: false` |
+
+On normal completion the CLI queries the final Run and drains any remaining persisted tail events by cursor. Timeout, interruption or pending approval can end subscription early; the `result` status reports the queried daemon state. Argument/configuration errors may occur before JSONL output starts. A blocked consumer or forcibly terminated process can leave a partial final line. Missing a successful `result` is not evidence of success.
+
+| Exit code | Meaning |
+| --- | --- |
+| `0` | Daemon Run is `completed` and its result was written |
+| `1` | Connection, session setup, submission, event-stream or output failure, or Run is `failed` |
+| `2` | Invalid CLI syntax or prompt/stdin input |
+| `3` | Run awaits human approval; CLI neither approves nor cancels it |
+| `4` | Run is `uncertain` and needs human verification |
+| `124` | CLI execution deadline exceeded |
+| `130` | CLI interrupted, or daemon Run is `cancelled` |
+
+`--timeout` defaults to 600 seconds, accepts 1–86400, and starts when input reading begins. It covers connection, session creation, submission and subscription. Ctrl+C and Unix SIGTERM request cancellation of this invocation's acknowledged Run. Timeout sends the same request. The CLI waits up to five seconds for a final daemon state and up to one additional second to write its closing record, retaining the timeout/interruption exit code. An open stdin pipe or paused stdout consumer does not hold this wait open indefinitely. The daemon's own run timeout applies independently.
+
+Cancellation does not undo tool effects; the final state may be `uncertain`. Before submission acknowledgment, the CLI may have no Run ID and cannot claim cancellation; `submission_outcome_unknown` marks this case. Ordinary disconnection or output failure never automatically replays submission or implicitly cancels daemon work. Handle pending approvals in TUI or Desktop. `exec` does not automatically attach a local Browser or Computer host; these capabilities still require explicit interactive-client attachment.
+
+Use `--idempotency-key KEY` to supply an identity; otherwise the CLI generates a UUID. Preserve identifiers from `submission` and `accepted`. Inspect the original session when an outcome is unknown. An explicit repeat must reuse the original `--session`, key and identical combined input. Reusing a key in a newly created session does not deduplicate work. Resuming or resolving interrupted runs remains an explicit `agent run` operation; `exec` does not perform recovery automatically.
+
 ## Terminal workbench
 
 ```sh

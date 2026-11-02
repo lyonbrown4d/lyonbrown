@@ -69,4 +69,13 @@ Use the same data directory as the daemon, or provide the same token through the
 
 Once connected, press `Ctrl+N` to create a session, enter a message and press `Enter`. Results and approvals come from the daemon. After closing the client, reconnect to the original session to query results. See [Terminal and desktop clients](clients.md) for all controls.
 
+For scripts and pipes, use the non-interactive entry:
+
+```sh
+agent exec "Explain this repository"
+cat build.log | agent exec "Analyze these logs" --output-format jsonl --timeout 120
+```
+
+It creates a session by default; use `--session SESSION_ID` for an existing one. See [non-interactive execution](clients.md#non-interactive-execution-with-agent-exec) for stdout formats, exit codes and cancellation boundaries. The original agentd still makes model requests and enforces approvals.
+
 Configuration sources: `apps/agentd/src/config.rs`, `crates/agent-config/src/load.rs`, `crates/agent-runtime/src/provider.rs`, `apps/agent-cli/src/config.rs`.

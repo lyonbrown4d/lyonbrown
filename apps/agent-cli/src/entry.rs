@@ -17,13 +17,7 @@ pub fn run() -> anyhow::Result<std::process::ExitCode> {
   }
   let matches = Config::command().get_matches();
   let explicit_endpoint = matches.value_source("endpoint") != Some(ValueSource::DefaultValue);
-  let config = Config::from_arg_matches(&matches)?.resolve(explicit_endpoint)?;
-  run_terminal(config)?;
-  Ok(std::process::ExitCode::SUCCESS)
-}
-
-#[tokio::main]
-async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
+  let mut config = Config::from_arg_matches(&matches)?.resolve(explicit_endpoint)?;
   let _logs = agent_telemetry::init_with_options(
     &agent_telemetry::LogOptions {
       directory: config.settings.log_directory.clone(),
@@ -33,14 +27,28 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
     "agent-cli",
     &std::env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
   )?;
+  match config.command.take() {
+    Some(crate::task_command::Command::Exec(args)) => {
+      crate::exec::run(&config, args).map(std::process::ExitCode::from)
+    }
+    command => {
+      config.command = command;
+      run_terminal(config).map(std::process::ExitCode::from)
+    }
+  }
+}
+
+#[tokio::main]
+async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<u8> {
   if let Some(command) = config.command.take() {
     if let crate::task_command::Command::Computer { command } = command {
-      return crate::computer_command::execute(&config, command).await;
+      crate::computer_command::execute(&config, command).await?;
+      return Ok(0);
     }
     let client = crate::bootstrap::connect_client(&config).await?;
     let value = crate::task_management::execute(&client, command).await?;
     println!("{}", serde_json::to_string_pretty(&value)?);
-    return Ok(());
+    return Ok(0);
   }
   tracing::info!(operation = "client.start", "terminal client starting");
   let theme = Theme::resolve(config.theme, std::env::var("COLORFGBG").ok().as_deref());
@@ -107,5 +115,5 @@ async fn run_terminal(mut config: ResolvedConfig) -> anyhow::Result<()> {
   if actions.send(Action::Shutdown(done)).await.is_ok() {
     let _ = closed.await;
   }
-  Ok(())
+  Ok(0)
 }

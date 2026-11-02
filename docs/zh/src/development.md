@@ -177,6 +177,14 @@ LYONBROWN_TEST_EMBEDDING_CONFIG=/absolute/path/offline-embedding.json cargo test
 
 该测试使用独立的校准与回放样本，检查真实模型加载、向量维度、阈值和 Unknown 行为；小样本结果不能当作生产多语言准确率。引擎接口见[可复用决策引擎](decision-engine.md)，服务启动、密钥和 Swagger 见 [AI Gateway](gateway.md)。
 
+## 非交互 CLI 验证
+
+```sh
+cargo test --locked -p agent-cli --test exec --test exec_control
+```
+
+测试启动真实 CLI 子进程、认证 agentd 和回环模型 mock，核对 stdin、JSONL 事件与数据库、当前会话 epoch、显式幂等复用、审批保留、失败与 Uncertain 退出码、超时取消、断线不重放，以及 stdin/stdout 阻塞时退出。Unix 额外覆盖 SIGINT 与 SIGTERM。测试检查持久状态和文件副作用，不调用付费模型；通过不代表真实推理质量或三平台运行验收。
+
 ## 异常 Run 恢复验收
 
 ```sh

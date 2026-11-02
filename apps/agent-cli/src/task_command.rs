@@ -3,6 +3,8 @@ use clap::{Args, Subcommand};
 
 #[derive(Subcommand)]
 pub enum Command {
+  /// Execute a prompt without entering the terminal UI.
+  Exec(crate::exec_command::ExecArgs),
   /// Inspect or explicitly recover an uncertain Run without replaying it.
   Run {
     #[command(subcommand)]
@@ -98,7 +100,7 @@ pub struct Dispatch {
   pub deadline_seconds: u32,
 }
 
-fn identifier(value: &str) -> Result<String, String> {
+pub(crate) fn identifier(value: &str) -> Result<String, String> {
   if value.is_empty()
     || value.len() > 256
     || !value
