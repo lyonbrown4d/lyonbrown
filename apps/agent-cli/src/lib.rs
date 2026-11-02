@@ -15,6 +15,7 @@ pub mod local_state;
 mod markdown;
 pub mod model;
 mod model_command;
+mod model_hub_view;
 pub mod picker;
 mod recovery_update;
 mod resource_backend;

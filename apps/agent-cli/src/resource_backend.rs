@@ -62,10 +62,10 @@ pub(crate) async fn execute(
           id,
         })
         .await?;
-      let value: serde_json::Value = serde_json::from_str(&result)?;
+      // Hub replies arrive as native JSON; the client formats them for reading.
       Ok((
         format!("Models · {action}"),
-        serde_json::to_string_pretty(&value)?,
+        crate::model_hub_view::format(&action, &result),
       ))
     }
     ResourceCommand::Git => {
