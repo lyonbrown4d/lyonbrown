@@ -63,7 +63,7 @@ impl Store {
         let record = serde_json::to_string(&state)?;
         model_jobs::Entity::insert(model_jobs::ActiveModel {
           id: Set((id).to_owned()),
-          record: Set((&record).to_owned()),
+          record: Set(record.to_owned()),
         })
         .on_conflict(
           OnConflict::columns([model_jobs::Column::Id])

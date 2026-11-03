@@ -18,7 +18,7 @@ fn artifact(name: &str, kind: &str, executable: Option<&str>) -> String {
 
 #[tokio::test]
 async fn discovery_selects_only_the_requested_binary_and_ignores_unrelated_output() -> Result<()> {
-  for package in ["agentd", "ai-gateway"] {
+  for package in ["agentd", "agent-cli"] {
     let selected = "/fixture/custom target/product with spaces";
     let input = [
       "tool chatter".into(),

@@ -52,8 +52,8 @@ pub(crate) async fn accept_task_tx(
     owner_node_id: Set(task.envelope.owner_node_id.clone()),
     status: Set(task.status.clone()),
     attempt_status: Set(task.attempt_status.clone()),
-    id: Set((&task.envelope.task_id).to_owned()),
-    idempotency_key: Set((&task.envelope.idempotency_key).to_owned()),
+    id: Set(task.envelope.task_id.to_owned()),
+    idempotency_key: Set(task.envelope.idempotency_key.to_owned()),
     owner_epoch: Set((i64::try_from(task.envelope.owner_epoch)?).to_owned()),
     record: Set((serde_json::to_string(&task)?).to_owned()),
   }

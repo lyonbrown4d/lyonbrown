@@ -10,8 +10,6 @@ use support::Harness;
 #[gpui_kit::test]
 async fn model_selection_is_persisted_for_the_selected_session(cx: &mut TestAppContext) {
   let harness = Harness::new(cx, Vec::new());
-  let storage_runtime_0 = harness.runtime.clone();
-  let _storage_context_0 = storage_runtime_0.enter();
   let session = resources::session(&harness, cx).await;
   resources::page(&harness, 1, cx);
   resources::ready(&harness, cx, |window, _| {
@@ -24,19 +22,15 @@ async fn model_selection_is_persisted_for_the_selected_session(cx: &mut TestAppC
   harness
     .wait(cx, async |_| {
       harness
-        .daemon
-        .store
-        .model_binding(&session)
-        .await
+        .runtime
+        .block_on(harness.daemon.store.model_binding(&session))
         .expect("stored binding")
         .is_some()
     })
     .await;
   let binding = harness
-    .daemon
-    .store
-    .model_binding(&session)
-    .await
+    .runtime
+    .block_on(harness.daemon.store.model_binding(&session))
     .unwrap()
     .unwrap();
   assert_eq!(binding.model_id, "fixture-model");
@@ -66,8 +60,6 @@ async fn skill_confirmation_uses_inspected_hash_and_source_edits_revoke_it(
   cx: &mut TestAppContext,
 ) {
   let harness = Harness::new(cx, Vec::new());
-  let storage_runtime_1 = harness.runtime.clone();
-  let _storage_context_1 = storage_runtime_1.enter();
   let session = resources::session(&harness, cx).await;
   let source = harness.directory.path().join("acceptance-skill");
   std::fs::create_dir(&source).unwrap();
@@ -84,9 +76,13 @@ async fn skill_confirmation_uses_inspected_hash_and_source_edits_revoke_it(
   cx.update_window(harness.window.into(), |_, window, cx| {
     window.click("skill-source", cx);
     window.input(source.to_str().unwrap(), cx);
-    window.click("skill-inspect", cx);
+    window.render_frame(cx);
+    assert_eq!(window.find("skill-source").value(), source.to_str());
+    assert_ne!(window.find("skill-inspect").disabled(), Some(true));
   })
   .unwrap();
+  cx.run_until_parked();
+  harness.click("skill-inspect", cx);
   resources::ready(&harness, cx, |window, _| {
     window.find("skill-install").disabled() != Some(true)
   })
@@ -99,9 +95,10 @@ async fn skill_confirmation_uses_inspected_hash_and_source_edits_revoke_it(
     assert_eq!(window.find("skill-install").disabled(), Some(true));
     window.press(&support::shortcut("a"), cx);
     window.input(source.to_str().unwrap(), cx);
-    window.click("skill-inspect", cx);
   })
   .unwrap();
+  cx.run_until_parked();
+  harness.click("skill-inspect", cx);
   resources::ready(&harness, cx, |window, _| {
     window.find("skill-install").disabled() != Some(true)
   })
@@ -190,8 +187,6 @@ async fn provider_environment_is_metadata_until_explicit_upload(cx: &mut TestApp
     return;
   }
   let harness = Harness::new(cx, Vec::new());
-  let storage_runtime_2 = harness.runtime.clone();
-  let _storage_context_2 = storage_runtime_2.enter();
   resources::session(&harness, cx).await;
   resources::page(&harness, 2, cx);
   resources::ready(&harness, cx, |window, _| {

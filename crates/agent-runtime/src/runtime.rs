@@ -18,6 +18,7 @@ use tokio_util::sync::CancellationToken;
 /// Host lifecycle and IO ownership; model/tool decisions belong only to AgentRun.
 pub struct Runtime {
   pub(crate) session: DurableSession,
+  pub(crate) privacy: Arc<Mutex<agent_privacy::PrivacyService>>,
   pub(crate) model: DynModel<Completion>,
   pub(crate) config: RuntimeConfig,
   pub(crate) tools: BTreeMap<String, Arc<dyn RuntimeTool>>,
@@ -48,8 +49,17 @@ impl Runtime {
       .map_err(|error| RuntimeError::Configuration(error.to_string()))?;
     Self::create(config, persistence, tools, on_event, model).await
   }
-  async fn create(
+  pub async fn open_with_model(
     config: RuntimeConfig,
+    persistence: Arc<dyn SessionPersistence>,
+    tools: Vec<Arc<dyn RuntimeTool>>,
+    on_event: EventListener,
+    model: DynModel<Completion>,
+  ) -> Result<Self> {
+    Self::create(config, persistence, tools, on_event, model).await
+  }
+  async fn create(
+    mut config: RuntimeConfig,
     persistence: Arc<dyn SessionPersistence>,
     tools: Vec<Arc<dyn RuntimeTool>>,
     listener: EventListener,
@@ -60,6 +70,34 @@ impl Runtime {
         "session and a positive owner epoch are required".into(),
       ));
     }
+    let known = if config.api_key.is_empty() {
+      vec![]
+    } else {
+      vec![secrecy::SecretString::from(config.api_key.clone())]
+    };
+    let mut privacy = agent_privacy::PrivacyService::new(&known)
+      .map_err(|_| RuntimeError::Configuration("privacy initialization failed".into()))?;
+    if let Some(saved) = persistence.load_private_scope(&config.session_id).await? {
+      privacy
+        .import_scope(&config.session_id, &saved)
+        .map_err(|_| RuntimeError::Persistence("invalid private scope".into()))?;
+    }
+    if !config.api_key.is_empty() {
+      privacy
+        .register_secret(&config.session_id, &config.api_key)
+        .map_err(|_| RuntimeError::Configuration("privacy initialization failed".into()))?;
+    }
+    if let Some(prompt) = &mut config.system_prompt {
+      *prompt = privacy
+        .protect_text(&config.session_id, prompt)
+        .map_err(|_| RuntimeError::Configuration("privacy protection failed".into()))?;
+    }
+    let saved = privacy
+      .export_scope(&config.session_id)
+      .map_err(|_| RuntimeError::Persistence("private scope export failed".into()))?;
+    persistence
+      .commit_private_scope(&config.session_id, config.owner_epoch, saved)
+      .await?;
     let session = DurableSession::open(&config.session_id, config.owner_epoch, persistence).await?;
     session.ensure_certain().await?;
     let mut registered = BTreeMap::new();
@@ -71,8 +109,9 @@ impl Runtime {
         ));
       }
     }
-    Ok(Self {
+    let runtime = Self {
       session,
+      privacy: Arc::new(Mutex::new(privacy)),
       model,
       config,
       tools: registered,
@@ -81,7 +120,47 @@ impl Runtime {
       cancellation: Mutex::new(None),
       pending_cancel: AtomicBool::new(false),
       admission: AtomicBool::new(true),
-    })
+    };
+    // Existing snapshots are never silently rewritten: refuse content that cannot
+    // satisfy the current boundary before any subsequent commit or model call.
+    let snapshot = serde_json::to_value(&*runtime.session.state.lock().await)
+      .map_err(|_| RuntimeError::Persistence("session privacy validation failed".into()))?;
+    runtime.validate_model_value(&snapshot).await?;
+    Ok(runtime)
+  }
+  /// Install the daemon-owned mapping service before admitting input.
+  pub async fn with_privacy(
+    mut self,
+    shared: Arc<Mutex<agent_privacy::PrivacyService>>,
+  ) -> Result<Self> {
+    if !Arc::ptr_eq(&self.privacy, &shared) {
+      let mut source = self.privacy.lock().await;
+      let mut target = shared.lock().await;
+      if let Some(saved) = self.session.load_private_scope().await? {
+        target
+          .import_scope(&self.config.session_id, &saved)
+          .map_err(|_| RuntimeError::Persistence("invalid private scope".into()))?;
+      }
+      source
+        .transfer_scope(&mut target, &self.config.session_id)
+        .map_err(|_| RuntimeError::Configuration("privacy service transfer failed".into()))?;
+      if let Some(prompt) = &mut self.config.system_prompt {
+        *prompt = target
+          .protect_text(&self.config.session_id, prompt)
+          .map_err(|_| RuntimeError::Configuration("privacy protection failed".into()))?;
+      }
+      let saved = target
+        .export_scope(&self.config.session_id)
+        .map_err(|_| self.session.private_scope_failed())?;
+      self.session.commit_private_scope(saved).await?;
+      drop(target);
+      drop(source);
+      self.privacy = shared;
+      let snapshot = serde_json::to_value(&*self.session.state.lock().await)
+        .map_err(|_| RuntimeError::Persistence("session privacy validation failed".into()))?;
+      self.validate_model_value(&snapshot).await?;
+    }
+    Ok(self)
   }
   pub async fn execute(&self, prompt: &str) -> Result<RuntimeResult> {
     self.execute_input(prompt, vec![]).await
@@ -102,7 +181,8 @@ impl Runtime {
       .try_lock()
       .map_err(|_| RuntimeError::Configuration("session already has an active execution".into()))?;
     self.session.ensure_certain().await?;
-    let prompt = crate::input::message(prompt, images)?;
+    let protected = self.protect_text(prompt).await?;
+    let prompt = crate::input::message(&protected, images)?;
     let spec = self.spec();
     self
       .session

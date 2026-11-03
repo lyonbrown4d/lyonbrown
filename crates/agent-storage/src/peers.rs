@@ -10,8 +10,8 @@ impl Store {
       let connection = &transaction;
       let result: anyhow::Result<_> = async {
         peers::Entity::insert(peers::ActiveModel {
-          node_id: Set((&value.node_id).to_owned()),
-          record: Set((&record).to_owned()),
+          node_id: Set(value.node_id.to_owned()),
+          record: Set(record.to_owned()),
         })
         .on_conflict(
           OnConflict::columns([peers::Column::NodeId])

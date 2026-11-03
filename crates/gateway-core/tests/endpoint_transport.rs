@@ -24,6 +24,7 @@ enum MockBehavior {
   Success,
   RateLimited,
   PendingStream,
+  PendingHeaders,
 }
 
 type CapturedRequest = (Option<String>, Value);
@@ -79,6 +80,7 @@ async fn mock_handler(
     }))
     .into_response(),
     MockBehavior::RateLimited => (StatusCode::TOO_MANY_REQUESTS, "rate limited").into_response(),
+    MockBehavior::PendingHeaders => std::future::pending::<Response>().await,
     MockBehavior::PendingStream => {
       let stream = async_stream::stream! {
         yield Ok::<_, std::io::Error>(
@@ -299,4 +301,350 @@ async fn unpolled_stream_holds_endpoint_permit_until_total_deadline() {
   assert_eq!(upstream_capture.calls.load(Ordering::SeqCst), 2);
   drop(retry);
   drop(first);
+}
+
+#[derive(Default)]
+struct AttemptAudit {
+  records: Mutex<Vec<gateway_core::AuditRecord>>,
+  attempts: Mutex<Vec<gateway_core::AttemptRecord>>,
+}
+#[async_trait::async_trait]
+impl gateway_core::AuditSink for AttemptAudit {
+  fn supports_attempts(&self) -> bool {
+    true
+  }
+  async fn record(
+    &self,
+    record: gateway_core::AuditRecord,
+  ) -> Result<(), gateway_core::AuditError> {
+    self
+      .records
+      .lock()
+      .map_err(|_| gateway_core::AuditError)?
+      .push(record);
+    Ok(())
+  }
+  async fn record_attempt(
+    &self,
+    attempt: gateway_core::AttemptRecord,
+  ) -> Result<(), gateway_core::AuditError> {
+    self
+      .attempts
+      .lock()
+      .map_err(|_| gateway_core::AuditError)?
+      .push(attempt);
+    Ok(())
+  }
+}
+
+#[tokio::test]
+async fn explicit_group_retries_only_after_recorded_rejection_and_respects_model_scope() {
+  let (first, a) = mock(MockBehavior::RateLimited).await;
+  let (second, b) = mock(MockBehavior::Success).await;
+  let mut settings = config(&a.base);
+  let mut alternate = settings.models[0].clone();
+  alternate.id = "alternate".into();
+  settings.models.push(alternate);
+  let mut backup = endpoint("backup", &b.base, "backup", true, 0, 2);
+  backup.model_ids = ["alternate".into()].into();
+  settings.endpoints = vec![endpoint("primary", &a.base, "primary", true, 0, 2), backup];
+  settings.groups = vec![gateway_core::ModelGroup {
+    id: "group".into(),
+    models: vec!["public-model".into(), "alternate".into()],
+  }];
+  let audit = Arc::new(AttemptAudit::default());
+  let engine = Arc::new(
+    decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("decision"),
+  );
+  let gateway = Gateway::new(settings, engine, audit.clone()).expect("gateway");
+  let server = serve(gateway.router()).await;
+  let response = post(
+    &server.base,
+    json!({"model":"group","messages":[{"role":"user","content":"hello"}],"max_tokens":16}),
+  )
+  .send()
+  .await
+  .expect("response");
+  assert_eq!(response.status(), StatusCode::OK);
+  let _ = response.bytes().await.expect("body");
+  assert_eq!(first.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(second.calls.load(Ordering::SeqCst), 1);
+  let attempts = audit.attempts.lock().expect("attempts");
+  assert_eq!(attempts.len(), 4);
+  assert_eq!(attempts[0].model, "public-model");
+  assert!(matches!(attempts[0].status, AuditStatus::Pending));
+  assert!(matches!(attempts[1].status, AuditStatus::Failed));
+  assert_eq!(attempts[1].upstream_status, Some(429));
+  assert_eq!(attempts[2].model, "alternate");
+  assert!(matches!(attempts[2].status, AuditStatus::Pending));
+  assert!(matches!(attempts[3].status, AuditStatus::Succeeded));
+  assert_eq!(
+    audit
+      .records
+      .lock()
+      .expect("records")
+      .last()
+      .expect("terminal")
+      .model,
+    "alternate"
+  );
+}
+
+#[tokio::test]
+async fn explicit_model_retries_accounts_but_never_switches_model() {
+  let (primary, a) = mock(MockBehavior::RateLimited).await;
+  let (backup, b) = mock(MockBehavior::Success).await;
+  let (other, c) = mock(MockBehavior::Success).await;
+  let mut settings = config(&a.base);
+  let mut alternate = settings.models[0].clone();
+  alternate.id = "alternate".into();
+  settings.models.push(alternate);
+  let mut other_endpoint = endpoint("other", &c.base, "other", true, 0, 2);
+  other_endpoint.model_ids = ["alternate".into()].into();
+  settings.endpoints = vec![
+    endpoint("primary", &a.base, "primary", true, 0, 2),
+    endpoint("backup", &b.base, "backup", true, 1, 2),
+    other_endpoint,
+  ];
+  settings.groups = vec![gateway_core::ModelGroup {
+    id: "group".into(),
+    models: vec!["public-model".into(), "alternate".into()],
+  }];
+  let audit = Arc::new(AttemptAudit::default());
+  let engine = Arc::new(
+    decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("decision"),
+  );
+  let server = serve(
+    Gateway::new(settings, engine, audit.clone())
+      .expect("gateway")
+      .router(),
+  )
+  .await;
+  let response = post(
+    &server.base,
+    json!({"model":"public-model","messages":[{"role":"user","content":"hello"}],"max_tokens":16}),
+  )
+  .send()
+  .await
+  .expect("response");
+  assert_eq!(response.status(), StatusCode::OK);
+  let _ = response.bytes().await.expect("body");
+  assert_eq!(primary.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(backup.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(other.calls.load(Ordering::SeqCst), 0);
+  let attempts = audit.attempts.lock().expect("attempts");
+  assert!(
+    attempts
+      .iter()
+      .all(|attempt| attempt.model == "public-model")
+  );
+}
+
+#[tokio::test]
+async fn stream_interruption_after_output_never_replays_to_backup() {
+  let (first, a) = mock(MockBehavior::PendingStream).await;
+  let (backup, b) = mock(MockBehavior::Success).await;
+  let mut settings = config(&a.base);
+  settings.limits.first_byte_ms = 100;
+  settings.limits.total_ms = 250;
+  settings.endpoints = vec![
+    endpoint("primary", &a.base, "primary", true, 0, 2),
+    endpoint("backup", &b.base, "backup", true, 1, 2),
+  ];
+  let audit = Arc::new(AttemptAudit::default());
+  let engine = Arc::new(
+    decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("decision"),
+  );
+  let server = serve(
+    Gateway::new(settings, engine, audit.clone())
+      .expect("gateway")
+      .router(),
+  )
+  .await;
+  let response = post(&server.base, json!({"model":"public-model","messages":[{"role":"user","content":"hello"}],"max_tokens":16,"stream":true})).send().await.expect("response");
+  assert_eq!(response.status(), StatusCode::OK);
+  let _ = response.bytes().await;
+  assert_eq!(first.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(backup.calls.load(Ordering::SeqCst), 0);
+  let attempts = audit.attempts.lock().expect("attempts");
+  assert_eq!(attempts.len(), 2);
+  assert!(matches!(attempts[1].status, AuditStatus::Uncertain));
+}
+
+#[tokio::test]
+async fn timeout_before_headers_is_uncertain_and_never_retries() {
+  let (first, a) = mock(MockBehavior::PendingHeaders).await;
+  let (backup, b) = mock(MockBehavior::Success).await;
+  let mut settings = config(&a.base);
+  settings.limits.first_byte_ms = 500;
+  settings.limits.total_ms = 2000;
+  settings.endpoints = vec![
+    endpoint("primary", &a.base, "primary", true, 0, 2),
+    endpoint("backup", &b.base, "backup", true, 1, 2),
+  ];
+  let audit = Arc::new(AttemptAudit::default());
+  let engine = Arc::new(
+    decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("decision"),
+  );
+  let server = serve(
+    Gateway::new(settings, engine, audit.clone())
+      .expect("gateway")
+      .router(),
+  )
+  .await;
+  let response = post(
+    &server.base,
+    json!({"model":"public-model","messages":[{"role":"user","content":"hello"}],"max_tokens":16}),
+  )
+  .send()
+  .await
+  .expect("response");
+  assert_eq!(response.status(), StatusCode::GATEWAY_TIMEOUT);
+  assert_eq!(first.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(backup.calls.load(Ordering::SeqCst), 0);
+  let attempts = audit.attempts.lock().expect("attempts");
+  assert_eq!(attempts.len(), 2);
+  assert!(matches!(attempts[1].status, AuditStatus::Uncertain));
+}
+
+struct RestrictedAccess;
+#[async_trait::async_trait]
+impl gateway_core::AccessControl for RestrictedAccess {
+  async fn authorize(&self, bearer: &str) -> Result<bool, gateway_core::AccessError> {
+    Ok(bearer == support::TOKEN)
+  }
+  async fn authenticate(
+    &self,
+    bearer: &str,
+  ) -> Result<Option<gateway_core::AccessPrincipal>, gateway_core::AccessError> {
+    Ok(
+      (bearer == support::TOKEN).then(|| gateway_core::AccessPrincipal {
+        key_id: "restricted".into(),
+        project_id: "project".into(),
+        allowed_models: ["public-model".into()].into(),
+        max_output_tokens: None,
+      }),
+    )
+  }
+}
+
+#[tokio::test]
+async fn group_never_falls_back_to_model_outside_principal_scope() {
+  let (first, a) = mock(MockBehavior::RateLimited).await;
+  let (forbidden, b) = mock(MockBehavior::Success).await;
+  let mut settings = config(&a.base);
+  let mut alternate = settings.models[0].clone();
+  alternate.id = "alternate".into();
+  alternate.api_base = format!("{}/v1", b.base);
+  settings.models.push(alternate);
+  settings.groups = vec![gateway_core::ModelGroup {
+    id: "group".into(),
+    models: vec!["public-model".into(), "alternate".into()],
+  }];
+  let audit = Arc::new(AttemptAudit::default());
+  let engine = Arc::new(
+    decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("decision"),
+  );
+  let server = serve(
+    Gateway::new_with_access(settings, engine, audit, Arc::new(RestrictedAccess))
+      .expect("gateway")
+      .router(),
+  )
+  .await;
+  let response = post(
+    &server.base,
+    json!({"model":"group","messages":[{"role":"user","content":"hello"}],"max_tokens":16}),
+  )
+  .send()
+  .await
+  .expect("response");
+  assert!(!response.status().is_success());
+  assert_eq!(first.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(forbidden.calls.load(Ordering::SeqCst), 0);
+}
+
+#[derive(Default)]
+struct StalledAttemptAudit;
+#[async_trait::async_trait]
+impl gateway_core::AuditSink for StalledAttemptAudit {
+  fn supports_attempts(&self) -> bool {
+    true
+  }
+  async fn record(
+    &self,
+    _record: gateway_core::AuditRecord,
+  ) -> Result<(), gateway_core::AuditError> {
+    Ok(())
+  }
+  async fn record_attempt(
+    &self,
+    attempt: gateway_core::AttemptRecord,
+  ) -> Result<(), gateway_core::AuditError> {
+    if matches!(attempt.status, AuditStatus::Failed) {
+      std::future::pending().await
+    } else {
+      Ok(())
+    }
+  }
+}
+
+#[tokio::test]
+async fn stalled_rejection_audit_prevents_retry() {
+  let (first, a) = mock(MockBehavior::RateLimited).await;
+  let (backup, b) = mock(MockBehavior::Success).await;
+  let mut settings = config(&a.base);
+  settings.limits.first_byte_ms = 500;
+  settings.limits.total_ms = 800;
+  settings.endpoints = vec![
+    endpoint("primary", &a.base, "primary", true, 0, 2),
+    endpoint("backup", &b.base, "backup", true, 1, 2),
+  ];
+  let engine = Arc::new(
+    decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("decision"),
+  );
+  let server = serve(
+    Gateway::new(settings, engine, Arc::new(StalledAttemptAudit))
+      .expect("gateway")
+      .router(),
+  )
+  .await;
+  let response = post(
+    &server.base,
+    json!({"model":"public-model","messages":[{"role":"user","content":"hello"}],"max_tokens":16}),
+  )
+  .send()
+  .await
+  .expect("response");
+  assert!(!response.status().is_success());
+  assert_eq!(first.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(backup.calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn group_never_falls_back_to_cloud_model_for_local_only_request() {
+  let (first, a) = mock(MockBehavior::RateLimited).await;
+  let (cloud, b) = mock(MockBehavior::Success).await;
+  let mut settings = config(&a.base);
+  let mut alternate = settings.models[0].clone();
+  alternate.id = "cloud".into();
+  alternate.local_inference = false;
+  alternate.api_base = format!("{}/v1", b.base);
+  settings.models.push(alternate);
+  settings.groups = vec![gateway_core::ModelGroup {
+    id: "group".into(),
+    models: vec!["public-model".into(), "cloud".into()],
+  }];
+  let engine = Arc::new(
+    decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("decision"),
+  );
+  let server = serve(
+    Gateway::new(settings, engine, Arc::new(AttemptAudit::default()))
+      .expect("gateway")
+      .router(),
+  )
+  .await;
+  let response = post(&server.base, json!({"model":"group","messages":[{"role":"user","content":"hello"}],"max_tokens":16,"routing":{"local_only":true}})).send().await.expect("response");
+  assert!(!response.status().is_success());
+  assert_eq!(first.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(cloud.calls.load(Ordering::SeqCst), 0);
 }

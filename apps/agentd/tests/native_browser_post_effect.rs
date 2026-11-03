@@ -6,7 +6,6 @@ mod native_browser_support;
 mod poison_page;
 #[path = "browser_tool_support/receipts.rs"]
 mod receipts;
-#[allow(dead_code)]
 #[path = "support/mod.rs"]
 mod support;
 

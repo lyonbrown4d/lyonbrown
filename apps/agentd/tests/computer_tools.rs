@@ -1,7 +1,6 @@
 //! Local model protocols through the real Harness and synthetic desktop runtime.
 //! These tests perform no OS input and do not constitute native acceptance.
 mod computer_tool_support;
-#[allow(dead_code)]
 mod support;
 
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply_with_id};

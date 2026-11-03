@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use agent_client::AgentClient;
 use agent_test_support::{MockModelServer, StandardProtocol};
 use agentd::{Daemon, config::Config};
@@ -13,6 +15,7 @@ pub struct TestNode {
   pub session_id: String,
   _data: TempDir,
   server: JoinHandle<()>,
+  server_stopping: tokio_util::sync::CancellationToken,
 }
 impl TestNode {
   pub async fn start(
@@ -37,10 +40,15 @@ impl TestNode {
     config.data_dir = Some(data.path().into());
     config.provider = protocol.provider().into();
     config.model = "main-fixture".into();
-    config.api_base = Some(main.base_url().into());
+    let path = if matches!(protocol, StandardProtocol::Anthropic) {
+      ""
+    } else {
+      "/v1"
+    };
+    config.api_base = Some(format!("{}{path}", main.base_url()));
     config.provider_api_key = Some("synthetic-main-secret".into());
     config.decision.model = Some("decision-fixture".into());
-    config.decision.api_base = Some(classifier.base_url().into());
+    config.decision.api_base = Some(format!("{}{path}", classifier.base_url()));
     config.decision_api_key = Some("synthetic-decision-secret".into());
     config.run_timeout_secs = 10;
     configure(&mut config);
@@ -51,6 +59,8 @@ impl TestNode {
     let browser_service = agentd::browser_service(daemon.clone());
     let runtime_service = agentd::runtime_service(daemon.clone());
     let computer_runtime_service = agentd::computer_runtime_service(daemon.clone());
+    let server_stopping = tokio_util::sync::CancellationToken::new();
+    let stop = server_stopping.clone();
     let server = tokio::spawn(async move {
       tonic::transport::Server::builder()
         .add_service(service)
@@ -58,7 +68,7 @@ impl TestNode {
         .add_service(browser_service)
         .add_service(runtime_service)
         .add_service(computer_runtime_service)
-        .serve_with_incoming(TcpListenerStream::new(listener))
+        .serve_with_incoming_shutdown(TcpListenerStream::new(listener), stop.cancelled_owned())
         .await
         .unwrap();
     });
@@ -76,6 +86,7 @@ impl TestNode {
       session_id: session.id,
       _data: data,
       server,
+      server_stopping,
     }
   }
   pub async fn run(&self, prompt: &str) -> agent_protocol::v1::Run {
@@ -97,5 +108,12 @@ impl TestNode {
   pub async fn close(self) {
     self.daemon.shutdown().await;
     self.server.abort();
+    let _ = self.server.await;
+  }
+  pub async fn close_and_wait(self) {
+    self.daemon.shutdown().await;
+    self.server_stopping.cancel();
+    drop(self.client);
+    self.server.await.expect("test server shutdown");
   }
 }

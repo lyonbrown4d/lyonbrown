@@ -110,7 +110,10 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
     let request = recovery(&run.id);
     let result = node.client.recover_run(request.clone()).await.unwrap();
     let fresh = result.session.unwrap();
-    assert_eq!(fresh.workspace, node.workspace.path().to_str().unwrap());
+    assert_eq!(
+      std::path::Path::new(&fresh.workspace),
+      node.workspace.path().canonicalize().unwrap()
+    );
     let replacement = result.run.unwrap();
     assert_ne!(fresh.id, node.session_id);
     assert_eq!(

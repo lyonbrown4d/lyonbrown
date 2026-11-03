@@ -104,7 +104,7 @@ async fn cancelling_pending_mcp_approval_never_dispatches_and_cannot_be_approved
     .await
     .expect("cancel pending run");
   let terminal = node.terminal(&run.id).await;
-  assert_eq!(terminal.status, "cancelled", "{}", terminal.error);
+  assert_eq!(terminal.status, "uncertain", "{}", terminal.error);
   assert!(node.client.approve(&approval.id, true).await.is_err());
   assert_eq!(
     node
@@ -119,6 +119,38 @@ async fn cancelling_pending_mcp_approval_never_dispatches_and_cannot_be_approved
   );
   assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
   assert_eq!(main.requests().await.len(), 1);
+  assert!(
+    node
+      .client
+      .start_run(
+        &node.session,
+        "do not replay the uncertain MCP call",
+        &agent_core::new_id()
+      )
+      .await
+      .is_err()
+  );
+  node.daemon.recover().await.expect("recover without replay");
+  assert_eq!(
+    node
+      .client
+      .get_run(&run.id)
+      .await
+      .expect("persisted run")
+      .status,
+    "uncertain"
+  );
+  assert!(node.client.approve(&approval.id, true).await.is_err());
+  assert_eq!(
+    fixture.calls.load(Ordering::SeqCst),
+    0,
+    "recovery must not dispatch MCP"
+  );
+  assert_eq!(
+    main.requests().await.len(),
+    1,
+    "recovery must not replay the model call"
+  );
   node.close().await;
   stop.cancel();
 }

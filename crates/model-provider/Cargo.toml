@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+gateway-core = { path = "../gateway-core" }
+axum = "=0.8.9"
 rig-core.workspace = true
 rig-reqwest = { workspace = true, features = ["reqwest-middleware-rustls"] }
 reqwest-middleware = "=0.5.2"
@@ -20,4 +22,5 @@ tokio.workspace = true
 tokio-util.workspace = true
 
 [dev-dependencies]
+decision-core = { path = "../decision-core" }
 agent-test-support = { path = "../agent-test-support" }

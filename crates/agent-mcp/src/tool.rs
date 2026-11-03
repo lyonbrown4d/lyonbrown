@@ -125,7 +125,7 @@ impl McpManager {
   pub fn cancel_connections(&self) {
     self.closed.store(true, Ordering::Release);
     for server in self.servers.values() {
-      server.connection.cancellation_token().cancel();
+      server.connection.cancel_transport();
     }
   }
 
@@ -195,7 +195,10 @@ impl McpManager {
       .catalog
       .get(&args.tool)
       .ok_or_else(|| RuntimeError::Tool("MCP tool is not allowed".into()))?;
-    if !entry.tool.is_live() || server.connection.client.is_closed() {
+    if server.connection.is_revoked()
+      || !entry.tool.is_live()
+      || server.connection.client.is_closed()
+    {
       return Err(RuntimeError::Tool("MCP server connection is closed".into()));
     }
     if !args.arguments.is_object()
@@ -222,7 +225,7 @@ impl McpManager {
         result.map_err(|_| RuntimeError::Tool("MCP authorization deadline exceeded".into()))??;
       }
     }
-    if self.closed.load(Ordering::Acquire) {
+    if self.closed.load(Ordering::Acquire) || server.connection.is_revoked() {
       return Err(RuntimeError::Tool(
         "MCP connections closed before dispatch".into(),
       ));
@@ -244,7 +247,7 @@ impl McpManager {
         _ = cancellation.cancelled() => {
           // Rig exposes a per-call timeout, but no public per-call cancellation
           // token. Revoke the connection instead of leaving a usable stale host.
-          server.connection.cancellation_token().cancel();
+          server.connection.cancel_transport();
           return Err(uncertain());
         }
       }

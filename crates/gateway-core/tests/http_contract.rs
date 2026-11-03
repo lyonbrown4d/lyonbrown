@@ -88,7 +88,7 @@ async fn invalid_media_context_json_and_size_are_rejected() {
       .await
       .expect("media")
       .status(),
-    400
+    422
   );
   let mut context = completion("public-model");
   context["max_tokens"] = json!(1024);
@@ -161,20 +161,18 @@ async fn failed_intent_stops_side_effect_and_readiness_can_drain() {
   );
 }
 #[tokio::test]
-async fn swagger_schema_is_public_and_model_list_hides_secrets() {
+async fn schema_is_public_and_model_list_hides_secrets() {
   let (_, upstream) = mock_json().await;
   let (_, server) = gateway(config(&upstream.base), Arc::new(Audit::default())).await;
-  let initializer = client()
-    .get(format!("{}/swagger-ui/swagger-initializer.js", server.base))
-    .send()
-    .await
-    .expect("local Swagger initializer")
-    .text()
-    .await
-    .expect("initializer body");
-  assert!(initializer.contains("\"validatorUrl\": \"none\""));
-  assert!(initializer.contains("\"queryConfigEnabled\": false"));
-  assert!(initializer.contains("\"persistAuthorization\": false"));
+  assert_eq!(
+    client()
+      .get(format!("{}/swagger-ui/", server.base))
+      .send()
+      .await
+      .expect("no web UI")
+      .status(),
+    404
+  );
   let url = format!("{}/api-doc/openapi.json", server.base);
   assert_eq!(
     client()

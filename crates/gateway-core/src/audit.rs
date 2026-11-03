@@ -46,6 +46,13 @@ pub enum AdmissionError {
 }
 #[async_trait]
 pub trait AuditSink: Send + Sync {
+  /// A sink must explicitly support durable attempt records before retries are enabled.
+  fn supports_attempts(&self) -> bool {
+    false
+  }
+  async fn record_attempt(&self, _attempt: AttemptRecord) -> Result<(), AuditError> {
+    Err(AuditError)
+  }
   async fn record(&self, record: AuditRecord) -> Result<(), AuditError>;
   async fn admit(&self, record: AuditRecord) -> Result<(), AdmissionError> {
     self
@@ -53,4 +60,15 @@ pub trait AuditSink: Send + Sync {
       .await
       .map_err(|_| AdmissionError::Unavailable)
   }
+}
+
+/// Durable metadata for one upstream dispatch. Pending is written before sending.
+#[derive(Clone, Debug)]
+pub struct AttemptRecord {
+  pub request_id: String,
+  pub sequence: u32,
+  pub model: String,
+  pub endpoint: Option<String>,
+  pub upstream_status: Option<u16>,
+  pub status: AuditStatus,
 }

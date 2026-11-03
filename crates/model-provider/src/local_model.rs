@@ -69,6 +69,7 @@ impl Wire for LocalWire {
     _mode: Mode,
   ) -> std::result::Result<Self::Payload, EncodeError> {
     crate::local_request::convert(request, &self.info, self.max_tokens)
+      .map_err(|_| EncodeError::request("unsupported or invalid local inference request"))
   }
 
   fn decoder<'id>(&self) -> Self::Decoder<'id> {

@@ -181,6 +181,10 @@ async fn approval_click_uses_exact_tool_arguments_before_real_file_effect(cx: &m
           .messages
           .iter()
           .any(|(_, body)| body.contains("Written after"))
+        && snapshot
+          .messages
+          .iter()
+          .any(|(role, body)| role == "Tool" && body == "**write_file** · finished")
     })
     .await;
   assert_eq!(
@@ -201,7 +205,7 @@ async fn approval_click_uses_exact_tool_arguments_before_real_file_effect(cx: &m
     completed
       .messages
       .iter()
-      .filter(|(role, body)| role == "Tool" && body.contains("tool_finished"))
+      .filter(|(role, body)| role == "Tool" && body == "**write_file** · finished")
       .count(),
     1,
     "duplicate watch streams must deduplicate durable event cursors"

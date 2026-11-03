@@ -3,12 +3,13 @@
 Rust-native file handling for the open [Agent Skills format](https://agentskills.io/specification).
 
 Format parsing and spec validation use the maintained Govcraft
-[`agent-skills` 0.2.0](https://docs.rs/agent-skills/0.2.0/) public API.
+[`agent-skills` 0.3.0](https://docs.rs/agent-skills/0.3.0/) public API.
 Lyonbrown adds its own manifest projection, portable-path policy and bounded
 staging/archive lifecycle. It does not maintain a second frontmatter parser.
 The parser adapter strips a leading UTF-8 BOM and normalizes CRLF to LF before
 parsing; original installed bytes and content hashes remain unchanged. Projected
-instructions therefore use LF. This upstream version accepts ASCII Skill names.
+instructions therefore use LF. Skill names follow upstream Unicode validation
+and Lyonbrown's portable-path rules.
 
 The embedding service owns authorization, downloads, durable operation intent,
 receipts, events, enabled state, version selection and session bindings. This

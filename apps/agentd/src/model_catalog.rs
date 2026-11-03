@@ -1,10 +1,11 @@
+mod bindings;
+
 use crate::Daemon;
 use agent_protocol::v1::{
   self,
   model_service_server::{ModelService, ModelServiceServer},
 };
 use agent_security::Authenticate;
-use agent_storage::ModelBinding;
 use tonic::{Request, Response, Status, service::interceptor::InterceptedService};
 
 pub fn model_service(
@@ -12,170 +13,6 @@ pub fn model_service(
 ) -> InterceptedService<ModelServiceServer<Daemon>, Authenticate> {
   let auth = Authenticate::new(daemon.auth_token());
   ModelServiceServer::with_interceptor(daemon, auth)
-}
-
-impl Daemon {
-  pub(crate) async fn model_bindings(
-    &self,
-  ) -> anyhow::Result<Vec<(String, String, String, ModelBinding)>> {
-    let mut entries = vec![(
-      self.config.model.clone(),
-      self.config.model.clone(),
-      self.config.provider.clone(),
-      ModelBinding {
-        model_id: self.config.model.clone(),
-        execution_id: "configured".into(),
-        provider: self.config.provider.clone(),
-        model: self.config.model.clone(),
-        endpoint: self.config.api_base.clone(),
-        credential_id: agent_config::provider_definition(&self.config.provider)
-          .map_or(self.config.provider.as_str(), |entry| entry.id)
-          .into(),
-      },
-    )];
-    for (id, name, vendor, protocol, endpoint) in [
-      (
-        "deepseek-chat",
-        "DeepSeek Chat",
-        "deepseek",
-        "openai-completions",
-        "https://api.deepseek.com",
-      ),
-      (
-        "deepseek-reasoner",
-        "DeepSeek Reasoner",
-        "deepseek",
-        "openai-completions",
-        "https://api.deepseek.com",
-      ),
-      (
-        "gpt-4.1",
-        "GPT-4.1",
-        "openai",
-        "openai-responses",
-        "https://api.openai.com/v1",
-      ),
-      (
-        "claude-sonnet-4-5",
-        "Claude Sonnet 4.5",
-        "anthropic",
-        "anthropic",
-        "https://api.anthropic.com",
-      ),
-    ] {
-      if entries.iter().any(|entry| entry.0 == id) {
-        continue;
-      }
-      entries.push((
-        id.into(),
-        name.into(),
-        vendor.into(),
-        ModelBinding {
-          model_id: id.into(),
-          execution_id: format!("builtin:{id}"),
-          provider: protocol.into(),
-          model: id.into(),
-          endpoint: Some(endpoint.into()),
-          credential_id: vendor.into(),
-        },
-      ));
-    }
-    for profile in &self.config.local_models {
-      if entries.iter().any(|entry| entry.0 == profile.id) {
-        continue;
-      }
-      entries.push((
-        profile.id.clone(),
-        profile.id.clone(),
-        "Imported".into(),
-        ModelBinding {
-          model_id: profile.id.clone(),
-          execution_id: format!("local:{}", profile.id),
-          provider: "local".into(),
-          model: profile.id.clone(),
-          endpoint: None,
-          credential_id: String::new(),
-        },
-      ));
-    }
-    for info in self.models.all() {
-      if entries.iter().any(|entry| entry.0 == info.id) {
-        continue;
-      }
-      entries.push((
-        info.id.clone(),
-        info.id.clone(),
-        "Hugging Face".into(),
-        ModelBinding {
-          model_id: info.id.clone(),
-          execution_id: format!("local:{}", info.id),
-          provider: "local".into(),
-          model: info.id,
-          endpoint: None,
-          credential_id: String::new(),
-        },
-      ));
-    }
-    for profile in self.store.provider_profiles().await? {
-      let id = format!("profile:{}", profile.id);
-      entries.push((
-        id.clone(),
-        profile.name.clone(),
-        profile.name,
-        ModelBinding {
-          model_id: id,
-          execution_id: format!("profile:{}:{}", profile.id, profile.revision),
-          provider: profile.protocol.runtime_provider().into(),
-          model: profile.model,
-          endpoint: Some(profile.base_url),
-          credential_id: format!("profile-secret:{}", profile.credential_id),
-        },
-      ));
-    }
-    Ok(entries)
-  }
-  pub(crate) fn binding_credential(
-    &self,
-    binding: &ModelBinding,
-  ) -> anyhow::Result<Option<String>> {
-    use agent_secrets::ExposeSecret;
-    if let Some(id) = binding.credential_id.strip_prefix("profile-secret:") {
-      return Ok(
-        self
-          .provider_secrets
-          .get(id)?
-          .map(|secret| secret.expose_secret().to_owned()),
-      );
-    }
-    if let Some(value) = self.config.catalog_credentials.get(&binding.credential_id) {
-      return Ok(Some(value.clone()));
-    }
-    if binding.execution_id == "configured"
-      && let Some(key) = &self.config.provider_api_key
-      && !key.is_empty()
-    {
-      return Ok(Some(key.clone()));
-    }
-    Ok(
-      self
-        .provider_secrets
-        .get(&format!("provider-{}", binding.credential_id))?
-        .map(|secret| secret.expose_secret().to_owned()),
-    )
-  }
-  pub(crate) async fn configured_for_run(&self, run: &str) -> anyhow::Result<Self> {
-    let Some(binding) = self.store.model_binding(run).await? else {
-      return Ok(self.clone());
-    };
-    let mut daemon = self.clone();
-    let mut config = self.config.clone();
-    config.provider = binding.provider.clone();
-    config.model = binding.model.clone();
-    config.api_base = binding.endpoint.clone();
-    config.provider_api_key = self.binding_credential(&binding)?;
-    daemon.config = config;
-    Ok(daemon)
-  }
 }
 
 #[tonic::async_trait]
@@ -216,7 +53,9 @@ impl ModelService for Daemon {
       .await
       .map_err(crate::service::db_error)?
     {
-      let ready = if binding.provider == "local" {
+      let ready = if self.uses_gateway_registry(&binding) {
+        self.gateway.gateway.is_some()
+      } else if binding.provider == "local" {
         self.models.backend(&binding.model).await.is_ok()
       } else {
         self
@@ -251,9 +90,10 @@ impl ModelService for Daemon {
               value.execution_id == binding.execution_id
             }),
         executions: vec![v1::ModelExecution {
-          id: binding.execution_id,
           label: if binding.provider == "local" {
             "Run on this machine"
+          } else if binding.execution_id.starts_with("gateway:") {
+            "Gateway"
           } else {
             "API"
           }
@@ -271,9 +111,23 @@ impl ModelService for Daemon {
             "Configure credential or load model"
           }
           .into(),
+          id: binding.execution_id,
         }],
       });
     }
+    let mut merged: Vec<v1::ModelCandidate> = Vec::new();
+    for candidate in models {
+      if let Some(existing) = merged.iter_mut().find(|entry| entry.id == candidate.id) {
+        existing.selected |= candidate.selected;
+        if candidate.state == "ready" {
+          existing.state = candidate.state;
+        }
+        existing.executions.extend(candidate.executions);
+      } else {
+        merged.push(candidate);
+      }
+    }
+    let mut models = merged;
     let hub = agent_model_hub::HubClient::new(
       &self.config.hub_endpoint,
       self.config.hub_token.as_deref(),
@@ -351,6 +205,10 @@ impl ModelService for Daemon {
         .backend(&binding.model)
         .await
         .map_err(|_| Status::failed_precondition("model is not loaded"))?;
+    } else if self.uses_gateway_registry(&binding) {
+      if self.gateway.gateway.is_none() {
+        return Err(Status::failed_precondition("gateway model unavailable"));
+      }
     } else if self
       .binding_credential(&binding)
       .map_err(crate::service::db_error)?

@@ -24,6 +24,7 @@ pub(super) struct AuditGuard {
   permit: Option<OwnedSemaphorePermit>,
   body_done: Option<oneshot::Receiver<()>>,
   endpoint: Option<crate::EndpointLease>,
+  attempt: Option<crate::AttemptRecord>,
 }
 impl AuditGuard {
   pub(super) fn new(
@@ -44,14 +45,61 @@ impl AuditGuard {
       permit: Some(permit),
       body_done: None,
       endpoint: None,
+      attempt: None,
     }
   }
   pub(super) fn request_id(&self) -> &str {
     &self.record.request_id
   }
-  pub(super) fn with_endpoint(mut self, endpoint: Option<crate::EndpointLease>) -> Self {
+  pub(super) fn set_model(&mut self, model: &str) {
+    self.record.model = model.to_owned();
+  }
+  pub(super) fn set_endpoint(&mut self, endpoint: Option<crate::EndpointLease>) {
     self.endpoint = endpoint;
-    self
+  }
+  pub(super) async fn start_attempt(
+    &mut self,
+    sequence: u32,
+    model: &str,
+  ) -> Result<(), GatewayError> {
+    if !self.sink.supports_attempts() {
+      return Ok(());
+    }
+    let attempt = crate::AttemptRecord {
+      request_id: self.record.request_id.clone(),
+      sequence,
+      model: model.into(),
+      endpoint: self
+        .endpoint
+        .as_ref()
+        .map(|lease| lease.endpoint().id.clone()),
+      upstream_status: None,
+      status: AuditStatus::Pending,
+    };
+    self.attempt = Some(attempt.clone());
+    timeout_at(self.deadline, self.sink.record_attempt(attempt))
+      .await
+      .map_err(|_| GatewayError::unavailable())?
+      .map_err(|_| GatewayError::unavailable())
+  }
+  pub(super) fn set_upstream_status(&mut self, status: u16) {
+    if let Some(attempt) = &mut self.attempt {
+      attempt.upstream_status = Some(status);
+    }
+  }
+  pub(super) async fn finish_attempt(&mut self, status: AuditStatus) -> Result<(), GatewayError> {
+    if let Some(mut attempt) = self.attempt.clone() {
+      attempt.status = status;
+      timeout_at(self.deadline, self.sink.record_attempt(attempt))
+        .await
+        .map_err(|_| GatewayError::unavailable())?
+        .map_err(|_| GatewayError::unavailable())?;
+      self.attempt = None;
+    }
+    Ok(())
+  }
+  pub(super) fn retry_enabled(&self) -> bool {
+    self.sink.supports_attempts()
   }
   pub(super) fn cooldown_endpoint(&self, rate_limited: bool) {
     if let Some(endpoint) = &self.endpoint {
@@ -103,6 +151,7 @@ impl AuditGuard {
   /// An owned writer retains both terminal responsibility and admission after an HTTP timeout.
   /// The acknowledgment precedes the body lease wait, so awaiting EOF cannot deadlock the writer.
   pub(super) async fn finish(mut self, status: AuditStatus) -> Result<(), GatewayError> {
+    self.finish_attempt(status).await?;
     self.record.status = status;
     self.record.elapsed_ms = self.started.elapsed().as_millis().min(u64::MAX as u128) as u64;
     let deadline = self.deadline;
@@ -143,6 +192,7 @@ impl Drop for AuditGuard {
       .terminal(AuditStatus::Uncertain, record.elapsed_ms);
     tracing::warn!(request_id=%record.request_id, model=%record.model, "gateway request dropped with uncertain upstream outcome");
     let sink = self.sink.clone();
+    let attempt = self.attempt.take();
     let Ok(runtime) = tokio::runtime::Handle::try_current() else {
       return;
     };
@@ -152,6 +202,10 @@ impl Drop for AuditGuard {
     let deadline = self.deadline;
     runtime.spawn(async move {
       let _permit = permit;
+      if let Some(mut attempt) = attempt {
+        attempt.status = AuditStatus::Uncertain;
+        let _ = sink.record_attempt(attempt).await;
+      }
       let _endpoint = endpoint;
       if sink.record(record).await.is_err() {
         tracing::error!("gateway uncertain audit update failed; pending intent requires recovery");

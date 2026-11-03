@@ -104,8 +104,11 @@ impl TaskWorker {
         result = &mut execution => return Ok(Some(result)),
         _ = cancellation.cancelled() => break,
         _ = &mut deadline => { cancellation.cancel(); break; },
-        _ = trust_check.tick() => {
-          if !self.manager.trust(&owner).await.is_ok_and(|trust| trust.fingerprint == owner_fingerprint) {
+        trust = async {
+          trust_check.tick().await;
+          self.manager.trust(&owner).await
+        } => {
+          if !trust.is_ok_and(|trust| trust.fingerprint == owner_fingerprint) {
             cancellation.cancel(); break;
           }
         }

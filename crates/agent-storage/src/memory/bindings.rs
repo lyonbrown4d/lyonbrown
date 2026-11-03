@@ -26,7 +26,7 @@ impl Store {
         let row=items::Entity::find_by_id(&memory.id).one(&transaction).await?.ok_or(MemoryError::NotFound)?;
         let current:MemoryItem=serde_json::from_str(&row.record)?;
         if current.state!=MemoryState::Active || current.revision!=memory.revision || current!=*memory || current.expires_at_ms.is_some_and(|expiry|expiry<=agent_core::now_ms()) {return Err(MemoryError::Conflict.into());}
-        if let MemoryScope::Session(id)=&current.scope {if id!=session {return Err(MemoryError::Forbidden.into());}}
+        if let MemoryScope::Session(id)=&current.scope && id!=session {return Err(MemoryError::Forbidden.into());}
         let content_hash=digest(current.content.as_bytes());
         if let Some(existing)=bindings::Entity::find_by_id((run.to_owned(),current.id.clone())).one(&transaction).await? {
           if u64::try_from(existing.revision)?!=current.revision || existing.content_hash!=content_hash {return Err(MemoryError::Conflict.into());}

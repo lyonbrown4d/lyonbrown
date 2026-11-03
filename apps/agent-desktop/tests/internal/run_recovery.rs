@@ -4,7 +4,7 @@ use agent_protocol::v1;
 use agent_test_support::{StandardProtocol, text_reply};
 use gpui_kit::{AppContext as _, SharedString, TestAppContext, test::TestWindowExt as _};
 
-async fn interrupted(harness: &Harness) -> agent_core::Run {
+fn interrupted(harness: &Harness) -> agent_core::Run {
   let session = harness
     .runtime
     .block_on(harness.client.create_session(
@@ -12,18 +12,20 @@ async fn interrupted(harness: &Harness) -> agent_core::Run {
       harness.directory.path().join("workspace").to_str().unwrap(),
     ))
     .unwrap();
-  let (run, _) = harness
-    .daemon
-    .store
-    .accept_run(&session.id, 1, "never replay this original", "original")
-    .await
-    .unwrap();
-  harness
-    .daemon
-    .store
-    .update_run_owned(&run.id, 1, RunStatus::Uncertain, "", "fixture interruption")
-    .await
-    .unwrap()
+  harness.runtime.block_on(async {
+    let (run, _) = harness
+      .daemon
+      .store
+      .accept_run(&session.id, 1, "never replay this original", "original")
+      .await
+      .unwrap();
+    harness
+      .daemon
+      .store
+      .update_run_owned(&run.id, 1, RunStatus::Uncertain, "", "fixture interruption")
+      .await
+      .unwrap()
+  })
 }
 
 async fn open(harness: &Harness, run: &agent_core::Run, cx: &mut TestAppContext) {
@@ -51,9 +53,7 @@ async fn open(harness: &Harness, run: &agent_core::Run, cx: &mut TestAppContext)
 #[gpui_kit::test]
 async fn abandon_records_only_and_preserves_original_chat_draft(cx: &mut TestAppContext) {
   let harness = Harness::new(cx, Vec::new());
-  let storage_runtime_0 = harness.runtime.clone();
-  let _storage_context_0 = storage_runtime_0.enter();
-  let run = interrupted(&harness).await;
+  let run = interrupted(&harness);
   open(&harness, &run, cx).await;
   cx.update_window(harness.window.into(), |_, window, cx| {
     harness
@@ -75,16 +75,27 @@ async fn abandon_records_only_and_preserves_original_chat_draft(cx: &mut TestApp
     })
     .await;
   let resolution = harness
-    .daemon
-    .store
-    .run_recovery(&run.id)
-    .await
+    .runtime
+    .block_on(harness.daemon.store.run_recovery(&run.id))
     .unwrap()
     .unwrap();
   assert!(resolution.session_id.is_none());
   assert!(resolution.replacement_run_id.is_none());
-  assert_eq!(harness.daemon.store.sessions().await.unwrap().len(), 1);
-  assert_eq!(harness.daemon.store.run(&run.id).await.unwrap(), Some(run));
+  assert_eq!(
+    harness
+      .runtime
+      .block_on(harness.daemon.store.sessions())
+      .unwrap()
+      .len(),
+    1
+  );
+  assert_eq!(
+    harness
+      .runtime
+      .block_on(harness.daemon.store.run(&run.id))
+      .unwrap(),
+    Some(run)
+  );
   assert!(
     harness
       .runtime
@@ -104,9 +115,7 @@ async fn lost_recovery_reply_requires_inspection_and_never_submits_again(cx: &mu
       "fresh result",
     )],
   );
-  let storage_runtime_1 = harness.runtime.clone();
-  let _storage_context_1 = storage_runtime_1.enter();
-  let run = interrupted(&harness).await;
+  let run = interrupted(&harness);
   open(&harness, &run, cx).await;
   let request = v1::RecoverRunRequest {
     run_id: run.id.clone(),
@@ -141,7 +150,14 @@ async fn lost_recovery_reply_requires_inspection_and_never_submits_again(cx: &mu
   .unwrap();
   assert!(!harness.snapshot(cx).recovery.unwrap().inspected);
   harness.click("recovery-continue", cx);
-  assert_eq!(harness.daemon.store.sessions().await.unwrap().len(), 2);
+  assert_eq!(
+    harness
+      .runtime
+      .block_on(harness.daemon.store.sessions())
+      .unwrap()
+      .len(),
+    2
+  );
   harness.click("recovery-refresh", cx);
   harness
     .wait(cx, async |state| {
@@ -167,5 +183,11 @@ async fn lost_recovery_reply_requires_inspection_and_never_submits_again(cx: &mu
     })
     .await;
   assert_eq!(harness.runtime.block_on(harness.model.requests()).len(), 1);
-  assert_eq!(harness.daemon.store.run(&run.id).await.unwrap(), Some(run));
+  assert_eq!(
+    harness
+      .runtime
+      .block_on(harness.daemon.store.run(&run.id))
+      .unwrap(),
+    Some(run)
+  );
 }

@@ -123,7 +123,7 @@ async fn credentials_skills_and_git_cross_the_authenticated_transport() {
     assert!(wrong.list_providers().await.is_err());
   }
   client.remove_provider_credential("openai").await.unwrap();
-  assert!(reopened.list().unwrap().is_empty());
+  assert!(reopened.get("provider-openai").unwrap().is_none());
   daemon.shutdown().await;
   server.abort();
 }

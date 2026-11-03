@@ -62,6 +62,8 @@ impl Runtime {
     let deadline = tokio::time::sleep(Duration::from_secs(120));
     tokio::pin!(deadline);
     let mut started = false;
+    let mut text_delta = String::new();
+    let mut reasoning_delta = String::new();
     loop {
       let item = tokio::select! { biased;
         _ = self.session.stopped.cancelled() => return Err(RuntimeError::Uncertain("session writer fenced".into())),
@@ -84,20 +86,35 @@ impl Runtime {
           ));
         }
         StreamedTurnEvent::EmitIngested => match &item {
-          Item::Event(StreamEvent::Text { text, .. }) => {
-            (self.listener)(RuntimeEvent::TextDelta { text: text.clone() })
-          }
-          Item::Event(StreamEvent::Reasoning { text, .. }) => {
-            (self.listener)(RuntimeEvent::ThinkingDelta { text: text.clone() })
-          }
+          Item::Event(StreamEvent::Text { text, .. }) => text_delta.push_str(text),
+          Item::Event(StreamEvent::Reasoning { text, .. }) => reasoning_delta.push_str(text),
           _ => {}
         },
         _ => {}
+      }
+      if text_delta.len().saturating_add(reasoning_delta.len()) > 1_048_576 {
+        return Err(RuntimeError::Execution(
+          "model output exceeds privacy limit".into(),
+        ));
       }
     }
     let response = stream.finish().await.map_err(model_error)?;
     let usage = response.usage;
     let turn = assembler.finish(&response);
+    self.validate_model_value(&response.raw).await?;
+    let turn_value = serde_json::to_value(&turn).map_err(model_error)?;
+    self.validate_model_value(&turn_value).await?;
+    self
+      .validate_model_value(&serde_json::json!([text_delta, reasoning_delta]))
+      .await?;
+    if !text_delta.is_empty() {
+      (self.listener)(RuntimeEvent::TextDelta { text: text_delta });
+    }
+    if !reasoning_delta.is_empty() {
+      (self.listener)(RuntimeEvent::ThinkingDelta {
+        text: reasoning_delta,
+      });
+    }
     self
       .session
       .update("model_response_committed", |state| {

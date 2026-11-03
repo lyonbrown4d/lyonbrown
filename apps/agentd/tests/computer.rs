@@ -1,5 +1,4 @@
 mod computer_support;
-#[allow(dead_code)]
 mod support;
 
 use agent_computer_runtime::{RUNTIME_PROTOCOL_VERSION, Reply, RuntimeResult, attach_host, wire};

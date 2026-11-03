@@ -41,12 +41,19 @@ impl WorkerExecutor for RuntimeWorker {
         _ => vec![],
       })
       .collect::<BTreeSet<_>>();
+    let instructions = daemon
+      .protect_private_text(
+        &job.session.id,
+        job.session.owner_epoch,
+        &job.task.instructions,
+      )
+      .await?;
     let (run, created) = daemon
       .store
       .accept_run(
         &job.session.id,
         job.session.owner_epoch,
-        &job.task.instructions,
+        &instructions,
         &job.task.attempt_id,
       )
       .await?;

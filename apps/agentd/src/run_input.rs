@@ -16,10 +16,45 @@ pub(crate) struct RunRuntime {
 
 pub(crate) struct RunPersistence {
   pub store: agent_storage::Store,
+  pub private_store: Arc<agent_secrets::SecretStore>,
   pub run_id: String,
 }
 #[async_trait::async_trait]
 impl SessionPersistence for RunPersistence {
+  async fn load_private_scope(
+    &self,
+    session: &str,
+  ) -> agent_runtime::Result<Option<agent_secrets::SecretString>> {
+    let record = self
+      .store
+      .load_private_scope(session)
+      .await
+      .map_err(|_| RuntimeError::Persistence("private session state unavailable".into()))?;
+    let Some(record) = record else {
+      return Ok(None);
+    };
+    self
+      .private_store
+      .open_value(&crate::privacy::scope_record_id(session), &record)
+      .map(Some)
+      .map_err(|_| RuntimeError::Persistence("private session state authentication failed".into()))
+  }
+  async fn commit_private_scope(
+    &self,
+    session: &str,
+    epoch: u64,
+    scope: agent_secrets::SecretString,
+  ) -> agent_runtime::Result<()> {
+    let record = self
+      .private_store
+      .seal_value(&crate::privacy::scope_record_id(session), &scope)
+      .map_err(|_| RuntimeError::Persistence("private session state encryption failed".into()))?;
+    self
+      .store
+      .commit_private_scope(session, epoch, &record)
+      .await
+      .map_err(|_| RuntimeError::Persistence("private session state commit unavailable".into()))
+  }
   async fn load(&self, session: &str) -> agent_runtime::Result<Option<Vec<u8>>> {
     self
       .store
@@ -111,15 +146,15 @@ impl Daemon {
         ));
       }
     };
+    let prompt = self
+      .protect_private_text(&session.id, input.owner_epoch, &input.prompt)
+      .await?;
     let receipts = self.input_receipts(&input.run_id).await?;
     if let Some(receipt) = receipts
       .iter()
       .find(|receipt| receipt.request_id == input.request_id)
     {
-      if receipt.run_id != input.run_id
-        || receipt.prompt != input.prompt
-        || receipt.kind != input.kind
-      {
+      if receipt.run_id != input.run_id || receipt.prompt != prompt || receipt.kind != input.kind {
         return Err(Status::already_exists(
           "input request identity reused with different content",
         ));
@@ -144,7 +179,7 @@ impl Daemon {
       .filter(|receipt| receipt.state == v1::RunInputState::Pending as i32)
       .map(|receipt| receipt.prompt.len())
       .sum();
-    if pending_bytes.saturating_add(input.prompt.len()) > 1_048_576 {
+    if pending_bytes.saturating_add(prompt.len()) > 1_048_576 {
       return Err(Status::resource_exhausted(
         "pending input byte capacity reached",
       ));
@@ -163,7 +198,7 @@ impl Daemon {
     }
     if let Err(error) = registered
       .runtime
-      .enqueue_input(&input.request_id, kind, &input.prompt)
+      .enqueue_input(&input.request_id, kind, &prompt)
       .await
     {
       if matches!(

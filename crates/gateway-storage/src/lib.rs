@@ -8,10 +8,8 @@ mod catalog;
 mod error;
 mod files;
 mod migrations;
-mod password;
 mod policy;
 mod schema;
-mod sessions;
 pub use access::{AccessTokenMetadata, IssuedAccessToken};
 pub use audit::AuditPage;
 pub use catalog::{ModelMetadata, ModelSnapshot};
@@ -20,13 +18,10 @@ use sea_orm::{
   ConnectOptions, Database, DatabaseConnection, DatabaseTransaction, TransactionTrait,
 };
 use sea_orm_migration::MigratorTrait;
-pub use sessions::{AdminIdentity, AdminRole, AdminSession};
 use std::{fs::File, path::Path, sync::Arc};
-use tokio::sync::Semaphore;
 
 struct Inner {
   connection: DatabaseConnection,
-  password_permits: Arc<Semaphore>,
   _ownership: File,
 }
 #[derive(Clone)]
@@ -63,7 +58,6 @@ impl GatewayStorage {
     Ok(Self {
       inner: Arc::new(Inner {
         connection,
-        password_permits: Arc::new(Semaphore::new(1)),
         _ownership: ownership,
       }),
     })

@@ -293,3 +293,19 @@ pub(crate) mod write_lock {
   pub enum Relation {}
   impl ActiveModelBehavior for ActiveModel {}
 }
+
+pub(crate) mod private_scopes {
+  use sea_orm::entity::prelude::*;
+  #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+  #[sea_orm(table_name = "private_scopes")]
+  pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    #[sea_orm(column_type = "String(StringLen::N(256))")]
+    pub session_id: String,
+    #[sea_orm(column_type = "Blob")]
+    pub ciphertext: Vec<u8>,
+  }
+  #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+  pub enum Relation {}
+  impl ActiveModelBehavior for ActiveModel {}
+}

@@ -270,3 +270,92 @@ async fn master_cancellation_is_confirmed_from_worker_without_resubmission() -> 
   server.await??;
   Ok(())
 }
+
+/// Holds the worker's only SQLite connection across a trust-check tick.
+struct TransactionExecutor {
+  store: agent_storage::Store,
+  started: tokio::sync::Notify,
+  committed: tokio::sync::Notify,
+  calls: std::sync::atomic::AtomicUsize,
+}
+
+#[async_trait::async_trait]
+impl agent_distributed::worker::WorkerExecutor for TransactionExecutor {
+  async fn execute(
+    &self,
+    _job: agent_distributed::worker::WorkerJob,
+    _cancellation: tokio_util::sync::CancellationToken,
+  ) -> Result<String> {
+    use sea_orm::TransactionTrait;
+    self.calls.fetch_add(1, Ordering::SeqCst);
+    let transaction = self.store.connection().begin().await?;
+    self.started.notify_one();
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    transaction.commit().await?;
+    self.committed.notify_one();
+    Ok("transaction completed".into())
+  }
+}
+
+#[tokio::test]
+async fn trust_check_does_not_stop_executor_holding_single_sqlite_connection() -> Result<()> {
+  use agent_distributed::{peers::PeerManager, worker::TaskWorker};
+  use std::sync::Arc;
+
+  let master = Node::new(false).await?;
+  let mut worker = Node::new(false).await?;
+  let store = worker.store().await?;
+  let manager = PeerManager::new(
+    store.clone(),
+    worker.identity.clone(),
+    worker.manager.local_node(),
+  )?;
+  let executor = Arc::new(TransactionExecutor {
+    store,
+    started: tokio::sync::Notify::new(),
+    committed: tokio::sync::Notify::new(),
+    calls: std::sync::atomic::AtomicUsize::new(0),
+  });
+  worker.worker = TaskWorker::new(
+    manager.clone(),
+    executor.clone(),
+    worker.directory.path().join("transaction-workspaces"),
+  )?;
+  worker.manager = manager;
+  master.pair(&worker).await?;
+  worker.pair(&master).await?;
+  let (stop, server) = worker.serve().await?;
+  let dispatcher = Dispatcher::new(master.manager.clone());
+  let envelope = master.envelope().await;
+  dispatcher
+    .submit(&worker.manager.local_node(), envelope.clone().into())
+    .await?;
+  tokio::time::timeout(Duration::from_secs(3), executor.started.notified()).await?;
+  tokio::time::timeout(Duration::from_secs(3), executor.committed.notified()).await?;
+  let result = tokio::time::timeout(Duration::from_secs(3), async {
+    loop {
+      let task = dispatcher
+        .reconcile(&worker.manager.local_node(), &envelope.task_id)
+        .await?;
+      if task.attempt_status == "succeeded" {
+        break Ok::<_, anyhow::Error>(task);
+      }
+      tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+  })
+  .await??;
+  assert_eq!(result.envelope.attempt_id, envelope.attempt_id);
+  assert_eq!(result.result, "transaction completed");
+  assert_eq!(executor.calls.load(Ordering::SeqCst), 1);
+  let durable = worker
+    .store()
+    .await?
+    .task(&envelope.task_id)
+    .await?
+    .expect("worker task");
+  assert_eq!(durable.envelope.attempt_id, envelope.attempt_id);
+  assert_eq!(durable.attempt_status, "succeeded");
+  stop.cancel();
+  server.await??;
+  Ok(())
+}

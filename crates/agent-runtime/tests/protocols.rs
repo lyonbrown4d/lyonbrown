@@ -41,6 +41,9 @@ impl RuntimeTool for Inspect {
 fn config(protocol: StandardProtocol, server: &MockModelServer) -> agent_runtime::RuntimeConfig {
   let mut config = support::config(server.base_url());
   config.provider = protocol.provider().into();
+  if !matches!(protocol, StandardProtocol::Anthropic) {
+    config.base_url = Some(format!("{}/v1", server.base_url()));
+  }
   config
 }
 async fn contract(protocol: StandardProtocol) {

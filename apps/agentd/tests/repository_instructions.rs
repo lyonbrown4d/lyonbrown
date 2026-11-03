@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 mod support;
 
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply};

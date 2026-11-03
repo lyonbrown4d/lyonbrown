@@ -96,7 +96,7 @@ async fn interrupted_approval_recovery_outbox_failure_rolls_back_all_state() -> 
   let outbox = store.pending_outbox(100).await?;
   drop(store);
   let restored = Store::open(&path).await?;
-  let injected = store.connection();
+  let injected = restored.connection();
   // Fail after the approval closure and its event/Outbox have already been written.
   injected.execute_unprepared("CREATE TRIGGER reject_recovery_outbox BEFORE INSERT ON outbox WHEN EXISTS (SELECT 1 FROM events WHERE run_id = NEW.run_id AND cursor = NEW.cursor AND json_extract(record, '$.kind') = 'run_uncertain') BEGIN SELECT RAISE(ABORT, 'injected storage fault'); END;").await?;
   let error = restored

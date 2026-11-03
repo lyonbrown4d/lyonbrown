@@ -111,7 +111,8 @@ fn current_daemon_run_statuses_preserve_status_and_error() -> Result<(), serde_j
     ("cancelled", RunStatus::Cancelled),
     ("uncertain", RunStatus::Uncertain),
   ] {
-    for kind in [format!("run_{name}")] {
+    {
+      let kind = format!("run_{name}");
       assert_eq!(
         decode(&kind, &json!({"status":name,"error":"detail"}).to_string())?,
         DecodedEvent::Known(AgentEvent::RunStateChanged {

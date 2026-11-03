@@ -1,5 +1,4 @@
 mod command_tool_support;
-#[allow(dead_code)]
 mod support;
 use agent_storage::OperationStatus;
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply};
@@ -143,7 +142,9 @@ async fn pending_cancel_and_unallowlisted_program_have_no_effect_or_intent() {
     if cancel {
       let pending = approval(&node, &run.id).await;
       node.client.cancel_run(&run.id).await.unwrap();
-      assert_eq!(node.terminal(&run.id).await.status, "cancelled");
+      let terminal = node.terminal(&run.id).await;
+      assert_eq!(terminal.status, "uncertain");
+      assert!(terminal.error.contains("unconfirmed"), "{}", terminal.error);
       assert!(
         node
           .daemon
@@ -200,13 +201,19 @@ async fn command_timeout_output_budget_and_dispatch_cancel_are_durably_uncertain
     }
     let terminal = node.terminal(&run.id).await;
     assert_eq!(terminal.status, "uncertain", "{mode}: {}", terminal.error);
-    let record = node
-      .daemon
-      .store
-      .operation(exact(&pending)["action_id"].as_str().unwrap())
-      .await
-      .unwrap()
-      .unwrap();
+    let action_id = exact(&pending)["action_id"].as_str().unwrap().to_owned();
+    let record = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+      loop {
+        if let Some(record) = node.daemon.store.operation(&action_id).await.unwrap()
+          && record.status != OperationStatus::Intent
+        {
+          break record;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+      }
+    })
+    .await
+    .expect("command receipt must become terminal");
     assert_eq!(record.status, OperationStatus::Uncertain);
     let receipt = record.result_summary.unwrap();
     assert_eq!(

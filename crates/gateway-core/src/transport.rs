@@ -15,61 +15,23 @@ use tokio::{
   time::{Instant, timeout_at},
 };
 
+const MAX_UPSTREAM_ATTEMPTS: u32 = 16;
+
 impl Gateway {
   pub(crate) async fn transfer(
     &self,
     request_id: String,
     mut request: ValidatedRequest,
-    model: ModelConfig,
+    models: Vec<ModelConfig>,
     revision: String,
     admission: (OwnedSemaphorePermit, Instant),
     principal: AccessPrincipal,
   ) -> Result<Response, GatewayError> {
     let (permit, started) = admission;
-    let endpoint = if self
-      .inner
-      .config
-      .endpoints
-      .iter()
-      .any(|endpoint| endpoint.model_ids.contains(&model.id))
-    {
-      Some(
-        self
-          .inner
-          .endpoints
-          .acquire(
-            &model.id,
-            model.local_inference || request.routing.local_only,
-          )
-          .map_err(|error| match error {
-            crate::EndpointAcquireError::CapacityExhausted => GatewayError(
-              StatusCode::TOO_MANY_REQUESTS,
-              "endpoint_capacity",
-              "Provider endpoints are at capacity",
-            ),
-            crate::EndpointAcquireError::Unavailable => GatewayError(
-              StatusCode::SERVICE_UNAVAILABLE,
-              "endpoint_unavailable",
-              "No eligible provider endpoint is available",
-            ),
-          })?,
-      )
-    } else {
-      None
-    };
-    let (base, key) = endpoint
-      .as_ref()
-      .map(|lease| {
-        (
-          lease.endpoint().api_base.clone(),
-          lease.endpoint().api_key.clone(),
-        )
-      })
-      .unwrap_or_else(|| (model.api_base.clone(), model.api_key.clone()));
-    request.body["model"] = model.upstream_model.into();
+    let model = models.first().ok_or_else(GatewayError::unavailable)?;
     let record = AuditRecord {
       request_id,
-      model: model.id,
+      model: model.id.clone(),
       principal: Some(principal),
       reserved_tokens: request.reserved_tokens,
       usage: None,
@@ -89,49 +51,125 @@ impl Gateway {
       self.inner.signals.clone(),
       permit,
     )
-    .with_endpoint(endpoint)
     .prepare(first_deadline)
     .await?;
-    let outgoing = self
-      .inner
-      .client
-      .send(&base, key.as_ref(), audit.request_id(), &request.body);
-    let response = match timeout_at(first_deadline, outgoing).await {
-      Ok(Ok(response)) => response,
-      Ok(Err(error)) if error.non_success_status().is_some() => {
-        let upstream_status = error.non_success_status();
-        if upstream_status
-          .is_some_and(|status| status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error())
-        {
-          audit.cooldown_endpoint(upstream_status == Some(StatusCode::TOO_MANY_REQUESTS));
-        }
-        let status = if upstream_status == Some(StatusCode::TOO_MANY_REQUESTS) {
-          StatusCode::TOO_MANY_REQUESTS
-        } else {
-          StatusCode::BAD_GATEWAY
-        };
-        let rejected = upstream_status.is_some_and(|status| status.is_client_error());
-        drop(error);
-        audit
-          .finish(if rejected {
-            AuditStatus::Failed
-          } else {
-            AuditStatus::Uncertain
-          })
-          .await?;
-        return Err(GatewayError(
-          status,
-          "upstream_error",
-          "Upstream rejected the request",
-        ));
+    let mut attempts = 0_u32;
+    let mut selected = 0_usize;
+    let response = loop {
+      if attempts >= MAX_UPSTREAM_ATTEMPTS || tokio::time::Instant::now() >= first_deadline {
+        audit.finish(AuditStatus::Failed).await?;
+        return Err(GatewayError::timeout());
       }
-      result => {
-        audit.finish(AuditStatus::Uncertain).await?;
-        return Err(if result.is_err() {
-          GatewayError::timeout()
-        } else {
-          GatewayError::upstream()
-        });
+      let Some(model) = models.get(selected) else {
+        audit.finish(AuditStatus::Failed).await?;
+        return Err(GatewayError(
+          StatusCode::TOO_MANY_REQUESTS,
+          "endpoint_unavailable",
+          "No eligible provider endpoint is available",
+        ));
+      };
+      let mapped = self
+        .inner
+        .config
+        .endpoints
+        .iter()
+        .any(|endpoint| endpoint.model_ids.contains(&model.id));
+      let endpoint = if mapped {
+        match self.inner.endpoints.acquire(
+          &model.id,
+          model.local_inference || request.routing.local_only,
+        ) {
+          Ok(lease) => Some(lease),
+          Err(_error) if audit.retry_enabled() && selected + 1 < models.len() => {
+            selected += 1;
+            continue;
+          }
+          Err(error) => {
+            audit.finish(AuditStatus::Failed).await?;
+            return Err(match error {
+              crate::EndpointAcquireError::CapacityExhausted => GatewayError(
+                StatusCode::TOO_MANY_REQUESTS,
+                "endpoint_capacity",
+                "Provider endpoints are at capacity",
+              ),
+              crate::EndpointAcquireError::Unavailable => GatewayError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "endpoint_unavailable",
+                "No eligible provider endpoint is available",
+              ),
+            });
+          }
+        }
+      } else {
+        None
+      };
+      let (base, key) = endpoint
+        .as_ref()
+        .map(|lease| {
+          (
+            lease.endpoint().api_base.clone(),
+            lease.endpoint().api_key.clone(),
+          )
+        })
+        .unwrap_or_else(|| (model.api_base.clone(), model.api_key.clone()));
+      audit.set_endpoint(endpoint);
+      request.body["model"] = model.upstream_model.clone().into();
+      attempts += 1;
+      audit.start_attempt(attempts, &model.id).await?;
+      audit.set_model(&model.id);
+      let outgoing = self
+        .inner
+        .client
+        .send(&base, key.as_ref(), audit.request_id(), &request.body);
+      match timeout_at(first_deadline, outgoing).await {
+        Ok(Ok(response)) => {
+          audit.set_upstream_status(response.status().as_u16());
+          break response;
+        }
+        Ok(Err(error)) if error.non_success_status().is_some() => {
+          let status = error.non_success_status();
+          if let Some(status) = status {
+            audit.set_upstream_status(status.as_u16());
+          }
+          if status == Some(StatusCode::TOO_MANY_REQUESTS) {
+            audit.cooldown_endpoint(true);
+            if audit.retry_enabled() {
+              audit.finish_attempt(AuditStatus::Failed).await?;
+              if !mapped {
+                selected += 1;
+              }
+              continue;
+            }
+          } else if status.is_some_and(|status| status.is_server_error()) {
+            audit.cooldown_endpoint(false);
+          }
+          let rejected = status.is_some_and(|status| status.is_client_error());
+          drop(error);
+          audit
+            .finish(if rejected {
+              AuditStatus::Failed
+            } else {
+              AuditStatus::Uncertain
+            })
+            .await?;
+          return Err(GatewayError(
+            if status == Some(StatusCode::TOO_MANY_REQUESTS) {
+              StatusCode::TOO_MANY_REQUESTS
+            } else {
+              StatusCode::BAD_GATEWAY
+            },
+            "upstream_error",
+            "Upstream rejected the request",
+          ));
+        }
+        result => {
+          audit.finish(AuditStatus::Uncertain).await?;
+          return Err(if result.is_err() {
+            GatewayError::timeout()
+          } else {
+            GatewayError::upstream()
+          });
+        }
       }
     };
     let expected = if request.stream {

@@ -52,17 +52,12 @@ flowchart TB
     Computer <-->|认证会话挂接 / 观察与获批执行| API
     SharedDecision[decision-core / 通用规则与后端接口]
     Decision --> SharedDecision
-    subgraph GatewayService[独立 AI Gateway]
-        GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
-        GatewayUI[Leptos SSR / 管理会话]
-        GatewayStore[SeaORM async SQLite / 策略 / 审计 / 凭据摘要]
-        GatewayHTTP --> SharedDecision
-        GatewayHTTP --> GatewayStore
-        GatewayUI --> GatewayStore
-        GatewayUI --> SharedDecision
-    end
-    Model -.->|显式配置网关端点| GatewayHTTP
-    GatewayHTTP --> GatewayUpstream[Chat Completions upstream]
+    Gateway[嵌入式 Gateway / 路由 / 访问控制 / 审计]
+    GatewayHTTP[可选回环 HTTP / Bearer API]
+    Model --> Gateway
+    GatewayHTTP --> Gateway
+    Gateway --> SharedDecision
+    Gateway --> GatewayUpstream[Chat Completions upstream]
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --> Workspace[工作区 / Git / Artifact / notify]
@@ -209,7 +204,7 @@ ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon �
 - 原生宿主挂接：`apps/agent-cli/src/computer_backend.rs`、`apps/agent-desktop/src/computer.rs`、`crates/agent-computer-runtime/src/client.rs`、`crates/agent-computer-runtime/src/attachment.rs`、`apps/agentd/src/computer/service.rs`、`apps/agentd/src/computer/tools/` 与 `apps/agentd/src/computer/mutation.rs`。
 - 持久状态：`crates/agent-storage/src/schema.rs`、`migration.rs` 与 `migration/`。
 - 通用决策与 Agent 接入：`crates/decision-core/`、`crates/decision-semantic/`、`crates/decision-model/` 与 `apps/agentd/src/model_routing.rs`。
-- 独立网关与合成模型：`apps/ai-gateway/`、`crates/gateway-core/`、`crates/gateway-storage/`、`crates/gateway-web/` 和 `apps/model-mock/`。
+- Gateway 与合成模型：`crates/gateway-core/`、`crates/gateway-storage/` 和 `apps/model-mock/`。
 
 跨设备任务中的 Worker Attempt 成功与 Master 采纳结果属于不同语义。协议保留 `attempt_id`、`owner_epoch` 和显式 `AcceptResult`，不能把收到结果当成已经采纳。
 

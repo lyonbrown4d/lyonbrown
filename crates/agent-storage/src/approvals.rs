@@ -24,7 +24,7 @@ pub(crate) async fn close_pending(connection: &impl ConnectionTrait, run: &str) 
       .filter(approvals::Column::Id.eq(&approval.id))
       .col_expr(
         approvals::Column::Status,
-        Expr::value((&approval.status).to_owned()),
+        Expr::value(approval.status.to_owned()),
       )
       .col_expr(
         approvals::Column::Record,
@@ -101,7 +101,7 @@ impl Store {
         run.status = "awaiting_approval".into();
         runs::Entity::update_many()
           .filter(runs::Column::Id.eq(run_id))
-          .col_expr(runs::Column::Status, Expr::value((&run.status).to_owned()))
+          .col_expr(runs::Column::Status, Expr::value(run.status.to_owned()))
           .col_expr(
             runs::Column::Record,
             Expr::value((serde_json::to_string(&run)?).to_owned()),
@@ -110,9 +110,9 @@ impl Store {
           .await
           .map(|result| result.rows_affected)?;
         approvals::ActiveModel {
-          id: Set((&value.id).to_owned()),
+          id: Set(value.id.to_owned()),
           run_id: Set((run_id).to_owned()),
-          status: Set((&value.status).to_owned()),
+          status: Set(value.status.to_owned()),
           record: Set((serde_json::to_string(&value)?).to_owned()),
         }
         .insert(connection)
@@ -196,7 +196,7 @@ impl Store {
         value.status = if approved { "approved" } else { "denied" }.into();
         runs::Entity::update_many()
           .filter(runs::Column::Id.eq(&run.id))
-          .col_expr(runs::Column::Status, Expr::value((&run.status).to_owned()))
+          .col_expr(runs::Column::Status, Expr::value(run.status.to_owned()))
           .col_expr(
             runs::Column::Record,
             Expr::value((serde_json::to_string(&run)?).to_owned()),
@@ -208,7 +208,7 @@ impl Store {
           .filter(approvals::Column::Id.eq(id))
           .col_expr(
             approvals::Column::Status,
-            Expr::value((&value.status).to_owned()),
+            Expr::value(value.status.to_owned()),
           )
           .col_expr(
             approvals::Column::Record,

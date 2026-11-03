@@ -1,5 +1,4 @@
 mod browser_tool_support;
-#[allow(dead_code)]
 mod support;
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply, tool_reply};
 use browser_tool_support::{

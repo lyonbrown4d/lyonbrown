@@ -51,6 +51,19 @@ pub struct SessionMutation {
 /// fence the writer until the store reconciles them.
 #[async_trait]
 pub trait SessionPersistence: Send + Sync {
+  /// Implementations that persist mappings must encrypt and authenticate them.
+  async fn load_private_scope(&self, _session_id: &str) -> Result<Option<secrecy::SecretString>> {
+    Ok(None)
+  }
+  /// The default leaves mappings ephemeral; it provides no restart recovery.
+  async fn commit_private_scope(
+    &self,
+    _session_id: &str,
+    _owner_epoch: u64,
+    _scope: secrecy::SecretString,
+  ) -> Result<()> {
+    Ok(())
+  }
   async fn load(&self, session_id: &str) -> Result<Option<Vec<u8>>>;
   async fn commit(
     &self,
@@ -85,6 +98,15 @@ pub struct ToolOutput {
 #[async_trait]
 pub trait RuntimeTool: Send + Sync {
   fn definition(&self) -> ToolDefinition;
+  /// The host must independently validate the sink and the requested reference.
+  /// The default refuses all sensitive references.
+  fn authorize_sensitive_reference(&self, _call: &ToolCall, _reference: &str) -> bool {
+    false
+  }
+  /// Validate the complete resolved call and its destination before side effects.
+  fn authorize_resolved_sensitive_call(&self, _original: &ToolCall, _resolved: &ToolCall) -> bool {
+    false
+  }
   async fn execute(&self, call: ToolCall, cancellation: CancellationToken) -> Result<ToolOutput>;
 }
 

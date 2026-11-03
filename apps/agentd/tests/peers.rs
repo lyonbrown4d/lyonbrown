@@ -183,9 +183,7 @@ async fn worker_tasks_participate_in_upgrade_fence_and_shutdown_cancellation() {
     .submit(&pair.worker_manager.local_node(), envelope.clone())
     .await
     .unwrap();
-  tokio::time::timeout(Duration::from_secs(5), mock.wait_for_requests(1))
-    .await
-    .unwrap();
+  pair.wait_for_worker_model(&mock, &envelope).await;
   let node = pair
     .worker
     .prepare_upgrade(Request::new(v1::Empty {}))

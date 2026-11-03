@@ -123,7 +123,7 @@ async fn tui_task_commands_drive_one_paired_worker_attempt_to_durable_acceptance
     "completed"
   );
   assert_eq!(
-    remote.pair.worker_runs(&envelope).len(),
+    remote.pair.worker_runs(&envelope).await.len(),
     1,
     "one Worker run was persisted"
   );

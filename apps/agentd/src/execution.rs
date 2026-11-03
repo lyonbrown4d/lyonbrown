@@ -304,6 +304,7 @@ impl Daemon {
         runtime_config,
         Arc::new(crate::run_input::RunPersistence {
           store: self.store.clone(),
+          private_store: self.provider_secrets.clone(),
           run_id: run.id.clone(),
         }),
         tools,
@@ -312,19 +313,21 @@ impl Daemon {
       )
       .await
     } else {
-      Runtime::open(
-        runtime_config,
-        Arc::new(crate::run_input::RunPersistence {
-          store: self.store.clone(),
-          run_id: run.id.clone(),
-        }),
-        tools,
-        listener,
-      )
-      .await
+      self
+        .open_remote_runtime(
+          runtime_config,
+          Arc::new(crate::run_input::RunPersistence {
+            store: self.store.clone(),
+            private_store: self.provider_secrets.clone(),
+            run_id: run.id.clone(),
+          }),
+          tools,
+          listener,
+        )
+        .await
     };
     let runtime = match runtime {
-      Ok(runtime) => Arc::new(runtime),
+      Ok(runtime) => Arc::new(runtime.with_privacy(self.privacy.clone()).await?),
       Err(error) => {
         event_writer.drain().await?;
         return Err(error.into());

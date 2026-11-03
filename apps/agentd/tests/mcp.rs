@@ -157,6 +157,8 @@ async fn product_configuration_does_not_forward_ambient_provider_credentials_to_
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn absent_mcp_configuration_exposes_no_mcp_authority_and_executes_no_remote_tool() {
   let protocol = StandardProtocol::ChatCompletions;
+  let fixture = Fixture::default();
+  let (_unconfigured, stop) = fixture.start().await;
   let main = MockModelServer::start(vec![
     tool_reply(protocol, "mcp_call", arguments("forbidden")),
     text_reply(protocol, "safe finish"),
@@ -166,7 +168,13 @@ async fn absent_mcp_configuration_exposes_no_mcp_authority_and_executes_no_remot
   let node = Node::start(&main, protocol, None).await;
   let run = node.run("attempt unconfigured MCP tool").await;
   let terminal = node.terminal(&run.id).await;
-  assert_eq!(terminal.status, "completed", "{}", terminal.error);
+  assert_eq!(terminal.status, "failed", "{}", terminal.error);
+  assert!(
+    terminal
+      .error
+      .contains("outside the advertised authorization set")
+  );
+  assert_eq!(fixture.calls.load(Ordering::SeqCst), 0);
   assert!(
     node
       .client
@@ -176,6 +184,11 @@ async fn absent_mcp_configuration_exposes_no_mcp_authority_and_executes_no_remot
       .is_empty()
   );
   let requests = main.requests().await;
+  assert_eq!(
+    requests.len(),
+    1,
+    "unauthorized tool must stop the model loop"
+  );
   assert!(
     requests[0].body["tools"]
       .as_array()
@@ -189,6 +202,13 @@ async fn absent_mcp_configuration_exposes_no_mcp_authority_and_executes_no_remot
     .events(&run.id, 0, 1000)
     .await
     .expect("events");
+  assert!(
+    events.iter().all(|event| !matches!(
+      decode(&event.kind, &event.payload_json).expect("event contract"),
+      DecodedEvent::Known(AgentEvent::ToolStarted { name, .. }) if name == "mcp_call"
+    )),
+    "unregistered MCP tool must not start"
+  );
   let plan: Value = serde_json::from_str(
     &events
       .iter()
@@ -204,4 +224,5 @@ async fn absent_mcp_configuration_exposes_no_mcp_authority_and_executes_no_remot
       .contains(&json!("mcp_call"))
   );
   node.close().await;
+  stop.cancel();
 }

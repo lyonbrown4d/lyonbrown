@@ -11,7 +11,7 @@ use anyhow::{Result, ensure};
 
 impl Store {
   pub async fn active_master_tasks(&self, node: &str) -> Result<usize> {
-    let count: i64 = tasks::Entity::find()
+    let count: u64 = tasks::Entity::find()
       .filter(tasks::Column::OwnerNodeId.eq(node))
       .filter(tasks::Column::AttemptStatus.is_in(["accepted", "running", "uncertain"]))
       .count(self.connection())

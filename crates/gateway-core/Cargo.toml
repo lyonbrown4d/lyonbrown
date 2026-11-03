@@ -8,6 +8,7 @@ license.workspace = true
 thiserror.workspace = true
 secrecy.workspace = true
 agent-security = { path = "../agent-security" }
+agent-privacy = { path = "../agent-privacy" }
 anyhow.workspace = true
 async-trait.workspace = true
 async-stream = "=0.3.6"
@@ -24,12 +25,11 @@ sha2.workspace = true
 subtle = "=2.6.1"
 tokio.workspace = true
 tracing.workspace = true
+tower.workspace = true
 url = "=2.5.8"
 uuid.workspace = true
 utoipa = "=6.0.0"
 utoipa-axum.workspace = true
-utoipa-swagger-ui = { version = "=10.0.2", features = ["axum", "vendored"] }
 
 [dev-dependencies]
 tempfile.workspace = true
-tower.workspace = true

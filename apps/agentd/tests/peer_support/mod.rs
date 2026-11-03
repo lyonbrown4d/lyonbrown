@@ -216,6 +216,65 @@ impl Pair {
     .unwrap()
   }
 
+  /// Keep the original five-second request deadline while surfacing terminal worker failures.
+  pub async fn wait_for_worker_model(&self, mock: &MockModelServer, envelope: &TaskEnvelope) {
+    let wait = async {
+      let request = mock.wait_for_requests(1);
+      tokio::pin!(request);
+      loop {
+        tokio::select! {
+          biased;
+          _ = &mut request => return,
+          _ = tokio::time::sleep(Duration::from_millis(500)) => {
+            let (finished, state) = self.worker_diagnostic(envelope).await;
+            if finished {
+              if !mock.requests().await.is_empty() { return; }
+              panic!("worker ended before model request: {state}");
+            }
+          }
+        }
+      }
+    };
+    if tokio::time::timeout(Duration::from_secs(5), wait)
+      .await
+      .is_err()
+    {
+      let state = tokio::time::timeout(Duration::from_secs(2), self.worker_diagnostic(envelope))
+        .await
+        .map(|(_, state)| state)
+        .unwrap_or_else(|_| "state unavailable".into());
+      panic!("worker model request deadline elapsed: {state}");
+    }
+  }
+
+  async fn worker_diagnostic(&self, envelope: &TaskEnvelope) -> (bool, String) {
+    let Ok(task) = self.worker.store.task(&envelope.task_id).await else {
+      return (false, "state unavailable".into());
+    };
+    let session = format!("worker:{}:{}", envelope.task_id, envelope.attempt_id);
+    let Ok(runs) = self.worker.store.runs(&session).await else {
+      return (false, "state unavailable".into());
+    };
+    let run = runs.last();
+    let finished = task
+      .as_ref()
+      .is_some_and(|task| terminal_status(&task.attempt_status))
+      || run.is_some_and(|run| terminal_status(&run.status));
+    let state = format!(
+      "task={}, attempt={}, run={}, error_class={}",
+      safe_status(task.as_ref().map(|task| task.status.as_str())),
+      safe_status(task.as_ref().map(|task| task.attempt_status.as_str())),
+      safe_status(run.map(|run| run.status.as_str())),
+      safe_error_class(
+        run
+          .map(|run| run.error.as_str())
+          .filter(|error| !error.is_empty())
+          .or_else(|| task.as_ref().map(|task| task.error.as_str()))
+      ),
+    );
+    (finished, state)
+  }
+
   pub async fn worker_runs(&self, envelope: &TaskEnvelope) -> Vec<agent_core::Run> {
     self
       .worker
@@ -261,7 +320,11 @@ async fn node(
   config.provider = protocol.provider().into();
   config.model = "worker-fixture".into();
   config.provider_api_key = Some("synthetic-worker-secret".into());
-  config.api_base = Some(mock.base_url().into());
+  config.api_base = Some(if protocol == StandardProtocol::Anthropic {
+    mock.base_url().into()
+  } else {
+    format!("{}/v1", mock.base_url())
+  });
   config.peer = Some(agent_config::PeerSettings {
     listen: address,
     advertise_url: format!("https://{address}"),
@@ -277,4 +340,45 @@ async fn node(
   };
   drop(reserve);
   daemon
+}
+
+fn terminal_status(status: &str) -> bool {
+  matches!(
+    status,
+    "completed" | "succeeded" | "failed" | "cancelled" | "uncertain"
+  )
+}
+fn safe_status(status: Option<&str>) -> &'static str {
+  match status {
+    None => "absent",
+    Some("accepted") => "accepted",
+    Some("running") => "running",
+    Some("awaiting_approval") => "awaiting_approval",
+    Some("awaiting_acceptance") => "awaiting_acceptance",
+    Some("completed") => "completed",
+    Some("succeeded") => "succeeded",
+    Some("failed") => "failed",
+    Some("cancelled") => "cancelled",
+    Some("uncertain") => "uncertain",
+    _ => "other",
+  }
+}
+fn safe_error_class(error: Option<&str>) -> &'static str {
+  let Some(error) = error.filter(|value| !value.is_empty()) else {
+    return "none";
+  };
+  let error = error.to_ascii_lowercase();
+  if error.contains("privacy") || error.contains("private") {
+    "privacy"
+  } else if error.contains("gateway") {
+    "gateway"
+  } else if error.contains("model") {
+    "model"
+  } else if error.contains("decision") || error.contains("classifier") {
+    "decision"
+  } else if error.contains("database") || error.contains("storage") {
+    "storage"
+  } else {
+    "other"
+  }
 }

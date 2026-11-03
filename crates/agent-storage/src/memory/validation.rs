@@ -24,10 +24,10 @@ pub(super) fn validate(mutation: &MemoryMutation) -> Result<()> {
   {
     return Err(MemoryError::Invalid.into());
   }
-  if let MemorySource::Explicit { request_id } = &mutation.source {
-    if uuid::Uuid::parse_str(request_id).is_err() {
-      return Err(MemoryError::Invalid.into());
-    }
+  if let MemorySource::Explicit { request_id } = &mutation.source
+    && uuid::Uuid::parse_str(request_id).is_err()
+  {
+    return Err(MemoryError::Invalid.into());
   }
   Ok(())
 }
@@ -61,10 +61,10 @@ pub(super) async fn validate_source(
     {
       return Err(MemoryError::Forbidden.into());
     }
-    if let memory_core::MemoryScope::Session(id) = &mutation.item.scope {
-      if id != session_id {
-        return Err(MemoryError::Forbidden.into());
-      }
+    if let memory_core::MemoryScope::Session(id) = &mutation.item.scope
+      && id != session_id
+    {
+      return Err(MemoryError::Forbidden.into());
     }
     if events::Entity::find_by_id((run_id.clone(), i64::try_from(*event_cursor)?))
       .one(connection)

@@ -141,7 +141,14 @@ async fn approval_is_not_granted_and_tool_effect_is_not_executed() {
   );
   assert_eq!(model.requests().await.len(), 1);
   node.client.cancel_run(id).await.unwrap();
-  node.status(id, "cancelled").await;
+  let cancelled = node.status(id, "uncertain").await;
+  assert!(
+    cancelled.error.contains("unconfirmed"),
+    "{}",
+    cancelled.error
+  );
+  assert!(!node.workspace.path().join("must-not-exist.txt").exists());
+  assert_eq!(model.requests().await.len(), 1);
   node.close().await;
 }
 

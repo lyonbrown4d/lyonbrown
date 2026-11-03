@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 mod classification;
 mod configuration;
+mod gateway;
 mod local;
 mod local_model;
 mod local_request;
@@ -9,6 +10,7 @@ mod local_stream;
 mod transport;
 pub use classification::{CLASSIFICATION_OUTPUT_LIMIT, classify_json};
 pub use configuration::configured;
+pub use gateway::{configured_with_gateway, gateway_model};
 pub use local::classify_local_json;
 pub use local_model::local_model;
 pub use transport::configured_http;

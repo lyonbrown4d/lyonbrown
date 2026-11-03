@@ -22,8 +22,10 @@ async fn terminal_model_skill_git_and_credential_workflows_use_daemon_without_in
 
   terminal.paste("/models");
   terminal.send("\r");
-  terminal.screen("deepseek-chat").await;
+  terminal.screen("DeepSeek Chat").await;
   terminal.snapshot("unified-model-catalog");
+  terminal.send("\x1b");
+  terminal.screen_without("DeepSeek Chat").await;
 
   terminal.paste("/models select terminal-fixture configured");
   terminal.send("\r");
@@ -69,8 +71,10 @@ async fn terminal_model_skill_git_and_credential_workflows_use_daemon_without_in
   terminal.snapshot("git-status");
   terminal.paste("/diff tracked.txt");
   terminal.send("\r");
-  terminal.screen("+after").await;
+  terminal.screen("+ after").await;
   terminal.snapshot("git-diff");
+  terminal.send("\x1b");
+  terminal.screen_without("+ after").await;
 
   let source = node.workspace.path().join("acceptance-skill");
   std::fs::create_dir(&source).unwrap();

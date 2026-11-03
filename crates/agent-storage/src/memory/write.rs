@@ -20,27 +20,26 @@ impl Store {
     let transaction = self.begin_write().await?;
     let result: Result<_> = async {
       // Dedup is checked under the same database fence as CAS and index intent.
-      if let MemorySource::Explicit { request_id } = &mutation.source {
-        if let Some(request) = requests::Entity::find_by_id(request_id)
+      if let MemorySource::Explicit { request_id } = &mutation.source
+        && let Some(request) = requests::Entity::find_by_id(request_id)
           .one(&transaction)
           .await?
-        {
-          if request.body_hash != body_hash {
-            return Err(MemoryError::Conflict.into());
-          }
-          let current = items::Entity::find_by_id(&request.memory_id)
-            .one(&transaction)
-            .await?
-            .ok_or(MemoryError::NotFound)?;
-          if current.state == "deleted" {
-            return Err(MemoryError::Conflict.into());
-          }
-          let previous = revisions::Entity::find_by_id((request.memory_id, request.revision))
-            .one(&transaction)
-            .await?
-            .ok_or(MemoryError::NotFound)?;
-          return Ok(serde_json::from_str(&previous.record)?);
+      {
+        if request.body_hash != body_hash {
+          return Err(MemoryError::Conflict.into());
         }
+        let current = items::Entity::find_by_id(&request.memory_id)
+          .one(&transaction)
+          .await?
+          .ok_or(MemoryError::NotFound)?;
+        if current.state == "deleted" {
+          return Err(MemoryError::Conflict.into());
+        }
+        let previous = revisions::Entity::find_by_id((request.memory_id, request.revision))
+          .one(&transaction)
+          .await?
+          .ok_or(MemoryError::NotFound)?;
+        return Ok(serde_json::from_str(&previous.record)?);
       }
       if mutation.item.state == MemoryState::Active
         && mutation

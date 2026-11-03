@@ -21,6 +21,18 @@ impl Node {
     let mut config = agentd::config::Config::try_parse_from(["agentd"]).unwrap();
     config.data_dir = Some(data.path().into());
     config.api_base = Some("http://127.0.0.1:1".into());
+    // A same-named Gateway entry must not override a selected profile's endpoint or key.
+    config
+      .gateway
+      .models
+      .push(agent_config::GatewayModelSettings {
+        id: "fixture-model".into(),
+        upstream_model: "fixture-model".into(),
+        api_base: "http://127.0.0.1:1/v1".into(),
+        api_key_env: None,
+        context_tokens: 128_000,
+        capabilities: ["text".into(), "tools".into()].into(),
+      });
     let daemon = agentd::Daemon::open(config).await.unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());

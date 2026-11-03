@@ -29,11 +29,15 @@ pub fn text(text: &str) -> Reply {
   }
 }
 pub fn config(app: &MockApp, protocol: Protocol) -> ModelConfig {
+  let base_path = match protocol {
+    Protocol::ChatCompletions | Protocol::Responses => "/v1",
+    _ => "",
+  };
   ModelConfig {
     provider: protocol.standard().unwrap().provider().into(),
     model: "synthetic".into(),
     api_key: "synthetic-secret-never-log".into(),
-    base_url: Some(app.base_url()),
+    base_url: Some(format!("{}{base_path}", app.base_url())),
     system_prompt: None,
     context_window: 16384,
     max_output_tokens: 1024,

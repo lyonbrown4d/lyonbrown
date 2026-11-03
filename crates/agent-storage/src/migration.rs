@@ -2,6 +2,7 @@ use sea_orm::sea_query::ExprTrait;
 mod configuration;
 mod memory;
 mod memory_projects;
+mod privacy;
 mod sessions;
 mod tasks;
 use crate::schema;
@@ -15,6 +16,7 @@ impl MigratorTrait for Migrator {
       Box::new(Initial),
       Box::new(memory::Memory),
       Box::new(memory_projects::MemoryProjects),
+      Box::new(privacy::PrivacyScopes),
     ]
   }
 }

@@ -66,6 +66,23 @@ pub(crate) fn validate(input: v1::ProviderProfile) -> Result<ProviderProfile, St
     credential_id: String::new(),
   })
 }
+fn validate_profile_privacy(
+  privacy: &mut agent_privacy::PrivacyService,
+  profile: &ProviderProfile,
+) -> Result<(), Status> {
+  for value in [&profile.name, &profile.model, &profile.base_url] {
+    let protected = privacy
+      .protect_text("provider-profile-validation", value)
+      .map_err(|_| Status::failed_precondition("provider privacy protection unavailable"))?;
+    if protected != *value {
+      return Err(Status::invalid_argument(
+        "provider profile contains protected content",
+      ));
+    }
+  }
+  Ok(())
+}
+
 fn credential(bytes: Vec<u8>) -> Result<Option<agent_secrets::SecretString>, Status> {
   if bytes.is_empty() {
     return Ok(None);
@@ -142,17 +159,30 @@ impl Daemon {
     profile.revision = expected
       .checked_add(1)
       .ok_or_else(|| Status::invalid_argument("provider revision exhausted"))?;
+    {
+      let mut privacy = self.privacy.lock().await;
+      if let Some(secret) = &secret {
+        privacy
+          .register_known_secret(secret)
+          .map_err(|_| Status::failed_precondition("provider privacy protection unavailable"))?;
+      }
+      validate_profile_privacy(&mut privacy, &profile)?;
+    }
     let new_id = secret
       .as_ref()
       .map(|_| format!("profile-{}", uuid::Uuid::new_v4()));
     if let (Some(secret), Some(id)) = (secret, &new_id) {
       self
-        .provider_secrets
-        .put(id, &secret)
-        .map_err(|_| Status::failed_precondition("provider credential could not be stored"))?;
+        .store_known_credential(id.clone(), secret, false)
+        .await?;
       profile.credential_id = id.clone();
     }
-    match self.store.put_provider_profile(&profile, expected).await {
+    // Protect the final check and publish against concurrent credential uploads.
+    let mut privacy = self.privacy.lock().await;
+    validate_profile_privacy(&mut privacy, &profile)?;
+    let saved = self.store.put_provider_profile(&profile, expected).await;
+    drop(privacy);
+    match saved {
       Ok(profile) => {
         self.events.notify_waiters();
         self.public_profile(profile)
@@ -201,6 +231,12 @@ impl Daemon {
           .ok_or_else(|| Status::failed_precondition("provider credential required"))?
       }
     };
+    self
+      .privacy
+      .lock()
+      .await
+      .register_known_secret(&secret)
+      .map_err(|_| Status::failed_precondition("provider privacy protection unavailable"))?;
     Ok(crate::provider_probe::probe(&profile, secret.expose_secret()).await)
   }
 }

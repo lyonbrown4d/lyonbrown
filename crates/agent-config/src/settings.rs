@@ -12,6 +12,8 @@ pub(crate) struct Credentials(pub BTreeMap<String, SecretString>);
 #[serde(deny_unknown_fields)]
 pub struct Settings {
   #[serde(default)]
+  pub gateway: crate::GatewaySettings,
+  #[serde(default)]
   pub database_url: Option<SecretString>,
   #[serde(default)]
   pub memory: crate::MemorySettings,
@@ -76,6 +78,13 @@ impl Settings {
       .get(&format!("mcp:{name}"))
       .map(|value| value.expose_secret())
   }
+  pub fn gateway_credential(&self, name: &str) -> Option<String> {
+    self
+      .credentials
+      .0
+      .get(&format!("gateway:{name}"))
+      .map(|value| value.expose_secret().to_owned())
+  }
   pub fn credential(&self, provider: &str) -> Option<String> {
     self
       .credentials
@@ -89,6 +98,7 @@ impl Settings {
   /// Revalidate after applying explicit command-line overrides.
   pub fn validate(&self) -> Result<()> {
     self.memory.validate()?;
+    self.gateway.validate()?;
     if let Some(url) = &self.database_url {
       let value = url.expose_secret();
       ensure!(
@@ -208,7 +218,7 @@ impl DecisionSettings {
   }
 }
 
-fn validate_url(value: &str, field: &str) -> Result<()> {
+pub(crate) fn validate_url(value: &str, field: &str) -> Result<()> {
   // Do not include the supplied URL in errors: credentials and query tokens may be present.
   let url =
     Url::parse(value).map_err(|_| anyhow::anyhow!("{field} must be an absolute HTTP(S) URL"))?;

@@ -1,7 +1,11 @@
 //! Layered process configuration without mutating the process environment.
 mod commands;
 mod delegation;
+mod gateway;
 mod load;
+pub use gateway::{
+  GatewayEndpointSettings, GatewayGroupSettings, GatewayModelSettings, GatewaySettings,
+};
 mod mcp;
 mod memory;
 mod models;

@@ -1,6 +1,6 @@
 # Runtime screenshots and acceptance scope
 
-This page preserves historical runtime evidence with its original platform, version and digests. The current Rig AgentRun, asynchronous SeaORM storage, latest database schema, memory and Qdrant integration, and asynchronous Gateway FluxDI composition were not recompiled or runtime-accepted in this iteration. Historical screenshots do not cover these implementations. See [verification scope](development.md#verification-scope).
+This page preserves historical runtime evidence with its original platform, version and digests. Historical screenshots do not establish runtime acceptance of the current Rig AgentRun, asynchronous SeaORM storage, database schema, memory or Qdrant integration. See [verification scope](development.md#verification-scope).
 
 The earlier Desktop client screenshots show the local native GPUI Desktop window on macOS 27.0.1, arm64, with GPUI Kit 0.7.3. That capture used CEF 154.0.34 (`cef` Rust crate 154.5.0+154.0.34). They record runs of the 0.1.0 native acceptance example, using a local HTTP model fixture through an authenticated connection to a real agentd. The fixture returns synthetic content without paid model calls. The eight images of Settings, conversation, tabs, collapsed panels, approval, Editor and Diff were captured on October 18, 2026. The [native capture record](evidence/desktop-native-capture.json) stores the executable, source and image digests, two Runs persisted as `completed`, and the exact file-write approval persisted as `consumed`. See [the client documentation](clients.md) for Settings, chat tabs and panel toggles.
 
@@ -153,40 +153,6 @@ The 0.1.0 ARM64 release build completed on macOS 27.0.1. Client builds enable `n
 | DMG | One for Desktop | Read-only mounted app tree matches staging; image detached afterward |
 
 Each client's five Helpers match its main executable digest, and all 232 CEF files match the pinned SDK. Both PKGs are unsigned and the artifacts are not notarized. These records cover generation and package contents; operating-system installation, native service lifecycle, upgrades and rollback require separate runtime acceptance. See the [local distribution guide](https://github.com/lyonbrown4d/lyonbrown/blob/main/packaging/README.md) for build commands.
-
-## AI Gateway administration and model requests
-
-Captured on October 19, 2026 using a 0.1.0 SSR server and WASM hydration debug build on macOS ARM64. The independent `ai-gateway` connects to local `model-mock` through Rig HTTP transport. Leptos components provide the initial SSR page and hydrated interaction. These light-theme images were captured during actual in-app browser operation.
-
-![Super-administrator username/password sign-in](images/gateway-login-macos.jpg)
-
-![Actual Gateway model catalog](images/gateway-models-macos.jpg)
-
-![Policy state after saving through the administration form](images/gateway-policy-macos.jpg)
-
-After signing in with the environment-initialized super-administrator username and password through the actual form, the policy revision was saved as `acceptance-v1`. Shared browser validation rejected invalid JSON, and Reset restored the original policy. Synthetic policy text containing HTML markup survived an SSR reload as text without creating extra page nodes. A subsequent automatic-routing request used the new revision. Logging out revoked the SQLite administration session; visiting the models page again returned to sign-in.
-
-![Actual request records and policy revisions](images/gateway-requests-macos.jpg)
-
-Four synthetic model requests covered explicit-model JSON, automatic-routing JSON, automatic-routing SSE and automatic routing after the policy update. All four SQLite audit records reached Succeeded; the SSE stream included its terminal marker. Additional checks covered API/admin credential separation, unauthenticated rejection and absence of credentials or prompt columns in storage. No paid model was called.
-
-![Swagger UI executing a health check with a 200 response](images/gateway-swagger-macos.jpg)
-
-The administration API-documentation link opened Swagger UI with its embedded specification and assets. An actual Try it out health request returned `200` with `status: live`.
-
-![Narrow-window navigation and independently scrolling request table](images/gateway-mobile-macos.jpg)
-
-The desktop layout was checked at 1280 × 800. The narrow viewport requested 390 × 844; document width after the scrollbar was 380 pixels. The document did not overflow horizontally, and the table scrolled inside its own container. The [runtime record](evidence/gateway-web-macos.json) contains binary, WASM, JavaScript, relevant-source and image hashes plus HTTP and SQLite results. This section does not cover public-network, Windows, Linux or new installer acceptance.
-
-## Gateway existing database and administration interaction
-
-![Gateway request page showing seven actual audit records on macOS](images/gateway-library-reuse-macos.png)
-
-This section uses the version 0.1.0 Gateway SSR/WASM product build and independent loopback `model-mock` on macOS arm64. This historical build used a copy of an existing SQLite database, retaining its single super administrator and 4 successful audit records. The current SeaORM schema does not provide that historical legacy-database upgrade path. Three subsequent JSON/SSE requests succeeded, bringing the page and database to 7 successful records.
-
-Actual browser checks covered local WASM rejection of a short password, login with the original account, the request page and logout. After logout, a protected page redirected to login, the database held 0 admin sessions, and the browser console showed no warnings or errors. `POST /v1/models`, `GET /v1/chat/completions`, `POST /health/live` and `DELETE /health/ready` each returned 405 without adding audit records. OpenAPI title and version metadata were preserved.
-
-The [runtime record](evidence/gateway-library-reuse-macos.json) stores these results and SHA-256 digests for two executables, 90 source and build files, browser assets and the screenshot. This section covers only a synthetic loopback model, without paid-model calls or weight loading; it does not establish Windows, Linux, public-network or installer acceptance.
 
 ## Capabilities outside this screenshot set
 

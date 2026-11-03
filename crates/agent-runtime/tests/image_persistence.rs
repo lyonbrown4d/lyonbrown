@@ -91,6 +91,9 @@ async fn image_recovery_preserves_framework_messages(protocol: StandardProtocol)
     .unwrap();
   let mut config = support::config(server.base_url());
   config.provider = protocol.provider().into();
+  if !matches!(protocol, StandardProtocol::Anthropic) {
+    config.base_url = Some(format!("{}/v1", server.base_url()));
+  }
   let store = support::shared();
   let events = Arc::new(Mutex::new(Vec::new()));
   let capture = events.clone();

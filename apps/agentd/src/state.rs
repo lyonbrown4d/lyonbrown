@@ -13,6 +13,8 @@ pub struct Daemon {
   pub config: Config,
   pub store: Store,
   pub(crate) memory: Arc<agent_memory::MemoryService>,
+  pub(crate) privacy: Arc<Mutex<agent_privacy::PrivacyService>>,
+  pub(crate) gateway: fluxdi::Shared<crate::gateway::GatewayHost>,
   pub node_id: String,
   pub(crate) token: Arc<String>,
   pub(crate) services: fluxdi::Shared<RuntimeServices>,
@@ -79,6 +81,9 @@ impl Daemon {
     Ok(())
   }
   pub async fn shutdown(&self) {
+    if let Some(gateway) = &self.gateway.gateway {
+      gateway.set_ready(false);
+    }
     let worker = {
       let _submission = self.submission.lock().await;
       let worker = self.peer_worker.lock().await.clone();

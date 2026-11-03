@@ -1,6 +1,7 @@
 //! Daemon-owned trusted native command tool with durable exact-action authorization.
 mod authorization;
 mod input;
+mod receipt;
 mod schema;
 
 use crate::{Daemon, config::Config};
@@ -137,6 +138,15 @@ impl CommandTool {
       began: began.clone(),
     });
     let executor = CommandExecutor::open(&self.workspace, self.policy.clone(), authorization)?;
+    let mut receipt = receipt::ReceiptGuard::new(
+      self.daemon.store.clone(),
+      self.daemon.events.clone(),
+      self.run_id.clone(),
+      self.epoch,
+      request.action_id.clone(),
+      began.clone(),
+      cancel.clone(),
+    );
     let outcome = executor.execute(request, cancel).await;
     if began.load(Ordering::Acquire) {
       let status = match outcome.status {
@@ -148,6 +158,7 @@ impl CommandTool {
         json!({"reason":outcome.reason,"exit_code":outcome.exit_code,
           "output_truncated":outcome.output_truncated,"stdout_bytes":outcome.stdout.len(),"stderr_bytes":outcome.stderr.len()})).await
         .map_err(|_| RuntimeError::Uncertain("command receipt could not be persisted; reconcile before acting again".into()))?;
+      receipt.finish();
       self.daemon.events.notify_waiters();
     } else if self
       .daemon

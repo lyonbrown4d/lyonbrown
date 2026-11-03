@@ -10,6 +10,8 @@ use std::sync::Arc;
 pub(super) async fn service(
   config: Shared<Config>,
   store: Shared<agent_storage::Store>,
+  secrets: Shared<agent_secrets::SecretStore>,
+  local: Shared<super::local::LocalNode>,
 ) -> Result<Shared<MemoryService>, Error> {
   config
     .memory
@@ -97,6 +99,15 @@ pub(super) async fn service(
       .map_err(|_| failure("Qdrant server connection or compatibility check failed"))?,
     ),
   };
+  let engine = Arc::new(
+    super::private_embedding::PrivateEmbedding::new(
+      engine,
+      &config,
+      secrets,
+      &[local.token.as_str().to_owned().into()],
+    )
+    .map_err(|_| failure("embedding privacy initialization failed"))?,
+  );
   MemoryService::new(repository, Some(engine), Some(index))
     .map(Shared::new)
     .map_err(|_| failure("memory service initialization failed"))

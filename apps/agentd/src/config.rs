@@ -1,8 +1,15 @@
+mod privacy;
 use clap::{CommandFactory, FromArgMatches, Parser, parser::ValueSource};
 use std::{net::SocketAddr, path::PathBuf};
 #[derive(Parser, Clone)]
 #[command(version, about = "Lyonbrown Rust agent daemon")]
 pub struct Config {
+  #[arg(skip)]
+  pub gateway: agent_config::GatewaySettings,
+  #[arg(skip)]
+  pub(crate) gateway_registry: Option<bool>,
+  #[arg(skip)]
+  pub(crate) gateway_credentials: std::collections::BTreeMap<String, agent_secrets::SecretString>,
   #[arg(skip)]
   pub memory: agent_config::MemorySettings,
   #[arg(skip)]
@@ -130,6 +137,7 @@ impl Config {
     cli.memory_embedding_api_key = settings.credential("memory_embedding").map(Into::into);
     cli.memory_vector_api_key = settings.credential("memory_vector").map(Into::into);
     cli.memory = settings.memory.clone();
+    cli.configure_gateway(&settings)?;
     cli.hub_token = std::env::var("HF_TOKEN")
       .ok()
       .filter(|value| !value.is_empty());
@@ -173,6 +181,22 @@ impl Config {
     cli.log_directory = Some(settings.log_directory);
     cli.log_retention = settings.log_retention;
     Ok(cli)
+  }
+
+  /// Apply the model gateway's layered configuration without exposing credentials.
+  pub fn configure_gateway(&mut self, settings: &agent_config::Settings) -> anyhow::Result<()> {
+    settings.gateway.validate()?;
+    self.gateway_credentials = settings
+      .gateway
+      .credential_references()
+      .filter_map(|name| {
+        settings
+          .gateway_credential(name)
+          .map(|value| (name.to_owned(), value.into()))
+      })
+      .collect();
+    self.gateway = settings.gateway.clone();
+    Ok(())
   }
 
   pub fn data_path(&self) -> anyhow::Result<PathBuf> {

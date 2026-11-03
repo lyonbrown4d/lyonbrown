@@ -7,6 +7,7 @@ mod driver;
 mod input;
 mod model_io;
 mod persistence;
+mod privacy;
 mod provider;
 mod recovery;
 mod runtime;

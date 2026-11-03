@@ -34,7 +34,7 @@ impl Node {
     config.data_dir = Some(data.path().into());
     config.provider = StandardProtocol::ChatCompletions.provider().into();
     config.model = "terminal-fixture".into();
-    config.api_base = Some(model.base_url().into());
+    config.api_base = Some(format!("{}/v1", model.base_url()));
     config.provider_api_key = Some("synthetic-test-secret".into());
     config.run_timeout_secs = 60;
     let daemon = Daemon::open(config).await.unwrap();

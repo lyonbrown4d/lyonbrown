@@ -150,20 +150,21 @@ struct ReceiptGuard {
 }
 impl Drop for ReceiptGuard {
   fn drop(&mut self) {
-    if !self.finished
-      && self
-        .store
-        .finish_operation(
-          &self.run,
-          self.epoch,
-          &self.action,
-          OperationStatus::Uncertain,
-          json!({"status":"uncertain"}),
-        )
-        .await
-        .is_err()
-    {
-      tracing::warn!(action_id=%self.action, "computer intent remains unresolved after caller stopped");
+    if self.finished {
+      return;
     }
+    let store = self.store.clone();
+    let run = self.run.clone();
+    let action = self.action.clone();
+    let epoch = self.epoch;
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+      tracing::warn!(action_id=%action, "computer intent remains unresolved; reconcile on startup");
+      return;
+    };
+    runtime.spawn(async move {
+      if store.finish_operation(&run, epoch, &action, OperationStatus::Uncertain, json!({"status":"uncertain"})).await.is_err() {
+        tracing::warn!(action_id=%action, "computer intent remains unresolved after caller stopped");
+      }
+    });
   }
 }

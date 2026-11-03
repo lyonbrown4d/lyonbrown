@@ -21,10 +21,10 @@ impl MemoryService {
     {
       return Err(MemoryError::Forbidden);
     }
-    if let MemorySource::Explicit { request_id } = &mutation.source {
-      if uuid::Uuid::parse_str(request_id).is_err() {
-        return Err(MemoryError::Invalid);
-      }
+    if let MemorySource::Explicit { request_id } = &mutation.source
+      && uuid::Uuid::parse_str(request_id).is_err()
+    {
+      return Err(MemoryError::Invalid);
     }
     let now = now_ms()?;
     let previous = self.get(access, &mutation.item.id).await?;

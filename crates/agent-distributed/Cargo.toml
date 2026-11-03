@@ -30,4 +30,5 @@ rustls-pemfile = "=2.2.0"
 snow = "=0.10.0"
 
 [dev-dependencies]
+sea-orm.workspace = true
 tempfile.workspace = true

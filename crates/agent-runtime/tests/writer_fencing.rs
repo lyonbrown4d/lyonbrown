@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 mod support;
 use agent_core::events::QueueKind;
 use agent_runtime::{Result, Runtime, RuntimeError, SessionMutation, SessionPersistence};

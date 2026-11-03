@@ -4,7 +4,6 @@
 mod native_browser_support;
 #[path = "native_browser_support/poison_page.rs"]
 mod poison_page;
-#[allow(dead_code)]
 #[path = "support/mod.rs"]
 mod support;
 

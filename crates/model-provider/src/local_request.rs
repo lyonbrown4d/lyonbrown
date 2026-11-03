@@ -1,17 +1,18 @@
 //! Maps canonical Rig messages to the inference-only application port.
 use agent_inference::{ChatMessage, GenerationRequest, InputContent, MessageRole, ModelInfo};
 use rig_core::completion::CompletionRequest;
-use rig_core::error::EncodeError;
 use rig_core::message::{
   AssistantContent, DocumentSourceKind, Image, Message, MimeType, ToolChoice, ToolResultContent,
   UserContent,
 };
 
+pub(crate) struct InvalidRequest;
+
 pub(crate) fn convert(
   request: CompletionRequest,
   info: &ModelInfo,
   default_max: u32,
-) -> Result<GenerationRequest, EncodeError> {
+) -> Result<GenerationRequest, InvalidRequest> {
   if request.model.as_deref().is_some_and(|id| id != info.id)
     || request
       .temperature
@@ -50,7 +51,7 @@ pub(crate) fn convert(
                 user = empty_message(MessageRole::User);
               }
               let mut tool = empty_message(MessageRole::Tool);
-              tool.tool_call_id = Some(result.call.as_str().to_owned());
+              tool.tool_call_id = Some(result.call.wire().into_owned());
               for content in &result.content {
                 tool.content.push(match content {
                   ToolResultContent::Text(text) => text_content(&text.text),
@@ -79,7 +80,7 @@ pub(crate) fn convert(
               if info.supports_tools && call.function.invalid_arguments.is_none() =>
             {
               assistant.tool_calls.push(agent_inference::ToolCall {
-                id: call.id.as_str().to_owned(),
+                id: call.id.wire().into_owned(),
                 name: call.function.name.as_str().to_owned(),
                 arguments: serde_json::Value::Object(call.function.arguments.clone()),
               });
@@ -125,7 +126,7 @@ fn text_content(text: &str) -> InputContent {
   InputContent::Text { text: text.into() }
 }
 
-fn image(value: &Image, info: &ModelInfo) -> Result<InputContent, EncodeError> {
+fn image(value: &Image, info: &ModelInfo) -> Result<InputContent, InvalidRequest> {
   if !info.supports_images {
     return Err(invalid());
   }
@@ -142,6 +143,6 @@ fn image(value: &Image, info: &ModelInfo) -> Result<InputContent, EncodeError> {
     data_base64: data.clone(),
   })
 }
-fn invalid() -> EncodeError {
-  EncodeError::request("unsupported or invalid local inference request")
+fn invalid() -> InvalidRequest {
+  InvalidRequest
 }

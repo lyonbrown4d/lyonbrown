@@ -11,7 +11,7 @@ impl Gateway {
     request: &ValidatedRequest,
     deadline: tokio::time::Instant,
     principal: &crate::AccessPrincipal,
-  ) -> Result<(ModelConfig, String), GatewayError> {
+  ) -> Result<(Vec<ModelConfig>, String), GatewayError> {
     if tokio::time::Instant::now() >= deadline {
       return Err(GatewayError::routing_timeout());
     }
@@ -58,6 +58,31 @@ impl Gateway {
     if eligible.is_empty() {
       return Err(no_model());
     }
+    if let Some(group) = self
+      .inner
+      .config
+      .groups
+      .iter()
+      .find(|group| group.id == request.requested_model)
+    {
+      let models: Vec<_> = group
+        .models
+        .iter()
+        .filter_map(|id| {
+          eligible
+            .iter()
+            .find(|model| &model.id == id)
+            .map(|model| (*model).clone())
+        })
+        .collect();
+      if models.is_empty() {
+        return Err(no_model());
+      }
+      return Ok((
+        models,
+        self.inner.decision.snapshot().policy().revision.clone(),
+      ));
+    }
     if !matches!(request.requested_model.as_str(), "auto" | "router/auto") {
       return eligible
         .into_iter()
@@ -65,7 +90,7 @@ impl Gateway {
         .cloned()
         .map(|model| {
           (
-            model,
+            vec![model],
             self.inner.decision.snapshot().policy().revision.clone(),
           )
         })
@@ -130,14 +155,14 @@ impl Gateway {
             && model.tier == advice.recommended_tier
             && model_eligible(model, &constraints)
         }) {
-          return Ok(((*model).clone(), result.provenance.policy_revision));
+          return Ok((vec![(*model).clone()], result.provenance.policy_revision));
         }
       }
     }
     Err(no_model())
   }
 }
-fn model_eligible(model: &ModelConfig, c: &Constraints) -> bool {
+pub(crate) fn model_eligible(model: &ModelConfig, c: &Constraints) -> bool {
   (!c.local_only || model.local_inference)
     && (c.allowed_tiers.is_empty() || c.allowed_tiers.contains(&model.tier))
     && c

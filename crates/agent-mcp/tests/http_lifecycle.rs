@@ -62,8 +62,9 @@ async fn connection_deadline_bounds_handshake_before_any_tool_call() {
 async fn cancellation_after_dispatch_is_uncertain_and_revokes_the_connection() {
   let fixture = Fixture::default();
   let (config, stop) = server(fixture.clone(), false).await;
+  let authorization = approval(true);
   let manager = Arc::new(
-    McpManager::connect(vec![config], approval(true), McpLimits::default())
+    McpManager::connect(vec![config], authorization.clone(), McpLimits::default())
       .await
       .expect("connect"),
   );
@@ -88,6 +89,7 @@ async fn cancellation_after_dispatch_is_uncertain_and_revokes_the_connection() {
     Err(RuntimeError::Tool(_))
   ));
   assert_eq!(fixture.calls.load(Ordering::SeqCst), 1);
+  assert_eq!(authorization.seen.lock().await.len(), 1);
   Arc::try_unwrap(manager)
     .ok()
     .expect("unique manager")

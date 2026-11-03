@@ -201,10 +201,10 @@ impl Desktop {
           }
           _ => {}
         }
-        if let Some(run) = self.vm.runs.iter_mut().find(|run| run.id == event.run_id) {
-          if let Some(status) = status {
-            run.status = status;
-          }
+        if let Some(run) = self.vm.runs.iter_mut().find(|run| run.id == event.run_id)
+          && let Some(status) = status
+        {
+          run.status = status;
         }
         match run_event {
           events::RunEvent::TextDelta { text } => {

@@ -2,7 +2,6 @@
 mod native_browser_support;
 #[path = "browser_tool_support/receipts.rs"]
 mod receipts;
-#[allow(dead_code)]
 mod support;
 
 use agent_browser::Command;

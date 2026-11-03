@@ -30,7 +30,7 @@ pub(crate) fn router(gateway: Gateway) -> Router {
   let (router, _) = protected.merge(public_routes()).split_for_parts();
   router
     .with_state(gateway.clone())
-    .merge(Gateway::documentation_router())
+    .route("/api-doc/openapi.json", axum::routing::get(openapi))
     .layer(middleware::from_fn_with_state(gateway, request_id))
 }
 async fn request_id(State(gateway): State<Gateway>, mut request: Request, next: Next) -> Response {
@@ -89,9 +89,14 @@ async fn authenticate(
   let Some(principal) = authorized else {
     return unauthorized();
   };
+  let token = RequestToken(secrecy::SecretString::from(supplied.to_owned()));
+  request.extensions_mut().insert(token);
   request.extensions_mut().insert(principal);
   next.run(request).await
 }
+#[derive(Clone)]
+struct RequestToken(secrecy::SecretString);
+
 fn unauthorized() -> Response {
   let mut response = GatewayError(
     StatusCode::UNAUTHORIZED,
@@ -127,14 +132,10 @@ async fn models(
 ) -> Json<crate::openapi::ModelList> {
   Json(crate::openapi::ModelList {
     object: "list".into(),
-    data: gateway
-      .models()
-      .into_iter()
-      .filter(|model| principal.permits_model(&model.id))
-      .collect(),
+    data: gateway.models_for(&principal),
   })
 }
-#[utoipa::path(post, path="/v1/chat/completions", security(("bearer"=[])), request_body=crate::ChatRequestSchema, responses((status=200, description="OpenAI JSON response or byte-preserved text/event-stream", content((serde_json::Value = "application/json"), (String = "text/event-stream"))), (status=400, body=crate::ErrorEnvelope), (status=401, body=crate::ErrorEnvelope), (status=403, body=crate::ErrorEnvelope), (status=404, body=crate::ErrorEnvelope), (status=413, body=crate::ErrorEnvelope), (status=429, body=crate::ErrorEnvelope), (status=502, body=crate::ErrorEnvelope), (status=503, body=crate::ErrorEnvelope), (status=504, body=crate::ErrorEnvelope)))]
+#[utoipa::path(post, path="/v1/chat/completions", security(("bearer"=[])), request_body=crate::ChatRequestSchema, responses((status=200, description="OpenAI JSON response or byte-preserved text/event-stream", content((serde_json::Value = "application/json"), (String = "text/event-stream"))), (status=400, body=crate::ErrorEnvelope), (status=401, body=crate::ErrorEnvelope), (status=403, body=crate::ErrorEnvelope), (status=404, body=crate::ErrorEnvelope), (status=413, body=crate::ErrorEnvelope), (status=422, body=crate::ErrorEnvelope), (status=429, body=crate::ErrorEnvelope), (status=502, body=crate::ErrorEnvelope), (status=503, body=crate::ErrorEnvelope), (status=504, body=crate::ErrorEnvelope)))]
 async fn completions(
   State(gateway): State<Gateway>,
   request: Request<Body>,
@@ -151,6 +152,15 @@ async fn completions(
     .extensions()
     .get::<crate::AccessPrincipal>()
     .cloned()
+    .ok_or(GatewayError(
+      StatusCode::UNAUTHORIZED,
+      "unauthorized",
+      "Bearer authentication required",
+    ))?;
+  let token = request
+    .extensions()
+    .get::<RequestToken>()
+    .map(|token| token.0.clone())
     .ok_or(GatewayError(
       StatusCode::UNAUTHORIZED,
       "unauthorized",
@@ -199,8 +209,15 @@ async fn completions(
   })?;
   let body =
     serde_json::from_slice(&bytes).map_err(|_| GatewayError::invalid("Malformed JSON body"))?;
-  let request = ValidatedRequest::parse(body, limits.default_output_tokens)?;
   let deadline = started + std::time::Duration::from_millis(limits.first_byte_ms);
+  use crate::ContentPolicy;
+  let body = tokio::time::timeout_at(
+    deadline,
+    gateway.inner.privacy.protect(&principal, token, body),
+  )
+  .await
+  .map_err(|_| GatewayError::routing_timeout())??;
+  let request = ValidatedRequest::parse(body, limits.default_output_tokens)?;
   if request
     .body
     .get("max_completion_tokens")
@@ -224,9 +241,14 @@ async fn completions(
       "Output limit exceeds API key scope",
     ));
   }
-  let (model, revision) = gateway.select(&id, &request, deadline, &principal).await?;
-  tracing::info!(request_id=%id, model=%model.id, policy_revision=%revision, operation="gateway.completion", "gateway route selected");
+  let (models, revision) = gateway.select(&id, &request, deadline, &principal).await?;
+  tracing::info!(request_id=%id, model=%models.first().map(|model| model.id.as_str()).unwrap_or(""), policy_revision=%revision, operation="gateway.completion", "gateway route selected");
   gateway
-    .transfer(id, request, model, revision, (permit, started), principal)
+    .transfer(id, request, models, revision, (permit, started), principal)
     .await
+}
+
+async fn openapi() -> Json<utoipa::openapi::OpenApi> {
+  use utoipa::OpenApi;
+  Json(crate::ApiDoc::openapi())
 }

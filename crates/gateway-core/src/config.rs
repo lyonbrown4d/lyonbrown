@@ -132,11 +132,20 @@ impl Default for Limits {
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub struct ModelGroup {
+  pub id: String,
+  pub models: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GatewayConfig {
   pub token: Secret,
   pub models: Vec<ModelConfig>,
   #[serde(default)]
   pub endpoints: Vec<crate::ProviderEndpoint>,
+  #[serde(default)]
+  pub groups: Vec<ModelGroup>,
   #[serde(default)]
   pub limits: Limits,
   #[serde(default)]
@@ -178,6 +187,27 @@ impl GatewayConfig {
     for model in &self.models {
       model.validate()?;
       ensure!(ids.insert(&model.id), "duplicate model id");
+    }
+    let mut groups = BTreeSet::new();
+    ensure!(self.groups.len() <= 256, "too many model groups");
+    for group in &self.groups {
+      ensure!(
+        !group.id.is_empty()
+          && !matches!(group.id.as_str(), "auto" | "router/auto")
+          && !ids.contains(&group.id)
+          && groups.insert(&group.id),
+        "invalid or duplicate group id"
+      );
+      let mut members = BTreeSet::new();
+      ensure!(
+        !group.models.is_empty()
+          && group.models.len() <= 16
+          && group
+            .models
+            .iter()
+            .all(|id| ids.contains(id) && members.insert(id)),
+        "invalid group members"
+      );
     }
     ensure!(self.endpoints.len() <= 1024, "too many provider endpoints");
     let mut endpoints = BTreeSet::new();

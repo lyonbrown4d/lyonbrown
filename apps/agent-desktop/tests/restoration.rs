@@ -9,8 +9,6 @@ async fn changing_authenticated_endpoint_never_copies_the_previous_scope_draft(
   cx: &mut TestAppContext,
 ) {
   let harness = Harness::new(cx, Vec::new());
-  let storage_runtime_0 = harness.runtime.clone();
-  let _storage_context_0 = storage_runtime_0.enter();
   harness.connect(cx);
   harness
     .wait(cx, async |state| {
@@ -60,8 +58,6 @@ async fn changing_authenticated_endpoint_never_copies_the_previous_scope_draft(
 #[gpui_kit::test]
 async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut TestAppContext) {
   let harness = Harness::new(cx, Vec::new());
-  let storage_runtime_1 = harness.runtime.clone();
-  let _storage_context_1 = storage_runtime_1.enter();
   harness.connect(cx);
   harness
     .wait(cx, async |state| state.local_state_loaded)
@@ -98,7 +94,13 @@ async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut 
       .as_deref()
       .is_some_and(|error| error.contains("no session"))
   );
-  assert!(harness.daemon.store.sessions().await.unwrap().is_empty());
+  assert!(
+    harness
+      .runtime
+      .block_on(harness.daemon.store.sessions())
+      .unwrap()
+      .is_empty()
+  );
   cx.update_window(window.into(), |_, window, cx| {
     window.click("bind-restored-chat", cx)
   })
@@ -114,10 +116,13 @@ async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut 
       assert_eq!(state.draft, "orphan draft stays local");
       assert!(
         harness
-          .daemon
-          .store
-          .runs(state.selected_session.as_deref().unwrap())
-          .await
+          .runtime
+          .block_on(
+            harness
+              .daemon
+              .store
+              .runs(state.selected_session.as_deref().unwrap())
+          )
           .unwrap()
           .is_empty()
       );
@@ -128,7 +133,14 @@ async fn orphan_chat_draft_requires_explicit_binding_before_submission(cx: &mut 
       "explicit binding did not finish: {state:?}"
     );
   }
-  assert_eq!(harness.daemon.store.sessions().await.unwrap().len(), 1);
+  assert_eq!(
+    harness
+      .runtime
+      .block_on(harness.daemon.store.sessions())
+      .unwrap()
+      .len(),
+    1
+  );
   assert!(
     harness
       .runtime
@@ -169,8 +181,6 @@ async fn recreated_desktop_restores_tabs_composer_and_editor_draft_without_savin
   cx: &mut TestAppContext,
 ) {
   let harness = Harness::new(cx, Vec::new());
-  let storage_runtime_2 = harness.runtime.clone();
-  let _storage_context_2 = storage_runtime_2.enter();
   let workspace = harness.directory.path().join("workspace");
   let file = workspace.join("restore.txt");
   std::fs::write(&file, "original file\n").expect("fixture workspace file");

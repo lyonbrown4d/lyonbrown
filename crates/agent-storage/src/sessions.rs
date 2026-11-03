@@ -14,7 +14,7 @@ impl Store {
       created_at_ms: now_ms(),
     };
     sessions::ActiveModel {
-      id: Set((&value.id).to_owned()),
+      id: Set(value.id.to_owned()),
       owner_epoch: Set((1_i64).to_owned()),
       record: Set((serde_json::to_string(&value)?).to_owned()),
     }

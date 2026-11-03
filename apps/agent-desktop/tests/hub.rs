@@ -36,8 +36,6 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
 ) {
   let hub = Hub::start();
   let harness = Harness::with_hub_endpoint(cx, hub.endpoint.clone());
-  let storage_runtime_0 = harness.runtime.clone();
-  let _storage_context_0 = storage_runtime_0.enter();
   harness.connect(cx);
   harness
     .wait(cx, async |state| state.status.starts_with("Connected"))
@@ -101,10 +99,8 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
   assert!(!inspected_id.is_empty());
   assert!(
     harness
-      .daemon
-      .store
-      .model_job(&inspected_id)
-      .await
+      .runtime
+      .block_on(harness.daemon.store.model_job(&inspected_id))
       .unwrap()
       .is_none()
   );
@@ -137,10 +133,8 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
   assert_eq!(hub.downloads.load(Ordering::SeqCst), 0);
   assert!(
     harness
-      .daemon
-      .store
-      .model_job(&inspected_id)
-      .await
+      .runtime
+      .block_on(harness.daemon.store.model_job(&inspected_id))
       .unwrap()
       .is_none()
   );
@@ -167,10 +161,8 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
   harness
     .wait(cx, async |_| {
       harness
-        .daemon
-        .store
-        .model_job(&confirmed_id)
-        .await
+        .runtime
+        .block_on(harness.daemon.store.model_job(&confirmed_id))
         .unwrap()
         .is_some_and(|job| job["state"] == "installed_unverified")
     })
@@ -258,10 +250,8 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
   );
   assert!(
     harness
-      .daemon
-      .store
-      .pending_runs()
-      .await
+      .runtime
+      .block_on(harness.daemon.store.pending_runs())
       .unwrap()
       .is_empty()
   );
@@ -315,10 +305,8 @@ async fn hub_buttons_revoke_edited_plans_and_install_only_reviewed_artifacts(
   );
   assert!(
     harness
-      .daemon
-      .store
-      .pending_runs()
-      .await
+      .runtime
+      .block_on(harness.daemon.store.pending_runs())
       .unwrap()
       .is_empty()
   );

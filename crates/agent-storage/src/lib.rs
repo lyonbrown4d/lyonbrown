@@ -17,6 +17,7 @@ mod migration;
 mod model_bindings;
 mod operations;
 mod peers;
+mod privacy;
 mod provider_profiles;
 mod recovery;
 mod runs;
@@ -33,7 +34,7 @@ pub use model_bindings::ModelBinding;
 pub use operations::{OperationRecord, OperationStatus};
 pub use provider_profiles::ProviderProfileError;
 pub use recovery::{RecoverRun, RecoveryAction, RunRecovery};
-use schema::{events, outbox, runs as run_rows, sessions};
+use schema::{events, outbox, runs as run_rows, sessions as session_rows};
 use sea_orm::{
   DatabaseConnection, DatabaseTransaction, QueryOrder, QuerySelect, Set, TransactionTrait,
   prelude::*, sea_query::Expr,
@@ -167,7 +168,7 @@ pub(crate) async fn verify_epoch(
   session_id: &str,
   expected: u64,
 ) -> Result<()> {
-  let row = sessions::Entity::find_by_id(session_id)
+  let row = session_rows::Entity::find_by_id(session_id)
     .one(connection)
     .await?
     .context("session missing")?;

@@ -16,6 +16,23 @@ pub struct SecretStore {
 }
 
 impl SecretStore {
+  /// Encrypt host-private state for an authoritative transactional store.
+  /// The identity is authenticated; callers must fence writes in that store.
+  pub fn seal_value(&self, id: &str, value: &SecretString) -> Result<Vec<u8>> {
+    validate_id(id)?;
+    crypto::validate_secret(value.expose_secret())?;
+    crypto::seal(&self.key, id, value)
+  }
+
+  /// Open an authenticated record fetched from a host-owned transactional store.
+  pub fn open_value(&self, id: &str, record: &[u8]) -> Result<SecretString> {
+    validate_id(id)?;
+    if record.len() > crypto::MAX_RECORD_BYTES {
+      return Err(crate::SecretError::InvalidRecord);
+    }
+    crypto::open(&self.key, id, record)
+  }
+
   /// Opens a dedicated private directory and provisions one local master key.
   /// Existing encrypted records without a key fail closed.
   pub fn open(root: impl AsRef<Path>) -> Result<Self> {

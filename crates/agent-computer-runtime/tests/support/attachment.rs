@@ -126,6 +126,48 @@ impl ComputerRuntimeService for Service {
 }
 #[tonic::async_trait]
 impl ClientService for Service {
+  async fn list_provider_profiles(
+    &self,
+    _: Request<v1::Empty>,
+  ) -> Result<Response<v1::ProviderProfiles>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn put_provider_profile(
+    &self,
+    _: Request<v1::PutProviderProfileRequest>,
+  ) -> Result<Response<v1::ProviderProfile>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn remove_provider_profile(
+    &self,
+    _: Request<v1::RemoveProviderProfileRequest>,
+  ) -> Result<Response<v1::Empty>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn probe_provider_profile(
+    &self,
+    _: Request<v1::ProbeProviderProfileRequest>,
+  ) -> Result<Response<v1::ProviderProbe>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn submit_run_input(
+    &self,
+    _: Request<v1::RunInputRequest>,
+  ) -> Result<Response<v1::RunInputReceipt>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn cancel_run_input(
+    &self,
+    _: Request<v1::CancelRunInputRequest>,
+  ) -> Result<Response<v1::RunInputReceipt>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn list_run_inputs(
+    &self,
+    _: Request<v1::RunRequest>,
+  ) -> Result<Response<v1::RunInputs>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
   async fn get_node(&self, _: Request<v1::Empty>) -> Result<Response<v1::Node>, Status> {
     Ok(Response::new(v1::Node {
       id: self.session.owner_node_id.clone(),

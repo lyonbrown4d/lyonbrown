@@ -60,6 +60,48 @@ impl GatewayStorage {
       })
       .await
   }
+  /// Returns the durable upstream attempt history for one request.
+  pub async fn list_attempts(&self, request_id: &str) -> Result<Vec<gateway_core::AttemptRecord>> {
+    if !valid_key(request_id) {
+      return Err(StorageError::InvalidInput("request id"));
+    }
+    let request_id = request_id.to_owned();
+    self
+      .run(move |connection| {
+        Box::pin(async move {
+          use crate::schema::gateway_attempts as attempts;
+          attempts::Entity::find()
+            .filter(attempts::Column::RequestId.eq(request_id))
+            .order_by_asc(attempts::Column::Sequence)
+            .all(connection)
+            .await?
+            .into_iter()
+            .map(|row| {
+              let status = match row.status {
+                0 => AuditStatus::Pending,
+                1 => AuditStatus::Succeeded,
+                2 => AuditStatus::Failed,
+                3 => AuditStatus::Cancelled,
+                4 => AuditStatus::Uncertain,
+                _ => return Err(StorageError::InvalidData),
+              };
+              Ok(gateway_core::AttemptRecord {
+                request_id: row.request_id,
+                sequence: u32::try_from(row.sequence).map_err(|_| StorageError::InvalidData)?,
+                model: row.model,
+                endpoint: row.endpoint,
+                upstream_status: row
+                  .upstream_status
+                  .map(|value| u16::try_from(value).map_err(|_| StorageError::InvalidData))
+                  .transpose()?,
+                status,
+              })
+            })
+            .collect()
+        })
+      })
+      .await
+  }
   pub async fn record_audit(&self, record: AuditRecord) -> Result<()> {
     if !valid_key(&record.request_id)
       || !valid_key(&record.model)
@@ -125,15 +167,14 @@ impl GatewayStorage {
             .one(connection)
             .await?
             .ok_or(StorageError::Conflict)?;
-          if previous.model != record.model
-            || previous.policy_revision != record.policy_revision
+          if previous.policy_revision != record.policy_revision
             || previous.principal != principal
             || previous.reserved_tokens != reserved
           {
             return Err(StorageError::Conflict);
           }
           if previous.status == status {
-            return if previous.usage == usage {
+            return if previous.usage == usage && previous.model == record.model {
               Ok(())
             } else {
               Err(StorageError::Conflict)
@@ -142,8 +183,27 @@ impl GatewayStorage {
           if previous.status != 0 {
             return Err(StorageError::Conflict);
           }
+          if previous.model != record.model {
+            use crate::schema::gateway_attempts as attempts;
+            if record
+              .principal
+              .as_ref()
+              .is_some_and(|principal| !principal.permits_model(&record.model))
+              || attempts::Entity::find()
+                .filter(attempts::Column::RequestId.eq(&record.request_id))
+                .order_by_desc(attempts::Column::Sequence)
+                .one(connection)
+                .await?
+                .is_none_or(|attempt| {
+                  attempt.model != record.model || (status == 1 && attempt.status != 1)
+                })
+            {
+              return Err(StorageError::Conflict);
+            }
+          }
           crate::budget::settle(connection, &record).await?;
           let mut previous: audits::ActiveModel = previous.into();
+          previous.model = Set(record.model);
           previous.status = Set(status);
           previous.elapsed_ms = Set(elapsed);
           previous.usage = Set(usage);
@@ -156,6 +216,79 @@ impl GatewayStorage {
 }
 #[async_trait]
 impl AuditSink for GatewayStorage {
+  fn supports_attempts(&self) -> bool {
+    true
+  }
+  async fn record_attempt(
+    &self,
+    attempt: gateway_core::AttemptRecord,
+  ) -> std::result::Result<(), AuditError> {
+    self
+      .write(move |connection| {
+        Box::pin(async move {
+          use crate::schema::gateway_attempts as attempts;
+          let sequence = i32::try_from(attempt.sequence)
+            .map_err(|_| StorageError::InvalidInput("attempt sequence"))?;
+          if !valid_key(&attempt.request_id)
+            || !valid_key(&attempt.model)
+            || attempt.endpoint.as_ref().is_some_and(|id| !valid_key(id))
+          {
+            return Err(StorageError::InvalidInput("attempt metadata"));
+          }
+          if attempt
+            .upstream_status
+            .is_some_and(|status| !(100..=599).contains(&status))
+          {
+            return Err(StorageError::InvalidInput("upstream status"));
+          }
+          let status = encode(attempt.status);
+          if status == 0 && attempt.upstream_status.is_some() {
+            return Err(StorageError::InvalidInput("pending attempt status"));
+          }
+          let existing = attempts::Entity::find()
+            .filter(attempts::Column::RequestId.eq(&attempt.request_id))
+            .filter(attempts::Column::Sequence.eq(sequence))
+            .one(connection)
+            .await?;
+          if status == 0 {
+            if existing.is_some() {
+              return Err(StorageError::Conflict);
+            }
+            let parent = audits::Entity::find()
+              .filter(audits::Column::RequestId.eq(&attempt.request_id))
+              .one(connection)
+              .await?
+              .ok_or(StorageError::Conflict)?;
+            if parent.status != 0 {
+              return Err(StorageError::Conflict);
+            }
+            attempts::ActiveModel {
+              request_id: Set(attempt.request_id),
+              sequence: Set(sequence),
+              model: Set(attempt.model),
+              endpoint: Set(attempt.endpoint),
+              upstream_status: Set(None),
+              status: Set(status),
+              ..Default::default()
+            }
+            .insert(connection)
+            .await?;
+          } else {
+            let row = existing.ok_or(StorageError::Conflict)?;
+            if row.status != 0 || row.model != attempt.model || row.endpoint != attempt.endpoint {
+              return Err(StorageError::Conflict);
+            }
+            let mut row: attempts::ActiveModel = row.into();
+            row.status = Set(status);
+            row.upstream_status = Set(attempt.upstream_status.map(|value| value as i16));
+            row.update(connection).await?;
+          }
+          Ok(())
+        })
+      })
+      .await
+      .map_err(|_| AuditError)
+  }
   async fn admit(
     &self,
     record: AuditRecord,
@@ -173,6 +306,14 @@ impl AuditSink for GatewayStorage {
   }
 }
 pub(crate) async fn reconcile(connection: &impl ConnectionTrait) -> Result<()> {
+  crate::schema::gateway_attempts::Entity::update_many()
+    .col_expr(
+      crate::schema::gateway_attempts::Column::Status,
+      Expr::value(4_i16),
+    )
+    .filter(crate::schema::gateway_attempts::Column::Status.eq(0_i16))
+    .exec(connection)
+    .await?;
   audits::Entity::update_many()
     .col_expr(audits::Column::Status, Expr::value(4_i16))
     .filter(audits::Column::Status.eq(0_i16))

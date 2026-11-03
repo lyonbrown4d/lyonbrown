@@ -73,7 +73,9 @@ async fn real_terminal_auth_history_multiline_resize_reconnect_and_cleanup() {
   terminal.screen("Disconnected").await;
   terminal.paste("draft survives reconnect");
   terminal.send("\r");
-  terminal.screen("draft is preserved").await;
+  terminal.screen("draft survives reconnect").await;
+  assert_eq!(node.client.list_runs(&session.id).await.unwrap().len(), 1);
+  assert_eq!(model.requests().await.len(), 1);
   node.reconnect().await;
   terminal.send("\x12");
   terminal.screen("Connected").await;
@@ -130,6 +132,7 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
     let runs = node.run_count(&session.id, index).await;
     let run = runs.iter().find(|run| run.prompt.ends_with(file)).unwrap();
     node.status(&run.id, "awaiting_approval").await;
+    terminal.screen("需要批准").await;
     terminal.screen("write_file").await;
     let approval = node
       .client
@@ -163,6 +166,9 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
         "denied operation finished"
       })
       .await;
+    // The daemon may have committed completion before the client refreshes
+    // its active-run state. Wait until Enter starts a new run, not a follow-up.
+    terminal.screen_without("Enter 排队").await;
   }
 
   terminal.paste("wait until cancelled");
@@ -175,7 +181,11 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
   tokio::time::timeout(Duration::from_secs(5), model.wait_for_requests(5))
     .await
     .unwrap();
-  terminal.screen("streamed before cancellation").await;
+  node.status(&cancelled.id, "running").await;
+  terminal.screen("模型正在生成").await;
+  terminal
+    .screen_without("streamed before cancellation")
+    .await;
   assert!(
     node
       .client
@@ -184,13 +194,15 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
       .unwrap()
       .result
       .is_empty(),
-    "live text must appear before a completed durable result"
+    "a stalled model must not have a completed durable result"
   );
-  terminal.snapshot("streaming");
+  terminal.snapshot("withheld-response");
   terminal.resize(8, 35);
   terminal.screen_without("Sessions").await;
-  terminal.screen("streamed before cancellation").await;
-  terminal.snapshot("compact-streaming");
+  terminal
+    .screen_without("streamed before cancellation")
+    .await;
+  terminal.snapshot("compact-withheld-response");
   terminal.resize(36, 140);
   terminal.screen("F1 帮助").await;
   node.disconnect().await;
@@ -198,14 +210,10 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
   node.reconnect().await;
   terminal.send("\x12");
   terminal.screen("Connected").await;
-  terminal.screen("streamed before cancellation").await;
-  assert_eq!(
-    terminal
-      .contents()
-      .matches("streamed before cancellation")
-      .count(),
-    1
-  );
+  terminal
+    .screen_without("streamed before cancellation")
+    .await;
+  assert!(!terminal.contents().contains("streamed before cancellation"));
   assert_eq!(
     model.requests().await.len(),
     5,
@@ -214,6 +222,7 @@ async fn real_terminal_approval_denial_cancel_and_quit_preserve_daemon_jobs() {
   terminal.send("\x18");
   node.status(&cancelled.id, "cancelled").await;
   terminal.screen("cancelled").await;
+  terminal.screen_without("Enter 排队").await;
 
   terminal.paste("keep daemon job alive on quit");
   terminal.send("\r");

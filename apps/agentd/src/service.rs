@@ -204,17 +204,22 @@ impl ClientService for Daemon {
       .ok_or_else(|| Status::invalid_argument("provider does not accept uploaded credentials"))?;
     let value = String::from_utf8(std::mem::take(&mut input.credential))
       .map_err(|_| Status::invalid_argument("provider credential must be UTF-8"))?;
-    let secret = agent_secrets::SecretString::from(value);
-    self
-      .provider_secrets
-      .put(&secret_id(definition.id), &secret)
-      .map_err(|_| Status::failed_precondition("provider credential could not be stored"))?;
+    if value.trim().is_empty()
+      || value.len() > agent_secrets::MAX_SECRET_BYTES
+      || value.contains('\0')
+    {
+      return Err(Status::invalid_argument("invalid provider credential"));
+    }
     let status = self
       .config
       .provider_inventory
       .iter()
       .find(|status| status.definition.id == definition.id)
       .ok_or_else(|| Status::internal("provider inventory unavailable"))?;
+    let secret = agent_secrets::SecretString::from(value);
+    self
+      .store_known_credential(secret_id(definition.id), secret, true)
+      .await?;
     Ok(Response::new(provider_status(status, true)))
   }
   async fn remove_provider_credential(
@@ -224,16 +229,15 @@ impl ClientService for Daemon {
     let input = request.into_inner();
     let definition = agent_config::provider_definition(&input.provider_id)
       .ok_or_else(|| Status::invalid_argument("unknown provider"))?;
-    self
-      .provider_secrets
-      .remove(&secret_id(definition.id))
-      .map_err(|_| Status::failed_precondition("provider credential could not be removed"))?;
     let status = self
       .config
       .provider_inventory
       .iter()
       .find(|status| status.definition.id == definition.id)
       .ok_or_else(|| Status::internal("provider inventory unavailable"))?;
+    self
+      .remove_known_credential(secret_id(definition.id))
+      .await?;
     Ok(Response::new(provider_status(status, false)))
   }
   async fn create_session(
@@ -277,12 +281,29 @@ impl ClientService for Daemon {
     if self.active.lock().await.len() >= 128 {
       return Err(Status::resource_exhausted("node run capacity reached"));
     }
+    if input.prompt.trim().is_empty() || input.prompt.len() > 1_048_576 {
+      return Err(Status::failed_precondition("invalid prompt length"));
+    }
+    let session = self
+      .store
+      .session(&input.session_id)
+      .await
+      .map_err(db_error)?
+      .ok_or_else(|| Status::failed_precondition("session not found"))?;
+    if session.owner_node_id != self.node_id || session.owner_epoch != input.owner_epoch {
+      return Err(Status::failed_precondition(
+        "session owner or epoch changed",
+      ));
+    }
+    let prompt = self
+      .protect_private_text(&session.id, input.owner_epoch, &input.prompt)
+      .await?;
     let (value, created) = self
       .store
       .accept_run(
         &input.session_id,
         input.owner_epoch,
-        &input.prompt,
+        &prompt,
         &input.idempotency_key,
       )
       .await

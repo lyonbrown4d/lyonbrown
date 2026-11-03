@@ -10,11 +10,17 @@ local-llama = ["agent-inference/llama"]
 local-mistral = ["agent-inference/mistral"]
 
 [dependencies]
+gateway-core = { path = "../../crates/gateway-core" }
+gateway-storage = { path = "../../crates/gateway-storage" }
+model-provider = { path = "../../crates/model-provider" }
+agent-privacy = { path = "../../crates/agent-privacy" }
+axum = "=0.8.9"
 agent-memory = { path = "../../crates/agent-memory" }
 memory-core = { path = "../../crates/memory-core" }
 memory-qdrant = { path = "../../crates/memory-qdrant" }
 decision-core = { path = "../../crates/decision-core" }
 sha2.workspace = true
+subtle = "=2.6.1"
 hex.workspace = true
 url = "=2.5.8"
 agent-mcp = { path = "../../crates/agent-mcp" }
@@ -56,13 +62,13 @@ async-stream = "=0.3.6"
 reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "stream"] }
 
 [dev-dependencies]
+tower.workspace = true
 sea-orm.workspace = true
 agent-test-support = { path = "../../crates/agent-test-support" }
 agent-client = { path = "../../crates/agent-client" }
 tempfile.workspace = true
 tokio-stream.workspace = true
 rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
-axum = "=0.8.9"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "=0.8.1"

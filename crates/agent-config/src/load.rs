@@ -6,6 +6,8 @@ use config::{Config, File};
 use crate::settings::{Credentials, Settings};
 
 const ALIASES: &[(&str, &str)] = &[
+  ("LYONBROWN_GATEWAY_HTTP_LISTEN", "gateway.http_listen"),
+  ("LYONBROWN_GATEWAY_HTTP_TOKEN_ENV", "gateway.http_token_env"),
   ("LYONBROWN_LISTEN", "listen"),
   ("LYONBROWN_DATABASE_URL", "database_url"),
   ("LYONBROWN_MEMORY_ENABLED", "memory.enabled"),
@@ -122,6 +124,19 @@ pub fn load_with_environment(
       .credentials
       .0
       .insert(key.into(), value.clone().into());
+  }
+  for name in settings.gateway.credential_references() {
+    let value = merged
+      .get(name)
+      .ok_or_else(|| anyhow::anyhow!("gateway credential reference is missing"))?;
+    ensure!(
+      !value.is_empty() && !value.chars().any(char::is_control),
+      "invalid gateway credential value"
+    );
+    settings
+      .credentials
+      .0
+      .insert(format!("gateway:{name}"), value.clone().into());
   }
   for server in &settings.mcp {
     for name in server.environment_references() {

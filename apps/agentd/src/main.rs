@@ -121,6 +121,10 @@ async fn serve(
     return Ok(());
   }
   let incoming = tonic::transport::server::TcpIncoming::bind(config.listen)?;
+  let gateway = match (config.gateway.http_listen, daemon.gateway_router()?) {
+    (Some(address), Some(router)) => Some((tokio::net::TcpListener::bind(address).await?, router)),
+    _ => None,
+  };
   daemon.recover().await?;
   let peer = agentd::peers::PeerRuntime::prepare(daemon.clone()).await?;
   if let Err(error) = ready() {
@@ -149,12 +153,32 @@ async fn serve(
       std::future::pending::<Result<()>>().await
     }
   };
-  tokio::pin!(local, remote);
-  let result = tokio::select! {
-    result = &mut local => result.map_err(anyhow::Error::from),
-    result = &mut remote => result,
+  let gateway_enabled = gateway.is_some();
+  let gateway_daemon = daemon.clone();
+  let gateway_server = async move {
+    if let Some((listener, router)) = gateway {
+      axum::serve(listener, router)
+        .with_graceful_shutdown(async move {
+          gateway_daemon.gateway_shutdown().await;
+        })
+        .await
+        .map_err(anyhow::Error::from)
+    } else {
+      std::future::pending::<Result<()>>().await
+    }
+  };
+  tokio::pin!(local, remote, gateway_server);
+  let (result, gateway_finished) = tokio::select! {
+    result = &mut local => (result.map_err(anyhow::Error::from), false),
+    result = &mut remote => (result, false),
+    result = &mut gateway_server => (result, true),
   };
   daemon.shutdown().await;
+  if gateway_enabled && !gateway_finished {
+    tokio::time::timeout(std::time::Duration::from_secs(17), &mut gateway_server)
+      .await
+      .context("gateway shutdown deadline exceeded")??;
+  }
   result
 }
 

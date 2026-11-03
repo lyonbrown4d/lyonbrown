@@ -75,17 +75,17 @@ impl Store {
           .await?
         {
           model_bindings::ActiveModel {
-            scope_id: Set((&run.id).to_owned()),
+            scope_id: Set(run.id.to_owned()),
             record: Set((record).to_owned()),
           }
           .insert(connection)
           .await?;
         }
         runs::ActiveModel {
-          id: Set((&run.id).to_owned()),
+          id: Set(run.id.to_owned()),
           session_id: Set((session).to_owned()),
           idempotency_key: Set((key).to_owned()),
-          status: Set((&run.status).to_owned()),
+          status: Set(run.status.to_owned()),
           created_at_ms: Set((run.created_at_ms).to_owned()),
           record: Set((serde_json::to_string(&run)?).to_owned()),
         }
@@ -206,7 +206,7 @@ impl Store {
         }
         runs::Entity::update_many()
           .filter(runs::Column::Id.eq(id))
-          .col_expr(runs::Column::Status, Expr::value((&run.status).to_owned()))
+          .col_expr(runs::Column::Status, Expr::value(run.status.to_owned()))
           .col_expr(
             runs::Column::Record,
             Expr::value((serde_json::to_string(&run)?).to_owned()),
@@ -263,7 +263,7 @@ impl Store {
           crate::approvals::close_pending(connection, &run.id).await?;
           runs::Entity::update_many()
             .filter(runs::Column::Id.eq(&run.id))
-            .col_expr(runs::Column::Status, Expr::value((&run.status).to_owned()))
+            .col_expr(runs::Column::Status, Expr::value(run.status.to_owned()))
             .col_expr(
               runs::Column::Record,
               Expr::value((serde_json::to_string(&run)?).to_owned()),

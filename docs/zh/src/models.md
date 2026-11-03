@@ -32,7 +32,7 @@ Linux CPU 的 [真实工具验收记录](evidence/model-tools-linux.json) 确认
 
 真实 CPU 推理验收使用 `cargo test --profile native-acceptance -p agentd --features local-mistral --test model_native_tools -- --ignored --nocapture`。该配置优化 Rust 推理内核并关闭 LTO，不使用未优化 debug 构建衡量本地模型响应能力。测试显式下载固定版本权重，校验真实工作区工具事件和多轮结果；Mock 通过不能替代该验收。
 
-Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 `model_route_decision`，再生成 Agent 专属的工具计划。通用库与可选后端见[可复用决策引擎](decision-engine.md)；独立网关见 [AI Gateway](gateway.md)。
+Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 `model_route_decision`，再生成 Agent 专属的工具计划。通用库与可选后端见[可复用决策引擎](decision-engine.md)；嵌入式 Gateway 与可选 HTTP 监听见 [AI Gateway](gateway.md)。
 
 每次运行先由 `agent-decision` 生成执行计划，再由 `agent-runtime` 打开 `Rig AgentRun`。分类器只返回建议，不执行工具，也不能授予权限。
 

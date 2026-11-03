@@ -2,6 +2,7 @@
 mod local;
 mod memory;
 mod persistence;
+mod private_embedding;
 use crate::{Daemon, config::Config, state::RuntimeServices};
 use fluxdi::{Error, Shared, static_module};
 use local::{LocalNode, SecurityModule};
@@ -17,9 +18,15 @@ static_module! {
     #[scope(root)]
     decision: agent_decision::DecisionEngine = decision(config,models);
     #[scope(root)]
-    async memory: agent_memory::MemoryService = memory::service(config,store);
+    async memory: agent_memory::MemoryService = memory::service(config,store,provider_secrets,local);
     #[scope(root)]
-    daemon: Daemon = daemon(config,local,store,services,decision,models,mcp,memory);
+    privacy: tokio::sync::Mutex<agent_privacy::PrivacyService> = privacy(config,local);
+    #[scope(root)]
+    async provider_secrets: agent_secrets::SecretStore = provider_secrets(config);
+    #[scope(root)]
+    async gateway: crate::gateway::GatewayHost = gateway(config,local,decision,provider_secrets,privacy);
+    #[scope(root)]
+    daemon: Daemon = daemon(config,local,store,services,decision,models,mcp,memory,gateway,provider_secrets,privacy);
     external config: Config;
     external local: LocalNode;
     external models: crate::models::Models;
@@ -100,24 +107,74 @@ fn daemon(
   models: Shared<crate::models::Models>,
   mcp: Shared<crate::mcp::Connections>,
   memory: Shared<agent_memory::MemoryService>,
+  gateway: Shared<crate::gateway::GatewayHost>,
+  provider_secrets: Shared<agent_secrets::SecretStore>,
+  privacy: Shared<tokio::sync::Mutex<agent_privacy::PrivacyService>>,
 ) -> Result<Shared<Daemon>, Error> {
-  let secret_root = config
-    .data_path()
-    .map_err(|error| Error::factory_failed("SecretStore", &error.to_string()))?
-    .join("provider-secrets");
-  let provider_secrets = agent_secrets::SecretStore::open(secret_root)
-    .map_err(|error| Error::factory_failed("SecretStore", &error.to_string()))?;
   Ok(Shared::new(Daemon {
     config: (*config).clone(),
     store: (*store).clone(),
     memory,
+    gateway,
+    privacy,
     node_id: local.node_id.clone(),
     token: local.token.clone(),
     services,
     decision,
     models,
     mcp,
-    provider_secrets: std::sync::Arc::new(provider_secrets),
+    provider_secrets,
     _lease: local.lease.clone(),
   }))
+}
+
+async fn provider_secrets(
+  config: Shared<Config>,
+) -> Result<Shared<agent_secrets::SecretStore>, Error> {
+  let root = config
+    .data_path()
+    .map_err(|_| Error::factory_failed("SecretStore", "data directory unavailable"))?
+    .join("provider-secrets");
+  tokio::task::spawn_blocking(move || agent_secrets::SecretStore::open(root))
+    .await
+    .map_err(|_| Error::factory_failed("SecretStore", "credential worker failed"))?
+    .map(Shared::new)
+    .map_err(|_| Error::factory_failed("SecretStore", "credential store unavailable"))
+}
+async fn gateway(
+  config: Shared<Config>,
+  local: Shared<LocalNode>,
+  decision: Shared<agent_decision::DecisionEngine>,
+  secrets: Shared<agent_secrets::SecretStore>,
+  privacy: Shared<tokio::sync::Mutex<agent_privacy::PrivacyService>>,
+) -> Result<Shared<crate::gateway::GatewayHost>, Error> {
+  use agent_secrets::ExposeSecret;
+  if config
+    .gateway
+    .http_token_env
+    .as_ref()
+    .and_then(|name| config.gateway_credentials.get(name))
+    .is_some_and(|token| token.expose_secret() == local.token.as_str())
+  {
+    return Err(Error::factory_failed(
+      "Gateway",
+      "model API token must differ from daemon token",
+    ));
+  }
+  crate::gateway::build(&config, decision.reusable(), secrets, privacy)
+    .await
+    .map(Shared::new)
+    .map_err(|_| Error::factory_failed("Gateway", "gateway configuration or storage unavailable"))
+}
+
+fn privacy(
+  config: Shared<Config>,
+  local: Shared<LocalNode>,
+) -> Result<Shared<tokio::sync::Mutex<agent_privacy::PrivacyService>>, Error> {
+  let mut known = config.privacy_credentials();
+  known.push(local.token.as_str().to_owned().into());
+  agent_privacy::PrivacyService::new(&known)
+    .map(tokio::sync::Mutex::new)
+    .map(Shared::new)
+    .map_err(|_| Error::factory_failed("PrivacyService", "privacy initialization failed"))
 }

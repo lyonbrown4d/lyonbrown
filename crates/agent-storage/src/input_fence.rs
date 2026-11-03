@@ -98,7 +98,7 @@ async fn fence(connection: &impl ConnectionTrait, mut run: Run) -> Result<Run> {
   crate::approvals::close_pending(connection, &run.id).await?;
   runs::Entity::update_many()
     .filter(runs::Column::Id.eq(&run.id))
-    .col_expr(runs::Column::Status, Expr::value((&run.status).to_owned()))
+    .col_expr(runs::Column::Status, Expr::value(run.status.to_owned()))
     .col_expr(
       runs::Column::Record,
       Expr::value((serde_json::to_string(&run)?).to_owned()),

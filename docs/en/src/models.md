@@ -32,7 +32,7 @@ Linux CPU acceptance confirmed actual file reading and returning the result acro
 
 Run actual CPU inference acceptance with `cargo test --profile native-acceptance -p agentd --features local-mistral --test model_native_tools -- --ignored --nocapture`. This profile optimizes Rust inference kernels without LTO; unoptimized debug builds are not suitable for assessing local response capability. The test explicitly downloads pinned weights and checks actual workspace tool events and multi-turn results. Mock success does not replace this acceptance.
 
-The Agent embeds the reusable core by default, pins the configured main model and persists `model_route_decision` before the Agent-specific tool plan. See [Reusable decision engine](decision-engine.md) for library/backends and [AI Gateway](gateway.md) for independent serving.
+The Agent embeds the reusable core by default, pins the configured main model and persists `model_route_decision` before the Agent-specific tool plan. See [Reusable decision engine](decision-engine.md) for library/backends and [AI Gateway](gateway.md) for embedded routing and its optional HTTP listener.
 
 Each run receives an execution plan from `agent-decision` before `agent-runtime` opens `Rig AgentRun`. A classifier returns advice. It executes no tools and cannot grant permissions.
 

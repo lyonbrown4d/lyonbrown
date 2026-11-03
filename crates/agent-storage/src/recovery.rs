@@ -186,17 +186,17 @@ impl Store {
           created_at_ms: now_ms(),
         };
         sessions::ActiveModel {
-          id: Set((&fresh.id).to_owned()),
+          id: Set(fresh.id.to_owned()),
           owner_epoch: Set((1_i64).to_owned()),
           record: Set((serde_json::to_string(&fresh)?).to_owned()),
         }
         .insert(connection)
         .await?;
         runs::ActiveModel {
-          id: Set((&run.id).to_owned()),
-          session_id: Set((&fresh.id).to_owned()),
+          id: Set(run.id.to_owned()),
+          session_id: Set(fresh.id.to_owned()),
           idempotency_key: Set((input.idempotency_key).to_owned()),
-          status: Set((&run.status).to_owned()),
+          status: Set(run.status.to_owned()),
           created_at_ms: Set((run.created_at_ms).to_owned()),
           record: Set((serde_json::to_string(&run)?).to_owned()),
         }
@@ -229,7 +229,7 @@ impl Store {
         .await
         .map(|result| result.rows_affected)?;
       run_recoveries::ActiveModel {
-        run_id: Set((&original.id).to_owned()),
+        run_id: Set(original.id.to_owned()),
         idempotency_key: Set((input.idempotency_key).to_owned()),
         record: Set((serde_json::to_string(&resolution)?).to_owned()),
       }

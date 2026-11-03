@@ -52,17 +52,12 @@ flowchart TB
     Computer <-->|Authenticated session attachment / observe and approved execution| API
     SharedDecision[decision-core / reusable rules and backend ports]
     Decision --> SharedDecision
-    subgraph GatewayService[Independent AI Gateway]
-        GatewayHTTP[FluxDI Axum / Bearer API / Swagger]
-        GatewayUI[Leptos SSR / admin sessions]
-        GatewayStore[SeaORM async SQLite / policy / audit / credential hashes]
-        GatewayHTTP --> SharedDecision
-        GatewayHTTP --> GatewayStore
-        GatewayUI --> GatewayStore
-        GatewayUI --> SharedDecision
-    end
-    Model -.->|Explicit gateway endpoint| GatewayHTTP
-    GatewayHTTP --> GatewayUpstream[Chat Completions upstream]
+    Gateway[Embedded Gateway / routing / access / audit]
+    GatewayHTTP[Optional loopback HTTP / Bearer API]
+    Model --> Gateway
+    GatewayHTTP --> Gateway
+    Gateway --> SharedDecision
+    Gateway --> GatewayUpstream[Chat Completions upstream]
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --> Workspace[Workspace / Git / artifacts / notify]
@@ -209,7 +204,7 @@ ComputerRuntime provides an embeddable interactive-user host interface, attached
 - Native host attachment: `apps/agent-cli/src/computer_backend.rs`, `apps/agent-desktop/src/computer.rs`, `crates/agent-computer-runtime/src/client.rs`, `crates/agent-computer-runtime/src/attachment.rs`, `apps/agentd/src/computer/service.rs`, `apps/agentd/src/computer/tools/` and `apps/agentd/src/computer/mutation.rs`.
 - Durable state: `crates/agent-storage/src/schema.rs`, `migration.rs` and `migration/`.
 - Reusable decisions and Agent integration: `crates/decision-core/`, `crates/decision-semantic/`, `crates/decision-model/` and `apps/agentd/src/model_routing.rs`.
-- Independent gateway and synthetic models: `apps/ai-gateway/`, `crates/gateway-core/`, `crates/gateway-storage/`, `crates/gateway-web/` and `apps/model-mock/`.
+- Gateway and synthetic models: `crates/gateway-core/`, `crates/gateway-storage/` and `apps/model-mock/`.
 
 A successful worker attempt and a master's acceptance of its result have different meanings. The protocol keeps `attempt_id`, `owner_epoch` and explicit `AcceptResult`; receiving a result does not establish acceptance.
 

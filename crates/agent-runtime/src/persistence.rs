@@ -106,6 +106,24 @@ impl DurableSession {
       stopped: CancellationToken::new(),
     })
   }
+  pub async fn commit_private_scope(&self, scope: secrecy::SecretString) -> Result<()> {
+    if self.failed.load(Ordering::Acquire) || self.stopped.is_cancelled() {
+      return Err(RuntimeError::Uncertain("session writer is fenced".into()));
+    }
+    self
+      .persistence
+      .commit_private_scope(&self.id, self.epoch, scope)
+      .await
+      .map_err(|_| self.private_scope_failed())
+  }
+  pub fn private_scope_failed(&self) -> RuntimeError {
+    self.failed.store(true, Ordering::Release);
+    self.stopped.cancel();
+    RuntimeError::Uncertain("private scope persistence failed; writer fenced".into())
+  }
+  pub async fn load_private_scope(&self) -> Result<Option<secrecy::SecretString>> {
+    self.persistence.load_private_scope(&self.id).await
+  }
   pub async fn ensure_certain(&self) -> Result<()> {
     if self.failed.load(Ordering::Acquire) {
       return Err(RuntimeError::Uncertain(

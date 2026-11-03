@@ -255,7 +255,7 @@ fn application_shortcuts_take_precedence_over_editor_bindings() {
 
 #[test]
 fn context_shortcuts_keep_editor_draft_and_existing_daemon_authority() {
-  use agent_cli::model::{Approval, ContextPanel};
+  use agent_cli::model::ContextPanel;
   let (actions, mut requests) = mpsc::channel(8);
   let mut app = connected();
   paste(&mut app, &actions, "keep draft");
@@ -277,10 +277,20 @@ fn context_shortcuts_keep_editor_draft_and_existing_daemon_authority() {
     key(&mut app, &actions, KeyCode::Esc, KeyModifiers::NONE);
     assert_eq!(app.router.current(), ContextPanel::Closed);
   }
-  app.approvals.push(Approval {
-    id: "pending".into(),
-    description: "write_file".into(),
-  });
+  update::apply(
+    &mut app,
+    Update::Approvals {
+      session: "session".into(),
+      generation: 0,
+      approvals: vec![agent_protocol::v1::Approval {
+        id: "pending".into(),
+        tool: "write_file".into(),
+        status: "pending".into(),
+        expires_at_ms: i64::MAX,
+        ..Default::default()
+      }],
+    },
+  );
   key(&mut app, &actions, KeyCode::Char('y'), KeyModifiers::NONE);
   assert!(
     requests.try_recv().is_err(),

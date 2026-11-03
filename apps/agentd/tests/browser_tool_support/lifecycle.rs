@@ -69,7 +69,7 @@ async fn opening_and_closing_require_exact_approval_and_persist_mutation_receipt
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn cancelling_pending_browser_approval_has_no_intent_or_effect() {
+async fn cancelling_pending_browser_approval_is_uncertain_without_effect_or_replay() {
   let protocol = StandardProtocol::ChatCompletions;
   let classifier = MockModelServer::start(vec![text_reply(protocol, &route())])
     .await
@@ -87,10 +87,37 @@ async fn cancelling_pending_browser_approval_has_no_intent_or_effect() {
   let run = node.run("cancel pending approval").await;
   let pending = approval(&node, &run.id).await;
   node.client.cancel_run(&run.id).await.unwrap();
-  assert_eq!(node.terminal(&run.id).await.status, "cancelled");
+  let result = node.terminal(&run.id).await;
+  assert_eq!(result.status, "uncertain", "{}", result.error);
   assert!(runtime.actions.lock().await.is_empty());
   assert_receipts(&node, &pending, "cancelled", None).await;
   assert_eq!(main.requests().await.len(), 1);
+  assert!(
+    node
+      .client
+      .start_run(
+        &node.session_id,
+        "do not replay the uncertain browser operation",
+        &agent_core::new_id(),
+      )
+      .await
+      .is_err()
+  );
+  node.daemon.recover().await.unwrap();
+  assert_eq!(
+    node.client.get_run(&run.id).await.unwrap().status,
+    "uncertain"
+  );
+  assert!(
+    runtime.actions.lock().await.is_empty(),
+    "recovery must not replay browser effects"
+  );
+  assert_receipts(&node, &pending, "cancelled", None).await;
+  assert_eq!(
+    main.requests().await.len(),
+    1,
+    "recovery must not replay the model call"
+  );
   drop(runtime);
   node.close().await;
 }

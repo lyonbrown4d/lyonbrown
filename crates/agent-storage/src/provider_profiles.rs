@@ -32,7 +32,7 @@ impl Store {
     decode(
       provider_profiles::Entity::find()
         .order_by_asc(provider_profiles::Column::Id)
-        .limit((100) as u64)
+        .limit(100_u64)
         .select_only()
         .column(provider_profiles::Column::Record)
         .into_tuple::<String>()
@@ -83,7 +83,7 @@ impl Store {
               )
               .col_expr(
                 provider_profiles::Column::Record,
-                Expr::value((&record).to_owned()),
+                Expr::value(record.to_owned()),
               )
               .exec(connection)
               .await
@@ -110,9 +110,9 @@ impl Store {
               return Err(ProviderProfileError::Capacity.into());
             }
             provider_profiles::ActiveModel {
-              id: Set((&profile.id).to_owned()),
+              id: Set(profile.id.to_owned()),
               revision: Set((revision).to_owned()),
-              record: Set((&record).to_owned()),
+              record: Set(record.to_owned()),
             }
             .insert(connection)
             .await?;

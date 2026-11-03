@@ -151,19 +151,20 @@ struct MutationGuard {
 }
 impl Drop for MutationGuard {
   fn drop(&mut self) {
-    if !self.finished
-      && self
-        .store
-        .finish_browser_action(
-          &self.id,
-          self.epoch,
-          "uncertain",
-          json!({"reason":"caller_disconnected"}),
-        )
-        .await
-        .is_err()
-    {
-      tracing::warn!(action_id=%self.id,"browser intent remains unresolved after caller disconnected");
+    if self.finished {
+      return;
     }
+    let store = self.store.clone();
+    let id = self.id.clone();
+    let epoch = self.epoch;
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+      tracing::warn!(action_id=%id, "browser intent remains unresolved; reconcile on startup");
+      return;
+    };
+    runtime.spawn(async move {
+      if store.finish_browser_action(&id, epoch, "uncertain", json!({"reason":"caller_disconnected"})).await.is_err() {
+        tracing::warn!(action_id=%id, "browser intent remains unresolved after caller disconnected");
+      }
+    });
   }
 }

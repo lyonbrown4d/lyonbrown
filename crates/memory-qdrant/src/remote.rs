@@ -1,9 +1,9 @@
 use crate::payload::{self, TIMEOUT, VECTOR};
+use ::qdrant_client::{Payload, Qdrant, qdrant::*};
 use memory_core::{
   EmbeddingDescriptor, IndexError, IndexResult, IndexedMemory, VectorHit, VectorIndex, VectorQuery,
   VectorStatus,
 };
-use qdrant_client::{Payload, Qdrant, qdrant::*};
 use rig_core::{
   DynModel,
   operation::Embedding,

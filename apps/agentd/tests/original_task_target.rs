@@ -223,9 +223,10 @@ async fn original_cancel_targets_same_attempt_and_lost_peer_never_redispatches()
       .dispatch_task(remote.target(), envelope.clone())
       .await
       .unwrap();
-    tokio::time::timeout(std::time::Duration::from_secs(5), mock.wait_for_requests(1))
-      .await
-      .unwrap();
+    remote
+      .pair
+      .wait_for_worker_model(&mock, &envelope.clone().into())
+      .await;
     if disconnect {
       remote.pair.abort_worker_listener().await;
       assert_eq!(

@@ -53,10 +53,11 @@ async fn actual_adapters_consume_fragmented_text_and_tool_result_roundtrips() {
       })
       .unwrap();
     assert_eq!(tool.function.name.as_str(), "fixture_echo");
-    assert_eq!(tool.function.arguments, json!({"text":"synthetic"}));
+    let arguments_value = Value::Object(tool.function.arguments.clone());
+    assert_eq!(arguments_value, json!({"text":"synthetic"}));
     assert_eq!(
       serde_json::from_str::<Value>(&arguments).unwrap(),
-      tool.function.arguments
+      arguments_value
     );
     let request = CompletionRequest::new(Message::tool_result(
       tool.id.clone(),

@@ -1,6 +1,5 @@
 #[path = "image_events/persistence.rs"]
 mod persistence;
-#[allow(dead_code)]
 mod support;
 
 use std::sync::{Arc, Mutex};

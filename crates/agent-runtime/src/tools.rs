@@ -62,6 +62,11 @@ impl Runtime {
       .tools
       .get(&name)
       .ok_or_else(|| RuntimeError::Tool("unregistered tool".into()))?;
+    let safe_call = ToolCall {
+      id: id.clone(),
+      arguments: arguments.clone(),
+    };
+    let resolved_call = self.authorize_tool_call(tool.as_ref(), &safe_call).await?;
     self
       .session
       .update("tool_started", |state| {
@@ -102,13 +107,7 @@ impl Runtime {
       arguments: arguments.clone(),
     });
     let token = cancellation.child_token();
-    let execution = tool.execute(
-      ToolCall {
-        id: id.clone(),
-        arguments,
-      },
-      token.clone(),
-    );
+    let execution = tool.execute(resolved_call, token.clone());
     let output = tokio::select! { biased;
       _ = self.session.stopped.cancelled() => return Err(RuntimeError::Uncertain("session writer fenced during tool execution".into())),
       _ = cancellation.cancelled() => {
@@ -127,14 +126,21 @@ impl Runtime {
     };
     let output = match output {
       Ok(output) => output,
-      Err(RuntimeError::Uncertain(message)) => {
-        self.session.uncertain(message).await?;
+      Err(RuntimeError::Uncertain(_)) => {
+        self
+          .session
+          .uncertain("tool outcome unresolved".into())
+          .await?;
         return Err(RuntimeError::Uncertain("tool outcome unresolved".into()));
       }
       Err(error) => ToolOutput {
         text: error.to_string(),
         is_error: true,
       },
+    };
+    let output = ToolOutput {
+      text: self.protect_text(&output.text).await?,
+      is_error: output.is_error,
     };
     let result = if output.is_error {
       ToolResult::failed(ToolExecutionError::other(output.text.clone()))

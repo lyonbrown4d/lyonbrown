@@ -1,4 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+  time::Duration,
+};
 
 use agent_runtime::Result;
 use rmcp::{
@@ -19,12 +25,25 @@ impl ClientHandler for RestrictedClient {}
 
 pub(crate) struct Connection {
   pub client: rig_rmcp::McpConnection,
-  cancellation: RunningServiceCancellationToken,
+  cancellation: std::sync::Mutex<Option<RunningServiceCancellationToken>>,
+  revoked: AtomicBool,
 }
 
 impl Connection {
-  pub fn cancellation_token(&self) -> RunningServiceCancellationToken {
-    self.cancellation.clone()
+  pub fn cancel_transport(&self) {
+    self.revoked.store(true, Ordering::Release);
+    if let Some(token) = self
+      .cancellation
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner)
+      .take()
+    {
+      token.cancel();
+    }
+  }
+
+  pub fn is_revoked(&self) -> bool {
+    self.revoked.load(Ordering::Acquire)
   }
 
   pub async fn cancel(self) {
@@ -89,7 +108,8 @@ pub(crate) async fn connect(config: &McpServerConfig, limits: &McpLimits) -> Res
   let cancellation = service.cancellation_token();
   Ok(Connection {
     client: rig_rmcp::McpConnection::new(service),
-    cancellation,
+    cancellation: std::sync::Mutex::new(Some(cancellation)),
+    revoked: AtomicBool::new(false),
   })
 }
 

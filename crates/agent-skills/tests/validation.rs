@@ -23,7 +23,8 @@ fn upstream_validation_projects_normalized_instructions_without_granting_tools()
       "invalid manifest was accepted"
     );
   }
-  assert!(parse_manifest("---\nname: révision\ndescription: Review changes\n---\n").is_err());
+  let unicode = parse_manifest("---\nname: révision\ndescription: Review changes\n---\n")?;
+  assert_eq!(unicode.manifest.name, "révision");
   let projected = parse_manifest(
     "\u{feff}---\r\nname: review\r\ndescription: 检查变更\r\nlicense: MIT\r\ncompatibility: Requires cargo\r\nmetadata:\r\n  author: example\r\n  version: '1.0'\r\nallowed-tools: 'Read   Bash(*)'\r\n---\r\n检查代码。\r\n",
   )?;

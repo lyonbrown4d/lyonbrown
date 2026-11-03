@@ -8,8 +8,6 @@ license.workspace = true
 sea-orm.workspace = true
 sea-orm-migration.workspace = true
 secrecy.workspace = true
-gateway-validation = { path = "../gateway-validation" }
-argon2 = "=0.6.0"
 async-trait.workspace = true
 decision-core = { path = "../decision-core" }
 gateway-core = { path = "../gateway-core" }
@@ -24,4 +22,5 @@ thiserror.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
+axum = "=0.8.9"
 tempfile.workspace = true

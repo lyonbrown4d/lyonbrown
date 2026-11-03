@@ -5,6 +5,35 @@ use agent_secrets::{ExposeSecret, MAX_SECRET_BYTES, SecretError, SecretStore, Se
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
+fn transactional_ciphertext_is_bounded_and_bound_to_its_identity() -> TestResult {
+  let directory = tempfile::tempdir()?;
+  let store = SecretStore::open(directory.path())?;
+  let value = SecretString::from("synthetic-private-session-original");
+  let record = store.seal_value("privacy-session-one", &value)?;
+  assert_eq!(
+    store
+      .open_value("privacy-session-one", &record)?
+      .expose_secret(),
+    value.expose_secret()
+  );
+  assert!(store.open_value("privacy-session-two", &record).is_err());
+  assert!(
+    store
+      .seal_value(
+        "privacy-session-one",
+        &SecretString::from("x".repeat(MAX_SECRET_BYTES + 1))
+      )
+      .is_err()
+  );
+  assert!(
+    !record
+      .windows(value.expose_secret().len())
+      .any(|part| part == value.expose_secret().as_bytes())
+  );
+  Ok(())
+}
+
+#[test]
 fn round_trip_and_metadata_never_expose_plaintext() -> TestResult {
   let directory = tempfile::tempdir()?;
   let store = SecretStore::open(directory.path())?;

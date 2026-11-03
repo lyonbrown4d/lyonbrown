@@ -74,6 +74,7 @@ impl Daemon {
       session.owner_epoch,
       Arc::new(crate::run_input::RunPersistence {
         store: self.store.clone(),
+        private_store: self.provider_secrets.clone(),
         run_id: run.id.clone(),
       }),
     )

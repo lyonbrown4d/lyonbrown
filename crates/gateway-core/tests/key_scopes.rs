@@ -45,6 +45,16 @@ async fn scoped_key_filters_models_blocks_direct_and_auto_escalation_and_enforce
     model("allowed-model", "allowed-upstream", &upstream.base),
     model("disallowed-model", "disallowed-upstream", &upstream.base),
   ];
+  config.groups = vec![
+    gateway_core::ModelGroup {
+      id: "accessible-group".into(),
+      models: vec!["allowed-model".into(), "disallowed-model".into()],
+    },
+    gateway_core::ModelGroup {
+      id: "hidden-group".into(),
+      models: vec!["disallowed-model".into()],
+    },
+  ];
   config.endpoints = vec![ProviderEndpoint {
     id: "mock-endpoint".into(),
     provider_id: "mock-provider".into(),
@@ -76,8 +86,15 @@ async fn scoped_key_filters_models_blocks_direct_and_auto_escalation_and_enforce
     .json()
     .await
     .expect("models JSON");
-  assert_eq!(models["data"].as_array().expect("model list").len(), 1);
-  assert_eq!(models["data"][0]["id"], "allowed-model");
+  let ids: Vec<_> = models["data"]
+    .as_array()
+    .expect("model list")
+    .iter()
+    .map(|model| model["id"].as_str().expect("id"))
+    .collect();
+  assert_eq!(ids, vec!["allowed-model", "accessible-group"]);
+  assert!(!models.to_string().contains("disallowed-model"));
+  assert!(!models.to_string().contains("hidden-group"));
 
   let direct = post(
     &server.base,

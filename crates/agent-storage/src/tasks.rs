@@ -70,7 +70,7 @@ impl Store {
             created_at_ms: agent_core::now_ms(),
           };
           sessions::ActiveModel {
-            id: Set((&session.id).to_owned()),
+            id: Set(session.id.to_owned()),
             owner_epoch: Set((1_i64).to_owned()),
             record: Set((serde_json::to_string(&session)?).to_owned()),
           }

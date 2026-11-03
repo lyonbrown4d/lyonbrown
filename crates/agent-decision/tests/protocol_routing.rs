@@ -1,8 +1,10 @@
 #[allow(dead_code)]
 mod support;
 use agent_decision::*;
+use agent_runtime::RuntimeConfig;
 use agent_test_support::{MockModelServer, StandardProtocol, text_reply};
 use serde_json::json;
+use std::sync::Arc;
 use support::*;
 use tokio_util::sync::CancellationToken;
 
@@ -38,7 +40,12 @@ async fn each_protocol_routes_every_task_kind_without_executing_tools() {
       )])
       .await
       .unwrap();
-      let plan = engine(&server, protocol, policy())
+      let engine = if protocol == StandardProtocol::Anthropic {
+        engine(&server, protocol, policy())
+      } else {
+        versioned_openai_engine(&server, protocol)
+      };
+      let plan = engine
         .decide("synthetic user request", None, CancellationToken::new())
         .await
         .unwrap();
@@ -174,4 +181,24 @@ async fn explicit_authorized_route_short_circuits_model_and_invalid_route_stops(
     DecisionError::ForbiddenRoute
   );
   assert!(server.requests().await.is_empty());
+}
+
+/// Rig appends OpenAI routes to the supplied base, so the fixture supplies `/v1`.
+fn versioned_openai_engine(
+  server: &MockModelServer,
+  protocol: StandardProtocol,
+) -> Arc<DecisionEngine> {
+  let config = RuntimeConfig {
+    session_id: "decision-fixture".into(),
+    owner_epoch: 1,
+    provider: protocol.provider().into(),
+    model: "classifier-fixture".into(),
+    api_key: "synthetic-classifier-secret".into(),
+    base_url: Some(format!("{}/v1", server.base_url())),
+    system_prompt: None,
+    context_window: 16_384,
+    max_output_tokens: 1024,
+    supports_images: false,
+  };
+  Arc::new(DecisionEngine::new(policy(), Some(Arc::new(RemoteClassifier::new(config)))).unwrap())
 }

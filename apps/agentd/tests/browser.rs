@@ -1,6 +1,5 @@
 #[path = "support/browser.rs"]
 mod browser;
-#[allow(dead_code)]
 mod support;
 use agent_protocol::v1;
 use agent_test_support::{MockModelServer, StandardProtocol};

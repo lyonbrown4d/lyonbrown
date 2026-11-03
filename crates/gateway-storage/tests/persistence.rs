@@ -209,3 +209,35 @@ async fn model_snapshots_never_persist_credentials_and_active_revision_can_be_re
     }
   }
 }
+
+#[tokio::test]
+async fn attempt_intents_are_durable_and_recovered_as_uncertain() {
+  let directory = tempfile::tempdir().expect("directory");
+  let path = directory.path().join("attempts.sqlite3");
+  let store = GatewayStorage::open(&path).await.expect("open");
+  store
+    .record_audit(audit("attempted", AuditStatus::Pending))
+    .await
+    .expect("request intent");
+  let attempt = gateway_core::AttemptRecord {
+    request_id: "attempted".into(),
+    sequence: 1,
+    model: "local".into(),
+    endpoint: Some("account".into()),
+    upstream_status: None,
+    status: AuditStatus::Pending,
+  };
+  store
+    .record_attempt(attempt.clone())
+    .await
+    .expect("attempt intent");
+  assert!(store.record_attempt(attempt).await.is_err());
+  drop(store);
+  let reopened = GatewayStorage::open(&path).await.expect("reopen");
+  let attempts = reopened
+    .list_attempts("attempted")
+    .await
+    .expect("attempt history");
+  assert_eq!(attempts.len(), 1);
+  assert!(matches!(attempts[0].status, AuditStatus::Uncertain));
+}

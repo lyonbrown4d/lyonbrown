@@ -60,7 +60,7 @@ pub(crate) async fn consume_approval_tx(
     .filter(approvals::Column::Id.eq(id))
     .col_expr(
       approvals::Column::Status,
-      Expr::value((&value.status).to_owned()),
+      Expr::value(value.status.to_owned()),
     )
     .col_expr(
       approvals::Column::Record,

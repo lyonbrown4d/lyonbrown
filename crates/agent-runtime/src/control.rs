@@ -16,6 +16,7 @@ impl Runtime {
         "input request identity is required".into(),
       ));
     }
+    let prompt = self.protect_text(prompt).await?;
     self
       .session
       .update("input_enqueued", |state| {
@@ -40,7 +41,7 @@ impl Runtime {
           id: agent_core::new_id(),
           request_id: request_id.into(),
           kind,
-          prompt: prompt.into(),
+          prompt: prompt.clone(),
           status: QueueStatus::Pending,
         };
         let event = input.event(QueueStatus::Pending);

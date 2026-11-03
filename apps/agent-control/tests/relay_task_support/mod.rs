@@ -223,16 +223,18 @@ impl RelayPair {
   pub async fn terminal(&self, task: &str) -> Task {
     tokio::time::timeout(Duration::from_secs(15), async {
       loop {
-        let result = self
-          .dispatch
-          .reconcile(&self.worker_node(), task)
-          .await
-          .unwrap();
-        if matches!(
-          result.attempt_status.as_str(),
-          "succeeded" | "failed" | "cancelled" | "uncertain"
-        ) {
-          return result;
+        match self.dispatch.reconcile(&self.worker_node(), task).await {
+          Ok(result)
+            if matches!(
+              result.attempt_status.as_str(),
+              "succeeded" | "failed" | "cancelled" | "uncertain"
+            ) =>
+          {
+            return result;
+          }
+          Ok(_) => {}
+          Err(error) if relay_authentication_timed_out(&error) => {}
+          Err(error) => panic!("reconcile existing task failed: {error:#}"),
         }
         tokio::time::sleep(Duration::from_millis(20)).await;
       }
@@ -253,6 +255,17 @@ impl RelayPair {
     self.control.disconnect().await;
   }
 }
+fn relay_authentication_timed_out(error: &anyhow::Error) -> bool {
+  error
+    .chain()
+    .any(|cause| cause.to_string() == "relay peer authentication timed out")
+    && error.chain().any(|cause| {
+      cause
+        .downcast_ref::<tokio::time::error::Elapsed>()
+        .is_some()
+    })
+}
+
 pub fn worker_session(task: &TaskEnvelope) -> String {
   format!("worker:{}:{}", task.task_id, task.attempt_id)
 }
@@ -268,7 +281,11 @@ async fn node(
   config.provider = protocol.provider().into();
   config.model = "relay-worker-fixture".into();
   config.provider_api_key = Some("synthetic-relay-model-secret".into());
-  config.api_base = Some(model.base_url().into());
+  config.api_base = Some(if protocol == StandardProtocol::Anthropic {
+    model.base_url().into()
+  } else {
+    format!("{}/v1", model.base_url())
+  });
   config.run_timeout_secs = 90;
   config.peer = Some(agent_config::PeerSettings {
     listen: address,

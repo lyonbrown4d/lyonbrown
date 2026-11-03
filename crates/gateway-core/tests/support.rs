@@ -71,6 +71,7 @@ pub fn config(base: &str) -> GatewayConfig {
     token: Secret::new(TOKEN),
     models: vec![model(base)],
     endpoints: vec![],
+    groups: vec![],
     limits: Limits::default(),
     constraints: Default::default(),
   }
