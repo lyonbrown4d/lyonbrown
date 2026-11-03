@@ -1,4 +1,4 @@
-//! Memory domain and index ports. No ORM, Harness, provider or vector SDK types.
+//! Memory domain and index ports. No ORM, Rig, provider or vector SDK types.
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

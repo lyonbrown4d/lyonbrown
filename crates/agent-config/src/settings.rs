@@ -176,17 +176,6 @@ impl Default for DecisionSettings {
 }
 impl DecisionSettings {
   pub fn validate(&self) -> Result<()> {
-    self.memory.validate()?;
-    if let Some(url) = &self.database_url {
-      let value = url.expose_secret();
-      ensure!(
-        value.starts_with("sqlite:")
-          || value.starts_with("postgres:")
-          || value.starts_with("postgresql:")
-          || value.starts_with("mysql:"),
-        "unsupported database backend"
-      );
-    }
     if let Some(policy) = &self.policy {
       decision_core::PolicySnapshot::new(policy.clone())?;
     }

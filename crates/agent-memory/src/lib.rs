@@ -4,7 +4,7 @@ mod embedding;
 mod mutations;
 mod retrieval;
 mod worker;
-pub use embedding::HttpEmbedding;
+pub use embedding::RigEmbedding;
 use memory_core::*;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

@@ -2,8 +2,8 @@ use std::{sync::Arc, time::Duration};
 
 use agent_runtime::Result;
 use rmcp::{
-  ClientHandler, RoleClient, ServiceExt,
-  service::RunningService,
+  ClientHandler, ServiceExt,
+  service::{RunningServiceCancellationToken, ServerSink},
   transport::{
     StreamableHttpClientTransport, common::client_side_sse::NeverRetry,
     streamable_http_client::StreamableHttpClientTransportConfig,
@@ -17,7 +17,27 @@ use crate::{McpLimits, McpServerConfig, McpTransport, config::invalid};
 pub(crate) struct RestrictedClient;
 impl ClientHandler for RestrictedClient {}
 
-pub(crate) type Connection = RunningService<RoleClient, RestrictedClient>;
+pub(crate) struct Connection {
+  pub client: rig_rmcp::McpConnection,
+  cancellation: RunningServiceCancellationToken,
+}
+
+impl Connection {
+  pub fn cancellation_token(&self) -> RunningServiceCancellationToken {
+    self.cancellation.clone()
+  }
+
+  pub async fn cancel(self) {
+    self.client.close().await;
+  }
+}
+
+impl std::ops::Deref for Connection {
+  type Target = ServerSink;
+  fn deref(&self) -> &Self::Target {
+    self.client.peer()
+  }
+}
 
 pub(crate) async fn connect(config: &McpServerConfig, limits: &McpLimits) -> Result<Connection> {
   agent_security::initialize_tls();
@@ -34,6 +54,7 @@ pub(crate) async fn connect(config: &McpServerConfig, limits: &McpLimits) -> Res
         // Never forward credentials to redirects or ambient proxy endpoints.
         let client = reqwest::Client::builder()
           .redirect(reqwest::redirect::Policy::none())
+          .retry(reqwest::retry::never())
           .no_proxy()
           .connect_timeout(limits.connection_timeout)
           // Logical connection/catalog and tool deadlines are enforced by their
@@ -62,9 +83,14 @@ pub(crate) async fn connect(config: &McpServerConfig, limits: &McpLimits) -> Res
       }
     }
   };
-  tokio::time::timeout(limits.connection_timeout, future)
+  let service = tokio::time::timeout(limits.connection_timeout, future)
     .await
-    .map_err(|_| invalid("MCP handshake deadline exceeded"))?
+    .map_err(|_| invalid("MCP handshake deadline exceeded"))??;
+  let cancellation = service.cancellation_token();
+  Ok(Connection {
+    client: rig_rmcp::McpConnection::new(service),
+    cancellation,
+  })
 }
 
 pub(crate) fn wire_limit(limits: &McpLimits) -> usize {

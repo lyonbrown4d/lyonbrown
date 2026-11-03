@@ -1,6 +1,6 @@
 # 运行截图与验收范围
 
-本页保留历史运行证据及原平台、版本和摘要。SeaORM 异步存储、最新数据库结构、记忆管理与 Qdrant、Gateway 全异步 FluxDI 装配均未在本轮重新编译或运行验收；这些历史截图不覆盖上述实现。当前阻塞见[开发与验证](development.md#当前依赖解析限制)。
+本页保留历史运行证据及原平台、版本和摘要。当前 Rig AgentRun、SeaORM 异步存储、最新数据库结构、记忆管理与 Qdrant、Gateway 全异步 FluxDI 装配均未在本轮重新编译或运行验收；历史截图不覆盖这些实现。验证范围见[开发与验证](development.md#验证范围)。
 
 本页早期桌面客户端截图来自本地 GPUI Desktop 原生窗口，运行环境为 macOS 27.0.1、arm64、GPUI Kit 0.7.3；该组截图对应的 CEF 版本为 154.0.34（Rust crate `cef` 154.5.0+154.0.34）。截图记录 0.1.0 原生验收程序的运行，使用本地 HTTP 模型 fixture，经认证连接真实 agentd。fixture 返回合成内容，不调用付费模型。设置、对话、标签页、面板折叠、审批、Editor 和 Diff 八张图采集于 2026 年 10 月 18 日。[原生截图记录](evidence/desktop-native-capture.json)保存了对应程序、源文件与图片摘要、两次已持久化为 `completed` 的 Run，以及状态为 `consumed` 的精确文件写入审批。设置页、聊天标签页和面板开关的使用方式见[客户端文档](clients.md)。
 

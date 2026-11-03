@@ -1,21 +1,15 @@
-//! The daemon's isolated adapter to the sole agent loop, `rpi-harness`.
+//! Durable host IO for Rig's serializable AgentRun state machine.
 #![forbid(unsafe_code)]
-
 mod classification;
 mod contracts;
 mod control;
-mod event_projection;
-mod events;
-mod image_recovery;
+mod driver;
 mod input;
-mod local_provider;
-mod local_stream;
+mod model_io;
 mod persistence;
 mod provider;
 mod recovery;
-mod request_events;
 mod runtime;
-mod semantic_events;
 mod tools;
 
 pub use classification::{CLASSIFICATION_OUTPUT_LIMIT, classify_json};

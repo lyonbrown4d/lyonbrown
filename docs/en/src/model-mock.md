@@ -58,7 +58,7 @@ Native Ollama shapes and streaming are tested through `ollama-rs`. Agent HTTP in
 
 `agent-test-support::MockInferenceBackend` implements the actual `InferenceBackend` port and registers in `ModelRegistry` for Agent or `decision-model` consumers. Scripts support text/thinking/tool chunks, delay, errors, finish reasons, cancellation and backpressure. Counters distinguish requests, completions, cancellations and failures. No HTTP process is required.
 
-Local integration tests traverse Registry, Harness and real SQLite, asserting final Run state, effective tools and route events. Remote cases traverse actual protocol adapters. Mock results validate integration, protocols and state rather than model quality, inference performance, context limits or native SDK correctness.
+Local integration tests traverse Registry, Runtime and real SQLite, asserting final Run state, effective tools and route events. Remote cases traverse actual protocol adapters. Mock results validate integration, protocols and state rather than model quality, inference performance, context limits or native SDK correctness.
 
 ```sh
 cargo test --locked -p model-mock -p agent-test-support

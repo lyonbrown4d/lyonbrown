@@ -9,7 +9,7 @@ publish = false
 agent-inference = { path = "../agent-inference" }
 async-trait.workspace = true
 tokio-util.workspace = true
-axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "tokio"] }
 futures.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

@@ -98,7 +98,7 @@ impl PeerRuntime {
     let tls = manager.server_tls().await?;
     let worker = Arc::new(TaskWorker::new(
       manager.clone(),
-      Arc::new(executor::HarnessWorker(daemon.clone())),
+      Arc::new(executor::RuntimeWorker(daemon.clone())),
       daemon.config.data_path()?.join("worker-workspaces"),
     )?);
     let recovered = worker.recover_uncertain().await?;

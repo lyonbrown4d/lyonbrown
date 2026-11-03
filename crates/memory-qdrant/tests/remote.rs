@@ -34,6 +34,12 @@ async fn remote_rejects_incompatible_server_before_collection_access()
         let _ = stopped.await;
       }),
   );
+  agent_security::initialize_tls();
+  let model = rig_core::providers::openai::OpenAIConfig::new("synthetic-local-key")
+    .with_base_url(&endpoint)
+    .connect(rig_reqwest::ReqwestClient::default())
+    .embedding("synthetic", Some(3))
+    .erase();
   let result = QdrantRemoteIndex::connect(
     &endpoint,
     None,
@@ -44,6 +50,7 @@ async fn remote_rejects_incompatible_server_before_collection_access()
       dimensions: 3,
       configuration_revision: "v1".into(),
     },
+    model,
   )
   .await;
   assert!(matches!(result, Err(IndexError::Unsupported)));

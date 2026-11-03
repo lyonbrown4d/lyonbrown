@@ -46,7 +46,7 @@ async fn failed_queue_cancellation_retains_intent_and_fences_execution() {
     .unwrap();
   // Reviewed test-only fault injection: reject snapshot writes, while allowing
   // the host intent and Run/Outbox fence to commit through the real Store.
-  database.execute_unprepared("CREATE TRIGGER refuse_input_snapshot BEFORE UPDATE ON harness_sessions BEGIN SELECT RAISE(ABORT, 'synthetic snapshot failure'); END;").await.unwrap();
+  database.execute_unprepared("CREATE TRIGGER refuse_input_snapshot BEFORE UPDATE ON runtime_sessions BEGIN SELECT RAISE(ABORT, 'synthetic snapshot failure'); END;").await.unwrap();
   assert!(
     node
       .client

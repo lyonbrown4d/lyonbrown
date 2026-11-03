@@ -1,7 +1,7 @@
 use crate::Daemon;
 use agent_core::events::{AGENT_EVENT_KIND, AgentEvent, ExecutionPhase};
 use agent_core::{Run, RunStatus};
-use agent_runtime::{RunOutcome, Runtime, RuntimeError, RuntimeEvent};
+use agent_runtime::{RunOutcome, Runtime, RuntimeError};
 use anyhow::Result;
 use std::sync::Arc;
 use std::time::Duration;
@@ -179,7 +179,7 @@ impl Daemon {
     {
       *restricted = true;
     }
-    // Persist the effective, authority-clamped plan before opening the Harness.
+    // Persist the effective, authority-clamped plan before opening the Rig runtime.
     self
       .store
       .append_event_owned(
@@ -369,10 +369,6 @@ impl Daemon {
       RunOutcome::Cancelled => (RunStatus::Cancelled, String::new()),
       RunOutcome::Failed { message } => (RunStatus::Failed, message),
       RunOutcome::Uncertain { message } => (RunStatus::Uncertain, message),
-      RunOutcome::Suspended { id } => (
-        RunStatus::Uncertain,
-        format!("harness suspended operation {id}; explicit reconciliation required"),
-      ),
     };
     self
       .store

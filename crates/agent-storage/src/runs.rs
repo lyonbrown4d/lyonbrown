@@ -191,7 +191,7 @@ impl Store {
           "run is already terminal"
         );
         // Serialize cancellation against the terminal commit. A successful
-        // Harness completion cannot overwrite a cancellation already accepted
+        // Runtime completion cannot overwrite a cancellation already accepted
         // by the daemon. Unknown side effects retain their Uncertain outcome.
         let status = if run.status == "cancel_requested" && status == RunStatus::Completed {
           RunStatus::Cancelled

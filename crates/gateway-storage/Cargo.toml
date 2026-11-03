@@ -14,12 +14,12 @@ async-trait.workspace = true
 decision-core = { path = "../decision-core" }
 gateway-core = { path = "../gateway-core" }
 fs2.workspace = true
-getrandom = "0.4.3"
+getrandom = "=0.4.3"
 hex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-subtle = "2.6.1"
+subtle = "=2.6.1"
 thiserror.workspace = true
 tokio.workspace = true
 

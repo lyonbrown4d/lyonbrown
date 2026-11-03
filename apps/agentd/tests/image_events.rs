@@ -35,59 +35,37 @@ fn image_blocks<'a>(value: &'a Value, found: &mut Vec<&'a Value>) {
   }
 }
 
-fn assert_metadata(value: &Value, expected: usize) {
-  let mut images = Vec::new();
-  image_blocks(value, &mut images);
-  assert_eq!(images.len(), expected);
-  for image in images {
-    assert_eq!(
-      image,
-      &json!({
-        "type": "image",
-        "mimeType": "image/png",
-        "dataRedacted": true,
-        "encodedBytes": PNG.len(),
-      })
-    );
-  }
-}
-
 fn assert_image_events(events: &[Event]) {
   assert!(!serde_json::to_string(events).unwrap().contains(PNG));
   assert!(!format!("{events:?}").contains(PNG));
-  let payloads = events
-    .iter()
-    .map(|event| {
-      (
-        event.kind.as_str(),
-        serde_json::from_str::<Value>(&event.payload_json).unwrap(),
-      )
-    })
-    .collect::<Vec<_>>();
-  let entry = payloads
-    .iter()
-    .find(|(kind, payload)| {
-      *kind == "entry_appended" && payload["entry"]["message"]["role"] == "user"
-    })
-    .expect("image user entry was committed");
-  assert_metadata(&entry.1["entry"]["message"], 1);
-  let operation = payloads
-    .iter()
-    .find(|(kind, payload)| {
-      *kind == "record_appended"
-        && payload["record"]["type"] == "operation_started"
-        && payload["record"]["intent"]["kind"] == "run"
-    })
-    .expect("execution intent was committed");
-  assert_metadata(&operation.1["record"]["intent"]["originalPrompt"], 1);
-  assert_eq!(
-    operation.1["record"]["intent"]["initialMessages"],
-    json!([])
+  assert!(events.iter().any(|event| event.kind == "run_started"));
+  assert!(
+    events
+      .iter()
+      .any(|event| event.kind == "model_response_committed")
   );
-  for (_, payload) in payloads {
+  assert!(events.iter().any(|event| event.kind == "run_finished"));
+  for event in events {
+    let payload: Value = serde_json::from_str(&event.payload_json).unwrap();
     let mut images = Vec::new();
     image_blocks(&payload, &mut images);
-    assert_metadata(&payload, images.len());
+    assert!(
+      images.is_empty(),
+      "image content escaped into {}",
+      event.kind
+    );
+    if matches!(
+      event.kind.as_str(),
+      "run_started" | "model_response_committed"
+    ) {
+      let fields = payload.as_object().unwrap();
+      assert_eq!(
+        fields.len(),
+        1,
+        "only the run identity belongs in this audit event"
+      );
+      assert!(fields["run_id"].as_str().is_some_and(|id| !id.is_empty()));
+    }
   }
 }
 
@@ -100,17 +78,19 @@ async fn assert_snapshot(node: &TestNode) {
     .unwrap()
     .unwrap();
   let snapshot: Value = serde_json::from_slice(&bytes).unwrap();
-  let entries = snapshot["state"]["entries"].as_array().unwrap();
+  assert_eq!(snapshot["version"], 1);
+  assert_eq!(snapshot["session_id"], node.session_id);
+  let entries = snapshot["history"].as_array().unwrap();
   let originals = entries
     .iter()
-    .filter(|entry| entry["message"]["role"] == "user" && entry.to_string().contains(PROMPT))
+    .filter(|entry| entry["role"] == "user" && entry.to_string().contains(PROMPT))
     .collect::<Vec<_>>();
   assert_eq!(originals.len(), 1, "image input was duplicated");
   let mut images = Vec::new();
-  image_blocks(&originals[0]["message"], &mut images);
+  image_blocks(originals[0], &mut images);
   assert_eq!(images.len(), 1);
-  assert_eq!(images[0]["mimeType"], "image/png");
-  assert_eq!(images[0]["data"], PNG);
+  assert_eq!(images[0]["media_type"], "png");
+  assert_eq!(images[0]["data"], json!({"type":"base64", "value":PNG}));
   assert!(images[0].get("dataRedacted").is_none());
 }
 
@@ -136,7 +116,7 @@ async fn watch_events(node: &TestNode, run_id: &str) -> Vec<Event> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn image_events_are_metadata_only_in_store_outbox_and_authenticated_watch() {
+async fn image_snapshot_restores_without_replay_and_events_never_expose_content() {
   let protocol = StandardProtocol::ChatCompletions;
   let main = MockModelServer::start(vec![text_reply(protocol, "Image received.")])
     .await
@@ -234,16 +214,8 @@ async fn image_events_are_metadata_only_in_store_outbox_and_authenticated_watch(
     Arc::new(move |event| capture.lock().unwrap().push(event)),
   )
   .await;
-  let error = match reopened {
-    Err(error) => error,
-    Ok(_) => panic!("image-bearing recovery must fail until upstream supports it"),
-  };
-  assert!(
-    error
-      .to_string()
-      .contains("image-bearing session recovery is unavailable")
-  );
-  assert!(!format!("{error:?}").contains(PNG));
+  let reopened = reopened.expect("Rig message snapshots must restore image content");
+  drop(reopened);
   assert_eq!(
     node.daemon.store.load_snapshot(&session.id).await.unwrap(),
     snapshot
@@ -276,7 +248,11 @@ async fn image_events_are_metadata_only_in_store_outbox_and_authenticated_watch(
     assert!(!format!("{runtime_events:?}").contains(PNG));
   }
   let requests = main.requests().await;
-  assert_eq!(requests.len(), 1, "rejected recovery called the provider");
+  assert_eq!(
+    requests.len(),
+    1,
+    "opening a persisted session must not call the provider"
+  );
   let images = requests[0].body["messages"]
     .as_array()
     .unwrap()

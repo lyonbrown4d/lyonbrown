@@ -1,31 +1,5 @@
 use crate::payload;
-use memory_core::VectorQuery;
 use qdrant_client::qdrant::{Condition, Filter, Range};
-
-pub(crate) fn filter(query: &VectorQuery) -> Filter {
-  let embedding = &query.embedding;
-  let scopes = query
-    .scopes
-    .iter()
-    .map(|scope| {
-      let (kind, id) = payload::scope(scope);
-      Condition::from(Filter::must([
-        Condition::matches("scope_kind", kind.to_owned()),
-        Condition::matches("scope_id", id.to_owned()),
-      ]))
-    })
-    .collect::<Vec<_>>();
-  Filter::must([
-    Condition::matches("embedding_id", embedding.id.clone()),
-    Condition::matches("embedding_model", embedding.model.clone()),
-    Condition::matches("embedding_dimensions", embedding.dimensions as i64),
-    Condition::matches(
-      "embedding_configuration_revision",
-      embedding.configuration_revision.clone(),
-    ),
-    Condition::from(Filter::should(scopes)),
-  ])
-}
 
 pub(crate) fn deletion(id: &str, through_revision: u64) -> Filter {
   let hi = (through_revision >> 32) as u32;

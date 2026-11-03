@@ -13,8 +13,8 @@ uuid.workspace = true
 fs2.workspace = true
 tonic.workspace = true
 sha2.workspace = true
-subtle = "2.6.1"
-rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+subtle = "=2.6.1"
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std"] }
 
 [dev-dependencies]
 tempfile.workspace = true

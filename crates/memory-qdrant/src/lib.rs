@@ -5,6 +5,7 @@ mod payload;
 mod remote;
 mod remote_filter;
 mod remote_write;
+mod search_filter;
 
 pub use embedded::QdrantEmbeddedIndex;
 pub use remote::QdrantRemoteIndex;

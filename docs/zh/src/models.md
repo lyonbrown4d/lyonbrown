@@ -34,7 +34,7 @@ Linux CPU 的 [真实工具验收记录](evidence/model-tools-linux.json) 确认
 
 Agent 默认内嵌通用核心，先固定本次配置的主模型并保存 `model_route_decision`，再生成 Agent 专属的工具计划。通用库与可选后端见[可复用决策引擎](decision-engine.md)；独立网关见 [AI Gateway](gateway.md)。
 
-每次运行先由 `agent-decision` 生成执行计划，再由 `agent-runtime` 打开 `rpi-harness`。分类器只返回建议，不执行工具，也不能授予权限。
+每次运行先由 `agent-decision` 生成执行计划，再由 `agent-runtime` 打开 `Rig AgentRun`。分类器只返回建议，不执行工具，也不能授予权限。
 
 ## 模型安装与运行绑定流程
 
@@ -78,14 +78,14 @@ flowchart TB
     Rule --> Persist[保存 execution_plan 事件]
     Clamp --> Persist
     Fallback --> Persist
-    Persist --> Filter[过滤 Harness 实际工具集合]
-    Filter --> Run[rpi-harness 执行]
+    Persist --> Filter[过滤 Runtime 实际工具集合]
+    Filter --> Run[Rig AgentRun 执行]
     Run --> Approval[有副作用的工具仍须人工审批]
 ```
 
 工具集合取分类结果、已授权工具和可用能力的交集。模型策略、分布式执行和目标节点也分别受允许列表约束。委派目标必须同时出现在配置和有效配对记录中；本地执行计划不提供委派工具。分类器不能通过输出其他工具、策略或节点扩大权限。委派配置与审批范围见[本地工具与浏览器操作](tools.md#委派给配对节点)。
 
-有效计划先写入持久事件 `execution_plan`，其中包含工具、能力、执行模式、风险、置信度、来源及 `trace_id`，然后才打开 Harness。daemon 按该计划过滤实际工具集合，因此限制同时作用于模型可见工具和实际执行。审批按运行、工具、完整参数和有效期核对；分类器判断不能替代人工批准。
+有效计划先写入持久事件 `execution_plan`，其中包含工具、能力、执行模式、风险、置信度、来源及 `trace_id`，然后才打开 Runtime。daemon 按该计划过滤实际工具集合，因此限制同时作用于模型可见工具和实际执行。审批按运行、工具、完整参数和有效期核对；分类器判断不能替代人工批准。
 
 分类器不可用、超时、输出无效、置信度不足或缺少所需能力时，回退为本地执行模式，使用已配置的主模型且不提供工具或目标节点。分类阶段取消会将运行保存为取消状态，不调用主模型。
 
@@ -128,7 +128,7 @@ minimum_confidence = 0.75
 
 ## 本地推理边界
 
-`agent-inference` 通过 `llama-cpp-2` 和 `mistral.rs` 提供本地推理适配。它们只生成模型输出；会话与 Agent Loop 仍由同一个 `rpi-harness` 管理。daemon 启动时加载配置的本地文件并注册模型，加载失败则不会就绪，也不会转用云端或自动下载模型。
+`agent-inference` 通过 `llama-cpp-2` 和 `mistral.rs` 提供本地推理适配。它们只生成模型输出；会话与 Agent Loop 仍由同一个 `Rig AgentRun` 管理。daemon 启动时加载配置的本地文件并注册模型，加载失败则不会就绪，也不会转用云端或自动下载模型。
 
 ```toml
 provider = "local"
@@ -147,7 +147,7 @@ max_model_bytes = 8589934592
 
 路径和模型文件为示例，必须换成本机文件；Windows 应使用本机绝对路径。`llama` 需要构建 `agentd` 时启用 `local-llama`，`mistral` 需要 `local-mistral`。llama 读取 GGUF；Mistral 可选择 `gguf` 或 `directory`。文件、模型架构与量化格式仍须被所选推理库支持，扩展名相同不代表兼容。
 
-本地配置使用 CPU，不隐式分配 GPU。`max_model_bytes` 限制输入文件大小，不表示运行时内存上限；上下文、输出 token 与并发量分别受配置约束。运行开始时，实际模型元数据写入 `model_selected` 事件。文本模型不声明图片或工具能力，daemon 会在保存执行计划和创建 Harness 前移除不受支持的工具。
+本地配置使用 CPU，不隐式分配 GPU。`max_model_bytes` 限制输入文件大小，不表示运行时内存上限；上下文、输出 token 与并发量分别受配置约束。运行开始时，实际模型元数据写入 `model_selected` 事件。文本模型不声明图片或工具能力，daemon 会在保存执行计划和创建 Runtime 前移除不受支持的工具。
 
 分类器也可设置 `decision.provider = "local"`，并将 `decision.model` 指向已配置的本地模型 ID，与主模型独立选择。`LocalClassifier` 只接受无工具的结构化输出，仍受同一 JSON、置信度、超时和取消规则约束；格式不合格时保守回退。本地主模型不需要云端凭证。
 

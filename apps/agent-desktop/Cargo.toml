@@ -22,8 +22,8 @@ name = "desktop-computer-target"
 path = "examples/computer_target.rs"
 
 [dependencies]
-gpui-kit = { version = "0.8.1", features = ["tree-sitter-rust", "tree-sitter-markdown", "tree-sitter-toml"] }
-image = { version = "0.25", default-features = false }
+gpui-kit = { version = "=0.9.0", features = ["tree-sitter-rust", "tree-sitter-markdown", "tree-sitter-toml"] }
+image = { version = "=0.25.10", default-features = false }
 anyhow.workspace = true
 async-channel.workspace = true
 tokio.workspace = true
@@ -51,7 +51,7 @@ native-cef = ["agent-browser-runtime/native-cef"]
 async-trait.workspace = true
 agent-computer = { path = "../../crates/agent-computer", default-features = false }
 clap.workspace = true
-gpui-kit = { version = "0.8.1", features = ["test-support"] }
+gpui-kit = { version = "=0.9.0", features = ["test-support"] }
 agent-test-support = { path = "../../crates/agent-test-support" }
 agentd = { path = "../agentd" }
 agent-distributed = { path = "../../crates/agent-distributed" }

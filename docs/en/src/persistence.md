@@ -1,6 +1,6 @@
 # Sessions, tasks and recovery
 
-Sessions preserve the Harness semantics needed to continue a conversation. Run records preserve orchestration state for individual user requests. The relational database stores these separately and writes events and Outbox records alongside critical changes. Local SQLite is the default; the daemon can also select PostgreSQL or MySQL.
+Sessions preserve the Runtime semantics needed to continue a conversation. Run records preserve orchestration state for individual user requests. The relational database stores these separately and writes events and Outbox records alongside critical changes. Local SQLite is the default; the daemon can also select PostgreSQL or MySQL.
 
 ## Databases and asynchronous transactions
 
@@ -21,7 +21,7 @@ sequenceDiagram
     participant UI as Client
     participant D as agentd
     participant S as Relational database
-    participant H as rpi-harness
+    participant H as Rig AgentRun
     participant T as Host tool
     UI->>D: StartRun(session, prompt, key, epoch)
     D->>S: Persist accepted run + event + outbox
@@ -40,21 +40,21 @@ sequenceDiagram
     D-->>UI: Durable events and result
 ```
 
-The runtime delegates tools to host adapters, which own authorization, workspace confinement and cancellation. Harness provider retries are disabled; retry policy belongs to durable orchestration. Recording intent before a side effect allows recovery to distinguish unexecuted work from unknown outcomes.
+The runtime delegates tools to host adapters, which own authorization, workspace confinement and cancellation. Runtime provider retries are disabled; retry policy belongs to durable orchestration. Recording intent before a side effect allows recovery to distinguish unexecuted work from unknown outcomes.
 
 ## Images in snapshots and events
 
-Harness snapshots retain original message content. The separate `entry_appended` and `record_appended` projections retain only `type`, `mimeType`, `dataRedacted` and `encodedBytes` for image blocks, without Base64 content. `encodedBytes` is the byte length of the original Base64 string. This applies to tool results, compaction tails, execution intents, queued messages and stream-start messages. Store, Outbox and `WatchRun` carry the same projected payload. Projection happens when Runtime commits new events; reading existing events does not recompute their payloads.
+Versioned Runtime snapshots retain the Session ID, Rig message history, active AgentRun and prepared request, steering messages, unfinished tools, input queue and uncertainty. Rig's native message serialization preserves images for session restoration. Snapshots are execution state rather than client event payloads.
 
-Projection follows known message schemas rather than recursively removing arbitrary JSON `data` fields. Tool arguments and custom business data remain the responsibility of their adapters. Unrecognized queue payloads or frames expose only a `projectionOmitted` marker. Input-image Debug output includes only MIME and length.
+Durable mutation events contain only allowlisted metadata, such as run IDs, call IDs and tool names, and explicit public events. They never copy complete Rig raw responses, messages or images. Store, Outbox and `WatchRun` use the same event payload. Adapters remain responsible for authorization and redaction of tool arguments, custom business data and credentials.
 
-Image-bearing session recovery is unavailable. The recovery entry point retains the snapshot and returns an explicit error without calling a model or replaying a request. The pinned rpi-ai 0.16.0 emits duplicate `type` keys in raw JSON serialization; see [upstream issue #59](https://github.com/bigfish1913/pi-rust/issues/59). No snapshot normalization workaround is included. The daemon's `StartRun` still accepts text only; internal Runtime image input does not establish client image-session support.
+Runtime can restore serialized image messages. This does not establish image support for every model or client image-session support: the daemon's `StartRun` still accepts text only. The current Rig path received no compilation, tests or image-restoration runtime acceptance in this iteration.
 
 ## Disconnection and restart
 
 After reconnecting, query runs in the original session. Events are ordered by run ID and `cursor`; `WatchRun.after_cursor` requests later events. A disconnected stream does not establish task failure and must not trigger prompt replay.
 
-The store's `recover_interrupted` marks executing records without a durable terminal result as `uncertain`. Accepted work that has not started is handled separately from work already executing. Runtime recovery checks unfinished Harness tool records: a missing committed tool result produces `Uncertain` instead of guessing whether the side effect happened.
+The store's `recover_interrupted` marks executing records without a durable terminal result as `uncertain`. Accepted work that has not started is handled separately from work already executing. Runtime recovery checks unfinished Runtime tool records: a missing committed tool result produces `Uncertain` instead of guessing whether the side effect happened.
 
 The same recovery transaction changes the run's `pending` approvals to `cancelled` and writes `approval_closed`, `run_uncertain` events and Outbox entries. If any write fails, these state and event changes roll back together; repeated recovery creates no additional records. Closing an old approval neither resolves an unknown run outcome nor authorizes tool replay.
 

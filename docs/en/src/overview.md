@@ -15,10 +15,12 @@ This guide is for local users and developers and describes the current Rust work
 | `apps/agent-control` | Control-plane entry point |
 | `crates/agent-client` | Shared authenticated client connection |
 | `crates/agent-protocol`, `proto/agent/v1` | Versioned protocol and conversions |
-| `crates/agent-runtime` | `rpi-harness` adapter and session recovery |
+| `crates/agent-runtime` | `Rig AgentRun` adapter and session recovery |
+| `crates/model-provider` | Rig standard protocols, shared embedding transport and local inference-port adaptation |
+| `crates/agent-mcp` | Rig-RMCP tools, catalogs, authorization and bounded connections |
 | `crates/agent-storage` | Asynchronous SeaORM relational state, events and Outbox |
 | `crates/memory-core`, `crates/agent-memory` | Memory domain ports, management, retrieval and jobs |
-| `crates/memory-qdrant` | Independently selected embedded / server vector adapters |
+| `crates/memory-qdrant` | Qdrant Edge and Rig-Qdrant Server retrieval with bounded SDK writes |
 
 Other capability boundaries are described in [Protocol and platform capabilities](protocol.md). A directory or protocol message alone does not establish a working platform capability.
 

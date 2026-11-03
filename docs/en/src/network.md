@@ -11,7 +11,7 @@ flowchart TB
     C["CLI / Desktop"] -->|Authenticated gRPC| API
     subgraph Master["Master node / agentd"]
         API["Client services"] --> D["Dispatcher / task identity and authorization"]
-        H["Node Harness / models and tools"] -->|delegate_task| D
+        H["Node Runtime / models and tools"] -->|delegate_task| D
         D --> MS[("Master SQLite / Session, Task, Event, Outbox")]
         D --> R{"Explicit route configuration"}
         R -->|Direct| Direct["PeerManager / mTLS"]
@@ -23,7 +23,7 @@ flowchart TB
     end
     subgraph Worker["Worker node / agentd"]
         WR["Worker RelayTransport / Noise + inner mTLS"] --> W["PeerService / TaskService"]
-        W --> WH["Isolated Harness Session / Worker models and tools"]
+        W --> WH["Isolated Runtime Session / Worker models and tools"]
         W --> WS[("Worker SQLite")]
         WH --> WS
         WH --> FS["Workspace isolated by Task and Attempt"]
@@ -33,7 +33,7 @@ flowchart TB
     WR <-->|Outbound mTLS connection / bidirectional ciphertext| Relay
 ```
 
-Master and Worker each exclusively own their configured relational store and share no Harness Session; SQLite remains the default. See [Sessions, tasks and recovery](persistence.md) for database backends. Control executes no models or tools and stores no task plaintext. Direct and Relay paths are configured alternatives, not automatic failover channels. Directory APIs are separate; the daemon Relay runtime does not register or renew directory leases automatically.
+Master and Worker each exclusively own their configured relational store and share no Runtime Session; SQLite remains the default. See [Sessions, tasks and recovery](persistence.md) for database backends. Control executes no models or tools and stores no task plaintext. Direct and Relay paths are configured alternatives, not automatic failover channels. Directory APIs are separate; the daemon Relay runtime does not register or renew directory leases automatically.
 
 Source references: [crates/agent-distributed/src/peers.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/peers.rs), [crates/agent-distributed/src/relay_transport/mod.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/relay_transport/mod.rs), [apps/agent-control/src/](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-control/src/).
 
@@ -166,7 +166,7 @@ cargo run -p agent-cli -- --data-dir /path/to/master task dispatch \
   --capability workspace.read --deadline-seconds 3600
 ```
 
-The deadline allows 1–86400 seconds. The Worker uses its own model, credentials and Harness, creating an isolated workspace and session under `worker-workspaces/<task_id>/<attempt_id>`. It does not copy the Master's session history or workspace files. Task capabilities can only reduce the Worker's available tools. Writes still require local approval on the Worker through a client connected to that Worker; Relay and Master result acceptance cannot bypass tool approval.
+The deadline allows 1–86400 seconds. The Worker uses its own model, credentials and Runtime, creating an isolated workspace and session under `worker-workspaces/<task_id>/<attempt_id>`. It does not copy the Master's session history or workspace files. Task capabilities can only reduce the Worker's available tools. Writes still require local approval on the Worker through a client connected to that Worker; Relay and Master result acceptance cannot bypass tool approval.
 
 A successful Worker attempt leaves the Task `awaiting_acceptance`. Explicit Master acceptance makes it `completed`:
 
@@ -227,6 +227,6 @@ Source references: [crates/agent-distributed/src/dispatcher.rs](https://github.c
 
 ## Sources and verification scope
 
-This page was checked against the current workspace's `apps/agentd/src/peers/`, `apps/agent-cli/src/task_command.rs`, `apps/agent-control/src/`, `crates/agent-config/src/{peer,relay}.rs` and `crates/agent-distributed/src/`. `apps/agent-control/tests/relay_tasks.rs` defines local real mTLS / Noise relay tests covering the Worker Harness, isolated workspaces, result acceptance and reconciliation of the same attempt after disconnection. Standard model protocols use a local mock server without paid model calls.
+This page was checked against the current workspace's `apps/agentd/src/peers/`, `apps/agent-cli/src/task_command.rs`, `apps/agent-control/src/`, `crates/agent-config/src/{peer,relay}.rs` and `crates/agent-distributed/src/`. `apps/agent-control/tests/relay_tasks.rs` defines local real mTLS / Noise relay tests covering the Worker Runtime, isolated workspaces, result acceptance and reconciliation of the same attempt after disconnection. Standard model protocols use a local mock server without paid model calls.
 
 Test definitions and documentation builds do not establish public deployment, cross-device networking or acceptance on all three platforms. See [Desktop screenshots and acceptance scope](runtime-evidence.md) for the scope of runtime evidence. Commands and configuration here were checked against source; they are not a deployment execution record.

@@ -15,10 +15,10 @@ pub(crate) mod sessions {
   pub enum Relation {}
   impl ActiveModelBehavior for ActiveModel {}
 }
-pub(crate) mod harness_sessions {
+pub(crate) mod runtime_sessions {
   use sea_orm::entity::prelude::*;
   #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-  #[sea_orm(table_name = "harness_sessions")]
+  #[sea_orm(table_name = "runtime_sessions")]
   pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     #[sea_orm(column_type = "String(StringLen::N(256))")]

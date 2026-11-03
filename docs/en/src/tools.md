@@ -60,7 +60,7 @@ Native CEF semantic actions invalidate the old snapshot before scrolling, focusi
 
 Human takeover input invalidates cached semantic observations before focus or dispatch. Errors after that boundary produce a durable `Uncertain` receipt without automatic replay. Successful input does not itself advance the frame revision, preserving paired down/up events; page changes may still invalidate that revision.
 
-`apps/agentd/tests/browser_tools.rs` uses local HTTP model mocks and real protocol adapters for Responses, Chat Completions and Anthropic Messages. It covers approval, denial, ownership/session boundaries, cancellation and screenshot artifacts. Its runtime host is synthetic: it verifies the Harness-to-daemon tool contract and durable state, and does not replace autonomous browser acceptance with native CEF.
+`apps/agentd/tests/browser_tools.rs` uses local HTTP model mocks and real protocol adapters for Responses, Chat Completions and Anthropic Messages. It covers approval, denial, ownership/session boundaries, cancellation and screenshot artifacts. Its runtime host is synthetic: it verifies the Runtime-to-daemon tool contract and durable state, and does not replace autonomous browser acceptance with native CEF.
 
 `apps/agentd/tests/native_browser_tools.rs` separately verifies the native chain. In a debug CEF environment on macOS 27.0.1 arm64, all three protocols completed real AX observation, exactly approved fill and click actions, local HTTP page effects and durable receipts. Three additional scenarios discarded the receipt after an actual successful click; cancellation and recovery preserved `Uncertain` without replay. The test uses synthetic pages, isolated profiles and the debug test keychain. It does not establish production keychain or other-platform acceptance.
 
@@ -77,7 +77,7 @@ See [Desktop screenshots and acceptance scope](runtime-evidence.md) for native r
 
 `computer_observe` and `computer_act` are disabled by default. Trusted daemon configuration enables them with top-level `computer_tools = true`, or `LYONBROWN_COMPUTER_TOOLS`. `computer_lease_secs` defaults to `300` seconds and accepts `10..=300`; its environment variable is `LYONBROWN_COMPUTER_LEASE_SECS`. Both use shared configuration layering. These switches do not create a native attachment. CLI/TUI and Desktop require explicit target selection and session attachment; see [terminal and desktop clients](clients.md#native-computer-attachment).
 
-Before advertising computer capability to the decision model, the daemon requires an authenticated host with a fixed desktop scope bound to the same owned Session and `owner_epoch`, plus a capability reply whose `can_control()` is true. Attachment, model selection or configuration alone cannot bypass screen and input permission checks. The sole Harness executes these tools without a separate Agent Loop.
+Before advertising computer capability to the decision model, the daemon requires an authenticated host with a fixed desktop scope bound to the same owned Session and `owner_epoch`, plus a capability reply whose `can_control()` is true. Attachment, model selection or configuration alone cannot bypass screen and input permission checks. The sole Runtime executes these tools without a separate Agent Loop.
 
 `computer_observe` accepts optional `screenshot` (default `false`) and returns `snapshot_id`, `revision`, scope, windows and bounded AX semantics, marked `untrusted_desktop_content`. Semantic output is limited to 1 MiB. Requested screenshots are encoded as PNG artifacts and returned as digests, without raw RGBA pixels in model text. Desktop content cannot grant authority.
 
@@ -100,7 +100,7 @@ endpoint = "https://worker.example:7448"
 capabilities = ["workspace.read"]
 ```
 
-This declares a permitted route; it neither creates trust nor expands the durable pairing grant. Supported capabilities are `workspace.read` and `workspace.write.approval`, further restricted by the effective execution plan. Only plans permitting distributed execution expose this tool to the Harness. Worker child runs cannot delegate again.
+This declares a permitted route; it neither creates trust nor expands the durable pairing grant. Supported capabilities are `workspace.read` and `workspace.write.approval`, further restricted by the effective execution plan. Only plans permitting distributed execution expose this tool to the Runtime. Worker child runs cannot delegate again.
 
 The model selects `dispatch`, `get`, `reconcile`, `cancel` or `accept` inside `call`. A task must belong to the current parent Run, Session, owner and `owner_epoch`. Dispatch specifies the target, instructions, capabilities and timeout. The daemon derives stable task and attempt identities from the current model call so repeated calls cannot start another execution.
 
@@ -108,4 +108,4 @@ Dispatch, cancellation and result acceptance require separate exact-action appro
 
 After durable intent exists, disconnection, cancellation or a lost receipt produces `Uncertain` and stops the Run for reconciliation of that identity. Reconciliation queries the existing task without dispatching it again. See [Clients](clients.md) for human management commands.
 
-`apps/agentd/tests/delegation.rs` uses actual adapters for all three model protocols, local model mocks and both Master and paired mTLS Worker Harnesses. It covers dispatch, approvals and result acceptance, as well as denial, revocation, rekeying, cross-parent access, scope expansion and unknown outcomes without replay.
+`apps/agentd/tests/delegation.rs` uses actual adapters for all three model protocols, local model mocks and both Master and paired mTLS Worker Runtimees. It covers dispatch, approvals and result acceptance, as well as denial, revocation, rekeying, cross-parent access, scope expansion and unknown outcomes without replay.

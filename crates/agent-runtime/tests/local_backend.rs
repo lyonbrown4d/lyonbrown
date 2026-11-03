@@ -87,6 +87,7 @@ async fn managed_inference_bridge_preserves_images_tools_and_tool_results() {
   let backend = registry.backend("fixture-model").await.unwrap();
   let mut config = support::config("http://unused.invalid");
   config.max_output_tokens = 256;
+  config.context_window = 2048;
   let runtime = Runtime::open_with_backend(
     config,
     support::shared(),

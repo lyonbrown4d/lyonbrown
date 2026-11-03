@@ -48,11 +48,11 @@ Rules can directly calculate context advice and match authorized tool descriptio
 
 The local adapter accepts explicit files with SHA-256 checks: ONNX model, tokenizer assets and ONNX Runtime library. Deployment prepares and licenses these assets; loading never contacts a model hub. ONNX Runtime is process-global; the host must use consistent runtime-library configuration and share its first initialized environment. Loading and inference run on blocking workers, with concurrency permits retained until actual computation ends even after the caller cancels. Model, preprocessing, corpus and threshold versions contribute to index provenance.
 
-`decision-model` adapts remote models or an existing local `InferenceBackend` to typed judgments. Shared `model-provider` adapters make one bounded request without a Harness, tools or automatic retries. Output must match the operation, supplied labels/options and numeric bounds. Local-only requests exclude remote classifiers. This uses existing model integration without requiring an additional Candle judgment model.
+`decision-model` adapts remote models or an existing local `InferenceBackend` to typed judgments. Shared `model-provider` adapters make one bounded request without a Runtime, tools or automatic retries. Output must match the operation, supplied labels/options and numeric bounds. Local-only requests exclude remote classifiers. This uses existing model integration without requiring an additional Candle judgment model.
 
 ## Agent and Gateway integration
 
-`agent-decision` retains Agent-specific tool, node and approval policy. Each Run calls the shared core by default, pins the configured main model and persists `model_route_decision` before the effective tool plan and Harness startup. The record audits that Run’s explicit main-model binding. Advice cannot bypass workspace limits, paired-worker scope or human approval.
+`agent-decision` retains Agent-specific tool, node and approval policy. Each Run calls the shared core by default, pins the configured main model and persists `model_route_decision` before the effective tool plan and Runtime startup. The record audits that Run’s explicit main-model binding. Advice cannot bypass workspace limits, paired-worker scope or human approval.
 
 Gateway `router/auto` passes its configured model catalog to the same core, selects a physical model and rechecks constraints. Neither consumer owns the other's Session or requires the other service to run.
 

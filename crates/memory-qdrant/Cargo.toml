@@ -17,8 +17,12 @@ fs2.workspace = true
 secrecy.workspace = true
 qdrant-edge.workspace = true
 qdrant-client.workspace = true
+rig-core.workspace = true
+rig-qdrant.workspace = true
 tempfile.workspace = true
 tonic = { workspace = true, features = ["tls-native-roots"] }
 
 [dev-dependencies]
+agent-security = { path = "../agent-security" }
+rig-reqwest.workspace = true
 tokio-stream.workspace = true

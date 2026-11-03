@@ -147,7 +147,7 @@ impl MigrationTrait for Initial {
     manager
       .drop_table(
         Table::drop()
-          .table(Alias::new("harness_sessions"))
+          .table(Alias::new("runtime_sessions"))
           .to_owned(),
       )
       .await?;

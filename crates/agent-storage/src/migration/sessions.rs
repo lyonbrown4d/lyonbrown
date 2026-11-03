@@ -20,7 +20,7 @@ pub(super) async fn create(manager: &SchemaManager<'_>) -> Result<(), DbErr> {
   manager
     .create_table(
       Table::create()
-        .table(Alias::new("harness_sessions"))
+        .table(Alias::new("runtime_sessions"))
         .col(
           ColumnDef::new(Alias::new("session_id"))
             .string_len(256)

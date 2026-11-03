@@ -9,10 +9,8 @@ use std::{
 
 use agent_runtime::{Result, RuntimeError, RuntimeTool, ToolCall, ToolDefinition, ToolOutput};
 use async_trait::async_trait;
-use rmcp::{
-  model::{CallToolRequest, CallToolRequestParams, ClientRequest, ServerResult},
-  service::PeerRequestOptions,
-};
+use rig_core::tool::ToolContext;
+use rig_rmcp::McpCallToolResult;
 use serde::Deserialize;
 use serde_json::Value;
 use tokio_util::sync::CancellationToken;
@@ -197,6 +195,9 @@ impl McpManager {
       .catalog
       .get(&args.tool)
       .ok_or_else(|| RuntimeError::Tool("MCP tool is not allowed".into()))?;
+    if !entry.tool.is_live() || server.connection.client.is_closed() {
+      return Err(RuntimeError::Tool("MCP server connection is closed".into()));
+    }
     if !args.arguments.is_object()
       || !entry.validator.is_valid(&args.arguments)
       || serde_json::to_vec(&args.arguments)
@@ -231,41 +232,29 @@ impl McpManager {
         "MCP call cancelled before dispatch".into(),
       ));
     }
-    let params = CallToolRequestParams::new(args.tool.clone()).with_arguments(
-      args
-        .arguments
-        .as_object()
-        .cloned()
-        .ok_or_else(|| RuntimeError::Tool("MCP arguments must be an object".into()))?,
-    );
-    let request = ClientRequest::CallToolRequest(CallToolRequest::new(params));
-    let future = server
-      .connection
-      .send_cancellable_request(request, PeerRequestOptions::no_options());
-    let mut handle = tokio::time::timeout(self.limits.call_timeout, future)
-      .await
-      .map_err(|_| uncertain())?
-      .map_err(|_| uncertain())?;
-    tracing::info!(server_id = %args.server, tool_name = %args.tool, call_id = %call.id, outcome = "dispatched", "MCP tool call dispatched");
-    let response = tokio::select! {
-      biased;
-      result = &mut handle.rx => result.map_err(|_| uncertain())?.map_err(|_| uncertain())?,
-      _ = cancellation.cancelled() => {
-        let _ = tokio::time::timeout(Duration::from_secs(1), handle.cancel(Some("daemon cancellation".into()))).await;
-        return Err(uncertain());
-      }
-      _ = tokio::time::sleep(self.limits.call_timeout) => {
-        let _ = tokio::time::timeout(Duration::from_secs(1), handle.cancel(Some("daemon deadline exceeded".into()))).await;
-        return Err(uncertain());
+    let mut context = ToolContext::new();
+    // Rig owns MCP request construction, timeout delivery and canonical result
+    // conversion. The host owns this already-authorized execution boundary.
+    let _completed = {
+      let execute = entry.tool.run_with(&mut context, args.arguments);
+      tokio::pin!(execute);
+      tokio::select! {
+        biased;
+        result = &mut execute => result,
+        _ = cancellation.cancelled() => {
+          // Rig exposes a per-call timeout, but no public per-call cancellation
+          // token. Revoke the connection instead of leaving a usable stale host.
+          server.connection.cancellation_token().cancel();
+          return Err(uncertain());
+        }
       }
     };
-    match response {
-      ServerResult::CallToolResult(result) => crate::output::output(result, &self.limits),
-      // Tasks and multi-round input would create additional execution paths.
-      _ => Err(RuntimeError::Uncertain(
-        "MCP server returned an unsupported non-final result; reconcile before continuing".into(),
-      )),
+    // An MCP is_error response is a final result, unlike transport failure.
+    // Rig publishes the untouched result on both successful and failed tools.
+    if let Some(McpCallToolResult(result)) = context.result().map_err(|_| uncertain())? {
+      return crate::output::output(result, &self.limits);
     }
+    Err(uncertain())
   }
 }
 

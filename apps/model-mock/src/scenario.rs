@@ -128,7 +128,7 @@ fn json_reply(protocol: Protocol, text: &str, tool: Option<(&str, &Value)>) -> V
       } else {
         json!({"role":"assistant","content":text})
       };
-      json!({"id":"chat_fixture","object":"chat.completion","model":"synthetic","choices":[{"index":0,"message":message,"finish_reason":if tool.is_some(){"tool_calls"}else{"stop"}}],"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14}})
+      json!({"id":"chat_fixture","object":"chat.completion","created":0,"model":"synthetic","choices":[{"index":0,"message":message,"finish_reason":if tool.is_some(){"tool_calls"}else{"stop"}}],"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14}})
     }
     Protocol::Responses => {
       let item = if let Some((name, arguments)) = tool {

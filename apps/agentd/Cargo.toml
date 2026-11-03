@@ -16,7 +16,7 @@ memory-qdrant = { path = "../../crates/memory-qdrant" }
 decision-core = { path = "../../crates/decision-core" }
 sha2.workspace = true
 hex.workspace = true
-url = "2.5"
+url = "=2.5.8"
 agent-mcp = { path = "../../crates/agent-mcp" }
 agent-inference = { path = "../../crates/agent-inference" }
 fluxdi.workspace = true
@@ -27,7 +27,7 @@ agent-browser = { path = "../../crates/agent-browser" }
 agent-computer = { path = "../../crates/agent-computer", default-features = false }
 agent-computer-runtime = { path = "../../crates/agent-computer-runtime", default-features = false }
 uuid.workspace = true
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "=0.25.10", default-features = false, features = ["png"] }
 agent-telemetry = { path = "../../crates/agent-telemetry" }
 agent-core = { path = "../../crates/agent-core" }
 agent-protocol = { path = "../../crates/agent-protocol" }
@@ -52,8 +52,8 @@ tokio-util.workspace = true
 tonic.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-async-stream = "0.3.6"
-reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "stream"] }
+async-stream = "=0.3.6"
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls", "stream"] }
 
 [dev-dependencies]
 sea-orm.workspace = true
@@ -62,7 +62,7 @@ agent-client = { path = "../../crates/agent-client" }
 tempfile.workspace = true
 tokio-stream.workspace = true
 rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-streamable-http-server"] }
-axum = "0.8"
+axum = "=0.8.9"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "=0.8.1"

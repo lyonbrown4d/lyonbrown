@@ -48,11 +48,11 @@ let result = engine.decide(&request, &DecisionCancellation::new()).await;
 
 本地适配只接受显式路径及 SHA-256 校验值：ONNX 模型、Tokenizer 配置和 ONNX Runtime 动态库。部署方须准备资产并确认许可证；加载不连接模型 Hub。ONNX Runtime 环境由进程共享，宿主需统一运行库配置，并复用首次初始化的环境。模型加载与推理使用阻塞工作线程，并发许可持续持有到实际计算结束；取消等待不会提前释放正在计算的槽位。模型与预处理版本、语料和阈值共同形成索引标识。
 
-`decision-model` 将远程模型或已有本地 `InferenceBackend` 适配成结构化判断后端。它使用共享 `model-provider` 协议调用，不创建 Harness、不调用工具、不自动重试；输出必须符合对应 Operation 的类型、标签、选项与数值范围。`local_only` 请求不会发送给远程分类后端。该适配使用现有模型接入能力，不要求额外引入 Candle 判断模型。
+`decision-model` 将远程模型或已有本地 `InferenceBackend` 适配成结构化判断后端。它使用共享 `model-provider` 协议调用，不创建 Runtime、不调用工具、不自动重试；输出必须符合对应 Operation 的类型、标签、选项与数值范围。`local_only` 请求不会发送给远程分类后端。该适配使用现有模型接入能力，不要求额外引入 Candle 判断模型。
 
 ## Agent 与 Gateway 的边界
 
-Agent 的 `agent-decision` 保留工具、节点和审批相关的专用适配。每次 Run 默认调用共享核心，固定使用本次配置的主模型，并先保存 `model_route_decision`，再生成和保存工具执行计划、启动 Harness。该记录用于核对本次显式主模型绑定。分类建议不能绕过工作区限制、Worker 配对或人工审批。
+Agent 的 `agent-decision` 保留工具、节点和审批相关的专用适配。每次 Run 默认调用共享核心，固定使用本次配置的主模型，并先保存 `model_route_decision`，再生成和保存工具执行计划、启动 Runtime。该记录用于核对本次显式主模型绑定。分类建议不能绕过工作区限制、Worker 配对或人工审批。
 
 Gateway 的 `router/auto` 使用其已配置模型目录调用同一个核心，按建议选择实际模型，并再次校验能力和本地范围。两种消费方式不共享 Agent Session，也不要求对方服务在线。
 

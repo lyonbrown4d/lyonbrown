@@ -1,7 +1,7 @@
-//! Daemon-authored presentation events, independent of provider and harness SDKs.
+//! Daemon-authored presentation events, independent of provider and runtime SDKs.
 //!
 //! Clients render these facts without deriving execution phases from persisted
-//! harness records. Compatibility parsing belongs to [`decode`].
+//! runtime records. Only typed events and current daemon statuses are decoded.
 
 mod decode;
 

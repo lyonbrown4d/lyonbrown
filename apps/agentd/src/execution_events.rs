@@ -1,8 +1,12 @@
 //! The daemon owns the public event vocabulary; clients never decode SDK data.
-use agent_core::events::{AgentEvent, ExecutionOutcome, ExecutionPhase, ModelIdentity};
+use agent_core::events::{AgentEvent, ExecutionPhase, ModelIdentity};
 use agent_runtime::RuntimeEvent;
 
-pub(crate) fn project(event: RuntimeEvent, model: &ModelIdentity, run_id: &str) -> Vec<AgentEvent> {
+pub(crate) fn project(
+  event: RuntimeEvent,
+  model: &ModelIdentity,
+  _run_id: &str,
+) -> Vec<AgentEvent> {
   let phase = |phase| AgentEvent::PhaseChanged {
     phase,
     model: Some(model.clone()),
@@ -24,16 +28,9 @@ pub(crate) fn project(event: RuntimeEvent, model: &ModelIdentity, run_id: &str) 
     // snapshot and outbox. The live adapter contributes only transient phase.
     RuntimeEvent::ToolStarted { .. } => vec![phase(ExecutionPhase::ExecutingTool)],
     RuntimeEvent::ToolFinished { .. } => Vec::new(),
-    RuntimeEvent::RunFinished { outcome, .. } => vec![AgentEvent::RunFinished {
-      run_id: run_id.into(),
-      outcome: match outcome.as_str() {
-        "completed" => ExecutionOutcome::Completed,
-        "aborted" | "cancelled" => ExecutionOutcome::Cancelled,
-        "suspended" => ExecutionOutcome::Suspended,
-        "failed" | "declined" => ExecutionOutcome::Failed,
-        _ => ExecutionOutcome::Uncertain,
-      },
-    }],
+    // Completion is committed with the Rig snapshot, then rebased to the
+    // daemon Run by RunPersistence. Do not emit a second terminal fact here.
+    RuntimeEvent::RunFinished { .. } => Vec::new(),
     RuntimeEvent::Compaction { active } => {
       let mut events = vec![AgentEvent::Compaction { active }];
       if active {

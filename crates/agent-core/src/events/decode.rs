@@ -1,7 +1,6 @@
 use super::{AGENT_EVENT_KIND, AgentEvent};
 use crate::RunStatus;
 use serde::{Deserialize, Serialize, de::Error};
-use serde_json::{Map, Value};
 
 /// Unknown kinds retain only their name, never unreviewed payload data.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -10,7 +9,7 @@ pub enum DecodedEvent {
   Unknown { kind: String },
 }
 
-/// Decode the current contract or a supported legacy runtime/status event.
+/// Decode the current contract or a current daemon run-status event.
 ///
 /// Unknown outer kinds are ignored without parsing their payload. Future tagged
 /// variants retain their tag only. A malformed known payload always returns an
@@ -19,28 +18,8 @@ pub fn decode(kind: &str, payload_json: &str) -> Result<DecodedEvent, serde_json
   if kind == AGENT_EVENT_KIND {
     return decode_tagged(payload_json);
   }
-  if let Some(status) = legacy_status(kind) {
+  if let Some(status) = run_status(kind) {
     return decode_status(status, payload_json).map(DecodedEvent::Known);
-  }
-  if matches!(
-    kind,
-    "text_delta"
-      | "thinking_delta"
-      | "tool_started"
-      | "tool_finished"
-      | "run_finished"
-      | "compaction"
-  ) {
-    let mut payload: Map<String, Value> = serde_json::from_str(payload_json)?;
-    if let Some(tag) = payload.get("type")
-      && tag.as_str() != Some(kind)
-    {
-      return Err(serde_json::Error::custom(
-        "event kind and payload type differ",
-      ));
-    }
-    payload.insert("type".into(), Value::String(kind.into()));
-    return serde_json::from_value(Value::Object(payload)).map(DecodedEvent::Known);
   }
   Ok(DecodedEvent::Unknown { kind: kind.into() })
 }
@@ -71,8 +50,8 @@ fn decode_tagged(payload_json: &str) -> Result<DecodedEvent, serde_json::Error> 
   }
 }
 
-fn legacy_status(kind: &str) -> Option<RunStatus> {
-  match kind.strip_prefix("run_").unwrap_or(kind) {
+fn run_status(kind: &str) -> Option<RunStatus> {
+  match kind.strip_prefix("run_")? {
     "accepted" => Some(RunStatus::Accepted),
     "running" => Some(RunStatus::Running),
     "awaiting_approval" => Some(RunStatus::AwaitingApproval),
@@ -87,12 +66,12 @@ fn legacy_status(kind: &str) -> Option<RunStatus> {
 
 fn decode_status(status: RunStatus, payload_json: &str) -> Result<AgentEvent, serde_json::Error> {
   #[derive(Deserialize)]
-  struct LegacyStatus {
+  struct StatusPayload {
     status: Option<RunStatus>,
     #[serde(default)]
     error: String,
   }
-  let payload: LegacyStatus = serde_json::from_str(payload_json)?;
+  let payload: StatusPayload = serde_json::from_str(payload_json)?;
   if payload.status.is_some_and(|reported| reported != status) {
     return Err(serde_json::Error::custom(
       "event kind and run status differ",

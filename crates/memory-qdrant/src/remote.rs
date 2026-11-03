@@ -4,6 +4,12 @@ use memory_core::{
   VectorStatus,
 };
 use qdrant_client::{Payload, Qdrant, qdrant::*};
+use rig_core::{
+  DynModel,
+  operation::Embedding,
+  vector_store::{VectorStoreIndex, request::VectorSearchRequest},
+};
+use rig_qdrant::QdrantVectorStore;
 use secrecy::{ExposeSecret, SecretString};
 use std::{collections::HashMap, future::Future, sync::Arc};
 use tokio::sync::Semaphore;
@@ -14,19 +20,31 @@ pub struct QdrantRemoteIndex {
   writes: crate::remote_write::RemoteWrite,
   collection: String,
   descriptor: EmbeddingDescriptor,
+  model: DynModel<Embedding>,
   admission: Arc<Semaphore>,
 }
 
 impl QdrantRemoteIndex {
   /// Connects to Qdrant Server 1.20.x over gRPC. Existing collections must use
   /// the named `memory` vector with the requested dimensions and cosine metric.
+  /// `model` is the same configured embedding model used by MemoryService;
+  /// queries already carry its vectors, so search does not embed the text again.
   pub async fn connect(
     endpoint: &str,
     api_key: Option<SecretString>,
     collection: &str,
     descriptor: EmbeddingDescriptor,
+    model: DynModel<Embedding>,
   ) -> IndexResult<Self> {
     payload::descriptor(&descriptor)?;
+    if model.id() != Some(descriptor.model.as_str())
+      || model
+        .capabilities()
+        .declared
+        .is_some_and(|dimensions| dimensions != descriptor.dimensions as usize)
+    {
+      return Err(IndexError::Invalid);
+    }
     if !payload::text(collection)
       || collection.len() > 128
       || !collection
@@ -49,6 +67,7 @@ impl QdrantRemoteIndex {
       writes,
       collection: collection.into(),
       descriptor,
+      model,
       admission: Arc::new(Semaphore::new(1)),
     };
     index
@@ -222,28 +241,28 @@ impl VectorIndex for QdrantRemoteIndex {
     cancel: CancellationToken,
   ) -> IndexResult<Vec<VectorHit>> {
     payload::query(&query, &self.descriptor)?;
-    let filter = crate::remote_filter::filter(&query);
+    let filter = crate::search_filter::scoped(&query)?;
+    let request = VectorSearchRequest::builder()
+      // MemoryService already embedded this query with this model. The preset
+      // dense query prevents Rig from issuing another embedding request.
+      .query("")
+      .samples(u64::from(query.limit))
+      .filter(filter)
+      .build();
+    let params = QueryPointsBuilder::new(&self.collection)
+      .query(query.vector)
+      .using(VECTOR)
+      .with_payload(true)
+      .build();
+    let store = QdrantVectorStore::new(self.client.clone(), self.model.clone(), params);
     self
       .run(cancel, false, async {
-        let response = self
-          .client
-          .query(
-            QueryPointsBuilder::new(&self.collection)
-              .query(query.vector)
-              .using(VECTOR)
-              .filter(filter)
-              .limit(query.limit as u64)
-              .with_payload(true),
-          )
+        store
+          .top_n::<serde_json::Value>(request)
           .await
-          .map_err(|_| IndexError::Unavailable)?;
-        response
-          .result
+          .map_err(|_| IndexError::Unavailable)?
           .into_iter()
-          .map(|point| {
-            let value = serde_json::Value::from(Payload::from(point.payload));
-            payload::hit(value, point.score)
-          })
+          .map(|point| payload::hit(point.document, point.score as f32))
           .collect()
       })
       .await

@@ -1,267 +1,197 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
-use rpi_harness::error::{SessionError, SessionResult};
-use rpi_harness::session::DefaultIdGenerator;
-use rpi_harness::session::memory::{Clock, InMemorySessionStorage, SystemClock};
-use rpi_harness::session::state::SessionState;
-use rpi_harness::session::types::*;
+//! The store commits the Rig state, application facts and owner fence together.
+use crate::{Result, RuntimeError, SessionMutation, SessionPersistence, TokenUsage};
+use agent_core::events::{AgentEvent, QueueKind, QueueStatus};
+use rig_agent::run::{AgentRun, PreparedRequest, RunSpec};
+use rig_core::message::Message;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{Value, json};
+use std::{
+  collections::BTreeMap,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 use tokio::sync::Mutex;
+use tokio_util::sync::CancellationToken;
 
-use crate::{Result, RuntimeError, SessionMutation as Mutation, SessionPersistence};
-
-#[derive(Serialize, Deserialize)]
-struct Snapshot {
-  version: u32,
-  metadata: SessionMetadata,
-  state: SessionState,
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Snapshot {
+  pub version: u32,
+  pub session_id: String,
+  pub history: Vec<Message>,
+  pub active: Option<ActiveRun>,
+  pub pending_tools: BTreeMap<String, ToolIntent>,
+  pub queue: Vec<QueuedInput>,
+  pub uncertainty: Option<String>,
 }
-
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct ActiveRun {
+  pub id: String,
+  pub run: AgentRun,
+  pub spec: RunSpec,
+  pub prepared: Option<PreparedRequest>,
+  /// Persisted before any provider IO; a restart may never replay it.
+  pub in_flight: Option<String>,
+  pub usage: TokenUsage,
+  pub segment: u64,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct ToolIntent {
+  pub call_id: String,
+  pub name: String,
+  pub arguments: Value,
+}
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct QueuedInput {
+  pub id: String,
+  pub request_id: String,
+  pub kind: QueueKind,
+  pub prompt: String,
+  pub status: QueueStatus,
+}
+impl QueuedInput {
+  pub fn event(&self, status: QueueStatus) -> AgentEvent {
+    AgentEvent::QueueUpdated {
+      entry_id: self.id.clone(),
+      kind: self.kind,
+      status,
+      prompt: matches!(status, QueueStatus::Pending).then(|| self.prompt.clone()),
+      request_id: Some(self.request_id.clone()),
+    }
+  }
+}
 pub(crate) struct DurableSession {
-  inner: InMemorySessionStorage,
-  gate: Mutex<()>,
+  pub state: Mutex<Snapshot>,
   persistence: Arc<dyn SessionPersistence>,
-  owner_epoch: u64,
+  id: String,
+  epoch: u64,
+  pub failed: AtomicBool,
+  pub stopped: CancellationToken,
 }
-
 impl DurableSession {
-  pub(crate) async fn open(
+  pub async fn open(
     id: &str,
-    owner_epoch: u64,
+    epoch: u64,
     persistence: Arc<dyn SessionPersistence>,
   ) -> Result<Self> {
-    let snapshot = match persistence.load(id).await? {
+    let state = match persistence.load(id).await? {
       Some(bytes) => {
-        crate::image_recovery::check(&bytes)?;
-        let snapshot: Snapshot = serde_json::from_slice(&bytes)
+        let value: Snapshot = serde_json::from_slice(&bytes)
           .map_err(|error| RuntimeError::Persistence(error.to_string()))?;
-        if snapshot.version != 1 || snapshot.metadata.id != id {
+        if value.version != 1 || value.session_id != id {
           return Err(RuntimeError::Persistence(
-            "invalid session snapshot identity/version".into(),
+            "invalid Rig session identity/version".into(),
           ));
         }
-        snapshot
+        value
       }
       None => Snapshot {
         version: 1,
-        metadata: SessionMetadata {
-          id: id.into(),
-          created_at: SystemClock.now_ms(),
-          parent_session_id: None,
-        },
-        state: SessionState::new(),
+        session_id: id.into(),
+        history: vec![],
+        active: None,
+        pending_tools: BTreeMap::new(),
+        queue: vec![],
+        uncertainty: None,
       },
     };
     Ok(Self {
-      inner: InMemorySessionStorage::from_state(
-        snapshot.metadata,
-        snapshot.state,
-        Arc::new(SystemClock),
-        Arc::new(DefaultIdGenerator::new()),
-      ),
-      gate: Mutex::new(()),
+      state: Mutex::new(state),
       persistence,
-      owner_epoch,
+      id: id.into(),
+      epoch,
+      failed: AtomicBool::new(false),
+      stopped: CancellationToken::new(),
     })
   }
-
-  async fn persist(
-    &self,
-    before: SessionState,
-    kind: &str,
-    payload: serde_json::Value,
-    events: Vec<agent_core::events::AgentEvent>,
-  ) -> SessionResult<()> {
-    let metadata = self.inner.metadata();
-    let snapshot = Snapshot {
-      version: 1,
-      metadata: metadata.clone(),
-      state: self.inner.snapshot_state(),
-    };
-    let encoded =
-      serde_json::to_vec(&snapshot).map_err(|error| SessionError::storage(error.to_string()));
-    let result = match encoded {
-      Ok(bytes) => self
-        .persistence
-        .commit(
-          &metadata.id,
-          self.owner_epoch,
-          bytes,
-          Mutation {
-            kind: kind.into(),
-            payload,
-            events,
-          },
-        )
-        .await
-        .map_err(|error| SessionError::storage(error.to_string())),
-      Err(error) => Err(error),
-    };
-    if result.is_err() {
-      self.inner.replace_state(before);
+  pub async fn ensure_certain(&self) -> Result<()> {
+    if self.failed.load(Ordering::Acquire) {
+      return Err(RuntimeError::Uncertain(
+        "session persistence requires reconciliation".into(),
+      ));
     }
-    result
+    let state = self.state.lock().await;
+    ensure_snapshot_certain(&state)
   }
-}
-
-#[async_trait]
-impl SessionStorage for DurableSession {
-  fn metadata(&self) -> SessionMetadata {
-    self.inner.metadata()
-  }
-  async fn get_lanes(&self) -> SessionResult<Vec<LanePointer>> {
-    let _guard = self.gate.lock().await;
-    self.inner.get_lanes().await
-  }
-  async fn get_entry(&self, id: &str) -> SessionResult<Option<Entry>> {
-    let _guard = self.gate.lock().await;
-    self.inner.get_entry(id).await
-  }
-  async fn find_entries(&self, query: &EntryQuery) -> SessionResult<Vec<Entry>> {
-    let _guard = self.gate.lock().await;
-    self.inner.find_entries(query).await
-  }
-  async fn find_entries_on_branch(
+  /// Copy-on-commit retains the last confirmed state when the host refuses a write.
+  /// Every commit passes the epoch to the relational store's transactional fence.
+  pub async fn update<T>(
     &self,
-    query: &EntryQuery,
-    bounds: &BranchBounds,
-    start: &str,
-  ) -> SessionResult<Vec<Entry>> {
-    let _guard = self.gate.lock().await;
-    self
-      .inner
-      .find_entries_on_branch(query, bounds, start)
-      .await
-  }
-  async fn find_records(&self, query: &RecordQuery) -> SessionResult<Vec<LaneRecord>> {
-    let _guard = self.gate.lock().await;
-    self.inner.find_records(query).await
-  }
-  async fn find_open_operations(
-    &self,
-    lane: &str,
-    limit: Option<usize>,
-  ) -> SessionResult<Vec<OperationStartedRecord>> {
-    let _guard = self.gate.lock().await;
-    self.inner.find_open_operations(lane, limit).await
-  }
-  async fn get_log(&self, options: &LogOptions) -> SessionResult<Vec<LogItem>> {
-    let _guard = self.gate.lock().await;
-    self.inner.get_log(options).await
-  }
-  async fn get_name(&self) -> SessionResult<Option<String>> {
-    let _guard = self.gate.lock().await;
-    self.inner.get_name().await
-  }
-  async fn get_label(&self, id: &str) -> SessionResult<Option<String>> {
-    let _guard = self.gate.lock().await;
-    self.inner.get_label(id).await
-  }
-  async fn get_stats(&self) -> SessionResult<SessionStats> {
-    let _guard = self.gate.lock().await;
-    self.inner.get_stats().await
-  }
-
-  async fn create_lane(&self, lane: &str, at: Option<&str>) -> SessionResult<()> {
-    let _guard = self.gate.lock().await;
-    let before = self.inner.snapshot_state();
-    self.inner.create_lane(lane, at).await?;
-    self
-      .persist(
-        before,
-        "lane_created",
-        json!({"lane": lane, "at": at}),
-        Vec::new(),
+    kind: &str,
+    f: impl FnOnce(&mut Snapshot) -> Result<(T, Value, Vec<AgentEvent>)>,
+  ) -> Result<T> {
+    if self.failed.load(Ordering::Acquire) {
+      return Err(RuntimeError::Uncertain("session writer is fenced".into()));
+    }
+    let mut current = self.state.lock().await;
+    // A concurrent writer may have failed while this caller waited for the lock.
+    if self.failed.load(Ordering::Acquire) || self.stopped.is_cancelled() {
+      return Err(RuntimeError::Uncertain("session writer is fenced".into()));
+    }
+    let mut next = current.clone();
+    let (output, payload, events) = f(&mut next)?;
+    let bytes = serde_json::to_vec(&next).map_err(|e| RuntimeError::Persistence(e.to_string()))?;
+    if let Err(error) = self
+      .persistence
+      .commit(
+        &self.id,
+        self.epoch,
+        bytes,
+        SessionMutation {
+          kind: kind.into(),
+          payload,
+          events,
+        },
       )
       .await
+    {
+      self.failed.store(true, Ordering::Release);
+      self.stopped.cancel();
+      return Err(RuntimeError::Uncertain(format!(
+        "session commit failed; writer fenced: {error}"
+      )));
+    }
+    *current = next;
+    Ok(output)
   }
-
-  async fn move_lane(&self, lane: &str, to: Option<&str>) -> SessionResult<()> {
-    let _guard = self.gate.lock().await;
-    let before = self.inner.snapshot_state();
-    self.inner.move_lane(lane, to).await?;
+  pub async fn uncertain(&self, message: String) -> Result<()> {
     self
-      .persist(
-        before,
-        "lane_moved",
-        json!({"lane": lane, "to": to}),
-        Vec::new(),
-      )
-      .await
-  }
-
-  async fn append_entry(&self, entry: ProvisionedEntry, lane: &str) -> SessionResult<Entry> {
-    let _guard = self.gate.lock().await;
-    let before = self.inner.snapshot_state();
-    let records = self
-      .inner
-      .find_records(&RecordQuery {
-        record_type: Some("queue_enqueued"),
-        ..Default::default()
+      .update("execution_uncertain", |state| {
+        state.uncertainty = Some(message.clone());
+        Ok(((), json!({"outcome":"uncertain"}), vec![]))
       })
       .await?;
-    let entry = self.inner.append_entry(entry, lane).await?;
-    let events = crate::semantic_events::entry(&entry, &records);
-    self
-      .persist(
-        before,
-        "entry_appended",
-        json!({"lane": lane, "entry": crate::event_projection::entry(&entry)}),
-        events,
-      )
-      .await?;
-    Ok(entry)
+    Err(RuntimeError::Uncertain(message))
   }
-
-  async fn append_record(&self, record: LaneRecord) -> SessionResult<LaneRecord> {
-    let _guard = self.gate.lock().await;
-    let before = self.inner.snapshot_state();
-    let records = if matches!(&record, LaneRecord::QueueCancelled(_)) {
-      self
-        .inner
-        .find_records(&RecordQuery {
-          record_type: Some("queue_enqueued"),
-          ..Default::default()
-        })
-        .await?
-    } else {
-      Vec::new()
-    };
-    let record = self.inner.append_record(record).await?;
-    let events = crate::semantic_events::record(&record, &records);
-    self
-      .persist(
-        before,
-        "record_appended",
-        json!({"record": crate::event_projection::record(&record)}),
-        events,
-      )
-      .await?;
-    Ok(record)
+}
+pub(crate) fn ensure_snapshot_certain(state: &Snapshot) -> Result<()> {
+  if let Some(message) = &state.uncertainty {
+    return Err(RuntimeError::Uncertain(message.clone()));
   }
-
-  async fn set_name(&self, name: Option<&str>) -> SessionResult<()> {
-    let _guard = self.gate.lock().await;
-    let before = self.inner.snapshot_state();
-    self.inner.set_name(name).await?;
-    self
-      .persist(before, "name_changed", json!({"name": name}), Vec::new())
-      .await
+  if !state.pending_tools.is_empty() {
+    return Err(RuntimeError::Uncertain(
+      "tool outcome was not durably confirmed; never replay".into(),
+    ));
   }
-
-  async fn set_label(&self, id: &str, label: Option<&str>) -> SessionResult<()> {
-    let _guard = self.gate.lock().await;
-    let before = self.inner.snapshot_state();
-    self.inner.set_label(id, label).await?;
-    self
-      .persist(
-        before,
-        "label_changed",
-        json!({"id": id, "label": label}),
-        Vec::new(),
-      )
-      .await
+  if state
+    .active
+    .as_ref()
+    .is_some_and(|active| active.in_flight.is_some())
+  {
+    return Err(RuntimeError::Uncertain(
+      "provider request outcome was not confirmed; never replay".into(),
+    ));
   }
+  Ok(())
+}
+pub(crate) fn active(state: &mut Snapshot) -> Result<&mut ActiveRun> {
+  state
+    .active
+    .as_mut()
+    .ok_or_else(|| RuntimeError::Execution("no active Rig run".into()))
+}
+pub(crate) fn rig_error(error: impl std::fmt::Display) -> RuntimeError {
+  RuntimeError::Execution(error.to_string())
 }

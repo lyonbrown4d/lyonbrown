@@ -209,12 +209,12 @@ impl Store {
           serde_json::json!({"run_id":run.id,"recovery_of":original.id}),
         )
         .await?;
-        // Harness snapshots, tool frames and approvals are deliberately not copied.
+        // Runtime snapshots, tool frames and approvals are deliberately not copied.
         resolution.session_id = Some(fresh.id);
         resolution.replacement_run_id = Some(run.id);
       }
       // Revoke late callbacks before accepting the human resolution. The original
-      // Run and Harness snapshot remain unchanged, including uncertain evidence.
+      // Run and Runtime snapshot remain unchanged, including uncertain evidence.
       sessions::Entity::update_many()
         .filter(sessions::Column::Id.eq(&session.id))
         .col_expr(

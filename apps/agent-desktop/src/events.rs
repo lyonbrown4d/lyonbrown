@@ -28,7 +28,7 @@ impl TerminalOutcome {
   }
 }
 
-/// Watch termination remains tied to durable run lifecycle events. A harness
+/// Watch termination remains tied to durable run lifecycle events. A runtime
 /// `run_finished` fact does not establish the durable run's terminal state.
 pub(crate) fn is_terminal(kind: &str) -> bool {
   TerminalOutcome::from_kind(kind).is_some()

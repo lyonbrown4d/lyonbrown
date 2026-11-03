@@ -16,6 +16,7 @@ fn upstream_validation_projects_normalized_instructions_without_granting_tools()
     "---\nname: review\ndescription: test\ncompatibility: ''\n---\n",
     "---\nname: review\nname: other\ndescription: duplicate\n---\n",
     "---\nname: review\ndescription: test\nmetadata:\n  version: [1,2]\n---\n",
+    "---\nname: review\ndescription: test\ninvented-field: value\n---\n",
   ] {
     assert!(
       parse_manifest(content).is_err(),

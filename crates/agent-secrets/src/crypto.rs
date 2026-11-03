@@ -1,5 +1,4 @@
-use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce, aead::AeadInPlace};
-use rand_core::{OsRng, RngCore};
+use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce, aead::AeadInOut};
 use secrecy::{ExposeSecret, SecretBox, SecretString};
 use zeroize::Zeroizing;
 
@@ -11,19 +10,18 @@ pub(crate) const MAX_RECORD_BYTES: usize = MAGIC.len() + NONCE_BYTES + MAX_SECRE
 
 pub(crate) fn random<const N: usize>() -> Result<Zeroizing<[u8; N]>> {
   let mut bytes = Zeroizing::new([0; N]);
-  OsRng
-    .try_fill_bytes(bytes.as_mut())
-    .map_err(|_| SecretError::Randomness)?;
+  getrandom::fill(bytes.as_mut()).map_err(|_| SecretError::Randomness)?;
   Ok(bytes)
 }
 
 pub(crate) fn seal(key: &SecretBox<[u8; 32]>, id: &str, secret: &SecretString) -> Result<Vec<u8>> {
   let nonce = random::<NONCE_BYTES>()?;
-  let cipher = XChaCha20Poly1305::new(key.expose_secret().into());
+  let cipher =
+    XChaCha20Poly1305::new_from_slice(key.expose_secret()).map_err(|_| SecretError::InvalidKey)?;
   let mut ciphertext = Zeroizing::new(secret.expose_secret().as_bytes().to_vec());
   cipher
     .encrypt_in_place(
-      XNonce::from_slice(nonce.as_ref()),
+      &XNonce::from(*nonce),
       &associated_data(id),
       &mut *ciphertext,
     )
@@ -42,11 +40,15 @@ pub(crate) fn open(key: &SecretBox<[u8; 32]>, id: &str, record: &[u8]) -> Result
   {
     return Err(SecretError::InvalidRecord);
   }
-  let cipher = XChaCha20Poly1305::new(key.expose_secret().into());
-  let nonce = XNonce::from_slice(&record[MAGIC.len()..MAGIC.len() + NONCE_BYTES]);
+  let cipher =
+    XChaCha20Poly1305::new_from_slice(key.expose_secret()).map_err(|_| SecretError::InvalidKey)?;
+  let nonce: [u8; NONCE_BYTES] = record[MAGIC.len()..MAGIC.len() + NONCE_BYTES]
+    .try_into()
+    .map_err(|_| SecretError::InvalidRecord)?;
+  let nonce = XNonce::from(nonce);
   let mut plaintext = Zeroizing::new(record[MAGIC.len() + NONCE_BYTES..].to_vec());
   cipher
-    .decrypt_in_place(nonce, &associated_data(id), &mut *plaintext)
+    .decrypt_in_place(&nonce, &associated_data(id), &mut *plaintext)
     .map_err(|_| SecretError::Authentication)?;
   let value = std::str::from_utf8(&plaintext).map_err(|_| SecretError::InvalidSecret)?;
   validate_secret(value)?;

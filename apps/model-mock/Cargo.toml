@@ -9,12 +9,12 @@ publish = false
 agent-test-support = { path = "../../crates/agent-test-support" }
 agent-telemetry = { path = "../../crates/agent-telemetry" }
 anyhow.workspace = true
-axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+axum = { version = "=0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
 clap.workspace = true
-config = { version = "0.15", default-features = false, features = ["toml", "json"] }
+config = { version = "=0.15.27", default-features = false, features = ["toml", "json"] }
 directories.workspace = true
 dotenvy.workspace = true
-reqwest = { version = "0.13", default-features = false, features = ["json", "stream"] }
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "stream"] }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
@@ -29,5 +29,5 @@ agent-inference = { path = "../../crates/agent-inference" }
 decision-core = { path = "../../crates/decision-core" }
 decision-model = { path = "../../crates/decision-model" }
 model-provider = { path = "../../crates/model-provider" }
-rpi-ai = { version = "=0.16.0", features = ["providers"] }
+rig-core.workspace = true
 tempfile.workspace = true

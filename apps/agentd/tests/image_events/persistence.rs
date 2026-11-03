@@ -1,7 +1,7 @@
 use agent_runtime::{Result, RuntimeError, SessionMutation, SessionPersistence};
 use agent_storage::Store;
 
-/// Test-owned adapter: the storage crate does not depend on Harness/runtime.
+/// Test-owned adapter: the storage crate does not depend on Rig/runtime.
 pub struct Persistence(pub Store);
 #[async_trait::async_trait]
 impl SessionPersistence for Persistence {

@@ -19,9 +19,9 @@ serde_json.workspace = true
 agent-telemetry = { path = "../../crates/agent-telemetry" }
 anyhow.workspace = true
 async-trait.workspace = true
-axum = "0.8"
+axum = "=0.8.9"
 clap.workspace = true
-config = { version = "0.15", default-features = false, features = ["toml"] }
+config = { version = "=0.15.27", default-features = false, features = ["toml"] }
 decision-core = { path = "../../crates/decision-core" }
 directories.workspace = true
 dotenvy.workspace = true
@@ -35,4 +35,4 @@ tracing.workspace = true
 model-mock = { path = "../model-mock" }
 sea-orm.workspace = true
 tempfile.workspace = true
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls"] }
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls"] }

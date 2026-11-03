@@ -33,8 +33,8 @@ async fn semantic_outbox_failure_rolls_back_snapshot_audit_and_all_events() -> a
       1,
       Some(&run.id),
       b"after",
-      "record_appended",
-      json!({"record":"usage"}),
+      "model_response_committed",
+      json!({"run_id":run.id}),
       std::slice::from_ref(&semantic),
     )
     .await;
@@ -54,8 +54,8 @@ async fn semantic_outbox_failure_rolls_back_snapshot_audit_and_all_events() -> a
       1,
       Some(&run.id),
       b"after",
-      "record_appended",
-      json!({"record":"usage"}),
+      "model_response_committed",
+      json!({"run_id":run.id}),
       std::slice::from_ref(&semantic),
     )
     .await?;
@@ -70,7 +70,11 @@ async fn semantic_outbox_failure_rolls_back_snapshot_audit_and_all_events() -> a
       .iter()
       .map(|event| event.kind.as_str())
       .collect::<Vec<_>>(),
-    ["record_appended", AGENT_EVENT_KIND]
+    ["model_response_committed", AGENT_EVENT_KIND]
+  );
+  assert_eq!(
+    serde_json::from_str::<serde_json::Value>(&added[0].payload_json)?,
+    json!({"run_id":run.id})
   );
   assert_eq!(
     serde_json::from_str::<AgentEvent>(&added[1].payload_json)?,

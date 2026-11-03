@@ -8,8 +8,8 @@ Lyonbrown 是 Rust monorepo。agentd、CLI/TUI、GPUI Desktop、BrowserRuntime �
 2. 使用 Rust 2024 edition、rustfmt 和 Clippy，统一 2 空格缩进，不使用 Tab。生产代码避免 panic、unwrap 和未受控 unsafe；必要的 FFI 仅放在平台适配边界，说明安全条件。
 3. 单个手写源文件达到 300 行时评估按职责拆分。集成测试放在独立 tests/ 目录；不要为压缩行数损害内聚性。
 4. Client 只拥有呈现、输入和连接状态。agentd 持有 Session、Task、模型、Tools、MCP、权限和事件；GPUI Desktop 与 TUI 均通过认证协议访问。
-5. rpi-harness 是唯一 Agent Loop。rpi、CEF、推理库的具体类型不得泄漏到公共协议或 UI 模型。
-6. SessionStore 保存 Harness 会话语义，TaskStore 保存编排状态；关键边界在同一关系数据库事务中写入状态、事件和 Outbox；单机使用 SQLite，远程支持 PostgreSQL 与 MySQL。先记录执行意图，再产生副作用。未知结果进入 Uncertain，禁止因断线盲目重放。
+5. Rig 是唯一 Agent Loop，优先复用固定版本框架的 AgentRun、模型适配、工具、消息、流式事件和结构化输出能力；不保留 rpi 依赖、第二套循环或旧快照兼容层。Rig、CEF、推理库的具体类型不得泄漏到公共协议或 UI 模型。
+6. SessionStore 保存 Rig 运行与会话语义，TaskStore 保存编排状态；关键边界在同一关系数据库事务中写入状态、事件和 Outbox；单机使用 SQLite，远程支持 PostgreSQL 与 MySQL。先记录执行意图，再产生副作用。未知结果进入 Uncertain，禁止因断线盲目重放。框架恢复出的待执行工具必须先核对宿主持久操作记录，不直接重放。
 7. Worker Attempt 成功不等于 Master 已采纳 Task。Session 单 Master 写入，持久化校验 owner_epoch；mDNS 发现不授信。
 8. BrowserRuntime 是嵌入 CLI/Desktop 的可复用执行环境 crate，不是单独产品 app；CEF 内部 helper 通过客户端可执行文件的私有运行模式启动。GPUI UI 与浏览器执行状态隔离。UI 关闭不默认取消 daemon 作业。网页内容不可信，不能访问应用特权接口；Profile 不等于活页面恢复。
 9. 操作能力面向 Windows、macOS、Linux。平台差异集中在适配层，统一授权、取消、超时和错误语义；缺失能力明确报告，不得把占位实现视为支持。
@@ -24,12 +24,12 @@ Lyonbrown 是 Rust monorepo。agentd、CLI/TUI、GPUI Desktop、BrowserRuntime �
 18. 模型接入测试使用本地 mock server，经真实协议适配器验证各个已开放的标准协议，不调用付费模型。重点验证决策模型的结构化输出、置信度、授权约束、保守回退、超时和取消；决策不得扩大工具、模型或节点权限，也不得绕过人工审批。测试必须检查最终执行行为与持久化状态，不能只断言 mock 返回值。
 19. 异步进程入口优先使用 `#[tokio::main]`，参数解析、序列化和依赖注入优先复用成熟库的宏，减少样板代码。CEF helper 与 Windows SCM 分派先于异步运行时初始化；GPUI 保留主线程事件循环。显式运行时仅用于需要持有、共享或定制运行时的边界，不为局部简化引入隐藏控制流的自定义宏。
 20. ComputerRuntime 由交互客户端显式选择本机范围后绑定单一 Session；目标发现不截图、输入或请求系统权限。窗口选择同时绑定窗口 ID 和进程 ID，不因标识复用采用新目标。切换会话不转移控制权，重连和退出撤销原宿主，不重放原生输入。原生 SDK 通过客户端的 `native-computer` 功能显式启用，普通 agentd 构建不启用该功能。
-21. `decision-core` 是默认嵌入 Agent 的可复用决策库，不依赖 Harness、Agent 内部类型、Provider SDK、HTTP 或数据库。语义与结构化推理通过适配层接入；建议不能授予工具、模型或节点权限，实际调度与长期绑定由调用方持有。
-22. AI Gateway 独立于 agentd，优先使用 FluxDI 的 Axum 请求作用域、SeaORM SQLite 和 Rust Leptos 全栈 Web UI，不引入独立 Node 前端栈。前端优先使用 `#[component]`、`view!`、Signal 和维护中的组件库，通过 SSR 与 WASM hydration 提供交互，表单复用 ServerAction / ActionForm，授权与持久化保持在服务端。OpenAPI 与 Swagger 优先使用 `utoipa` 生态从代码生成；API Key 与管理会话分离；环境变量初始化唯一超级管理员用户名和密码，密码使用成熟库的 Argon2id 加盐哈希，无默认密码，不以环境变量覆盖已有账户；写操作校验来源、超级管理员身份和 CSRF。 基础输入校验优先复用成熟库的派生宏，并在 Rust 前后端共享规则；权限、CSRF、PolicySnapshot 语义校验和 CAS 仍由服务端执行，不以前端校验代替服务端判定。 Gateway 上游仅复用固定版本 `rig-core` / `rig-reqwest` 0.45.0 的公开 raw HTTP transport 与 SseFramer，保留原始 JSON/SSE；资源限制、严格终态检查、取消和审计由 Gateway 持有，不引入 Rig Agent 或第二套 Agent Loop。Agent 与 model-provider 继续复用现有 rpi-ai 三协议适配，不要求全项目统一为 Rig。
+21. `decision-core` 是默认嵌入 Agent 的可复用决策库，不依赖 Rig、Agent 内部类型、Provider SDK、HTTP 或数据库。语义与结构化推理通过适配层接入；建议不能授予工具、模型或节点权限，实际调度与长期绑定由调用方持有。
+22. AI Gateway 独立于 agentd，优先使用 FluxDI 的 Axum 请求作用域、SeaORM SQLite 和 Rust Leptos 全栈 Web UI，不引入独立 Node 前端栈。前端优先使用 `#[component]`、`view!`、Signal 和维护中的组件库，通过 SSR 与 WASM hydration 提供交互，表单复用 ServerAction / ActionForm，授权与持久化保持在服务端。OpenAPI 与 Swagger 优先使用 `utoipa` 生态从代码生成；API Key 与管理会话分离；环境变量初始化唯一超级管理员用户名和密码，密码使用成熟库的 Argon2id 加盐哈希，无默认密码，不以环境变量覆盖已有账户；写操作校验来源、超级管理员身份和 CSRF。 基础输入校验优先复用成熟库的派生宏，并在 Rust 前后端共享规则；权限、CSRF、PolicySnapshot 语义校验和 CAS 仍由服务端执行，不以前端校验代替服务端判定。 Gateway 上游仅复用固定版本 `rig-core` / `rig-reqwest` 0.46.0 的公开 raw HTTP transport 与 SseFramer，保留原始 JSON/SSE；资源限制、严格终态检查、取消和审计由 Gateway 持有，Gateway 不运行 Agent Loop。Agent、model-provider 和 embedding 统一优先复用固定版本 Rig 的公开框架能力，宿主持有授权、事务、取消与副作用恢复。
 23. `apps/model-mock` 提供独立、仅回环监听的合成模型服务，优先复用 HTTP Mock 与协议 SDK。远程标准协议、Ollama 协议和本地 `InferenceBackend` Mock 均不得调用付费模型或隐式加载权重；Mock 通过不代表真实推理 SDK、模型质量或性能验收。
 24. TUI 与 Desktop 按 MVVM 组织客户端：View 组合成熟组件并呈现状态，ViewModel 持有或派生客户端展示状态，协议与命令适配层负责连接 daemon；不将凭据、原生执行句柄或 Agent 调度权限放入 ViewModel。优先复用组件库的输入、Markdown、Tab、折叠、布局、主题和可访问性能力，再补产品所需的状态与组合逻辑。
 
-25. 记忆由 agentd 的 MemoryService 持有，领域模型与端口不依赖 ORM、Harness 或向量 SDK。关系数据库保存权威记忆、来源、修订与状态，Qdrant 负责独立的可重建向量索引：单机通过公开 Rust API 将 Qdrant Edge 嵌入 agentd，远程连接 Qdrant Server，不引入第二种向量引擎。索引经持久作业与 Outbox 异步更新，检索前限制作用域、返回后核对权威版本与有效状态；记忆不能扩大权限或替代人工审批。同步索引维护和 CPU 推理仅在适配边界有界调度，不阻塞 Tokio 工作线程。
+25. 记忆由 agentd 的 MemoryService 持有，领域模型与端口不依赖 ORM、Rig 或向量 SDK。关系数据库保存权威记忆、来源、修订与状态，Qdrant 负责独立的可重建向量索引：单机通过公开 Rust API 将 Qdrant Edge 嵌入 agentd，远程连接 Qdrant Server，不引入第二种向量引擎。索引经持久作业与 Outbox 异步更新，检索前限制作用域、返回后核对权威版本与有效状态；记忆不能扩大权限或替代人工审批。同步索引维护和 CPU 推理仅在适配边界有界调度，不阻塞 Tokio 工作线程。
 
 ## 验证
 

@@ -1,6 +1,5 @@
 use crate::{Result, RuntimeConfig, RuntimeError};
-use rpi_ai::{Model, Provider};
-use std::sync::Arc;
+use rig_core::{DynModel, operation::Completion};
 
 pub(crate) fn model_config(config: &RuntimeConfig) -> model_provider::ModelConfig {
   model_provider::ModelConfig {
@@ -14,7 +13,7 @@ pub(crate) fn model_config(config: &RuntimeConfig) -> model_provider::ModelConfi
     supports_images: config.supports_images,
   }
 }
-pub(crate) fn configured(config: &RuntimeConfig) -> Result<(Model, Arc<dyn Provider>)> {
+pub(crate) fn configured(config: &RuntimeConfig) -> Result<DynModel<Completion>> {
   if config.session_id.trim().is_empty() || config.owner_epoch == 0 {
     return Err(RuntimeError::Configuration(
       "session and a positive owner epoch are required".into(),

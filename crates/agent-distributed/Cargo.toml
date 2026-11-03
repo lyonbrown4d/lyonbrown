@@ -23,11 +23,11 @@ sha2.workspace = true
 hex.workspace = true
 uuid.workspace = true
 tracing.workspace = true
-url = "2"
-mdns-sd = "0.21.7"
-rcgen = "0.14"
-rustls-pemfile = "2.2"
-snow = "0.10"
+url = "=2.5.8"
+mdns-sd = "=0.21.7"
+rcgen = "=0.14.10"
+rustls-pemfile = "=2.2.0"
+snow = "=0.10.0"
 
 [dev-dependencies]
 tempfile.workspace = true

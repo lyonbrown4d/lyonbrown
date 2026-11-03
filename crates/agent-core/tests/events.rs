@@ -82,65 +82,25 @@ fn typed_usage_queue_and_outcome_round_trip() -> Result<(), serde_json::Error> {
 }
 
 #[test]
-fn legacy_runtime_events_decode_without_client_phase_inference() -> Result<(), serde_json::Error> {
-  for (kind, payload, expected) in [
-    (
-      "text_delta",
-      json!({"text":"hello"}),
-      AgentEvent::TextDelta {
-        text: "hello".into(),
-      },
-    ),
-    (
-      "thinking_delta",
-      json!({"text":"reason"}),
-      AgentEvent::ThinkingDelta {
-        text: "reason".into(),
-      },
-    ),
-    (
-      "tool_started",
-      json!({"call_id":"call","name":"read","arguments":{"path":"file"}}),
-      AgentEvent::ToolStarted {
-        call_id: "call".into(),
-        name: "read".into(),
-        arguments: json!({"path":"file"}),
-      },
-    ),
-    (
-      "tool_finished",
-      json!({"call_id":"call","name":"read","text":"content","is_error":false}),
-      AgentEvent::ToolFinished {
-        call_id: "call".into(),
-        name: "read".into(),
-        text: "content".into(),
-        is_error: false,
-      },
-    ),
-    (
-      "run_finished",
-      json!({"run_id":"run","outcome":"completed"}),
-      AgentEvent::RunFinished {
-        run_id: "run".into(),
-        outcome: ExecutionOutcome::Completed,
-      },
-    ),
-    (
-      "compaction",
-      json!({"active":true}),
-      AgentEvent::Compaction { active: true },
-    ),
+fn runtime_audit_names_are_not_presentation_events() -> Result<(), serde_json::Error> {
+  for kind in [
+    "text_delta",
+    "thinking_delta",
+    "tool_started",
+    "tool_finished",
+    "run_finished",
+    "compaction",
   ] {
     assert_eq!(
-      decode(kind, &payload.to_string())?,
-      DecodedEvent::Known(expected)
+      decode(kind, "untrusted non-json")?,
+      DecodedEvent::Unknown { kind: kind.into() }
     );
   }
   Ok(())
 }
 
 #[test]
-fn legacy_run_status_aliases_preserve_status_and_error() -> Result<(), serde_json::Error> {
+fn current_daemon_run_statuses_preserve_status_and_error() -> Result<(), serde_json::Error> {
   for (name, status) in [
     ("accepted", RunStatus::Accepted),
     ("running", RunStatus::Running),
@@ -151,7 +111,7 @@ fn legacy_run_status_aliases_preserve_status_and_error() -> Result<(), serde_jso
     ("cancelled", RunStatus::Cancelled),
     ("uncertain", RunStatus::Uncertain),
   ] {
-    for kind in [name.to_owned(), format!("run_{name}")] {
+    for kind in [format!("run_{name}")] {
       assert_eq!(
         decode(&kind, &json!({"status":name,"error":"detail"}).to_string())?,
         DecodedEvent::Known(AgentEvent::RunStateChanged {
@@ -184,10 +144,6 @@ fn malformed_known_payloads_are_errors_instead_of_unknown_events() {
       AGENT_EVENT_KIND,
       r#"{"type":"run_finished","run_id":"run","outcome":"future_outcome"}"#,
     ),
-    ("text_delta", r#"{"text":2}"#),
-    ("tool_finished", r#"{"name":"read"}"#),
-    ("compaction", "[]"),
-    ("text_delta", r#"{"type":"thinking_delta","text":"hello"}"#),
     ("run_failed", r#"{"status":"completed"}"#),
     ("run_completed", r#"{"status":"future_status"}"#),
     ("run_uncertain", r#"{"error":7}"#),

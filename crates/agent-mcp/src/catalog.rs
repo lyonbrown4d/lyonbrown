@@ -12,6 +12,7 @@ use crate::{
 };
 
 pub(crate) struct CatalogEntry {
+  pub tool: rig_core::tool::DynamicTool,
   pub schema: Value,
   pub description: Option<String>,
   pub validator: Validator,
@@ -53,7 +54,7 @@ pub(crate) async fn catalog(
           return Err(invalid("MCP selected catalog exceeds limit"));
         }
         let name = tool.name.to_string();
-        selected.insert(name, compile(tool, limits)?);
+        selected.insert(name, compile(tool, limits, connection)?);
       }
     }
     match page.next_cursor {
@@ -72,7 +73,7 @@ pub(crate) async fn catalog(
   Ok(selected)
 }
 
-fn compile(tool: Tool, limits: &McpLimits) -> Result<CatalogEntry> {
+fn compile(tool: Tool, limits: &McpLimits, connection: &Connection) -> Result<CatalogEntry> {
   if !valid_id(&tool.name) {
     return Err(invalid("MCP tool has an invalid name"));
   }
@@ -92,11 +93,16 @@ fn compile(tool: Tool, limits: &McpLimits) -> Result<CatalogEntry> {
     .with_draft(jsonschema::Draft::Draft202012)
     .build(&schema)
     .map_err(|_| invalid("MCP tool schema is unsupported or invalid"))?;
-  let description = tool.description.map(|value| value.into_owned());
+  let description = tool.description.as_ref().map(|value| value.to_string());
   if description.as_ref().is_some_and(|value| value.len() > 4096) {
     return Err(invalid("MCP tool description exceeds 4096 bytes"));
   }
+  let tool = rig_rmcp::McpTool::new(tool, &connection.client)
+    .with_timeout(limits.call_timeout)
+    .try_into()
+    .map_err(|_| invalid("MCP tool has an invalid name"))?;
   Ok(CatalogEntry {
+    tool,
     schema,
     description,
     validator,

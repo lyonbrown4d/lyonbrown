@@ -1,6 +1,6 @@
 # 组件与调用关系
 
-`agentd` 持有会话、任务、模型、工具和权限。`agent-client` 将 bearer token 放入 gRPC 请求元数据；终端与桌面通过同一套 `ClientService` 消息访问 daemon。`rpi-harness` 的具体类型保留在 runtime 适配层，不进入公共协议或 UI 模型。
+`agentd` 持有会话、任务、模型、工具和权限。`agent-client` 将 bearer token 放入 gRPC 请求元数据；终端与桌面通过同一套 `ClientService` 消息访问 daemon。`Rig AgentRun` 的具体类型保留在 runtime 适配层，不进入公共协议或 UI 模型。
 
 ## 系统总览
 
@@ -23,7 +23,7 @@ flowchart TB
         API[Client / Model / Skill / Workspace / Runtime / Orchestration 服务]
         Decision[agent-decision / Agent 工具与节点策略]
         Run[Run 生命周期 / 并发限制 / 取消与恢复]
-        Harness[agent-runtime / 唯一 rpi-harness Loop]
+        Runtime[agent-runtime / 唯一 Rig AgentRun Loop]
         Model[模型 Registry / 元数据与能力限制]
         Tools[工作区 / 命令 / MCP / 浏览器 / 委派工具]
         Approval[精确动作审批 / owner_epoch / 持久意图]
@@ -32,9 +32,9 @@ flowchart TB
         API --> Run
         API --> Dispatcher
         Run --> Decision
-        Run --> Harness
-        Harness --> Model
-        Harness --> Tools
+        Run --> Runtime
+        Runtime --> Model
+        Runtime --> Tools
         Tools --> Approval
         Tools --> Dispatcher
         Approval --> Store
@@ -66,9 +66,9 @@ flowchart TB
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / 本地 CPU 模型]
     Tools --> Workspace[工作区 / Git / Artifact / notify]
-    Tools --> MCP[rmcp / stdio / Streamable HTTP]
+    Tools --> MCP[Rig-RMCP / rmcp / stdio / Streamable HTTP]
     subgraph PeerNode[受信 Worker 节点]
-        Worker[PeerService / TaskService / 独立 Harness Session]
+        Worker[PeerService / TaskService / 独立 Runtime Session]
         WorkerStore[Worker 本地 SQLite 与隔离工作区]
         Worker --> WorkerStore
     end
@@ -92,14 +92,14 @@ flowchart TB
 
 ## Run 与副作用
 
-一次请求可以经历多轮模型生成和工具调用，但只有 daemon 中的同一个 Harness 管理消息历史与循环。下图中的模型适配器可连接标准 API 或本地推理后端；客户端只接收领域事件。
+一次请求可以经历多轮模型生成和工具调用，但只有 daemon 中的同一个 Runtime 管理消息历史与循环。下图中的模型适配器可连接标准 API 或本地推理后端；客户端只接收领域事件。
 
 ```mermaid
 sequenceDiagram
     participant C as CLI / Desktop
     participant D as agentd
     participant S as 本机 SQLite
-    participant H as 唯一 rpi-harness
+    participant H as 唯一 Rig AgentRun
     participant P as 模型适配器
     participant T as 主机工具适配器
     C->>D: StartRun / Session / epoch / 幂等键
@@ -161,18 +161,18 @@ flowchart TB
         Service[认证 gRPC 服务]
         Orchestration[会话与任务编排]
         Runtime[agent-runtime]
-        Harness[rpi-harness 唯一 Agent Loop]
+        AgentLoop[Rig AgentRun 唯一 Agent Loop]
         Tools[主机授权与工具适配]
         Store[agent-storage SQLite]
         Service --> Orchestration
         Orchestration --> Runtime
-        Runtime --> Harness
-        Harness --> Tools
+        Runtime --> AgentLoop
+        AgentLoop --> Tools
         Orchestration --> Store
-        Runtime --> Store
+        AgentLoop --> Store
     end
     Client -->|Bearer token / HTTP2| Service
-    Harness -->|模型请求| Provider[模型提供方]
+    AgentLoop -->|模型请求| Provider[模型提供方]
     Tools --> Workspace[工作区与平台能力]
 ```
 
@@ -199,7 +199,7 @@ flowchart LR
 
 浏览器挂接断开后不重放操作。网页不能访问应用特权接口；Profile 只保存浏览器磁盘数据，不恢复内存中的活页面。发现节点不授予执行权限，配对和任务授权仍由 daemon 处理。公网注册和转发使用独立的控制面协议，不能将节点发现等同于互信。
 
-ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Harness 提供 `computer_observe` 与 `computer_act`；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/TUI 和 Desktop 通过注入的 `ComputerHostFactory` 显式发现并选择本地窗口或显示器，再将宿主固定到选定 daemon 会话；切换聊天不会转移已有挂接。ComputerRuntime 嵌入客户端进程，不是独立产品进程，也不创建 Agent Loop。客户端的 `native-computer` feature 默认关闭，入口接线不代表原生控制运行验收完成。macOS 仅在控制台登录会话、有效会话 UUID 与明确未锁定字段均满足策略时允许继续检查权限；状态未知或锁定时拒绝，已观察到的会话失效不会因解锁自动恢复。权限、租约与执行限制见[原生桌面执行边界](protocol.md#原生桌面执行边界)，工具机制见[模型计算机工具](tools.md#模型计算机工具)。
+ComputerRuntime 以库提供交互用户宿主接口，通过固定的 daemon 会话和桌面范围挂接。原生工作在阻塞线程执行，宿主断开后取消命令，并保持桌面互斥直到操作系统调用结束。daemon 在受信配置、会话归属和控制权限检查后，通过唯一 Runtime 提供 `computer_observe` 与 `computer_act`；观察、不可变操作准备和准确审批后的执行均使用认证连接，执行前持久化审批消费与意图。CLI/TUI 和 Desktop 通过注入的 `ComputerHostFactory` 显式发现并选择本地窗口或显示器，再将宿主固定到选定 daemon 会话；切换聊天不会转移已有挂接。ComputerRuntime 嵌入客户端进程，不是独立产品进程，也不创建 Agent Loop。客户端的 `native-computer` feature 默认关闭，入口接线不代表原生控制运行验收完成。macOS 仅在控制台登录会话、有效会话 UUID 与明确未锁定字段均满足策略时允许继续检查权限；状态未知或锁定时拒绝，已观察到的会话失效不会因解锁自动恢复。权限、租约与执行限制见[原生桌面执行边界](protocol.md#原生桌面执行边界)，工具机制见[模型计算机工具](tools.md#模型计算机工具)。
 
 ## 源码依据
 

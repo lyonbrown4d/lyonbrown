@@ -1,5 +1,3 @@
-#[path = "../src/semantic_events.rs"]
-mod semantic_adapter;
 mod support;
 
 use agent_core::events::AgentEvent;
@@ -97,7 +95,15 @@ async fn real_adapter_persists_semantic_tool_and_usage_facts_without_duplicate_t
     "each assistant turn has its own durable usage key"
   );
   assert_eq!(usage.values().map(|usage| usage.total).sum::<u64>(), 23);
-  assert!(mutations.iter().filter(|mutation| mutation.kind == "entry_appended").any(|mutation| mutation.events.iter().any(|event| matches!(event, AgentEvent::UsageUpdated { entry_id, usage } if mutation.payload["entry"]["id"] == *entry_id && usage.total == 14))));
+  assert!(
+    mutations
+      .iter()
+      .filter(|mutation| mutation.kind == "model_response_committed")
+      .any(|mutation| mutation
+        .events
+        .iter()
+        .any(|event| matches!(event, AgentEvent::UsageUpdated { usage, .. } if usage.total == 14)))
+  );
   assert!(!semantic.iter().any(|event| matches!(
     event,
     AgentEvent::TextDelta { .. } | AgentEvent::ThinkingDelta { .. }
@@ -129,112 +135,4 @@ async fn real_adapter_persists_semantic_tool_and_usage_facts_without_duplicate_t
     .position(|event| matches!(event, RuntimeEvent::ToolStarted { .. }))
     .expect("tool");
   assert!(first_request < first_tool);
-}
-
-#[test]
-fn compaction_and_later_usage_record_share_the_same_replacement_key() {
-  use rpi_harness::session::types::{
-    CompactionEntry, Entry, EntryBase, LaneRecord, RecordBase, UsageCause, UsageRecord,
-  };
-  let mut reported = rpi_ai::Usage::zero();
-  reported.input = 7;
-  reported.output = 2;
-  reported.total_tokens = 9;
-  let mut compacted = CompactionEntry {
-    base: EntryBase {
-      entry_type: "compaction".into(),
-      id: "compacted".into(),
-      seq: 1,
-      parent_id: None,
-      timestamp: 1,
-    },
-    summary: "fixture summary".into(),
-    retained_tail: Vec::new(),
-    tokens_before: 100,
-    details: None,
-    usage: None,
-  };
-  assert!(
-    semantic_adapter::entry(&Entry::Compaction(compacted.clone()), &[]).is_empty(),
-    "missing usage must not be estimated"
-  );
-  compacted.usage = Some(reported.clone());
-  let mut events = semantic_adapter::entry(&Entry::Compaction(compacted), &[]);
-  reported.output = 3;
-  reported.total_tokens = 10;
-  events.extend(semantic_adapter::record(
-    &LaneRecord::Usage(UsageRecord {
-      base: RecordBase {
-        id: "correction".into(),
-        seq: 2,
-        lane: "main".into(),
-        timestamp: 2,
-      },
-      usage: reported,
-      cause: UsageCause::Compaction,
-      run_id: Some("run".into()),
-      entry_id: Some("compacted".into()),
-      attempt: Some(1),
-      stop_reason: None,
-      tool_call_id: None,
-      details: None,
-    }),
-    &[],
-  ));
-  let usage = events
-    .into_iter()
-    .filter_map(|event| match event {
-      AgentEvent::UsageUpdated { entry_id, usage } => Some((entry_id, usage)),
-      _ => None,
-    })
-    .collect::<std::collections::BTreeMap<_, _>>();
-  assert_eq!(usage.len(), 1);
-  assert_eq!(usage["compacted"].input, 7);
-  assert_eq!(usage["compacted"].output, 3);
-  assert_eq!(usage["compacted"].total, 10);
-}
-
-#[test]
-fn tool_usage_is_reported_only_when_present_on_the_committed_result() {
-  use rpi_harness::session::types::{Entry, EntryBase, MessageEntry};
-  let mut tool = rpi_ai::ToolResultMessage {
-    role: Default::default(),
-    tool_call_id: "call".into(),
-    tool_name: "fixture".into(),
-    content: Vec::new(),
-    details: None,
-    usage: None,
-    added_tool_names: Vec::new(),
-    is_error: false,
-    timestamp: 1,
-  };
-  let entry = |tool| {
-    Entry::Message(MessageEntry {
-      base: EntryBase {
-        entry_type: "message".into(),
-        id: "tool-result".into(),
-        seq: 1,
-        parent_id: None,
-        timestamp: 1,
-      },
-      message: rpi_agent::message::AgentMessage::ToolResult(Box::new(tool)),
-      terminate: None,
-    })
-  };
-  assert!(
-    semantic_adapter::entry(&entry(tool.clone()), &[])
-      .iter()
-      .all(|event| !matches!(event, AgentEvent::UsageUpdated { .. }))
-  );
-  let mut usage = rpi_ai::Usage::zero();
-  usage.input = 5;
-  usage.total_tokens = 5;
-  tool.usage = Some(usage);
-  let events = semantic_adapter::entry(&entry(tool), &[]);
-  assert!(
-    events
-      .iter()
-      .any(|event| matches!(event, AgentEvent::ToolFinished { call_id, .. } if call_id == "call"))
-  );
-  assert!(events.iter().any(|event|matches!(event, AgentEvent::UsageUpdated { entry_id, usage } if entry_id == "tool-result" && usage.total == 5)));
 }

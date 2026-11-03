@@ -16,20 +16,22 @@ fn event(kind: &str, payload: &str) -> Event {
 }
 
 #[test]
-fn tagged_and_legacy_text_keep_the_same_increment() {
-  for (kind, payload) in [
-    ("agent_event", r#"{"type":"text_delta","text":"hello"}"#),
-    ("text_delta", r#"{"text":"hello"}"#),
-  ] {
-    let decoded = decode(&event(kind, payload));
-    assert_eq!(
-      decoded.event,
-      RunEvent::TextDelta {
-        text: "hello".into()
-      }
-    );
-    assert_eq!(decoded.status(), None);
-  }
+fn only_tagged_text_contributes_a_transcript_increment() {
+  let decoded = decode(&event(
+    "agent_event",
+    r#"{"type":"text_delta","text":"hello"}"#,
+  ));
+  assert_eq!(
+    decoded.event,
+    RunEvent::TextDelta {
+      text: "hello".into()
+    }
+  );
+  assert_eq!(decoded.status(), None);
+  assert_eq!(
+    decode(&event("text_delta", r#"{"text":"hello"}"#)).event,
+    RunEvent::Other
+  );
 }
 
 #[test]

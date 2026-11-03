@@ -7,10 +7,10 @@ use tokio_util::sync::CancellationToken;
 
 use crate::Daemon;
 
-pub(super) struct HarnessWorker(pub Daemon);
+pub(super) struct RuntimeWorker(pub Daemon);
 
 #[async_trait::async_trait]
-impl WorkerExecutor for HarnessWorker {
+impl WorkerExecutor for RuntimeWorker {
   async fn execute(&self, job: WorkerJob, cancellation: CancellationToken) -> Result<String> {
     let daemon = &self.0;
     ensure!(
@@ -119,7 +119,7 @@ impl WorkerExecutor for HarnessWorker {
     match terminal.status.as_str() {
       "completed" => Ok(terminal.result),
       "uncertain" => Err(UncertainOutcome.into()),
-      _ => anyhow::bail!("worker Harness did not complete: {}", terminal.status),
+      _ => anyhow::bail!("worker runtime did not complete: {}", terminal.status),
     }
   }
 }

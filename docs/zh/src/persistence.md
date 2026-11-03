@@ -1,6 +1,6 @@
 # 会话、任务与恢复
 
-会话保存可继续对话的 Harness 语义，运行记录保存一次用户请求的编排状态。关系数据库将这两类数据分开存储，并在关键写入中一并记录事件和 Outbox。默认后端为本机 SQLite；daemon 也可配置 PostgreSQL 或 MySQL。
+会话保存可继续对话的 Runtime 语义，运行记录保存一次用户请求的编排状态。关系数据库将这两类数据分开存储，并在关键写入中一并记录事件和 Outbox。默认后端为本机 SQLite；daemon 也可配置 PostgreSQL 或 MySQL。
 
 ## 数据库与异步事务
 
@@ -21,7 +21,7 @@ sequenceDiagram
     participant UI as Client
     participant D as agentd
     participant S as Relational database
-    participant H as rpi-harness
+    participant H as Rig AgentRun
     participant T as Host tool
     UI->>D: StartRun(session, prompt, key, epoch)
     D->>S: Persist accepted run + event + outbox
@@ -40,21 +40,21 @@ sequenceDiagram
     D-->>UI: Durable events and result
 ```
 
-Runtime 将工具交给主机适配器执行，主机负责授权、工作区约束和取消。Harness 自身的 provider 自动重试被禁用；重试策略属于持久任务编排。先保存执行意图，再产生副作用，是恢复时区分「未执行」与「结果未知」的依据。
+Runtime 将工具交给主机适配器执行，主机负责授权、工作区约束和取消。Runtime 自身的 provider 自动重试被禁用；重试策略属于持久任务编排。先保存执行意图，再产生副作用，是恢复时区分「未执行」与「结果未知」的依据。
 
 ## 快照与事件中的图像
 
-Harness 快照保留原始消息内容。`entry_appended` 和 `record_appended` 则使用独立投影：图像块只保留 `type`、`mimeType`、`dataRedacted` 和 `encodedBytes`，不携带 Base64 内容。`encodedBytes` 表示原 Base64 字符串的字节数。该规则也适用于工具结果、压缩保留的消息、执行意图、排队消息和流式起始消息；Store、Outbox 与 `WatchRun` 使用同一投影载荷。投影发生在 Runtime 提交新事件时，读取既有事件不会重新计算载荷。
+Runtime 快照使用版本化结构，保存 Session ID、Rig 消息历史、活动 AgentRun 与已准备请求、steering 消息、未完成工具、输入队列及未知结果。消息使用 Rig 原生序列化，完整保留图像以便恢复会话。快照属于执行状态，不作为客户端事件载荷。
 
-投影按已知消息类型处理图像，不递归删除任意 JSON 中的 `data` 字段。工具参数和自定义业务数据仍由对应适配器约束；无法识别的排队载荷或消息帧只返回 `projectionOmitted` 标记。输入图像的调试输出只含 MIME 和长度。
+持久化变更事件仅写入白名单元数据（如运行 ID、调用 ID、工具名）与显式公共事件，不复制完整 Rig raw 响应、消息或图像内容。Store、Outbox 与 `WatchRun` 使用同一事件载荷。工具参数、自定义业务数据与凭据仍由各适配器约束；该规则不代替对应数据的授权和脱敏。
 
-含图像会话的恢复暂不开放。恢复入口保留原快照并明确返回不可用，不调用模型或重放请求。原因是当前固定的 rpi-ai 0.16.0 仍保留原始 JSON 序列化产生重复 `type` 字段的限制，见[上游问题 #59](https://github.com/bigfish1913/pi-rust/issues/59)。代码没有加入快照规范化适配。daemon 的 `StartRun` 接口仍只接收文本；Runtime 内部的图像输入不代表客户端支持图像会话。
+Runtime 支持消息图像的序列化恢复，不代表所有模型支持图像，也不代表客户端已开放图像会话。daemon 的 `StartRun` 仍只接收文本。当前 Rig 路径未在本轮执行编译、测试或图像恢复运行验收。
 
 ## 断线与重启
 
 客户端断线后，使用原会话重新查询运行状态。事件按运行 ID 和 `cursor` 排序，`WatchRun` 的 `after_cursor` 用于请求后续事件。事件流断开不能证明任务失败，也不能触发 prompt 重放。
 
-存储层的 `recover_interrupted` 将执行中而没有持久终态的记录标记为 `uncertain`。尚未开始的 `accepted` 记录与已经进入执行的记录分开处理。Runtime 恢复 Harness 会话时检查未完成的工具记录：工具结果未提交时返回 `Uncertain`，不会猜测副作用是否发生。
+存储层的 `recover_interrupted` 将执行中而没有持久终态的记录标记为 `uncertain`。尚未开始的 `accepted` 记录与已经进入执行的记录分开处理。Runtime 恢复会话时检查未完成的工具记录：工具结果未提交时返回 `Uncertain`，不会猜测副作用是否发生。
 
 恢复事务同时将对应运行的 `pending` 审批改为 `cancelled`，并写入 `approval_closed`、`run_uncertain` 事件及 Outbox。任一写入失败时，这些状态和事件一并回滚；重复恢复不再次生成记录。关闭旧审批不会解决运行的未知结果，也不会授权重放工具。
 

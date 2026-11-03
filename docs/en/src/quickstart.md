@@ -2,7 +2,7 @@
 
 Install the Rust toolchain required by the root `Cargo.toml`. Models, native graphics and browser SDK prerequisites depend on enabled capabilities; a crate name does not establish availability without the relevant native dependencies.
 
-The current working tree has an unresolved native SQLite dependency conflict. These commands were not rerun in this iteration. Read the [dependency limit](development.md#current-dependency-resolution-limit); historical runs do not establish startup acceptance for this revision.
+The current Rig AgentRun and storage composition were not compiled or runtime-accepted in this iteration. Commands below are usage entry points; historical runs do not establish startup acceptance for this revision. See [verification scope](development.md#verification-scope).
 
 ## Start the development environment
 

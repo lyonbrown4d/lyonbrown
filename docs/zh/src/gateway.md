@@ -1,8 +1,8 @@
 # AI Gateway
 
-`ai-gateway` 是独立 Rust 服务，默认监听 `127.0.0.1:8099`。它通过 FluxDI 的类型化模块与 Axum 请求作用域装配共享决策核心、SQLite 存储、模型转发和 Leptos 管理界面，不需要启动 agentd。Agent 使用网关时仍自行管理 Harness、Session、工具和审批。
+`ai-gateway` 是独立 Rust 服务，默认监听 `127.0.0.1:8099`。它通过 FluxDI 的类型化模块与 Axum 请求作用域装配共享决策核心、SQLite 存储、模型转发和 Leptos 管理界面，不需要启动 agentd。Agent 使用网关时仍自行管理 Runtime、Session、工具和审批。
 
-当前全异步存储与 FluxDI 启动装配仅完成静态核对，未执行本轮运行验收；依赖解析仍受[上游 SQLite 冲突](development.md#当前依赖解析限制)阻塞。
+当前全异步存储与 FluxDI 启动装配仅完成静态核对，未执行本轮运行验收。验证范围见[开发与验证](development.md#验证范围)。
 
 ## 启动与配置
 
@@ -89,7 +89,7 @@ Gateway 使用 `utoipa-axum` 0.3.0 的 `routes!` 和 `OpenApiRouter`，从同一
 
 Swagger 页面与规范在本机地址可直接打开，业务 API 仍需通过 Swagger 的 Authorize 提供 API Key。规范不包含实际模型目录或凭据，Swagger 资源随程序内嵌，不要求访问 CDN。当前入站协议为 Chat Completions；图片、音频、Responses 和 Anthropic 入站请求不在此接口的兼容范围内。
 
-Gateway 上游传输复用 [Rig-Core 0.45.0](https://docs.rs/rig-core/0.45.0/rig_core/) 的公开 raw HTTP 接口与 `SseFramer`，以及 [Rig-Reqwest 0.45.0](https://docs.rs/rig-reqwest/0.45.0/rig_reqwest/) 的 `ReqwestMiddlewareClient`。Gateway 保留 `n` 等已开放的请求参数，并按原始字节转发 JSON 和 SSE 响应，包括多候选结果、工具调用片段和 usage。中间件在非 2xx 时立即释放原始响应正文，只向 Rig 提供相同状态的空正文；Gateway 继续负责字节限制、严格 `[DONE]` 检查、时限、取消和审计。这里不使用 Rig Agent 或 Agent Loop；Agent 与 `model-provider` 继续复用 rpi-ai 的 Responses、Chat Completions 和 Anthropic 三协议适配。
+Gateway 上游传输复用 [Rig-Core 0.46.0](https://docs.rs/rig-core/0.46.0/rig_core/) 的公开 raw HTTP 接口与 `SseFramer`，以及 [Rig-Reqwest 0.46.0](https://docs.rs/rig-reqwest/0.46.0/rig_reqwest/) 的 `ReqwestMiddlewareClient`。Gateway 保留 `n` 等已开放的请求参数，并按原始字节转发 JSON 和 SSE 响应，包括多候选结果、工具调用片段和 usage。中间件在非 2xx 时立即释放原始响应正文，只向 Rig 提供相同状态的空正文；Gateway 继续负责字节限制、严格 `[DONE]` 检查、时限、取消和审计。Gateway 不使用 Rig Agent 或 Agent Loop；Agent 与 `model-provider` 使用 Rig 的 Responses、Chat Completions 和 Anthropic 三协议适配，Agent Loop 由 `agent-runtime` 内的 Rig AgentRun 持有。
 
 指定 `model` 为公共模型 ID 时按配置直连，不因不存在或能力不足切换模型。`model = "router/auto"` 时调用 [共享决策引擎](decision-engine.md)，选择实际模型后再次核对工具能力、上下文容量、本地范围及服务器约束。请求中的 `routing.local_only` 和 `routing.allowed_tiers` 只能进一步收紧服务器限制，转发前移除。
 

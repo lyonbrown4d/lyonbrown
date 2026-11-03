@@ -1,4 +1,4 @@
-//! Authenticated, owner-fenced commands for the existing Harness input queue.
+//! Authenticated, owner-fenced commands for the existing Runtime input queue.
 mod snapshot;
 use crate::Daemon;
 use agent_core::events::{AGENT_EVENT_KIND, AgentEvent, QueueKind, QueueStatus};
@@ -32,8 +32,15 @@ impl SessionPersistence for RunPersistence {
     session: &str,
     epoch: u64,
     snapshot: Vec<u8>,
-    mutation: SessionMutation,
+    mut mutation: SessionMutation,
   ) -> agent_runtime::Result<()> {
+    // Public events use the daemon Run identity; Rig's internal segment IDs
+    // remain private snapshot bookkeeping.
+    for event in &mut mutation.events {
+      if let AgentEvent::RunFinished { run_id, .. } = event {
+        *run_id = self.run_id.clone();
+      }
+    }
     self
       .store
       .commit_run_snapshot_with_events(

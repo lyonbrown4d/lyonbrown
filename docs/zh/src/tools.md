@@ -60,7 +60,7 @@ CHILD_KEY = "LYONBROWN_CHILD_VALUE"
 
 人工接管的原始输入在聚焦或派发前撤销旧语义快照；进入这些步骤后的错误保存为 `Uncertain`，恢复不自动重放。成功输入本身不递增帧版本，允许同一帧的按下与松开配对；页面变化仍可使帧失效。
 
-`apps/agentd/tests/browser_tools.rs` 通过本地 HTTP 模型 mock 和真实协议适配器覆盖 Responses、Chat Completions、Anthropic Messages，以及批准、拒绝、所有权/会话边界、取消和截图 artifact。其 runtime host 是合成实现，验证的是 Harness 到 daemon 的工具契约与持久状态，不能替代原生 CEF 自主浏览器操作验收。
+`apps/agentd/tests/browser_tools.rs` 通过本地 HTTP 模型 mock 和真实协议适配器覆盖 Responses、Chat Completions、Anthropic Messages，以及批准、拒绝、所有权/会话边界、取消和截图 artifact。其 runtime host 是合成实现，验证的是 Runtime 到 daemon 的工具契约与持久状态，不能替代原生 CEF 自主浏览器操作验收。
 
 原生链路使用 `apps/agentd/tests/native_browser_tools.rs` 单独验收。在 macOS 27.0.1 arm64 的调试 CEF 环境中，三个协议分别完成真实 AX 观察、准确审批后的填入与点击，并通过本地 HTTP 页面副作用和持久回执核对结果；另三种场景在点击成功后丢弃回执，确认取消与恢复不重放，运行保持 `Uncertain`。测试只操作合成页面和独立 Profile，使用调试测试钥匙串，不证明生产钥匙串或其他平台已验收。
 
@@ -78,7 +78,7 @@ cargo test -p agentd --test browser_tools --test command_tools --locked
 
 `computer_observe` 与 `computer_act` 默认关闭。受信任的 daemon 配置使用顶层 `computer_tools = true` 启用，环境变量为 `LYONBROWN_COMPUTER_TOOLS`。`computer_lease_secs` 默认为 `300` 秒，允许 `10..=300` 秒，环境变量为 `LYONBROWN_COMPUTER_LEASE_SECS`；配置沿用共享分层规则。这些开关不建立原生连接。CLI/TUI 和 Desktop 必须另行显式选择目标并挂接到会话，操作见[终端与桌面客户端](clients.md#原生计算机连接)。
 
-向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 `owner_epoch` 下、桌面范围已经固定的认证宿主，并确认能力响应的 `can_control()` 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Harness 执行，不创建另一套 Agent Loop。
+向决策模型声明计算机能力前，daemon 必须找到同一自有 Session 和 `owner_epoch` 下、桌面范围已经固定的认证宿主，并确认能力响应的 `can_control()` 为真。仅连接成功、模型选择计算机能力或配置启用，都不能绕过屏幕与输入权限检查。工具由唯一的 Runtime 执行，不创建另一套 Agent Loop。
 
 `computer_observe` 接收可选的 `screenshot`（默认 `false`），返回 `snapshot_id`、`revision`、范围、窗口和有界 AX 语义，并标记 `untrusted_desktop_content`。语义输出限制为 1 MiB；截图按需编码为 PNG，返回 artifact 摘要，不把 RGBA 像素直接放入模型文本。桌面内容不能授予权限。
 
@@ -101,7 +101,7 @@ endpoint = "https://worker.example:7448"
 capabilities = ["workspace.read"]
 ```
 
-这段配置只声明允许的路由，不创建配对，也不授予 Worker 超出配对记录的能力。可用能力限于 `workspace.read` 与 `workspace.write.approval`；实际范围还受本次执行计划约束。只有允许分布式执行的计划才向 Harness 提供此工具，Worker 的子运行不继续委派。
+这段配置只声明允许的路由，不创建配对，也不授予 Worker 超出配对记录的能力。可用能力限于 `workspace.read` 与 `workspace.write.approval`；实际范围还受本次执行计划约束。只有允许分布式执行的计划才向 Runtime 提供此工具，Worker 的子运行不继续委派。
 
 模型通过 `call` 选择 `dispatch`、`get`、`reconcile`、`cancel` 或 `accept`。任务只能属于本次父 Run、会话、所有者与 `owner_epoch`。`dispatch` 要求目标、指令、能力和超时，daemon 为当前模型调用生成稳定的任务与尝试标识，避免重复调用产生第二次执行。
 
@@ -109,4 +109,4 @@ capabilities = ["workspace.read"]
 
 执行意图持久化后发生断线、取消或回执丢失，任务进入 `Uncertain`，本次运行停止并要求核对原任务。`reconcile` 查询同一任务身份，不重新派发。人工管理命令见[客户端](clients.md)。
 
-`apps/agentd/tests/delegation.rs` 通过三个模型协议的真实适配器、本地模型 mock、Master 与配对 mTLS Worker 的 Harness 验证派发、审批和结果验收，并覆盖拒绝、撤销配对、身份变化、跨父运行访问、范围扩大及未知结果禁止重放。
+`apps/agentd/tests/delegation.rs` 通过三个模型协议的真实适配器、本地模型 mock、Master 与配对 mTLS Worker 的 Runtime 验证派发、审批和结果验收，并覆盖拒绝、撤销配对、身份变化、跨父运行访问、范围扩大及未知结果禁止重放。

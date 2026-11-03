@@ -2,7 +2,7 @@
 
 The daemon manages preferences, facts and procedures. The relational database owns content, state, revisions, sources, Run bindings and indexing jobs. Qdrant stores rebuildable vectors and retrieval metadata. A vector hit does not establish that a memory is current and grants no tool or node authority.
 
-This page describes the current working tree. The SeaORM, Qdrant and memory-context changes have not completed compilation, tests or runtime acceptance in this iteration; see [Development and verification](development.md#current-dependency-resolution-limit).
+This page describes the current working tree. The SeaORM, Qdrant and memory-context changes have not completed compilation, tests or runtime acceptance in this iteration; see [Development and verification](development.md#verification-scope).
 
 ## Scopes and states
 
@@ -41,7 +41,7 @@ backend = "embedded"
 # directory = "memory/custom-index"
 ```
 
-Embedding uses an OpenAI-compatible HTTP `/embeddings` endpoint and requires exactly one vector with the configured dimensions and finite values. The ID, model, dimensions and normalized API address determine its configuration revision; rotating credentials does not change that identity. `api_key_env` references dotenv or process-environment credentials, which do not enter memory records or status output. Remote endpoints require HTTPS; loopback HTTP is allowed. URLs cannot contain credentials, queries or fragments. `LYONBROWN_MEMORY_ENABLED` overrides the enabled flag.
+Embedding reuses Rig’s OpenAI-compatible embedding adapter and the shared bounded HTTP client for the `/embeddings` endpoint and requires exactly one vector with the configured dimensions and finite values. The ID, model, dimensions and normalized API address determine its configuration revision; rotating credentials does not change that identity. `api_key_env` references dotenv or process-environment credentials, which do not enter memory records or status output. Remote endpoints require HTTPS; loopback HTTP is allowed. URLs cannot contain credentials, queries or fragments. `LYONBROWN_MEMORY_ENABLED` overrides the enabled flag.
 
 ### Select a vector backend
 
@@ -49,6 +49,10 @@ Embedding uses an OpenAI-compatible HTTP `/embeddings` endpoint and requires exa
 | --- | --- |
 | `embedded` | Uses pinned `qdrant-edge` 0.9.0 `EdgeShard`, with no separate Qdrant process; defaults to `memory/<configuration-revision>` inside the daemon data directory |
 | `qdrant` | Uses pinned `qdrant-client` 1.20.0 over gRPC; startup requires Qdrant Server `1.20.x` |
+
+Remote retrieval reuses Rig-Qdrant 0.46.0 `QdrantVectorStore::top_n` and `QdrantFilter`, supplying the existing query vector and scope filter without another embedding call. Results still require authoritative revision, state and authorization checks against relational storage.
+
+Remote upserts and exact deletion by memory revision use single-write Qdrant SDK operations, retaining caller-selected stable identities and uncertain-outcome semantics. Index writes cannot generate replacement identities or retry autonomously through the framework. Rig exposes no Qdrant Edge interface, so the embedded backend uses the Edge SDK for the same Qdrant engine.
 
 Relative embedded directories resolve inside the daemon data directory. A native ownership lock protects the index. Existing embedding descriptors, dimensions, Cosine distance and WAL settings must match. Synchronous embedded SDK work uses bounded blocking tasks; relational storage still uses its native asynchronous driver.
 

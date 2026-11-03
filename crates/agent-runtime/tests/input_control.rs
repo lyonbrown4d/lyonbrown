@@ -135,7 +135,7 @@ async fn failure_fences_execution(cancel: bool) {
       })
       .collect();
     if let Some(entry) = entry {
-      // SDK cancellation removes the in-memory item before its failed commit.
+      // Copy-on-commit keeps the in-memory item after its refused cancellation.
       // The product must retain the last durable Pending fact, never acknowledge
       // a cancellation or consumption that did not commit.
       assert_eq!(
@@ -170,6 +170,6 @@ async fn enqueue_commit_failure_aborts_real_runtime_and_closes_admission() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn swallowed_cancel_commit_failure_aborts_real_runtime_and_keeps_pending_receipt() {
+async fn cancel_commit_failure_aborts_real_runtime_and_keeps_pending_receipt() {
   failure_fences_execution(true).await;
 }

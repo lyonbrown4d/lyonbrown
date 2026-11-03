@@ -1,6 +1,6 @@
 # Lyonbrown
 
-Lyonbrown is a Rust workspace for a daemon-owned agent runtime, an authenticated terminal client and a native GPUI desktop. `rpi-harness` owns the agent loop. Clients present sessions and tasks; they do not run a second loop. The reusable decision engine is embedded by default; an independent AI Gateway provides authenticated model routing and a component-based Leptos administration UI with server rendering and Rust/WASM hydration.
+Lyonbrown is a Rust workspace for a daemon-owned agent runtime, an authenticated terminal client and a native GPUI desktop. Rig's `AgentRun` owns the agent loop; model protocols, MCP tool integration and remote vector search reuse Rig's framework components. Clients present sessions and tasks. The daemon retains authorization, transactional persistence and uncertain-outcome recovery. The reusable decision engine is embedded by default; an independent AI Gateway provides authenticated model routing and a component-based Leptos administration UI with server rendering and Rust/WASM hydration.
 
 - [中文文档](https://lyonbrown4d.github.io/lyonbrown/zh/)
 - [English guide](https://lyonbrown4d.github.io/lyonbrown/en/)

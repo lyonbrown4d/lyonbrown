@@ -11,7 +11,7 @@ flowchart TB
     C["CLI / Desktop"] -->|认证 gRPC| API
     subgraph Master["Master 节点 / agentd"]
         API["客户端服务"] --> D["Dispatcher / Task 身份与权限校验"]
-        H["本节点 Harness / 模型与工具"] -->|delegate_task| D
+        H["本节点 Runtime / 模型与工具"] -->|delegate_task| D
         D --> MS[("Master 本地 SQLite / Session、Task、Event、Outbox")]
         D --> R{"显式路由配置"}
         R -->|直连| Direct["PeerManager / mTLS"]
@@ -23,7 +23,7 @@ flowchart TB
     end
     subgraph Worker["Worker 节点 / agentd"]
         WR["Worker RelayTransport / Noise + 内层 mTLS"] --> W["PeerService / TaskService"]
-        W --> WH["独立 Harness Session / Worker 自有模型与工具"]
+        W --> WH["独立 Runtime Session / Worker 自有模型与工具"]
         W --> WS[("Worker 本地 SQLite")]
         WH --> WS
         WH --> FS["按 Task 与 Attempt 隔离的工作区"]
@@ -33,7 +33,7 @@ flowchart TB
     WR <-->|出站 mTLS 连接 / 密文双向转发| Relay
 ```
 
-Master 与 Worker 各自使用独占的关系数据库并提交各自事务，不共享 Harness Session；默认后端为 SQLite，其他选项见[会话、任务与恢复](persistence.md)。Control 不执行模型或工具，也不保存任务明文。图中直连和 Relay 是配置选择的替代路径，不是故障时自动切换的两条通道；目录 API 独立存在，daemon 的 Relay runtime 不自动注册或续租。
+Master 与 Worker 各自使用独占的关系数据库并提交各自事务，不共享 Runtime Session；默认后端为 SQLite，其他选项见[会话、任务与恢复](persistence.md)。Control 不执行模型或工具，也不保存任务明文。图中直连和 Relay 是配置选择的替代路径，不是故障时自动切换的两条通道；目录 API 独立存在，daemon 的 Relay runtime 不自动注册或续租。
 
 源码核对: [crates/agent-distributed/src/peers.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/peers.rs), [crates/agent-distributed/src/relay_transport/mod.rs](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/crates/agent-distributed/src/relay_transport/mod.rs), [apps/agent-control/src/](https://github.com/lyonbrown4d/lyonbrown/blob/705f995a59ff69e186f07a035dcb639e43f9d44d/apps/agent-control/src/).
 
@@ -166,7 +166,7 @@ cargo run -p agent-cli -- --data-dir /path/to/master task dispatch \
   --capability workspace.read --deadline-seconds 3600
 ```
 
-截止时间允许 1 至 86400 秒。Worker 使用自身模型、凭据与 Harness，在 `worker-workspaces/<task_id>/<attempt_id>` 下创建独立工作区和会话；不会复制 Master 的会话历史或工作区文件。任务能力只能缩小 Worker 可用工具范围；写操作仍需 Worker 本地审批，通过连接 Worker 的客户端处理，Relay 和 Master 的结果采纳均不能绕过工具审批。
+截止时间允许 1 至 86400 秒。Worker 使用自身模型、凭据与 Runtime，在 `worker-workspaces/<task_id>/<attempt_id>` 下创建独立工作区和会话；不会复制 Master 的会话历史或工作区文件。任务能力只能缩小 Worker 可用工具范围；写操作仍需 Worker 本地审批，通过连接 Worker 的客户端处理，Relay 和 Master 的结果采纳均不能绕过工具审批。
 
 Worker 成功后 Task 为 `awaiting_acceptance`，Master 显式采纳后才是 `completed`：
 
@@ -227,6 +227,6 @@ sequenceDiagram
 
 ## 来源与验证范围
 
-本文按当前工作区中的 `apps/agentd/src/peers/`、`apps/agent-cli/src/task_command.rs`、`apps/agent-control/src/`、`crates/agent-config/src/{peer,relay}.rs` 和 `crates/agent-distributed/src/` 核对。`apps/agent-control/tests/relay_tasks.rs` 定义了本地真实 mTLS / Noise 转发、Worker Harness、隔离工作区、结果采纳及断线后同一尝试核对的测试，并通过本地 mock server 覆盖标准模型协议，不调用付费模型。
+本文按当前工作区中的 `apps/agentd/src/peers/`、`apps/agent-cli/src/task_command.rs`、`apps/agent-control/src/`、`crates/agent-config/src/{peer,relay}.rs` 和 `crates/agent-distributed/src/` 核对。`apps/agent-control/tests/relay_tasks.rs` 定义了本地真实 mTLS / Noise 转发、Worker Runtime、隔离工作区、结果采纳及断线后同一尝试核对的测试，并通过本地 mock server 覆盖标准模型协议，不调用付费模型。
 
 测试定义和文档构建不能证明公网部署、跨设备网络或三平台运行验收。实际运行证据与截图的范围见[桌面运行截图与验收范围](runtime-evidence.md)；本页命令与配置经过源码核对，不作为部署执行记录。

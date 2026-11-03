@@ -1,6 +1,6 @@
 # Components and calls
 
-`agentd` owns sessions, tasks, models, tools and permissions. `agent-client` puts a bearer token in gRPC request metadata; terminal and desktop clients use the same `ClientService` messages. Concrete `rpi-harness` types stay within the runtime adapter and do not enter public protocol or UI models.
+`agentd` owns sessions, tasks, models, tools and permissions. `agent-client` puts a bearer token in gRPC request metadata; terminal and desktop clients use the same `ClientService` messages. Concrete `Rig AgentRun` types stay within the runtime adapter and do not enter public protocol or UI models.
 
 ## System overview
 
@@ -23,7 +23,7 @@ flowchart TB
         API[Client / Model / Skill / Workspace / Runtime / Orchestration services]
         Decision[agent-decision / Agent tool and node policy]
         Run[Run lifecycle / concurrency / cancellation / recovery]
-        Harness[agent-runtime / sole rpi-harness loop]
+        Runtime[agent-runtime / sole Rig AgentRun loop]
         Model[Model registry / metadata and capability limits]
         Tools[Workspace / command / MCP / browser / delegation tools]
         Approval[Exact approval / owner_epoch / durable intent]
@@ -32,9 +32,9 @@ flowchart TB
         API --> Run
         API --> Dispatcher
         Run --> Decision
-        Run --> Harness
-        Harness --> Model
-        Harness --> Tools
+        Run --> Runtime
+        Runtime --> Model
+        Runtime --> Tools
         Tools --> Approval
         Tools --> Dispatcher
         Approval --> Store
@@ -66,9 +66,9 @@ flowchart TB
     Model --> Remote[OpenAI Chat / Responses / Anthropic Messages]
     Model --> Native[llama-cpp-2 / mistral.rs / local CPU models]
     Tools --> Workspace[Workspace / Git / artifacts / notify]
-    Tools --> MCP[rmcp / stdio / Streamable HTTP]
+    Tools --> MCP[Rig-RMCP / rmcp / stdio / Streamable HTTP]
     subgraph PeerNode[Trusted Worker node]
-        Worker[PeerService / TaskService / isolated Harness Session]
+        Worker[PeerService / TaskService / isolated Runtime Session]
         WorkerStore[Worker SQLite and isolated workspace]
         Worker --> WorkerStore
     end
@@ -92,14 +92,14 @@ The control directory, Noise links and TaskService are separate protocol boundar
 
 ## Runs and side effects
 
-A request can involve several model generations and tool calls, while the same daemon-owned Harness manages history and the loop. The model adapter can use a standard API or local inference backend; clients receive domain events only.
+A request can involve several model generations and tool calls, while the same daemon-owned Runtime manages history and the loop. The model adapter can use a standard API or local inference backend; clients receive domain events only.
 
 ```mermaid
 sequenceDiagram
     participant C as CLI / Desktop
     participant D as agentd
     participant S as Local SQLite
-    participant H as Sole rpi-harness
+    participant H as Sole Rig AgentRun
     participant P as Model adapter
     participant T as Host tool adapter
     C->>D: StartRun / Session / epoch / idempotency key
@@ -161,18 +161,18 @@ flowchart TB
         Service[Authenticated gRPC service]
         Orchestration[Session and task orchestration]
         Runtime[agent-runtime]
-        Harness[rpi-harness sole agent loop]
+        AgentLoop[Rig AgentRun sole agent loop]
         Tools[Host authorization and tools]
         Store[agent-storage SQLite]
         Service --> Orchestration
         Orchestration --> Runtime
-        Runtime --> Harness
-        Harness --> Tools
+        Runtime --> AgentLoop
+        AgentLoop --> Tools
         Orchestration --> Store
-        Runtime --> Store
+        AgentLoop --> Store
     end
     Client -->|Bearer token / HTTP2| Service
-    Harness -->|Model requests| Provider[Model provider]
+    AgentLoop -->|Model requests| Provider[Model provider]
     Tools --> Workspace[Workspace and platform capabilities]
 ```
 
@@ -199,7 +199,7 @@ flowchart LR
 
 Disconnecting the browser attachment does not replay actions. Web content cannot access privileged application interfaces. Profiles preserve browser data on disk, without restoring live in-memory pages. Node discovery grants no execution authority; pairing and task authorization remain with the daemon. Public registration and relay use a separate control-plane protocol; discovery does not establish trust.
 
-ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. After checking trusted configuration, session ownership and control permissions, the daemon provides `computer_observe` and `computer_act` through the sole Harness. Observation, immutable action preparation and execution after exact approval use this authenticated connection; approval consumption and intent become durable before execution. CLI/TUI and Desktop use an injected `ComputerHostFactory` to explicitly discover and select a local window or display, then bind the host to the selected daemon session. Switching chats does not transfer an existing attachment. ComputerRuntime is embedded in the client process, without a standalone product process or another Agent Loop. The client `native-computer` feature is disabled by default; wired entry points do not establish native-control runtime acceptance. On macOS, the policy requires a logged-in console session, a valid session UUID and an explicit unlocked field before proceeding to permission checks. Unknown or locked state is rejected; an observed session failure cannot recover automatically after unlocking. See [Native desktop execution boundary](protocol.md#native-desktop-execution-boundary) for permissions, leases and execution limits, and [model computer tools](tools.md#model-computer-tools) for tool behavior.
+ComputerRuntime provides an embeddable interactive-user host interface, attached to one fixed daemon session and desktop scope. Native work runs on a blocking worker. Disconnecting cancels commands and retains desktop exclusion until the OS call drains. After checking trusted configuration, session ownership and control permissions, the daemon provides `computer_observe` and `computer_act` through the sole Runtime. Observation, immutable action preparation and execution after exact approval use this authenticated connection; approval consumption and intent become durable before execution. CLI/TUI and Desktop use an injected `ComputerHostFactory` to explicitly discover and select a local window or display, then bind the host to the selected daemon session. Switching chats does not transfer an existing attachment. ComputerRuntime is embedded in the client process, without a standalone product process or another Agent Loop. The client `native-computer` feature is disabled by default; wired entry points do not establish native-control runtime acceptance. On macOS, the policy requires a logged-in console session, a valid session UUID and an explicit unlocked field before proceeding to permission checks. Unknown or locked state is rejected; an observed session failure cannot recover automatically after unlocking. See [Native desktop execution boundary](protocol.md#native-desktop-execution-boundary) for permissions, leases and execution limits, and [model computer tools](tools.md#model-computer-tools) for tool behavior.
 
 ## Source references
 

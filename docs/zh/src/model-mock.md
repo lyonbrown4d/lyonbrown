@@ -58,7 +58,7 @@ Ollama 原生接口用 `ollama-rs` 客户端验证响应形状和流式解析。
 
 `agent-test-support::MockInferenceBackend` 实现真实的 `InferenceBackend` 端口，可注册到 `ModelRegistry`，供 Agent 或 `decision-model` 使用。脚本支持文本/Thinking/ToolCall chunk、延迟、错误、停止原因、取消和背压，计数区分请求、完成、取消和失败。进程内 Mock 不需要启动 HTTP 服务。
 
-本地集成测试经过 Registry、Harness 和真实 SQLite，检查最终 Run、有效工具计划与模型路由事件；远程测试经过真实协议适配器检查请求与响应。Mock 证明接入、协议与状态行为，不证明模型质量、推理性能、上下文上限或原生 SDK 正确性。
+本地集成测试经过 Registry、Runtime 和真实 SQLite，检查最终 Run、有效工具计划与模型路由事件；远程测试经过真实协议适配器检查请求与响应。Mock 证明接入、协议与状态行为，不证明模型质量、推理性能、上下文上限或原生 SDK 正确性。
 
 ```sh
 cargo test --locked -p model-mock -p agent-test-support

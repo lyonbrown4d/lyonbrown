@@ -5,9 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-chacha20poly1305 = "=0.10.1"
+chacha20poly1305 = "=0.11.0"
 fs2.workspace = true
-rand_core = { version = "=0.6.4", features = ["getrandom"] }
+getrandom.workspace = true
 secrecy.workspace = true
 serde.workspace = true
 tempfile.workspace = true

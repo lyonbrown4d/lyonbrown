@@ -11,8 +11,8 @@ pub enum RuntimeError {
   Configuration(String),
   #[error("session persistence: {0}")]
   Persistence(String),
-  #[error("harness execution: {0}")]
-  Harness(String),
+  #[error("agent execution: {0}")]
+  Execution(String),
   #[error("tool execution: {0}")]
   Tool(String),
   #[error("session has an unresolved execution outcome: {0}")]
@@ -40,7 +40,7 @@ pub struct RuntimeConfig {
 pub struct SessionMutation {
   pub kind: String,
   pub payload: Value,
-  /// Application events committed atomically with this Harness mutation.
+  /// Application events committed atomically with this Rig run mutation.
   #[serde(default)]
   pub events: Vec<agent_core::events::AgentEvent>,
 }
@@ -81,7 +81,7 @@ pub struct ToolOutput {
 }
 
 /// Authorization, workspace confinement and side effects belong to the host.
-/// The harness durably records tool intent before calling this interface.
+/// The runtime durably records tool intent before calling this interface.
 #[async_trait]
 pub trait RuntimeTool: Send + Sync {
   fn definition(&self) -> ToolDefinition;
@@ -94,7 +94,6 @@ pub enum RunOutcome {
   Completed,
   Cancelled,
   Failed { message: String },
-  Suspended { id: String },
   Uncertain { message: String },
 }
 

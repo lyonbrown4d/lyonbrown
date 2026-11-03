@@ -1,8 +1,8 @@
 # AI Gateway
 
-`ai-gateway` is an independent Rust service, listening on `127.0.0.1:8099` by default. Typed FluxDI modules and Axum request scopes assemble the decision core, SQLite persistence, forwarding and Leptos administration UI. It needs no agentd. An Agent using the gateway still owns its Harness, Session, tools and approvals.
+`ai-gateway` is an independent Rust service, listening on `127.0.0.1:8099` by default. Typed FluxDI modules and Axum request scopes assemble the decision core, SQLite persistence, forwarding and Leptos administration UI. It needs no agentd. An Agent using the gateway still owns its Runtime, Session, tools and approvals.
 
-The asynchronous persistence and FluxDI bootstrap have received static review only, without runtime acceptance in this iteration. Dependency resolution remains blocked by the [upstream SQLite conflict](development.md#current-dependency-resolution-limit).
+The asynchronous persistence and FluxDI bootstrap have received static review only, without runtime acceptance in this iteration. See [verification scope](development.md#verification-scope).
 
 ## Startup and configuration
 
@@ -89,7 +89,7 @@ Gateway uses `utoipa-axum` 0.3.0 `routes!` and `OpenApiRouter` to register Axum 
 
 Swagger and the specification are accessible on the local listener. Business operations still require an API key through Authorize. The schema contains no live model catalog or credentials, and UI assets are embedded without CDN requests. The inbound protocol is Chat Completions; images, audio, Responses and Anthropic inbound requests are outside this endpoint's compatibility scope.
 
-Gateway upstream transport reuses the public raw HTTP interfaces and `SseFramer` from [Rig-Core 0.45.0](https://docs.rs/rig-core/0.45.0/rig_core/), with [Rig-Reqwest 0.45.0](https://docs.rs/rig-reqwest/0.45.0/rig_reqwest/)'s `ReqwestMiddlewareClient`. Gateway retains supported request fields such as `n` and forwards JSON and SSE response bytes unchanged, including multiple choices, tool-call fragments and usage. Middleware immediately drops non-2xx response bodies and exposes only the same status with an empty body to Rig. Gateway retains byte limits, strict `[DONE]` checks, deadlines, cancellation and auditing. It uses no Rig Agent or Agent Loop; Agent and `model-provider` continue using rpi-ai's Responses, Chat Completions and Anthropic protocol adapters.
+Gateway upstream transport reuses the public raw HTTP interfaces and `SseFramer` from [Rig-Core 0.46.0](https://docs.rs/rig-core/0.46.0/rig_core/), with [Rig-Reqwest 0.46.0](https://docs.rs/rig-reqwest/0.46.0/rig_reqwest/)'s `ReqwestMiddlewareClient`. Gateway retains supported request fields such as `n` and forwards JSON and SSE response bytes unchanged, including multiple choices, tool-call fragments and usage. Middleware immediately drops non-2xx response bodies and exposes only the same status with an empty body to Rig. Gateway retains byte limits, strict `[DONE]` checks, deadlines, cancellation and auditing. Gateway uses no Rig Agent or Agent Loop. Agent and `model-provider` use Rig adapters for Responses, Chat Completions and Anthropic; Rig AgentRun inside `agent-runtime` owns the Agent Loop.
 
 An explicit public model ID routes directly after validation; unknown or incapable models are not silently substituted. `router/auto` uses the [shared decision engine](decision-engine.md), followed by capability, context and locality revalidation. Request `routing.local_only` and `routing.allowed_tiers` can only narrow server policy and are removed before forwarding.
 

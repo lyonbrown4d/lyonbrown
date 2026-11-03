@@ -1,9 +1,9 @@
 //! Embedding and vector SDKs are selected only at the daemon composition boundary.
 use crate::config::Config;
 use agent_config::MemoryVectorSettings;
-use agent_memory::{HttpEmbedding, MemoryService};
+use agent_memory::{MemoryService, RigEmbedding};
 use fluxdi::{Error, Shared};
-use memory_core::{EmbeddingDescriptor, MemoryEmbedding, MemoryRepository, VectorIndex};
+use memory_core::{EmbeddingDescriptor, MemoryRepository, VectorIndex};
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
@@ -57,8 +57,8 @@ pub(super) async fn service(
     // Credentials rotate independently of embedding semantics.
     configuration_revision: hex::encode(Sha256::digest(identity)),
   };
-  let engine: Arc<dyn MemoryEmbedding> = Arc::new(
-    HttpEmbedding::new(
+  let engine = Arc::new(
+    RigEmbedding::new(
       &embedding.api_base,
       config.memory_embedding_api_key.clone(),
       descriptor.clone(),
@@ -91,6 +91,7 @@ pub(super) async fn service(
         config.memory_vector_api_key.clone(),
         collection,
         descriptor,
+        engine.model(),
       )
       .await
       .map_err(|_| failure("Qdrant server connection or compatibility check failed"))?,

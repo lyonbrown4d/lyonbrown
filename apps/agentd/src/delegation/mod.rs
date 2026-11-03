@@ -1,4 +1,4 @@
-//! The Harness may propose delegation; only scoped exact approval can dispatch it.
+//! The runtime may propose delegation; only scoped exact approval can dispatch it.
 mod input;
 mod operations;
 mod schema;

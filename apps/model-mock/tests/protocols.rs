@@ -1,8 +1,10 @@
 mod support;
+use futures::StreamExt;
 use model_mock::{Protocol, Reply};
-use rpi_ai::{
-  AssistantMessageEvent as Event, Content, Context, DoneReason, SimpleStreamOptions,
-  ToolResultMessage, UserMessage,
+use rig_core::{
+  completion::CompletionRequest,
+  message::{AssistantContent, Message},
+  streaming::{Item, StreamEvent},
 };
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
@@ -30,60 +32,48 @@ async fn actual_adapters_consume_fragmented_text_and_tool_result_roundtrips() {
         .unwrap(),
       "synthetic text"
     );
-    let (model, provider) = model_provider::configured(&config).unwrap();
-    let mut context = Context::new(vec![UserMessage::new("call fixture_echo", 0).into()]);
-    let options = SimpleStreamOptions {
-      api_key: Some(config.api_key.clone()),
-      max_retries: Some(0),
-      ..Default::default()
-    };
-    let mut stream = provider.stream_simple(&model, &context, &options).await;
-    let mut tool = None;
-    let mut terminal = None;
-    while let Some(event) = stream.next().await {
-      match event {
-        Event::ToolCallEnd { tool_call, .. } => tool = Some(tool_call),
-        Event::Done { reason, message } => {
-          assert_eq!(reason, DoneReason::ToolUse);
-          terminal = Some(message);
-        }
-        Event::Error { error, .. } => panic!("adapter error: {error:?}"),
-        _ => {}
+    let model = model_provider::configured(&config).unwrap();
+    let prompt = Message::user("call fixture_echo");
+    let mut stream = model
+      .stream(CompletionRequest::new(prompt.clone()).max_tokens(128))
+      .unwrap();
+    let mut arguments = String::new();
+    while let Some(item) = stream.next().await {
+      if let Item::Event(StreamEvent::Arguments { json, .. }) = item.unwrap() {
+        arguments.push_str(&json);
       }
     }
-    let tool = tool.unwrap();
-    assert_eq!(tool.name, "fixture_echo");
-    assert_eq!(tool.arguments, json!({"text":"synthetic"}));
-    context.messages.push(terminal.unwrap().into());
-    context.messages.push(
-      ToolResultMessage {
-        role: Default::default(),
-        tool_call_id: tool.id,
-        tool_name: tool.name,
-        content: vec![Content::text("synthetic")],
-        details: None,
-        usage: None,
-        added_tool_names: Vec::new(),
-        is_error: false,
-        timestamp: 0,
-      }
-      .into(),
+    let response = stream.finish().await.unwrap();
+    let tool = response
+      .choice
+      .iter()
+      .find_map(|content| match content {
+        AssistantContent::ToolCall(tool) => Some(tool),
+        _ => None,
+      })
+      .unwrap();
+    assert_eq!(tool.function.name.as_str(), "fixture_echo");
+    assert_eq!(tool.function.arguments, json!({"text":"synthetic"}));
+    assert_eq!(
+      serde_json::from_str::<Value>(&arguments).unwrap(),
+      tool.function.arguments
     );
-    let mut stream = provider.stream_simple(&model, &context, &options).await;
+    let request = CompletionRequest::new(Message::tool_result(
+      tool.id.clone(),
+      tool.function.name.clone(),
+      "synthetic",
+    ))
+    .messages([prompt, response.message().unwrap()])
+    .max_tokens(128);
+    let mut stream = model.stream(request).unwrap();
     let mut final_text = String::new();
-    let mut stopped = false;
-    while let Some(event) = stream.next().await {
-      match event {
-        Event::TextDelta { delta, .. } => final_text.push_str(&delta),
-        Event::Done { reason, .. } => {
-          assert_eq!(reason, DoneReason::Stop);
-          stopped = true;
-        }
-        Event::Error { error, .. } => panic!("adapter error: {error:?}"),
-        _ => {}
+    while let Some(item) = stream.next().await {
+      if let Item::Event(StreamEvent::Text { text, .. }) = item.unwrap() {
+        final_text.push_str(&text);
       }
     }
-    assert!(stopped);
+    let response = stream.finish().await.unwrap();
+    assert_eq!(response.text(), "tool completed");
     assert_eq!(final_text, "tool completed");
     let health: Value = reqwest::get(format!("{}/health", app.base_url()))
       .await

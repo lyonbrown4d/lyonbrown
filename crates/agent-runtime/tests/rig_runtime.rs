@@ -32,11 +32,11 @@ impl RuntimeTool for Inspect {
     let snapshot = self.store.snapshot.lock().unwrap().clone().unwrap();
     let durable: serde_json::Value = serde_json::from_slice(&snapshot).unwrap();
     assert!(
-      durable["state"]["records"]
-        .as_array()
+      durable["pending_tools"]
+        .as_object()
         .unwrap()
-        .iter()
-        .any(|record| record["type"] == "tool_started")
+        .values()
+        .any(|intent| intent["call_id"] == call.id)
     );
     assert_eq!(call.arguments, json!({"path":"file.txt"}));
     self.calls.fetch_add(1, Ordering::SeqCst);
@@ -52,7 +52,7 @@ impl RuntimeTool for Inspect {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn actual_harness_drives_tools_streams_and_restores_transcript() {
+async fn rig_agent_run_drives_tools_streams_and_restores_transcript() {
   let mut server = Server::start(vec![tool(), text("inspected"), text("remembered")]).await;
   let store = shared();
   let calls = Arc::new(AtomicUsize::new(0));
@@ -256,15 +256,13 @@ async fn tool_reported_uncertainty_stops_run_and_survives_restart() {
 }
 
 #[tokio::test]
-async fn unsupported_tokio_flavor_is_reported_before_harness_callbacks() {
-  let result = Runtime::open(
-    config("https://unused.invalid"),
+async fn single_thread_tokio_is_supported_without_blocking_persistence_callbacks() {
+  let runtime = Runtime::open(
+    config("http://127.0.0.1:1"),
     shared(),
     Vec::new(),
     Arc::new(|_| {}),
   )
   .await;
-  assert!(
-    matches!(result,Err(agent_runtime::RuntimeError::Configuration(message)) if message.contains("multithreaded Tokio"))
-  );
+  assert!(runtime.is_ok());
 }

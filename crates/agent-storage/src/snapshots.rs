@@ -1,6 +1,6 @@
 use crate::{
   Store, event_tx,
-  schema::{harness_sessions, runs as run_rows},
+  schema::{runs as run_rows, runtime_sessions},
   verify_epoch,
 };
 use anyhow::{Context, Result};
@@ -8,7 +8,7 @@ use sea_orm::{QueryOrder, Set, prelude::*, sea_query::OnConflict};
 impl Store {
   pub async fn load_snapshot(&self, session_id: &str) -> Result<Option<Vec<u8>>> {
     Ok(
-      harness_sessions::Entity::find_by_id(session_id)
+      runtime_sessions::Entity::find_by_id(session_id)
         .one(self.connection())
         .await?
         .map(|row| row.snapshot),
@@ -70,7 +70,7 @@ impl Store {
             .context("run missing")?;
           anyhow::ensure!(
             run.session_id == session_id,
-            "harness run belongs to another session"
+            "runtime run belongs to another session"
           );
           run
         } else {
@@ -80,15 +80,15 @@ impl Store {
             .order_by_desc(run_rows::Column::Id)
             .one(connection)
             .await?
-            .context("session has no accepted run for harness mutation")?
+            .context("session has no accepted run for runtime mutation")?
         };
-        harness_sessions::Entity::insert(harness_sessions::ActiveModel {
+        runtime_sessions::Entity::insert(runtime_sessions::ActiveModel {
           session_id: Set(session_id.into()),
           snapshot: Set(snapshot.into()),
         })
         .on_conflict(
-          OnConflict::column(harness_sessions::Column::SessionId)
-            .update_column(harness_sessions::Column::Snapshot)
+          OnConflict::column(runtime_sessions::Column::SessionId)
+            .update_column(runtime_sessions::Column::Snapshot)
             .to_owned(),
         )
         .exec_without_returning(connection)

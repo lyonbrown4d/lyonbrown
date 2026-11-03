@@ -4,11 +4,22 @@ The workspace uses Rust edition 2024. Cargo workspace declarations and `Cargo.lo
 
 Async entry points prefer `#[tokio::main]`. Clap, Serde and fluxdi macros provide argument parsing, serialization and dependency injection. `RunStatus` and `Tool` use derives from fixed `strum` 0.28.0 for snake_case static-string conversion; error types reuse existing `thiserror` derives. CEF helper and Windows SCM dispatch run before runtime initialization. GPUI retains its main-thread event loop; explicitly owned or shared runtimes remain part of its composition.
 
-## Current dependency resolution limit
+## Verification scope
 
-The working tree declares rpi family 0.16.0 and SeaORM / SeaORM Migration 2.0.4. Offline dependency resolution fails explicitly: `rpi-harness 0.16.0 → rusqlite 0.31 → libsqlite3-sys 0.28`, while `SeaORM 2.0.4 → SQLx 0.9` requires `libsqlite3-sys >=0.30.1,<0.38`. Both dependencies claim the same native SQLite link name, so Cargo cannot resolve them together. Upstream `main` at `31e7ba` retains the conflicting dependency; see [pi-rust #236](https://github.com/bigfish1913/pi-rust/issues/236). Downgrading the ORM, copying the SDK, downstream forks and long-lived patches are not supported workarounds.
+Agent execution uses the pinned Rig 0.46.0 AgentRun and standard protocol adapters. Relational persistence remains on SeaORM / SeaORM Migration 2.0.4. Dependency declarations and source integration do not establish successful resolution, compilation or runtime behavior.
 
-`Cargo.lock` has not been updated to resolve these declarations. This iteration performed static source review and a failed offline dependency-resolution check, without Cargo compilation, tests, mdBook builds or new native runtime acceptance. Commands below remain development entry points and verification requirements, not successful results for the current working tree. [Historical screenshots](runtime-evidence.md) cover only their recorded platforms, versions and source identities.
+`rig-core`, `rig-agent`, `rig-reqwest`, `rig-rmcp` and `rig-qdrant` are pinned together at 0.46.0. The current `Cargo.lock` resolves successfully; the former native SQLite link conflict no longer blocks resolution. This does not establish successful compilation or execution.
+
+Direct registry dependencies use exact versions, with updates checked against official crates.io version information. Two upstream compatibility constraints retain earlier versions:
+
+| Dependency | Retained version and reason |
+| --- | --- |
+| `tree-sitter` | `0.26.13`: `gpui-component` 0.9 requires `^0.26.13`; its native link library cannot coexist with `0.27` |
+| `sse-stream` | `0.2.6`: the public `rmcp` 3.8 API returns `0.2` types, preventing a direct switch to `0.3` |
+
+The existing ORT integration still uses its pinned release candidate, and Qdrant Edge uses the 0.9.0 beta SDK; neither is described as a stable SDK release. GPUI Kit 0.9, Agent Skills 0.3, ZIP and Markdown upgrades received static checks against official source APIs, with an added Skill unknown-field rejection case. Their tests and desktop runtime acceptance were not performed.
+
+Compilation, tests and mdBook builds were not run in this iteration as requested. Commands below are development entry points and verification requirements, not successful results for this working tree. [Historical screenshots](runtime-evidence.md) cover only their recorded platforms, versions and source identities, and do not cover the current Rig execution path.
 
 Relational I/O uses the native asynchronous ORM with versioned Rust migrations and no legacy Diesel compatibility. See [Long-term memory](memory.md) for backend configuration and durable jobs. Source integration for PostgreSQL, MySQL and Qdrant embedded / server does not replace execution against those databases or services.
 
@@ -93,7 +104,7 @@ cargo run -p agent-desktop --features native-computer
 
 Clients connect to or reuse the native daemon service through the shared launcher; the foreground development daemon is described above. The native feature does not change the daemon's `computer_tools = false` default or replace OS permissions, interactive session checks or exact action approval. Neither default nor test dependencies implicitly enable native SDKs through Cargo feature unification. See [terminal and desktop clients](clients.md#native-computer-attachment) for selection, attachment and detachment.
 
-Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Harness attachment, observation and approved input require actual runtime acceptance. macOS follows the [session identity and lock-field policy](protocol.md#native-desktop-execution-boundary), returning `SessionStateUnknown` when state cannot be established. Read-only permission checks, rejection paths and synthetic-host regressions do not establish native-control acceptance. Real capture, approved input, locking and session switching still require runtime acceptance; actual Windows and Linux runtime acceptance also remains incomplete.
+Compilation establishes only that the code builds on the selected host. Native discovery, GUI selection, client-to-Runtime attachment, observation and approved input require actual runtime acceptance. macOS follows the [session identity and lock-field policy](protocol.md#native-desktop-execution-boundary), returning `SessionStateUnknown` when state cannot be established. Read-only permission checks, rejection paths and synthetic-host regressions do not establish native-control acceptance. Real capture, approved input, locking and session switching still require runtime acceptance; actual Windows and Linux runtime acceptance also remains incomplete.
 
 ## Verification commands
 
@@ -114,7 +125,7 @@ These commands check formatting, static issues, tests, compilation and documenta
 
 ## TUI interaction and queue recovery checks
 
-`agent-core::events::AgentEvent` defines execution facts authored by agentd. Clients do not infer model phases from Harness audit records. Run focused checks with default features:
+`agent-core::events::AgentEvent` defines execution facts authored by agentd. Clients do not infer model phases from Runtime audit records. Run focused checks with default features:
 
 ```sh
 cargo test --locked -p agent-cli -p agentd -p agent-core -p agent-runtime -p agent-storage --test events --test activity --test interaction --test tui_interactions --test workflow --test input_control --test queue_cancel_failure --test queue_restore --test semantic_events --test input_fence --test run_input --test run_input_handoff --test run_input_failure --test original_task_target
@@ -161,7 +172,7 @@ cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 ```
 
-`apps/agentd/tests/computer_tools.rs` uses local model mocks, the real adapters for all three standard protocols, the Harness and an injectable synthetic `attach_host`. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable `Uncertain` with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not replace actual CLI/Desktop native attachment checks or establish desktop-control acceptance on three platforms.
+`apps/agentd/tests/computer_tools.rs` uses local model mocks, the real adapters for all three standard protocols, the Runtime and an injectable synthetic `attach_host`. It checks observation, exact approval and denial, renewal through model and approval latency, configuration/host/input-permission restrictions, and durable `Uncertain` with no replay after lost or corrupted receipts and recovery. Assertions inspect input counts, approvals, execution receipts, events and Outbox. These tests perform no OS input and do not replace actual CLI/Desktop native attachment checks or establish desktop-control acceptance on three platforms.
 
 ```sh
 cargo test -p agentd --test computer_tools --locked
@@ -180,7 +191,7 @@ LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --fe
 cargo run --locked -p agent-desktop --example desktop-computer-target
 ```
 
-This example provides only a synthetic button and text field. It starts no daemon, model or ComputerRuntime and requests no screen-recording or Accessibility permissions. Startup prints a fresh `.local/acceptance/computer-target-*` directory; `state.json` retains `click_count` and `text` after exit. Each run creates a separate target for native-control acceptance. Interacting with this fixture does not establish Harness or approval-path acceptance.
+This example provides only a synthetic button and text field. It starts no daemon, model or ComputerRuntime and requests no screen-recording or Accessibility permissions. Startup prints a fresh `.local/acceptance/computer-target-*` directory; `state.json` retains `click_count` and `text` after exit. Each run creates a separate target for native-control acceptance. Interacting with this fixture does not establish Runtime or approval-path acceptance.
 
 ## Reusable decision and Gateway checks
 

@@ -1,4 +1,4 @@
-//! One bounded inference request without a Harness or session mutation.
+//! One bounded inference request without an AgentRun or session mutation.
 use crate::{Result, RuntimeConfig, RuntimeError};
 pub use model_provider::CLASSIFICATION_OUTPUT_LIMIT;
 use tokio_util::sync::CancellationToken;
@@ -15,5 +15,5 @@ pub async fn classify_json(
   }
   model_provider::classify_json(&crate::provider::model_config(config), prompt, cancellation)
     .await
-    .map_err(|error| RuntimeError::Harness(error.to_string()))
+    .map_err(|error| RuntimeError::Execution(error.to_string()))
 }

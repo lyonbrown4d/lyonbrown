@@ -61,10 +61,18 @@ async fn concurrent_retry_and_cancel_have_one_durable_queue_identity() {
       .await
       .unwrap()
       .unwrap();
-    assert!(
-      String::from_utf8(snapshot)
-        .unwrap()
-        .contains(&first.entry_id)
+    let snapshot: serde_json::Value = serde_json::from_slice(&snapshot).unwrap();
+    assert_eq!(snapshot["version"], 1);
+    assert_eq!(snapshot["session_id"], node.session_id);
+    assert_eq!(
+      snapshot["queue"],
+      json!([{
+        "id": first.entry_id,
+        "request_id": request.request_id,
+        "kind": "follow_up",
+        "prompt": request.prompt,
+        "status": "pending"
+      }])
     );
     let mut conflict = request.clone();
     conflict.prompt.push_str(" different payload");
@@ -161,15 +169,17 @@ async fn queued_input_cannot_expand_the_persisted_fallback_tool_plan() {
         }),
       ))
       .await;
-    // If the SDK continues after rejecting an unavailable tool, finish that turn.
-    main
-      .push_reply(text_reply(protocol, "unavailable tool was rejected"))
-      .await;
     let result = node.terminal(&run.id).await;
+    assert_eq!(result.status, "failed", "{}", result.error);
     assert!(
-      matches!(result.status.as_str(), "completed" | "failed"),
-      "{}",
-      result.error
+      result
+        .error
+        .contains("outside the advertised authorization set")
+    );
+    assert_eq!(
+      main.requests().await.len(),
+      2,
+      "unknown tools must not cause a repair request"
     );
     assert!(!node.workspace.path().join("forbidden.txt").exists());
     assert!(
@@ -194,10 +204,13 @@ async fn queued_input_cannot_expand_the_persisted_fallback_tool_plan() {
     let plan: serde_json::Value = serde_json::from_str(&plans[0].payload_json).unwrap();
     assert_eq!(plan["allowed_tools"], json!([]));
     assert!(
-      events
+      !events
         .iter()
         .filter_map(|event| serde_json::from_str::<AgentEvent>(&event.payload_json).ok())
-        .any(|event| matches!(event, AgentEvent::ToolFinished { name, is_error: true, .. } if name == "write_file"))
+        .any(|event| matches!(event,
+          AgentEvent::ToolStarted { name, .. } | AgentEvent::ToolFinished { name, .. }
+            if name == "write_file")),
+      "Rig must reject an unadvertised call before the host tool boundary"
     );
     node.close().await;
   }

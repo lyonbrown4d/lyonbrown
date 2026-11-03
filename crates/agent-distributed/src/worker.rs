@@ -16,7 +16,7 @@ pub struct WorkerJob {
 
 #[async_trait::async_trait]
 pub trait WorkerExecutor: Send + Sync + 'static {
-  /// Run one independent local Harness session. Honor cancellation before every side effect.
+  /// Run one independent local Rig session. Honor cancellation before every side effect.
   async fn execute(&self, job: WorkerJob, cancellation: CancellationToken) -> Result<String>;
 }
 

@@ -13,7 +13,7 @@ agent-storage = { path = "../../crates/agent-storage" }
 agent-telemetry = { path = "../../crates/agent-telemetry" }
 anyhow.workspace = true
 clap.workspace = true
-config = { version = "0.15", default-features = false, features = ["toml"] }
+config = { version = "=0.15.27", default-features = false, features = ["toml"] }
 dotenvy.workspace = true
 fluxdi.workspace = true
 futures.workspace = true

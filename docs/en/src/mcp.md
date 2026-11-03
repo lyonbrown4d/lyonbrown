@@ -1,6 +1,8 @@
 # Connect MCP tools
 
-`agentd` uses `rmcp` to connect to explicitly configured MCP servers over stdio or Streamable HTTP. The daemon owns connections and cached tool catalogs. Clients present approvals and results; model input cannot add servers or alter transports.
+`agentd` connects to explicitly configured MCP servers through pinned Rig-RMCP 0.46.0 `McpConnection`, `McpTool` and Rig `DynamicTool`, with `rmcp` underneath for stdio or Streamable HTTP. The daemon owns connections and cached tool catalogs. Clients present approvals and results; model input cannot add servers or alter transports.
+
+Rig adapts MCP tools to framework types. The daemon retains allowlists, paginated catalogs, schema validation, exact approval, untrusted-output labeling and bounded transports. A framework connection grants no additional tool authority.
 
 ## Servers and credentials
 
@@ -57,7 +59,7 @@ These arguments are illustrative; the selected server's schema determines the re
 
 The daemon validates the allowlist and schema before persisting approval. Approval binds the Run, server, tool, call ID, exact arguments and expiry; it can be consumed once, before dispatch. Read-only annotations and classifier confidence do not waive approval. Without configured MCP servers, `mcp_call` appears in neither the effective plan nor the model's tools. Classification can only reduce that authority.
 
-Cancellation before dispatch sends no tool invocation. Cancellation, timeout or disconnection after dispatch may leave unknown side effects. Such runs become `Uncertain` and are never automatically replayed. Pending approvals close when the run ends; consumed approvals retain their record. See [Sessions, tasks and recovery](persistence.md).
+Cancellation before dispatch sends no tool invocation. Cancellation, timeout or disconnection after dispatch may leave unknown side effects. Such runs become `Uncertain` and are never automatically replayed. Cancellation closes the connection without guaranteeing that the remote tool stopped or reversed its side effects. Pending approvals close when the run ends; consumed approvals retain their record. See [Sessions, tasks and recovery](persistence.md).
 
 Returned resource links are not fetched automatically. Sampling and elicitation cannot expand client authority. Protocol messages, text and image outputs have size limits. Daemon shutdown cancels shared connections; retained run tools cannot issue later requests.
 

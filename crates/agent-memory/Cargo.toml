@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+rig-core.workspace = true
+model-provider = { path = "../model-provider" }
 memory-core = { path = "../memory-core" }
 async-trait.workspace = true
 serde.workspace = true

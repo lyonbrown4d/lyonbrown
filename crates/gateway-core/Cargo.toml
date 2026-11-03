@@ -10,9 +10,9 @@ secrecy.workspace = true
 agent-security = { path = "../agent-security" }
 anyhow.workspace = true
 async-trait.workspace = true
-async-stream = "0.3.6"
-axum = "0.8"
-bytes = "1.12"
+async-stream = "=0.3.6"
+axum = "=0.8.9"
+bytes = "=1.12.1"
 decision-core = { path = "../decision-core" }
 futures.workspace = true
 rig-core.workspace = true
@@ -21,14 +21,14 @@ reqwest-middleware = "=0.5.2"
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-subtle = "2.6"
+subtle = "=2.6.1"
 tokio.workspace = true
 tracing.workspace = true
-url = "2.5"
+url = "=2.5.8"
 uuid.workspace = true
-utoipa = "6"
+utoipa = "=6.0.0"
 utoipa-axum.workspace = true
-utoipa-swagger-ui = { version = "10", features = ["axum", "vendored"] }
+utoipa-swagger-ui = { version = "=10.0.2", features = ["axum", "vendored"] }
 
 [dev-dependencies]
 tempfile.workspace = true

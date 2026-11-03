@@ -34,7 +34,7 @@ Run actual CPU inference acceptance with `cargo test --profile native-acceptance
 
 The Agent embeds the reusable core by default, pins the configured main model and persists `model_route_decision` before the Agent-specific tool plan. See [Reusable decision engine](decision-engine.md) for library/backends and [AI Gateway](gateway.md) for independent serving.
 
-Each run receives an execution plan from `agent-decision` before `agent-runtime` opens `rpi-harness`. A classifier returns advice. It executes no tools and cannot grant permissions.
+Each run receives an execution plan from `agent-decision` before `agent-runtime` opens `Rig AgentRun`. A classifier returns advice. It executes no tools and cannot grant permissions.
 
 ## Model installation and execution binding
 
@@ -78,14 +78,14 @@ flowchart TB
     Rule --> Persist[Persist execution_plan event]
     Clamp --> Persist
     Fallback --> Persist
-    Persist --> Filter[Filter actual Harness tool set]
-    Filter --> Run[rpi-harness executes]
+    Persist --> Filter[Filter actual Runtime tool set]
+    Filter --> Run[Rig AgentRun executes]
     Run --> Approval[Mutating tools still require human approval]
 ```
 
 The tool set is the intersection of the classifier's selection, authorized tools and available capabilities. Model policies, distributed execution and target nodes are independently constrained by allowlists. Delegation targets must appear in both operator configuration and active pairing records. Local plans do not expose delegation. Classifier output cannot widen tool, model or node authority. See [Delegating to paired nodes](tools.md#delegating-to-paired-nodes) for configuration and approval scope.
 
-The effective plan is persisted as an `execution_plan` event before opening the Harness. It records tools, capabilities, execution mode, risk, confidence, source and `trace_id`. The daemon filters the actual Harness tools against this plan, restricting both model-visible tools and execution. Approval consumption checks the run, tool, full arguments and expiry; a classification never replaces human approval.
+The effective plan is persisted as an `execution_plan` event before opening the Runtime. It records tools, capabilities, execution mode, risk, confidence, source and `trace_id`. The daemon filters the actual Runtime tools against this plan, restricting both model-visible tools and execution. Approval consumption checks the run, tool, full arguments and expiry; a classification never replaces human approval.
 
 Unavailable classifiers, timeout, invalid output, insufficient confidence or missing required capabilities fall back to local execution with the configured main model and no tools or target node. Cancellation during classification persists a cancelled run without calling the main model.
 
@@ -128,7 +128,7 @@ The classifier model ID and domain are examples. Replace them with the service's
 
 ## Local inference boundary
 
-`agent-inference` adapts `llama-cpp-2` and `mistral.rs`. Both generate model output; the same `rpi-harness` retains session and loop ownership. The daemon loads configured local files into its registry before becoming ready. Load failure prevents startup without downloading models or falling back to a cloud provider.
+`agent-inference` adapts `llama-cpp-2` and `mistral.rs`. Both generate model output; the same `Rig AgentRun` retains session and loop ownership. The daemon loads configured local files into its registry before becoming ready. Load failure prevents startup without downloading models or falling back to a cloud provider.
 
 ```toml
 provider = "local"
@@ -147,7 +147,7 @@ max_model_bytes = 8589934592
 
 Replace the example path with an existing local model. Windows requires a native absolute path. Build `agentd` with `local-llama` for `llama`, or `local-mistral` for `mistral`. Llama reads GGUF; Mistral accepts `gguf` or `directory`. The selected engine must support the actual model architecture and quantization; a matching extension alone does not establish compatibility.
 
-Profiles explicitly select CPU execution without implicit GPU allocation. `max_model_bytes` bounds input file size, rather than runtime RAM. Context, output tokens and concurrency have separate limits. Each run persists actual metadata in `model_selected`. Text-only backends do not advertise image or tool support; the daemon removes unsupported tools before persisting the effective plan and opening the Harness.
+Profiles explicitly select CPU execution without implicit GPU allocation. `max_model_bytes` bounds input file size, rather than runtime RAM. Context, output tokens and concurrency have separate limits. Each run persists actual metadata in `model_selected`. Text-only backends do not advertise image or tool support; the daemon removes unsupported tools before persisting the effective plan and opening the Runtime.
 
 To select a local classifier independently, set `decision.provider = "local"` and point `decision.model` to a configured profile ID. `LocalClassifier` accepts structured output without tool calls and applies the same JSON, confidence, deadline and cancellation checks. Invalid output takes the conservative fallback. A local main model needs no cloud credentials.
 

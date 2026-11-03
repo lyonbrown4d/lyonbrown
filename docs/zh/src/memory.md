@@ -2,7 +2,7 @@
 
 长期记忆由 daemon 管理，保存偏好、事实和操作说明。关系数据库保存正文、状态、修订、来源、Run 绑定和索引作业；Qdrant 只保存可重建的向量与检索元数据。命中向量不等于记忆仍然有效，也不授予工具或节点权限。
 
-本文依据当前工作区实现。SeaORM、Qdrant 和记忆上下文接入尚未完成本轮编译、测试或运行验收；构建限制见[开发与验证](development.md#当前依赖解析限制)。
+本文依据当前工作区实现。SeaORM、Qdrant 和记忆上下文接入尚未完成本轮编译、测试或运行验收；验证范围见[开发与验证](development.md#验证范围)。
 
 ## 范围与状态
 
@@ -41,7 +41,7 @@ backend = "embedded"
 # directory = "memory/custom-index"
 ```
 
-embedding 使用 OpenAI 兼容的 HTTP `/embeddings` 接口，要求单条、指定维度且全部为有限数值的向量。`id`、模型、维度和规范化 API 地址共同确定配置修订；密钥轮换不改变该身份。凭据只通过 `api_key_env` 指向 `.env` 或进程环境，不写入记忆记录或状态输出。远程地址要求 HTTPS，回环地址可用 HTTP；地址不能包含凭据、查询参数或 fragment。`LYONBROWN_MEMORY_ENABLED` 可覆盖启用状态。
+embedding 复用 Rig 的 OpenAI 兼容 embedding 适配器与共享受限 HTTP 客户端，调用 `/embeddings` 接口，要求单条、指定维度且全部为有限数值的向量。`id`、模型、维度和规范化 API 地址共同确定配置修订；密钥轮换不改变该身份。凭据只通过 `api_key_env` 指向 `.env` 或进程环境，不写入记忆记录或状态输出。远程地址要求 HTTPS，回环地址可用 HTTP；地址不能包含凭据、查询参数或 fragment。`LYONBROWN_MEMORY_ENABLED` 可覆盖启用状态。
 
 ### 选择向量后端
 
@@ -49,6 +49,10 @@ embedding 使用 OpenAI 兼容的 HTTP `/embeddings` 接口，要求单条、指
 | --- | --- |
 | `embedded` | 使用固定版本 `qdrant-edge` 0.9.0 的 `EdgeShard`，不需要独立 Qdrant 进程；默认目录为 daemon 数据目录下的 `memory/<配置修订>` |
 | `qdrant` | 使用固定版本 `qdrant-client` 1.20.0，经 gRPC 连接 Qdrant Server；启动检查要求服务端为 `1.20.x` |
+
+远端检索复用 Rig-Qdrant 0.46.0 的 `QdrantVectorStore::top_n` 与 `QdrantFilter`，传入已生成的查询向量与范围过滤条件，不重复调用 embedding。返回后仍回读关系数据库核对权威修订、有效状态和权限。
+
+远端 upsert 与按记忆修订精确删除使用 Qdrant SDK 的单次写接口，保留调用方指定的稳定身份与结果未知语义。索引写入不能由框架随机生成新身份或自行重试。Rig 没有 Qdrant Edge 接口，embedded 后端继续通过 Edge SDK 访问同一种 Qdrant 引擎。
 
 自定义 embedded 相对目录以 daemon 数据目录为基准；索引持有本机所有权锁。已有索引的 embedding 描述、维度、Cosine 距离或 WAL 配置不匹配时明确报错。嵌入式 SDK 的同步工作通过受限阻塞任务执行；这不改变关系数据库使用原生异步连接的要求。
 

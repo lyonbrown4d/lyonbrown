@@ -34,7 +34,7 @@ pub fn text_reply(protocol: StandardProtocol, text: &str) -> ScriptedReply {
 pub fn tool_reply(protocol: StandardProtocol, name: &str, arguments: Value) -> ScriptedReply {
   tool_reply_with_id(protocol, "call_fixture", name, arguments)
 }
-/// Distinct provider call IDs let a single Harness run perform multiple durable tools.
+/// Distinct provider call IDs let a single Rig AgentRun perform multiple durable tools.
 pub fn tool_reply_with_id(
   protocol: StandardProtocol,
   call_id: &str,
@@ -58,9 +58,9 @@ fn halves(value: &str) -> (&str, &str) {
 fn chat_text(text: &str) -> ScriptedReply {
   let (first, last) = halves(text);
   ScriptedReply::sse(vec![
-    json!({"choices":[{"delta":{"role":"assistant","content":first},"finish_reason":null}]}),
-    json!({"choices":[{"delta":{"content":last},"finish_reason":null}]}),
-    json!({"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14}}),
+    json!({"id":"chat_fixture","object":"chat.completion.chunk","created":0,"model":"fixture-model","choices":[{"index":0,"delta":{"role":"assistant","content":first},"finish_reason":null}]}),
+    json!({"id":"chat_fixture","object":"chat.completion.chunk","created":0,"model":"fixture-model","choices":[{"index":0,"delta":{"content":last},"finish_reason":null}]}),
+    json!({"id":"chat_fixture","object":"chat.completion.chunk","created":0,"model":"fixture-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":11,"completion_tokens":3,"total_tokens":14}}),
   ])
   .with_sse_done()
 }
@@ -68,9 +68,9 @@ fn chat_tool(call_id: &str, name: &str, arguments: Value) -> ScriptedReply {
   let encoded = arguments.to_string();
   let (first, last) = halves(&encoded);
   ScriptedReply::sse(vec![
-    json!({"choices":[{"delta":{"tool_calls":[{"index":0,"id":call_id,"type":"function","function":{"name":name,"arguments":first}}]},"finish_reason":null}]}),
-    json!({"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":last}}]},"finish_reason":null}]}),
-    json!({"choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":7,"completion_tokens":2,"total_tokens":9}}),
+    json!({"id":"chat_fixture","object":"chat.completion.chunk","created":0,"model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":call_id,"type":"function","function":{"name":name,"arguments":first}}]},"finish_reason":null}]}),
+    json!({"id":"chat_fixture","object":"chat.completion.chunk","created":0,"model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":last}}]},"finish_reason":null}]}),
+    json!({"id":"chat_fixture","object":"chat.completion.chunk","created":0,"model":"fixture-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":7,"completion_tokens":2,"total_tokens":9}}),
   ])
   .with_sse_done()
 }
@@ -163,7 +163,7 @@ fn anthropic_tool(call_id: &str, name: &str, arguments: Value) -> ScriptedReply 
 pub fn truncated_reply(protocol: StandardProtocol) -> ScriptedReply {
   match protocol {
     StandardProtocol::ChatCompletions => ScriptedReply::sse(vec![
-      json!({"choices":[{"delta":{"content":"unfinished"},"finish_reason":null}]}),
+      json!({"id":"chat_fixture","object":"chat.completion.chunk","created":0,"model":"fixture-model","choices":[{"index":0,"delta":{"content":"unfinished"},"finish_reason":null}]}),
     ]),
     StandardProtocol::Responses => ScriptedReply::sse(vec![
       json!({"type":"response.created","response":{"id":"unfinished","status":"in_progress"}}),

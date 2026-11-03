@@ -53,3 +53,31 @@ pub(crate) fn validate(prompt: &str, images: &[RuntimeImage]) -> Result<()> {
   }
   Ok(())
 }
+
+pub(crate) fn message(
+  prompt: &str,
+  images: Vec<RuntimeImage>,
+) -> Result<rig_core::message::Message> {
+  use rig_core::message::{DocumentSourceKind, Image, ImageMediaType, Message, UserContent};
+  let mut content = vec![UserContent::text(prompt)];
+  for image in images {
+    let media_type = match image.mime_type.as_str() {
+      "image/png" => ImageMediaType::PNG,
+      "image/jpeg" => ImageMediaType::JPEG,
+      "image/webp" => ImageMediaType::WEBP,
+      "image/gif" => ImageMediaType::GIF,
+      _ => {
+        return Err(RuntimeError::Configuration(
+          "unsupported image MIME type".into(),
+        ));
+      }
+    };
+    content.push(UserContent::Image(Image {
+      data: DocumentSourceKind::Base64(image.data_base64),
+      media_type: Some(media_type),
+      detail: None,
+      native: None,
+    }));
+  }
+  Ok(Message::User { content })
+}

@@ -66,7 +66,7 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
       .unwrap();
     let node = TestNode::start(&main, &classifier, protocol).await;
     // A prior committed session becomes unreadable. A real StartRun must mark
-    // the failed Harness restoration Uncertain, making explicit recovery usable.
+    // the failed Runtime restoration Uncertain, making explicit recovery usable.
     let (seed, _) = node
       .daemon
       .store

@@ -4,11 +4,22 @@
 
 异步入口优先使用 `#[tokio::main]`，参数解析、序列化和依赖注入复用 Clap、Serde、fluxdi 的宏。`RunStatus` 和 `Tool` 通过固定版本 `strum` 0.28.0 的派生宏生成 snake_case 静态字符串转换；错误类型复用现有 `thiserror` 派生。CEF helper 和 Windows SCM 先完成平台分派；GPUI 保留主线程事件循环，需要持有或共享的运行时显式装配。
 
-## 当前依赖解析限制
+## 验证范围
 
-当前工作区声明 rpi family 0.16.0、SeaORM / SeaORM Migration 2.0.4。本轮离线依赖解析明确失败：`rpi-harness 0.16.0 → rusqlite 0.31 → libsqlite3-sys 0.28`，而 `SeaORM 2.0.4 → SQLx 0.9` 要求 `libsqlite3-sys >=0.30.1,<0.38`。两个依赖声明同一个 SQLite 原生链接名，Cargo 不能同时解析。上游 `main` 的 `31e7ba` 源码也保留该依赖，见 [pi-rust #236](https://github.com/bigfish1913/pi-rust/issues/236)。不能通过降级 ORM、复制 SDK、下游 fork 或长期补丁掩盖冲突。
+Agent 运行使用固定版本 Rig 0.46.0 的 AgentRun 与标准协议适配器。关系存储仍使用 SeaORM / SeaORM Migration 2.0.4。依赖声明与源码接线不能证明依赖解析、编译或运行通过。
 
-`Cargo.lock` 尚未更新为这组声明的解析结果。本轮仅完成静态源码检查和失败的离线依赖解析，未运行 Cargo 编译、测试、mdBook 构建或新原生运行验收。下列命令是开发入口与验证要求，不表示当前工作区已经能成功执行；[历史截图](runtime-evidence.md)只覆盖各记录标注的平台、版本和源码。
+`rig-core`、`rig-agent`、`rig-reqwest`、`rig-rmcp` 与 `rig-qdrant` 统一固定为 0.46.0。当前 `Cargo.lock` 已成功解析，不再受旧 SQLite 原生链接冲突阻塞；这不代表编译或运行通过。
+
+直接 registry 依赖固定具体版本，更新时以 crates.io 官方版本信息为准。当前有两项上游兼容限制：
+
+| 依赖 | 保留版本与原因 |
+| --- | --- |
+| `tree-sitter` | `0.26.13`；`gpui-component` 0.9 要求 `^0.26.13`，同一原生链接库不能与 `0.27` 并存 |
+| `sse-stream` | `0.2.6`；`rmcp` 3.8 的公开接口返回 `0.2` 类型，不能直接改为 `0.3` |
+
+既有 ORT 接入仍使用当前固定的候选版本，Qdrant Edge 仍使用 0.9.0 的 beta SDK；不能把这两项标为稳定版 SDK。GPUI Kit 0.9、Agent Skills 0.3、ZIP 与 Markdown 升级仅按官方源码核对现有接口，并补充 Skill 未知字段拒绝用例；尚未执行相应测试或桌面运行验收。
+
+本轮按要求未运行编译、测试或 mdBook 构建。下列命令是开发入口与验证要求，不表示当前工作区已有成功结果；[历史截图](runtime-evidence.md)仅覆盖各记录标注的平台、版本和源码，不覆盖当前 Rig 运行路径。
 
 关系数据库使用原生异步 ORM，结构使用版本化 Rust 迁移；不维护旧 Diesel 数据库兼容。记忆后端配置与持久作业机制见[长期记忆](memory.md)。当前 PostgreSQL、MySQL、Qdrant embedded / server 的源码接线没有替代对应数据库或服务器的运行验收。
 
@@ -93,7 +104,7 @@ cargo run -p agent-desktop --features native-computer
 
 客户端通过共享 launcher 连接或复用原生 daemon 服务；开发前台 daemon 的使用方式见上方。原生 feature 不改变 daemon 的 `computer_tools = false` 默认值，也不代替系统权限、交互会话检查或准确动作审批。默认依赖和测试依赖均不通过 Cargo feature 合并隐式启用原生 SDK。目标选择、会话挂接和断开操作见[终端与桌面客户端](clients.md#原生计算机连接)。
 
-构建通过只说明对应主机上的代码可编译。原生目标发现、GUI 选择、客户端到 Harness 的连接、屏幕观察与获批输入均需实际运行验收。macOS 按[会话身份与锁字段策略](protocol.md#原生桌面执行边界)检查，无法确认状态时返回 `SessionStateUnknown`；不得将只读权限检查、拒绝路径或合成宿主回归称为原生控制验收。真实捕获、获批输入、锁屏与会话切换仍需实际验收；Windows 和 Linux 的实际运行验收也尚未完成。
+构建通过只说明对应主机上的代码可编译。原生目标发现、GUI 选择、客户端到 Runtime 的连接、屏幕观察与获批输入均需实际运行验收。macOS 按[会话身份与锁字段策略](protocol.md#原生桌面执行边界)检查，无法确认状态时返回 `SessionStateUnknown`；不得将只读权限检查、拒绝路径或合成宿主回归称为原生控制验收。真实捕获、获批输入、锁屏与会话切换仍需实际验收；Windows 和 Linux 的实际运行验收也尚未完成。
 
 ## 检查命令
 
@@ -114,7 +125,7 @@ mdbook build docs/en
 
 ## TUI 交互与队列恢复验证
 
-TUI 的执行状态由 `agent-core::events::AgentEvent` 定义，agentd 负责产出；客户端不从 Harness 审计记录推断模型阶段。定向回归可在默认 feature 下执行：
+TUI 的执行状态由 `agent-core::events::AgentEvent` 定义，agentd 负责产出；客户端不从 Runtime 审计记录推断模型阶段。定向回归可在默认 feature 下执行：
 
 ```sh
 cargo test --locked -p agent-cli -p agentd -p agent-core -p agent-runtime -p agent-storage --test events --test activity --test interaction --test tui_interactions --test workflow --test input_control --test queue_cancel_failure --test queue_restore --test semantic_events --test input_fence --test run_input --test run_input_handoff --test run_input_failure --test original_task_target
@@ -161,7 +172,7 @@ cargo test -p agent-runtime -p agent-decision -p agentd --locked
 cargo test -p agent-mcp --features test-fixtures --locked
 ```
 
-`apps/agentd/tests/computer_tools.rs` 使用本地模型 mock、三个标准协议的真实适配器、Harness 与可注入的合成 `attach_host`，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 `Uncertain` 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能替代 CLI/Desktop 原生连接入口的实际运行或三平台桌面控制验收。
+`apps/agentd/tests/computer_tools.rs` 使用本地模型 mock、三个标准协议的真实适配器、Runtime 与可注入的合成 `attach_host`，检查观察、准确审批的批准与拒绝、模型及审批延迟期间续租、配置/宿主/输入权限限制，以及丢失或损坏回执后的持久 `Uncertain` 与恢复不重放。断言同时检查输入次数、审批、执行回执、事件和 Outbox。这些测试不执行操作系统输入，不能替代 CLI/Desktop 原生连接入口的实际运行或三平台桌面控制验收。
 
 ```sh
 cargo test -p agentd --test computer_tools --locked
@@ -180,7 +191,7 @@ LYONBROWN_TEST_GGUF=/absolute/path/model.gguf cargo test -p agent-inference --fe
 cargo run --locked -p agent-desktop --example desktop-computer-target
 ```
 
-该示例只提供合成按钮和文字输入框，不启动 daemon、模型或 ComputerRuntime，也不请求录屏或辅助功能权限。启动时输出本次 `.local/acceptance/computer-target-*` 目录，`state.json` 保存 `click_count` 和 `text`，退出后保留。每次运行使用新目录，适合作为原生控制验收的独立目标；操作此窗口不等于已验收 Harness 和审批链路。
+该示例只提供合成按钮和文字输入框，不启动 daemon、模型或 ComputerRuntime，也不请求录屏或辅助功能权限。启动时输出本次 `.local/acceptance/computer-target-*` 目录，`state.json` 保存 `click_count` 和 `text`，退出后保留。每次运行使用新目录，适合作为原生控制验收的独立目标；操作此窗口不等于已验收 Runtime 和审批链路。
 
 ## 可复用决策与 Gateway 检查
 
