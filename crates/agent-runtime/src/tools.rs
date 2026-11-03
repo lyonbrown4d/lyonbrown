@@ -136,6 +136,21 @@ impl Runtime {
         is_error: true,
       },
     };
+    let output = if output.text.len() > crate::budget::TOOL_BYTES {
+      ToolOutput {
+        text: format!(
+          "The tool returned a confirmed {} result. The result body was omitted because it exceeded the 16MiB host limit. Do not repeat the operation merely to regenerate the omitted body.",
+          if output.is_error {
+            "error"
+          } else {
+            "successful"
+          }
+        ),
+        is_error: output.is_error,
+      }
+    } else {
+      output
+    };
     let result = if output.is_error {
       ToolResult::failed(ToolExecutionError::other(output.text.clone()))
     } else {

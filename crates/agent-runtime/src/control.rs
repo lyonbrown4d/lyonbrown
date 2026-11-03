@@ -10,7 +10,7 @@ impl Runtime {
     kind: QueueKind,
     prompt: &str,
   ) -> Result<String> {
-    crate::input::validate(prompt, &[])?;
+    crate::validate_input(prompt, &[])?;
     if request_id.trim().is_empty() {
       return Err(RuntimeError::Configuration(
         "input request identity is required".into(),

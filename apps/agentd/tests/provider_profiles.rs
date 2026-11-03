@@ -120,7 +120,10 @@ async fn profile_selection_pins_immutable_credentials_and_real_adapter_for_all_p
     (3, StandardProtocol::Anthropic),
   ] {
     let model = MockModelServer::start(vec![
-      ScriptedReply::status(200, json!({"data":[{"id":"fixture-model"}]})),
+      ScriptedReply::status(
+        200,
+        json!({"data":[{"id":"fixture-model","display_name":"Fixture"}]}),
+      ),
       text_reply(protocol, "synthetic profile output"),
     ])
     .await
@@ -298,7 +301,7 @@ async fn probes_validate_and_bound_untrusted_responses_without_persisting_or_red
     ScriptedReply::status(302, json!({"secret":"synthetic-key"}))
       .header("location", format!("{}/v1/models", destination.base_url())),
     ScriptedReply::status(401, json!({"error":"synthetic-key"})),
-    ScriptedReply::status(200, json!({"data":vec![json!({"id":"model"}); 101]})),
+    ScriptedReply::status(200, json!({"data":vec![json!({"id":"model"}); 1001]})),
     ScriptedReply::status(200, json!({"data":[],"padding":"x".repeat(1024*1024)})),
     ScriptedReply::status(200, json!({"data":[]})),
     ScriptedReply::stall(),

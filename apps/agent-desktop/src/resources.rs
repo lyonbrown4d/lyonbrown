@@ -1,12 +1,16 @@
 //! Presentation and authenticated command adapters for daemon-owned resources.
+mod context_panel;
 mod dispatch;
 mod hub;
 mod hub_view;
+mod memory;
 mod models;
+mod profile_editor;
 mod providers;
 mod skills;
 mod state;
 mod status;
+mod workflow;
 
 use agent_client::AgentClient;
 use gpui_kit::*;
@@ -26,6 +30,8 @@ pub(crate) struct ResourcePanels {
   pub(crate) providers: Entity<ResourcePane>,
   pub(crate) skills: Entity<ResourcePane>,
   pub(crate) status: Entity<ResourcePane>,
+  pub(crate) memory: Entity<memory::MemoryPanel>,
+  pub(crate) workflow: Entity<workflow::WorkflowPane>,
 }
 impl ResourcePanels {
   pub(crate) fn new(
@@ -39,6 +45,8 @@ impl ResourcePanels {
       providers: pane(ResourceSection::Providers),
       skills: pane(ResourceSection::Skills),
       status: pane(ResourceSection::Status),
+      memory: cx.new(|cx| memory::MemoryPanel::new(runtime.clone(), window, cx)),
+      workflow: cx.new(|cx| workflow::WorkflowPane::new(runtime.clone(), window, cx)),
     }
   }
   pub(crate) fn bind(
@@ -52,15 +60,35 @@ impl ResourcePanels {
         pane.bind(client.clone(), session.clone(), cx)
       });
     }
+    self.memory.update(cx, |panel, cx| {
+      panel.bind(client.clone(), session.clone(), cx)
+    });
+    self
+      .workflow
+      .update(cx, |panel, cx| panel.bind(client, session, cx));
   }
   /// Called before replacing a connection, including a connected-to-connected transition.
   pub(crate) fn invalidate(&mut self, cx: &mut App) {
     self.bind(None, None, cx);
   }
   pub(crate) fn blocks_connection(&self, cx: &App) -> bool {
-    [&self.models, &self.providers, &self.skills, &self.status]
-      .iter()
-      .any(|pane| pane.read(cx).pending_mutations > 0)
+    self.workflow.read(cx).pending
+      || self.memory.read(cx).pending
+      || [&self.models, &self.providers, &self.skills, &self.status]
+        .iter()
+        .any(|pane| {
+          pane
+            .read(cx)
+            .context_panel
+            .as_ref()
+            .is_some_and(|panel| panel.read(cx).pending)
+            || pane.read(cx).pending_mutations > 0
+            || pane
+              .read(cx)
+              .profile_editor
+              .as_ref()
+              .is_some_and(|editor| editor.read(cx).pending)
+        })
   }
   pub(crate) fn view(&self, section: ResourceSection) -> AnyElement {
     match section {

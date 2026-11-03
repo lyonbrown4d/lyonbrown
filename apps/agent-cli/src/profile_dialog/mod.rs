@@ -1,6 +1,7 @@
 //! Safe profile presentation. Secret editors are owned by the transient input adapter.
 mod backend;
 mod input;
+mod presets;
 mod view;
 use agent_protocol::v1::{ProviderProbe, ProviderProfile};
 pub(crate) use backend::execute;
@@ -54,6 +55,7 @@ pub struct ProfileDialog {
   pub confirm_remove: bool,
   pub message: String,
   pub credential_present: bool,
+  preset_index: Option<usize>,
   editors: [TextArea<'static>; 3],
 }
 impl std::fmt::Debug for ProfileDialog {
@@ -72,6 +74,7 @@ impl ProfileDialog {
       protocol: agent_protocol::v1::RemoteProviderProtocol::OpenaiResponses as i32,
       ..Default::default()
     });
+    let preset_index = presets::matching(&profile);
     let editors = [&profile.name, &profile.base_url, &profile.model].map(|value| {
       let mut editor = TextArea::new(vec![value.clone()]);
       editor.set_max_histories(0);
@@ -86,6 +89,7 @@ impl ProfileDialog {
       confirm_remove: false,
       message: "填写配置；探测仅请求模型列表。空密钥保留已有凭据。".into(),
       credential_present: false,
+      preset_index,
     }
   }
   pub fn snapshot(&self) -> ProviderProfile {

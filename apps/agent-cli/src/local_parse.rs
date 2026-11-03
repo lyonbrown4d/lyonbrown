@@ -18,6 +18,9 @@ pub(crate) fn parse_p0(prompt: &str) -> Option<Result<P0Command, String>> {
   let root = words.first()?.as_str();
   let args = &words[1..];
   let parsed = match root {
+    "/plan" | "/changes" | "/undo" => crate::plan_command::parse(root, args)
+      .map(crate::resource_command::ResourceCommand::Workflow)
+      .map(P0Command::Resource),
     "/memory" => crate::memory_command::parse(args)
       .map(crate::resource_command::ResourceCommand::Memory)
       .map(P0Command::Resource),
@@ -30,9 +33,9 @@ pub(crate) fn parse_p0(prompt: &str) -> Option<Result<P0Command, String>> {
     "/status" if args.is_empty() => Ok(P0Command::Resource(
       crate::resource_command::ResourceCommand::Status,
     )),
-    "/context" if args.is_empty() => Ok(P0Command::Resource(
-      crate::resource_command::ResourceCommand::Context,
-    )),
+    "/context" | "/compact" | "/mode" => {
+      crate::context_command::parse(root, args).map(P0Command::Resource)
+    }
     "/permissions" if args.is_empty() => Ok(P0Command::Resource(
       crate::resource_command::ResourceCommand::Permissions,
     )),

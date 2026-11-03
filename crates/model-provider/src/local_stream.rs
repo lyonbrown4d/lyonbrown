@@ -103,14 +103,13 @@ impl<'id> rig_core::wire::Decoder<'id, Completion, Frame> for Decoder {
           agent_inference::FinishReason::Length => FinishReason::Length,
           agent_inference::FinishReason::ToolCalls => FinishReason::ToolCalls,
         };
+        let mut usage = Usage::new();
+        usage.input_tokens = Some(summary.input_tokens);
+        usage.output_tokens = Some(summary.output_tokens);
+        usage.total_tokens = summary.input_tokens.checked_add(summary.output_tokens);
         Ok(out.end(Finish {
           reason: Some(reason),
-          usage: Usage {
-            input_tokens: Some(summary.input_tokens),
-            output_tokens: Some(summary.output_tokens),
-            total_tokens: summary.input_tokens.checked_add(summary.output_tokens),
-            ..Usage::new()
-          },
+          usage,
           ..Finish::default()
         }))
       }

@@ -9,6 +9,31 @@ pub struct CommandSpec {
 
 pub const COMMANDS: &[CommandSpec] = &[
   CommandSpec {
+    name: "plan",
+    usage: crate::plan_command::USAGE,
+    summary: "Read durable plans, record progress and explicit user completion overrides",
+  },
+  CommandSpec {
+    name: "changes",
+    usage: "/changes [list [AFTER]|get ID|apply ID REVISION HASH]",
+    summary: "Inspect exact checkpoint diffs and request approved application",
+  },
+  CommandSpec {
+    name: "undo",
+    usage: "/undo CHANGE_ID",
+    summary: "Create a revision-checked reverse preview; applying it still requires exact approval",
+  },
+  CommandSpec {
+    name: "attach",
+    usage: "/attach \"本地图片路径\"",
+    summary: "Attach an explicitly selected image to the next new task",
+  },
+  CommandSpec {
+    name: "detach",
+    usage: "/detach INDEX",
+    summary: "Remove an unsent image attachment; indexes start at 1",
+  },
+  CommandSpec {
     name: "memory",
     usage: crate::memory_command::USAGE,
     summary: "Inspect, propose, approve, edit, or forget scoped memories; writes are never retried automatically",
@@ -29,8 +54,18 @@ pub const COMMANDS: &[CommandSpec] = &[
     summary: "Cancel the active run",
   },
   CommandSpec {
+    name: "compact",
+    usage: "/compact [focus]",
+    summary: "Compact context through agentd",
+  },
+  CommandSpec {
+    name: "mode",
+    usage: "/mode [read-only|plan|execute]",
+    summary: "Restrict session tools and inspect the effective mode",
+  },
+  CommandSpec {
     name: "context",
-    usage: "/context",
+    usage: "/context [summary|undo|cancel JOB_ID]",
     summary: "Show current context status",
   },
   CommandSpec {

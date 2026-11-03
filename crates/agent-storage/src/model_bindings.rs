@@ -111,6 +111,7 @@ impl Store {
       let connection = &transaction;
       let result: anyhow::Result<_> = async {
         verify_epoch(connection, session, epoch).await?;
+        crate::context_maintenance::ensure_idle(connection, session).await?;
         let active = runs::Entity::find()
           .filter(runs::Column::SessionId.eq(session))
           .filter(runs::Column::Status.is_not_in(["completed", "failed", "cancelled"]))

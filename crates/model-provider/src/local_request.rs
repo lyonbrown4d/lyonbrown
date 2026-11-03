@@ -50,7 +50,7 @@ pub(crate) fn convert(
                 user = empty_message(MessageRole::User);
               }
               let mut tool = empty_message(MessageRole::Tool);
-              tool.tool_call_id = Some(result.call.as_str().to_owned());
+              tool.tool_call_id = Some(result.call.to_string());
               for content in &result.content {
                 tool.content.push(match content {
                   ToolResultContent::Text(text) => text_content(&text.text),
@@ -79,7 +79,7 @@ pub(crate) fn convert(
               if info.supports_tools && call.function.invalid_arguments.is_none() =>
             {
               assistant.tool_calls.push(agent_inference::ToolCall {
-                id: call.id.as_str().to_owned(),
+                id: call.id.to_string(),
                 name: call.function.name.as_str().to_owned(),
                 arguments: serde_json::Value::Object(call.function.arguments.clone()),
               });

@@ -1,5 +1,15 @@
 # 模型与执行决策
 
+
+## 远程 Provider
+
+远程模型通过 Rig Registry 与公开客户端接入，包含 OpenAI Responses、OpenAI Chat Completions、Anthropic Messages、Gemini GenerateContent，以及 OpenRouter、Groq、Mistral API、DeepSeek 的框架预设。协议编码和模型列表解析由框架提供，不使用 SDK 隐式环境读取。agentd 通过共享配置或加密凭据存储显式提供密钥。
+
+TUI 的 Provider 对话框和 Desktop 的 Providers 页面复用同一组预设，可以编辑地址、模型和名称，保存自定义配置并探测模型列表。探测总时限 5 秒、响应最多 1 MiB、最多 1000 个模型 ID；它不执行生成，不能证明模型质量、视觉或工具能力。凭据存在只表示可配置，不代表服务已通过运行验收。
+
+环境变量分别为 `OPENAI_API_KEY`、`ANTHROPIC_API_KEY`、`GEMINI_API_KEY`（或 `GOOGLE_API_KEY`）、`OPENROUTER_API_KEY`、`GROQ_API_KEY`、`MISTRAL_API_KEY`、`DEEPSEEK_API_KEY`。凭据不会自动选择模型；地址仍要求 HTTPS，回环可使用 HTTP。新增 Provider 已编写本地 mock 协议回归，本轮未执行编译或测试。
+
+
 ## 终端模型目录与安装
 
 `/models` 通过认证协议读取 agentd 的统一目录，包含内置 API 模型、配置模型和 Hugging Face 已安装权重。目录中的 `configurable`、`installed_unverified` 和 `ready` 分别表示需要凭据、文件已安装但未加载、执行方式已具备；API 凭据存在不代表已完成联网推理验证。模型与执行方式分别有稳定 ID，使用 `/models select MODEL EXECUTION` 选择。agentd 校验会话归属和 `owner_epoch`，有活动或结果未知的 Run 时拒绝切换。选择写入 SQLite，Run 接受时在同一事务复制执行绑定，后续选择不改写原 Run。

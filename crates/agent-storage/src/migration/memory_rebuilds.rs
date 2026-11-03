@@ -1,0 +1,107 @@
+use super::large_text;
+use sea_orm_migration::prelude::*;
+#[derive(DeriveMigrationName)]
+pub(super) struct MemoryRebuilds;
+#[async_trait::async_trait]
+impl MigrationTrait for MemoryRebuilds {
+  async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+    manager
+      .create_table(
+        Table::create()
+          .table(Alias::new("memory_rebuilds"))
+          .col(
+            ColumnDef::new(Alias::new("id"))
+              .string_len(256)
+              .not_null()
+              .comment("重建请求 UUID；同时作为幂等标识"),
+          )
+          .col(
+            ColumnDef::new(Alias::new("scope_key"))
+              .string_len(64)
+              .not_null()
+              .comment("宿主授权作用域列表的摘要"),
+          )
+          .col(
+            ColumnDef::new(Alias::new("descriptor_key"))
+              .string_len(64)
+              .not_null()
+              .comment("嵌入模型、维度和配置版本的摘要"),
+          )
+          .col(
+            ColumnDef::new(Alias::new("scan_finished"))
+              .boolean()
+              .not_null()
+              .comment("是否已完成当前授权范围的分页扫描"),
+          )
+          .col(
+            ColumnDef::new(Alias::new("state"))
+              .small_integer()
+              .not_null()
+              .comment("状态码：1待完成，2已完成"),
+          )
+          .col(
+            large_text("record", manager.get_database_backend())
+              .comment("权威重建进度；不包含记忆正文")
+              .take(),
+          )
+          .col(
+            ColumnDef::new(Alias::new("generation"))
+              .big_integer()
+              .not_null()
+              .comment("同一授权范围内按事务递增的请求顺序"),
+          )
+          .primary_key(Index::create().col(Alias::new("id")))
+          .to_owned(),
+      )
+      .await?;
+    manager
+      .create_index(
+        Index::create()
+          .name("memory_rebuilds_queue")
+          .table(Alias::new("memory_rebuilds"))
+          .col(Alias::new("descriptor_key"))
+          .col(Alias::new("state"))
+          .col(Alias::new("id"))
+          .to_owned(),
+      )
+      .await?;
+    manager
+      .create_index(
+        Index::create()
+          .name("memory_rebuilds_scope")
+          .table(Alias::new("memory_rebuilds"))
+          .col(Alias::new("scope_key"))
+          .col(Alias::new("generation"))
+          .to_owned(),
+      )
+      .await?;
+    manager
+      .create_index(
+        Index::create()
+          .name("memory_jobs_rebuild")
+          .table(Alias::new("memory_jobs"))
+          .col(Alias::new("rebuild_id"))
+          .col(Alias::new("state"))
+          .to_owned(),
+      )
+      .await?;
+    Ok(())
+  }
+  async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+    manager
+      .drop_index(
+        Index::drop()
+          .name("memory_jobs_rebuild")
+          .table(Alias::new("memory_jobs"))
+          .to_owned(),
+      )
+      .await?;
+    manager
+      .drop_table(
+        Table::drop()
+          .table(Alias::new("memory_rebuilds"))
+          .to_owned(),
+      )
+      .await
+  }
+}

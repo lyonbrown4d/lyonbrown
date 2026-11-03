@@ -2,6 +2,7 @@
 #![forbid(unsafe_code)]
 mod embedding;
 mod mutations;
+mod rebuild;
 mod retrieval;
 mod worker;
 pub use embedding::RigEmbedding;
@@ -114,7 +115,14 @@ impl MemoryService {
     {
       return Err(MemoryError::NotFound);
     }
-    self.repository.retry_job(job_id).await
+    let descriptor = self
+      .embedding
+      .as_ref()
+      .map(|embedding| embedding.descriptor());
+    self
+      .repository
+      .retry_job_for(job_id, descriptor.as_ref())
+      .await
   }
   pub async fn bind_run(
     &self,

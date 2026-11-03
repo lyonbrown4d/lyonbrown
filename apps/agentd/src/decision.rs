@@ -52,7 +52,18 @@ pub(crate) fn build(
     Tool::ReadFile,
     Tool::ListFiles,
     Tool::SearchFiles,
+    Tool::LoadSkill,
     Tool::WriteFile,
+    Tool::MemoryRead,
+    Tool::MemorySearch,
+    Tool::MemoryPropose,
+    Tool::PlanRead,
+    Tool::PlanUpdate,
+    Tool::PatchPreview,
+    Tool::PatchApply,
+    Tool::CheckpointRead,
+    Tool::CheckpointUndo,
+    Tool::ValidationRecord,
   ]
   .into_iter()
   .collect::<std::collections::BTreeSet<_>>();
@@ -116,7 +127,18 @@ pub(crate) fn workspace_rule(
     Tool::ReadFile,
     Tool::ListFiles,
     Tool::SearchFiles,
+    Tool::LoadSkill,
     Tool::WriteFile,
+    Tool::MemoryRead,
+    Tool::MemorySearch,
+    Tool::MemoryPropose,
+    Tool::PlanRead,
+    Tool::PlanUpdate,
+    Tool::PatchPreview,
+    Tool::PatchApply,
+    Tool::CheckpointRead,
+    Tool::CheckpointUndo,
+    Tool::ValidationRecord,
   ]
   .into_iter()
   .collect::<std::collections::BTreeSet<_>>();

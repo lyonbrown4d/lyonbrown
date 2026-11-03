@@ -47,6 +47,9 @@ impl ResourcePane {
     } else {
       page = page.child("Refresh to read the selected session's daemon status.");
     }
+    if let Some(panel) = &self.context_panel {
+      page = page.child(panel.clone());
+    }
     page.into_any_element()
   }
 }

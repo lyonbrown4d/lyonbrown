@@ -48,7 +48,7 @@ Versioned Runtime snapshots retain the Session ID, Rig message history, active A
 
 Durable mutation events contain only allowlisted metadata, such as run IDs, call IDs and tool names, and explicit public events. They never copy complete Rig raw responses, messages or images. Store, Outbox and `WatchRun` use the same event payload. Adapters remain responsible for authorization and redaction of tool arguments, custom business data and credentials.
 
-Runtime can restore serialized image messages. This does not establish image support for every model or client image-session support: the daemon's `StartRun` still accepts text only. The current Rig path received no compilation, tests or image-restoration runtime acceptance in this iteration.
+Runtime can restore serialized image messages. Clients use `StartRunWithAttachments` for images while `StartRun` accepts text. Media and Run admission commit in one transaction, and the model must declare image support. See [image input and limits](agent-workflows.md#attach-images). Compilation, tests and image-restoration runtime acceptance were not run in this iteration.
 
 ## Disconnection and restart
 

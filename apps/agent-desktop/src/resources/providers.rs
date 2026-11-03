@@ -90,6 +90,7 @@ impl ResourcePane {
           .disabled(self.busy || self.pending_mutations > 0 || !self.ready())
           .on_click(cx.listener(move |this, _, _, cx| this.remove_credential(id.clone(), cx))))
       }))
+      .children(self.profile_editor.iter().cloned())
       .into_any_element()
   }
 }

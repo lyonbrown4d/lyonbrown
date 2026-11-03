@@ -121,6 +121,9 @@ impl MemoryRepository for Repository {
     job.attempts += 1;
     Ok(Some(job.clone()))
   }
+  async fn claim_job_for(&self, _: &EmbeddingDescriptor) -> MemoryResult<Option<MemoryJob>> {
+    self.claim_job().await
+  }
   async fn finish_job(
     &self,
     id: &str,
@@ -156,6 +159,9 @@ impl MemoryRepository for Repository {
     job.state = MemoryJobState::Pending;
     Ok(())
   }
+  async fn retry_job_for(&self, id: &str, _: Option<&EmbeddingDescriptor>) -> MemoryResult<()> {
+    self.retry_job(id).await
+  }
   async fn jobs(&self, id: &str) -> MemoryResult<Vec<MemoryJob>> {
     Ok(
       self
@@ -182,6 +188,27 @@ impl MemoryRepository for Repository {
   }
   async fn project_scope(&self, _: &str, _: &str) -> MemoryResult<MemoryScope> {
     Err(MemoryError::Forbidden)
+  }
+  async fn start_rebuild(
+    &self,
+    _: &str,
+    _: &[MemoryScope],
+    _: &EmbeddingDescriptor,
+    _: bool,
+    _: i64,
+  ) -> MemoryResult<MemoryRebuild> {
+    Err(MemoryError::Storage)
+  }
+  async fn list_rebuilds(
+    &self,
+    _: &[MemoryScope],
+    _: Option<&str>,
+    _: u32,
+  ) -> MemoryResult<MemoryRebuildPage> {
+    Err(MemoryError::Storage)
+  }
+  async fn advance_rebuild(&self, _: &EmbeddingDescriptor, _: u32, _: i64) -> MemoryResult<bool> {
+    Ok(false)
   }
   async fn bind_run(&self, _: &str, _: &str, _: u64, _: &[MemoryItem]) -> MemoryResult<()> {
     Ok(())

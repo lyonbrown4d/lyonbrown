@@ -16,6 +16,9 @@ pub(crate) async fn execute(
   updates: &mpsc::Sender<Update>,
 ) -> anyhow::Result<()> {
   match action {
+    Action::Media(request) => {
+      crate::media::execute(client, request, stream, updates).await?;
+    }
     Action::CancelProviderProbe { .. } => {}
     Action::ProviderProfile {
       generation,
@@ -264,6 +267,38 @@ pub(crate) async fn execute(
       source,
       command,
     } => {
+      if matches!(
+        &command,
+        crate::resource_command::ResourceCommand::Workflow(
+          crate::plan_command::WorkflowCommand::Apply { .. }
+        )
+      ) {
+        let client = client.clone();
+        let updates = updates.clone();
+        // Keep the command adapter available while the reviewed filesystem operation completes.
+        tokio::spawn(async move {
+          let result = crate::resource_backend::execute(&client, session.as_deref(), command).await;
+          let (title, detail) = result.unwrap_or_else(|error| {
+            (
+              "Change apply result".into(),
+              format!(
+                "{error}. Inspect the checkpoint before trying again; no request was replayed."
+              ),
+            )
+          });
+          let _ = updates
+            .send(Update::ResourceDetail {
+              session,
+              generation,
+              navigation_revision,
+              source,
+              title,
+              detail,
+            })
+            .await;
+        });
+        return Ok(());
+      }
       let (title, detail) =
         crate::resource_backend::execute(client, session.as_deref(), command).await?;
       let _ = updates

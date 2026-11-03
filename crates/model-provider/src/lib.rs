@@ -8,7 +8,7 @@ mod local_request;
 mod local_stream;
 mod transport;
 pub use classification::{CLASSIFICATION_OUTPUT_LIMIT, classify_json};
-pub use configuration::configured;
+pub use configuration::{configured, list_models};
 pub use local::classify_local_json;
 pub use local_model::local_model;
 pub use transport::configured_http;

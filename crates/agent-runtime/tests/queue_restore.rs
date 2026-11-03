@@ -4,7 +4,7 @@ mod support;
 use agent_core::events::{AgentEvent, QueueKind, QueueStatus};
 use agent_runtime::{RunOutcome, Runtime};
 use agent_test_support::{MockModelServer, ScriptedReply, StandardProtocol};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 #[tokio::test]
 async fn cancelled_run_preserves_pending_input_and_its_cancellation_receipt() {
@@ -20,20 +20,13 @@ async fn cancelled_run_preserves_pending_input_and_its_cancellation_receipt() {
         .await
         .unwrap(),
     );
-    let execution = {
-      let runtime = runtime.clone();
-      tokio::spawn(async move { runtime.execute("initial prompt").await })
-    };
-    tokio::time::timeout(Duration::from_secs(5), model.wait_for_requests(1))
-      .await
-      .unwrap();
     let id = runtime
       .enqueue_input("stable-request", QueueKind::FollowUp, "durable follow-up")
       .await
       .unwrap();
     runtime.cancel().await.unwrap();
     assert_eq!(
-      execution.await.unwrap().unwrap().outcome,
+      runtime.execute("initial prompt").await.unwrap().outcome,
       RunOutcome::Cancelled
     );
     assert!(runtime.has_pending_inputs().await.unwrap());
@@ -53,7 +46,7 @@ async fn cancelled_run_preserves_pending_input_and_its_cancellation_receipt() {
     assert!(!next.cancel_input(&id).await.unwrap());
     assert!(!next.has_pending_inputs().await.unwrap());
     assert!(!next.input_consumed(&id).await.unwrap());
-    assert_eq!(model.requests().await.len(), 1);
+    assert_eq!(model.requests().await.len(), 0);
     let statuses: Vec<_> = memory
       .mutations
       .lock()

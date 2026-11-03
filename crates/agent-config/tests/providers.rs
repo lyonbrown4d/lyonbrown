@@ -101,7 +101,7 @@ fn empty_environment_masks_dotenv_and_invalid_credentials_are_not_usable() -> Re
 }
 
 #[test]
-fn detected_unsupported_provider_is_not_enabled_and_cli_aliases_still_select() -> Result<()> {
+fn native_credentials_do_not_auto_select_and_cli_aliases_still_select() -> Result<()> {
   let temp = tempfile::tempdir()?;
   let environment = BTreeMap::from([
     ("GEMINI_API_KEY".into(), "private-google".into()),
@@ -112,12 +112,12 @@ fn detected_unsupported_provider_is_not_enabled_and_cli_aliases_still_select() -
   for id in ["gemini", "openrouter"] {
     let entry = provider(&inventory, id)?;
     assert!(!entry.selected);
-    assert!(!entry.definition.runtime_supported);
+    assert!(entry.definition.runtime_supported);
     assert_eq!(entry.credential.state, CredentialState::Detected);
-    assert_eq!(settings.credential(id), None);
+    assert!(settings.credential(id).is_some());
   }
   // Inventory reflects explicit post-load CLI overrides; credentials do not
-  // select a model and cannot turn recognition into runtime integration.
+  // select a model or authorize model access.
   settings.provider = "openai-completions".into();
   settings.model = "explicit-model".into();
   let inventory = settings.provider_inventory();

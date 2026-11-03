@@ -1,9 +1,13 @@
 //! Authenticated daemon client shared by terminal and native desktop clients.
 mod browser;
 mod computer;
+mod context;
 mod development;
 mod execution;
+mod interaction;
+pub use interaction::tool_availability_label;
 pub mod local_state;
+pub mod media;
 mod memory;
 mod models;
 pub mod navigation;
@@ -12,6 +16,7 @@ mod provider_profiles;
 mod recovery;
 mod run_input;
 mod skills;
+mod workflow;
 mod workspace;
 use agent_protocol::v1::{self, client_service_client::ClientServiceClient};
 use anyhow::{Context, Result, ensure};
@@ -32,6 +37,8 @@ impl Interceptor for Authentication {
 
 #[derive(Clone)]
 pub struct AgentClient {
+  workflow:
+    v1::workflow_service_client::WorkflowServiceClient<InterceptedService<Channel, Authentication>>,
   memory:
     v1::memory_service_client::MemoryServiceClient<InterceptedService<Channel, Authentication>>,
   models: v1::model_service_client::ModelServiceClient<InterceptedService<Channel, Authentication>>,
@@ -102,6 +109,12 @@ impl AgentClient {
     bearer.set_sensitive(true);
     let auth = Authentication(bearer);
     let client = Self {
+      workflow: v1::workflow_service_client::WorkflowServiceClient::with_interceptor(
+        channel.clone(),
+        auth.clone(),
+      )
+      .max_decoding_message_size(12 * 1024 * 1024)
+      .max_encoding_message_size(12 * 1024 * 1024),
       models: v1::model_service_client::ModelServiceClient::with_interceptor(
         channel.clone(),
         auth.clone(),
@@ -114,7 +127,9 @@ impl AgentClient {
         channel.clone(),
         auth.clone(),
       ),
-      inner: ClientServiceClient::with_interceptor(channel.clone(), auth.clone()),
+      inner: ClientServiceClient::with_interceptor(channel.clone(), auth.clone())
+        .max_encoding_message_size(agent_media::MAX_RPC_BYTES)
+        .max_decoding_message_size(agent_media::MAX_RPC_BYTES),
       workspace: v1::workspace_service_client::WorkspaceServiceClient::with_interceptor(
         channel.clone(),
         auth.clone(),

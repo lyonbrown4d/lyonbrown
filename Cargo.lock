@@ -207,6 +207,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-changes"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "diffy",
+ "hex",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "uuid 1.29.0",
+]
+
+[[package]]
 name = "agent-cli"
 version = "0.1.0"
 dependencies = [
@@ -219,6 +232,7 @@ dependencies = [
  "agent-distributed",
  "agent-inference",
  "agent-launch",
+ "agent-media",
  "agent-protocol",
  "agent-secrets",
  "agent-telemetry",
@@ -262,6 +276,7 @@ dependencies = [
 name = "agent-client"
 version = "0.1.0"
 dependencies = [
+ "agent-media",
  "agent-protocol",
  "agent-security",
  "anyhow",
@@ -413,6 +428,7 @@ dependencies = [
  "agent-distributed",
  "agent-inference",
  "agent-launch",
+ "agent-media",
  "agent-protocol",
  "agent-telemetry",
  "agent-test-support",
@@ -562,6 +578,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-media"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "image",
+ "sha2 0.11.1",
+ "tempfile",
+]
+
+[[package]]
 name = "agent-memory"
 version = "0.1.0"
 dependencies = [
@@ -603,6 +630,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent-planning"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum 0.28.0",
+ "thiserror 2.0.21",
+ "uuid 1.29.0",
+]
+
+[[package]]
 name = "agent-protocol"
 version = "0.1.0"
 dependencies = [
@@ -629,6 +667,7 @@ dependencies = [
  "model-provider",
  "rig-agent",
  "rig-core",
+ "rig-memory",
  "serde",
  "serde_json",
  "tempfile",
@@ -684,7 +723,10 @@ dependencies = [
 name = "agent-storage"
 version = "0.1.0"
 dependencies = [
+ "agent-changes",
  "agent-core",
+ "agent-media",
+ "agent-planning",
  "anyhow",
  "async-trait",
  "hex",
@@ -747,6 +789,7 @@ name = "agentd"
 version = "0.1.0"
 dependencies = [
  "agent-browser",
+ "agent-changes",
  "agent-client",
  "agent-computer",
  "agent-computer-runtime",
@@ -756,8 +799,10 @@ dependencies = [
  "agent-distributed",
  "agent-inference",
  "agent-mcp",
+ "agent-media",
  "agent-memory",
  "agent-model-hub",
+ "agent-planning",
  "agent-protocol",
  "agent-runtime",
  "agent-secrets",
@@ -770,6 +815,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "axum",
+ "base64 0.23.1",
  "clap",
  "decision-core",
  "directories",
@@ -4105,6 +4151,15 @@ name = "deunicode"
 version = "1.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "abd57806937c9cc163efc8ea3910e00a62e2aeb0b8119f1793a978088f8f6b04"
+
+[[package]]
+name = "diffy"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e3dc2f773b6aaa63b1a7684b8589f670a8a0146a510b74d23a401c882364b49"
+dependencies = [
+ "hashbrown 0.17.1",
+]
 
 [[package]]
 name = "digest"

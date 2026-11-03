@@ -143,9 +143,11 @@ async fn cancellation_reaches_stalled_provider() {
   let result = tokio::time::timeout(std::time::Duration::from_secs(5), execution)
     .await
     .unwrap()
-    .unwrap()
     .unwrap();
-  assert_eq!(result.outcome, RunOutcome::Cancelled);
+  assert!(matches!(
+    result,
+    Err(agent_runtime::RuntimeError::Uncertain(_))
+  ));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

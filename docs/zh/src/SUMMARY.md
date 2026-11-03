@@ -16,3 +16,5 @@
 - [连接节点与 Control Relay](network.md)
 - [协议与平台能力](protocol.md)
 - [开发与验证](development.md)
+
+- [计划、上下文与变更](agent-workflows.md)

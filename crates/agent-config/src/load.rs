@@ -94,21 +94,20 @@ pub fn load_with_environment(
   if settings.log_directory.is_relative() {
     settings.log_directory = data_dir.join(&settings.log_directory);
   }
-  settings.credentials = Credentials(
-    [
-      ("openai", "OPENAI_API_KEY"),
-      ("anthropic", "ANTHROPIC_API_KEY"),
-      ("deepseek", "DEEPSEEK_API_KEY"),
-      ("daemon", "LYONBROWN_TOKEN"),
-    ]
-    .into_iter()
-    .filter_map(|(provider, key)| {
-      merged
-        .get(key)
-        .map(|value| (provider.into(), value.clone().into()))
-    })
-    .collect(),
-  );
+  let mut credentials = BTreeMap::new();
+  for provider in crate::PROVIDER_CATALOG {
+    if let Some(value) = provider
+      .credential_env_names
+      .iter()
+      .find_map(|name| merged.get(*name))
+    {
+      credentials.insert(provider.id.to_owned(), value.clone().into());
+    }
+  }
+  if let Some(value) = merged.get("LYONBROWN_TOKEN") {
+    credentials.insert("daemon".into(), value.clone().into());
+  }
+  settings.credentials = Credentials(credentials);
   settings.validate()?;
   for (key, name) in settings.memory.credential_references() {
     let value = merged

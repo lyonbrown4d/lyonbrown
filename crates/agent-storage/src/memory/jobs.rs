@@ -2,9 +2,17 @@ use super::{entities::jobs, job_state};
 use crate::{Store, event_tx};
 use anyhow::Result;
 use memory_core::{MemoryError, MemoryItem, MemoryJob, MemoryJobKind, MemoryJobState, MemoryState};
-use sea_orm::{QueryOrder, QuerySelect, Set, prelude::*};
+use sea_orm::{Condition, QueryOrder, QuerySelect, Set, prelude::*};
 
 pub(super) async fn enqueue(connection: &impl ConnectionTrait, item: &MemoryItem) -> Result<()> {
+  enqueue_rebuild(connection, item, None, None).await
+}
+pub(super) async fn enqueue_rebuild(
+  connection: &impl ConnectionTrait,
+  item: &MemoryItem,
+  rebuild_id: Option<&str>,
+  embedding: Option<&memory_core::EmbeddingDescriptor>,
+) -> Result<()> {
   jobs::ActiveModel {
     id: Set(agent_core::new_id()),
     memory_id: Set(item.id.clone()),
@@ -20,6 +28,8 @@ pub(super) async fn enqueue(connection: &impl ConnectionTrait, item: &MemoryItem
     state: Set("pending".into()),
     attempts: Set(0),
     error_category: Set(None),
+    rebuild_id: Set(rebuild_id.map(str::to_owned)),
+    descriptor_key: Set(embedding.map(super::rebuilds::descriptor_key).transpose()?),
   }
   .insert(connection)
   .await?;
@@ -59,11 +69,21 @@ impl Store {
       .map(decode)
       .collect()
   }
-  pub(super) async fn memory_claim_job(&self) -> Result<Option<MemoryJob>> {
+  pub(super) async fn memory_claim_job(
+    &self,
+    embedding: Option<&memory_core::EmbeddingDescriptor>,
+  ) -> Result<Option<MemoryJob>> {
     let transaction = self.begin_write().await?;
     let result: Result<_> = async {
-      let Some(mut row) = jobs::Entity::find()
-        .filter(jobs::Column::State.eq("pending"))
+      let mut query = jobs::Entity::find().filter(jobs::Column::State.eq("pending"));
+      if let Some(embedding) = embedding {
+        query = query.filter(
+          Condition::any()
+            .add(jobs::Column::DescriptorKey.is_null())
+            .add(jobs::Column::DescriptorKey.eq(super::rebuilds::descriptor_key(embedding)?)),
+        );
+      }
+      let Some(mut row) = query
         .order_by_asc(jobs::Column::Id)
         .one(&transaction)
         .await?
@@ -147,13 +167,24 @@ impl Store {
       }
     }
   }
-  pub(super) async fn memory_retry_job(&self, id: &str) -> Result<()> {
+  pub(super) async fn memory_retry_job(
+    &self,
+    id: &str,
+    embedding: Option<&memory_core::EmbeddingDescriptor>,
+    check_descriptor: bool,
+  ) -> Result<()> {
     let transaction = self.begin_write().await?;
     let result: Result<_> = async {
       let row = jobs::Entity::find_by_id(id)
         .one(&transaction)
         .await?
         .ok_or(MemoryError::NotFound)?;
+      if check_descriptor && let Some(target) = &row.descriptor_key {
+        let actual = embedding.map(super::rebuilds::descriptor_key).transpose()?;
+        if actual.as_ref() != Some(target) {
+          return Err(MemoryError::EmbeddingMismatch.into());
+        }
+      }
       if row.state == "pending" {
         return Ok(());
       }

@@ -1,7 +1,7 @@
 //! Client input and protocol values only; scope IDs remain daemon-owned.
 use agent_protocol::v1::{MemoryKind, MemoryScopeKind, MemoryState};
 
-pub const USAGE: &str = "/memory list [STATE|all] [AFTER_ID] · get ID · status · search TEXT · add SCOPE KIND TEXT · propose SCOPE KIND TEXT · approve ID REVISION · edit ID REVISION TEXT · forget ID REVISION · jobs ID · retry ID JOB_ID";
+pub const USAGE: &str = "/memory list [STATE|all] [AFTER_ID] · get ID · status · search TEXT · add SCOPE KIND TEXT · propose SCOPE KIND TEXT · approve ID REVISION · edit ID REVISION TEXT · forget ID REVISION · jobs ID · retry ID JOB_ID · rebuild · rebuilds [AFTER_ID]";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MemoryCommand {
@@ -11,6 +11,12 @@ pub enum MemoryCommand {
   },
   Get(String),
   Status,
+  Rebuild {
+    request: String,
+  },
+  Rebuilds {
+    after: String,
+  },
   Search(String),
   Create {
     id: String,
@@ -61,6 +67,15 @@ pub(crate) fn parse(args: &[String]) -> Result<MemoryCommand, String> {
         .unwrap_or_default(),
     },
     [verb] if verb == "status" => MemoryCommand::Status,
+    [verb] if verb == "rebuild" => MemoryCommand::Rebuild {
+      request: uuid::Uuid::now_v7().to_string(),
+    },
+    [verb] if verb == "rebuilds" => MemoryCommand::Rebuilds {
+      after: String::new(),
+    },
+    [verb, after] if verb == "rebuilds" => MemoryCommand::Rebuilds {
+      after: identifier(after)?,
+    },
     [verb, id] if verb == "get" => MemoryCommand::Get(identifier(id)?),
     [verb, id] if verb == "jobs" => MemoryCommand::Jobs(identifier(id)?),
     [verb, text @ ..] if verb == "search" => MemoryCommand::Search(content(text)?),

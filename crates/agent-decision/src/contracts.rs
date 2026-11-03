@@ -44,7 +44,18 @@ choices!(
     ReadFile,
     ListFiles,
     SearchFiles,
+    LoadSkill,
     WriteFile,
+    MemoryRead,
+    MemorySearch,
+    MemoryPropose,
+    PlanRead,
+    PlanUpdate,
+    PatchPreview,
+    PatchApply,
+    CheckpointRead,
+    CheckpointUndo,
+    ValidationRecord,
     ExecuteCommand,
     BrowserObserve,
     BrowserAct,
@@ -58,8 +69,16 @@ choices!(
 impl Tool {
   pub fn capability(self) -> Capability {
     match self {
-      Self::ReadFile | Self::ListFiles | Self::SearchFiles => Capability::FileRead,
-      Self::WriteFile => Capability::FileWrite,
+      Self::ReadFile | Self::ListFiles | Self::SearchFiles | Self::LoadSkill => {
+        Capability::FileRead
+      }
+      Self::MemoryRead
+      | Self::MemorySearch
+      | Self::MemoryPropose
+      | Self::PlanRead
+      | Self::PlanUpdate => Capability::FileRead,
+      Self::PatchPreview | Self::CheckpointRead | Self::ValidationRecord => Capability::FileRead,
+      Self::WriteFile | Self::PatchApply | Self::CheckpointUndo => Capability::FileWrite,
       Self::ExecuteCommand => Capability::ProcessExecute,
       Self::BrowserObserve | Self::BrowserAct => Capability::Browser,
       Self::ComputerObserve | Self::ComputerAct => Capability::Computer,
@@ -71,6 +90,7 @@ impl Tool {
     matches!(
       self,
       Self::WriteFile
+        | Self::PatchApply
         | Self::ExecuteCommand
         | Self::BrowserAct
         | Self::ComputerAct

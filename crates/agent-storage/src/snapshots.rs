@@ -82,6 +82,7 @@ impl Store {
             .await?
             .context("session has no accepted run for runtime mutation")?
         };
+        crate::context_maintenance::observe_snapshot(connection, session_id, epoch, kind).await?;
         runtime_sessions::Entity::insert(runtime_sessions::ActiveModel {
           session_id: Set(session_id.into()),
           snapshot: Set(snapshot.into()),

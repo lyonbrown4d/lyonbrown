@@ -2,6 +2,12 @@ use agent_client::AgentClient;
 use agent_protocol::v1::{Approval, Event, Run, Session};
 
 pub enum Update {
+  ImagesSelected {
+    scope: String,
+    images: Vec<agent_client::media::NamedImage>,
+  },
+  ImagesConfirmed(String),
+  ImagesRejected(String),
   Connected {
     client: Box<AgentClient>,
     sessions: Vec<Session>,

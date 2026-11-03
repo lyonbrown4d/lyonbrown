@@ -150,3 +150,32 @@ pub(crate) fn jobs(value: &v1::MemoryJobs) -> String {
     .collect::<Vec<_>>()
     .join("\n\n")
 }
+
+pub(crate) fn rebuild(value: &v1::MemoryRebuild) -> String {
+  let state = match v1::MemoryRebuildState::try_from(value.state) {
+    Ok(v1::MemoryRebuildState::Pending) => "pending",
+    Ok(v1::MemoryRebuildState::Completed) => "completed",
+    _ => "unknown",
+  };
+  format!(
+    "Rebuild: {}\nState: {state} · scanned {} · index jobs {}\nEmbedding: {} · {} dimensions\nPending waits for all generated jobs; inspect /memory jobs ID before an explicit retry.",
+    text(&value.id),
+    value.scanned,
+    value.enqueued,
+    text(&value.embedding_model),
+    value.dimensions
+  )
+}
+pub(crate) fn rebuilds(value: &v1::MemoryRebuilds) -> String {
+  let mut lines = value.items.iter().map(rebuild).collect::<Vec<_>>();
+  if lines.is_empty() {
+    lines.push("No rebuilds in the current scopes".into());
+  }
+  if !value.next_cursor.is_empty() {
+    lines.push(format!(
+      "Next page: /memory rebuilds {}",
+      text(&value.next_cursor)
+    ));
+  }
+  lines.join("\n\n")
+}

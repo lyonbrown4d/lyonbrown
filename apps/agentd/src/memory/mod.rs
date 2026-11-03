@@ -1,5 +1,8 @@
 //! Authenticated local-owner memory management. Model tools use proposals separately.
 mod access;
+mod rebuild;
+mod tools;
+pub(crate) use tools::tools;
 #[cfg(test)]
 mod tests;
 mod wire;
@@ -140,6 +143,37 @@ impl MemoryService for Daemon {
       .map_err(failure)?;
     self.events.notify_waiters();
     Ok(Response::new(v1::Empty {}))
+  }
+  async fn start_memory_rebuild(
+    &self,
+    request: Request<v1::StartMemoryRebuildRequest>,
+  ) -> Result<Response<v1::MemoryRebuild>, Status> {
+    let input = request.into_inner();
+    let access = self.memory_access(&input.session_id).await?;
+    let rebuild = self
+      .memory
+      .start_rebuild(&access, &input.request_id, input.force)
+      .await
+      .map_err(failure)?;
+    self.events.notify_waiters();
+    Ok(Response::new(rebuild::record(rebuild)))
+  }
+  async fn list_memory_rebuilds(
+    &self,
+    request: Request<v1::ListMemoryRebuildsRequest>,
+  ) -> Result<Response<v1::MemoryRebuilds>, Status> {
+    let input = request.into_inner();
+    let access = self.memory_access(&input.session_id).await?;
+    let after = (!input.after_id.is_empty()).then_some(input.after_id.as_str());
+    let page = self
+      .memory
+      .rebuilds(&access, after, page_limit(input.limit, 20)?)
+      .await
+      .map_err(failure)?;
+    Ok(Response::new(v1::MemoryRebuilds {
+      items: page.items.into_iter().map(rebuild::record).collect(),
+      next_cursor: page.next_cursor.unwrap_or_default(),
+    }))
   }
   async fn get_memory_status(
     &self,

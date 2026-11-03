@@ -134,25 +134,27 @@ impl Config {
       .ok()
       .filter(|value| !value.is_empty());
     cli.provider_inventory = settings.provider_inventory();
-    cli.catalog_credentials = ["openai", "anthropic", "deepseek"]
-      .into_iter()
-      .filter_map(|id| settings.credential(id).map(|value| (id.to_owned(), value)))
+    cli.catalog_credentials = agent_config::PROVIDER_CATALOG
+      .iter()
+      .filter_map(|provider| {
+        settings
+          .credential(provider.id)
+          .map(|value| (provider.id.to_owned(), value))
+      })
       .collect();
-    cli.provider_api_key = settings.credential(if settings.provider == "anthropic" {
-      "anthropic"
-    } else {
-      "openai"
-    });
+    cli.provider_api_key = settings.credential(
+      agent_config::provider_definition(&settings.provider)
+        .map_or(settings.provider.as_str(), |provider| provider.id),
+    );
     let decision_provider = settings
       .decision
       .provider
       .as_deref()
       .unwrap_or(&settings.provider);
-    cli.decision_api_key = settings.credential(if decision_provider == "anthropic" {
-      "anthropic"
-    } else {
-      "openai"
-    });
+    cli.decision_api_key = settings.credential(
+      agent_config::provider_definition(decision_provider)
+        .map_or(decision_provider, |provider| provider.id),
+    );
     cli.mcp = crate::mcp_config::resolve(&settings)?;
     cli.configure_commands(&settings)?;
     cli.browser_tools = settings.browser_tools;

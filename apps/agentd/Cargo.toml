@@ -10,6 +10,10 @@ local-llama = ["agent-inference/llama"]
 local-mistral = ["agent-inference/mistral"]
 
 [dependencies]
+base64 = "=0.23.1"
+agent-media = { path = "../../crates/agent-media" }
+agent-planning = { path = "../../crates/agent-planning" }
+agent-changes = { path = "../../crates/agent-changes" }
 agent-memory = { path = "../../crates/agent-memory" }
 memory-core = { path = "../../crates/memory-core" }
 memory-qdrant = { path = "../../crates/memory-qdrant" }

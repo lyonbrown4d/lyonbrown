@@ -14,6 +14,7 @@ use agent_computer_runtime::{ComputerHostFactory, NativeComputerHost};
 use std::sync::Arc;
 
 pub enum Action {
+  Media(crate::media::Request),
   CancelProviderProbe {
     dialog: String,
   },
@@ -116,6 +117,7 @@ pub enum Action {
 }
 
 pub enum Update {
+  Media(crate::media::Reply),
   ProviderProfile {
     generation: u64,
     dialog: String,
@@ -356,6 +358,7 @@ pub fn spawn_with_computer_factory(
               };
               let operation = match &action {
                   Action::Connect => "client.connect",
+                  Action::Media(_) => "run.images",
                   Action::Computer { .. } | Action::Shutdown(_) => "computer.control",
                   Action::NewSession => "session.create",
                   Action::Select { .. } => "session.select",

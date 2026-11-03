@@ -209,6 +209,7 @@ impl Store {
           serde_json::json!({"run_id":run.id,"recovery_of":original.id}),
         )
         .await?;
+        crate::interaction::inherit_recovery_mode(connection, &original.id, &fresh.id, &run.id).await?;
         // Runtime snapshots, tool frames and approvals are deliberately not copied.
         resolution.session_id = Some(fresh.id);
         resolution.replacement_run_id = Some(run.id);

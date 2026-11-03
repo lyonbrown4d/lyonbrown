@@ -4,6 +4,7 @@ mod entities;
 mod jobs;
 mod project_scope;
 mod read;
+mod rebuilds;
 mod validation;
 mod write;
 use crate::Store;
@@ -66,7 +67,16 @@ impl MemoryRepository for Store {
       .map_err(storage_error)
   }
   async fn claim_job(&self) -> MemoryResult<Option<MemoryJob>> {
-    self.memory_claim_job().await.map_err(storage_error)
+    self.memory_claim_job(None).await.map_err(storage_error)
+  }
+  async fn claim_job_for(
+    &self,
+    embedding: &EmbeddingDescriptor,
+  ) -> MemoryResult<Option<MemoryJob>> {
+    self
+      .memory_claim_job(Some(embedding))
+      .await
+      .map_err(storage_error)
   }
   async fn finish_job(
     &self,
@@ -84,7 +94,20 @@ impl MemoryRepository for Store {
     self.memory_jobs(id).await.map_err(storage_error)
   }
   async fn retry_job(&self, id: &str) -> MemoryResult<()> {
-    self.memory_retry_job(id).await.map_err(storage_error)
+    self
+      .memory_retry_job(id, None, false)
+      .await
+      .map_err(storage_error)
+  }
+  async fn retry_job_for(
+    &self,
+    id: &str,
+    embedding: Option<&EmbeddingDescriptor>,
+  ) -> MemoryResult<()> {
+    self
+      .memory_retry_job(id, embedding, true)
+      .await
+      .map_err(storage_error)
   }
   async fn recover_jobs(&self) -> MemoryResult<u64> {
     self.memory_recover_jobs().await.map_err(storage_error)
@@ -96,6 +119,41 @@ impl MemoryRepository for Store {
   ) -> MemoryResult<MemoryScope> {
     self
       .memory_project_scope(owner, canonical_workspace)
+      .await
+      .map_err(storage_error)
+  }
+  async fn start_rebuild(
+    &self,
+    id: &str,
+    scopes: &[MemoryScope],
+    embedding: &EmbeddingDescriptor,
+    force: bool,
+    now: i64,
+  ) -> MemoryResult<MemoryRebuild> {
+    self
+      .memory_start_rebuild(id, scopes, embedding, force, now)
+      .await
+      .map_err(storage_error)
+  }
+  async fn list_rebuilds(
+    &self,
+    scopes: &[MemoryScope],
+    after: Option<&str>,
+    limit: u32,
+  ) -> MemoryResult<MemoryRebuildPage> {
+    self
+      .memory_list_rebuilds(scopes, after, limit)
+      .await
+      .map_err(storage_error)
+  }
+  async fn advance_rebuild(
+    &self,
+    embedding: &EmbeddingDescriptor,
+    limit: u32,
+    now: i64,
+  ) -> MemoryResult<bool> {
+    self
+      .memory_advance_rebuild(embedding, limit, now)
       .await
       .map_err(storage_error)
   }

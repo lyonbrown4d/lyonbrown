@@ -7,6 +7,7 @@ The public contract is `proto/agent/v1/agent.proto`, using package `agent.v1`. P
 | Service | Message scope |
 | --- | --- |
 | `ClientService` | Node information, sessions, runs, events, cancellation and approvals |
+| `WorkflowService` | Typed plans, steps, host verification, change previews and user undo |
 | `WorkspaceService` | File reads, revision-checked writes, whole-workspace diffs and watching |
 | `OrchestrationService` | Local Master dispatch, paged queries, reconciliation, cancellation and result acceptance |
 | `TaskService` | Worker submission, queries, events, cancellation and result acceptance |
@@ -80,3 +81,5 @@ Clients generate a stable UUID for a new form. Revision zero creates; edits subm
 Creation requires a single-line credential of at most 16 KiB; an empty byte array on update preserves the existing value. Encrypted storage owns credentials. Changes create immutable references, so a failed CAS never overwrites an old value. Orphaned credentials whose publication cannot be confirmed are retained conservatively. SQLite profile writes and encrypted secret files do not form a cross-store atomic transaction. Removing a profile does not revoke pinned Session/Run model bindings; old credentials have no automatic garbage collection.
 
 Probe validates an unsaved draft and performs a model-list GET without configuration writes or inference. Reusing a stored credential requires an exact current revision. Addresses require HTTPS or loopback HTTP, without embedded credentials, queries, or fragments. Probes disable proxies, redirects, and automatic retries; limits are five seconds, 1 MiB, and 100 valid model IDs. Failures never echo upstream bodies or credential values. These bounded checks are distinct from real inference SDK acceptance.
+
+`ClientService` also provides context statistics, explicit summary reads, compaction and undo, session modes and image Run admission. Plan, step, mode, change and rebuild states use enums. Image message debug output omits content. Workflow messages have a 12 MiB transport limit and client image requests a 40 MiB limit; the business image limit remains 32 MiB. See [Plans, context and changes](agent-workflows.md) for behavior and limits.

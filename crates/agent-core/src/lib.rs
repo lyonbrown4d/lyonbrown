@@ -1,5 +1,7 @@
 //! Application-owned domain records; independent of UI and agent-engine types.
+pub mod context_maintenance;
 pub mod events;
+pub mod interaction;
 pub mod provider_profiles;
 mod records;
 pub use records::*;

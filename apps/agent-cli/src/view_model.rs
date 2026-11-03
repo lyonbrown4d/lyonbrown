@@ -231,6 +231,22 @@ impl<'a> ViewModel<'a> {
     } else {
       format!("{} · {}", app.notice, app.persistence_warning)
     };
+    let notice = if let Some(draft) = app
+      .selected_session()
+      .and_then(|session| app.image_drafts.get(&session.id))
+      .filter(|draft| !draft.attachments.is_empty())
+    {
+      let images = draft
+        .attachments
+        .iter()
+        .enumerate()
+        .map(|(index, image)| format!("{}. {}", index + 1, image.name))
+        .collect::<Vec<_>>()
+        .join(" · ");
+      format!("图片：{images} · {notice}")
+    } else {
+      notice
+    };
     Self {
       connection,
       connected: app.connection == Connection::Connected,

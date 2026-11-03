@@ -20,6 +20,7 @@ pub struct Runtime {
   pub(crate) session: DurableSession,
   pub(crate) model: DynModel<Completion>,
   pub(crate) config: RuntimeConfig,
+  pub(crate) summary_guard: Option<Arc<dyn crate::SummaryRequestGuard>>,
   pub(crate) tools: BTreeMap<String, Arc<dyn RuntimeTool>>,
   pub(crate) listener: EventListener,
   pub(crate) execution: Mutex<()>,
@@ -75,6 +76,7 @@ impl Runtime {
       session,
       model,
       config,
+      summary_guard: None,
       tools: registered,
       listener,
       execution: Mutex::new(()),
@@ -91,7 +93,7 @@ impl Runtime {
     prompt: &str,
     images: Vec<crate::RuntimeImage>,
   ) -> Result<RuntimeResult> {
-    crate::input::validate(prompt, &images)?;
+    crate::validate_input(prompt, &images)?;
     if !images.is_empty() && !self.config.supports_images {
       return Err(RuntimeError::Configuration(
         "configured model does not support image input".into(),
@@ -112,8 +114,9 @@ impl Runtime {
             "resume the existing run before submitting a prompt".into(),
           ));
         }
+        state.context.protect(&prompt);
         let run = AgentRun::from_spec(&spec, prompt, None)
-          .with_validated_history(state.history.clone())
+          .with_validated_history(state.context.messages()?)
           .map_err(crate::persistence::rig_error)?;
         let id = agent_core::new_id();
         state.active = Some(ActiveRun {
@@ -124,6 +127,7 @@ impl Runtime {
           in_flight: None,
           usage: Default::default(),
           segment: 0,
+          context_cursor: state.context.messages()?.len(),
         });
         Ok(((), serde_json::json!({"run_id":id}), vec![]))
       })
@@ -142,14 +146,7 @@ impl Runtime {
     self.run_owned().await.map(Some)
   }
   async fn run_owned(&self) -> Result<RuntimeResult> {
-    let token = CancellationToken::new();
-    {
-      let mut current = self.cancellation.lock().await;
-      if self.pending_cancel.swap(false, Ordering::AcqRel) {
-        token.cancel();
-      }
-      *current = Some(token.clone());
-    }
+    let token = self.begin_cancellation().await;
     self.admission.store(true, Ordering::Release);
     let result = self.drive(&token).await;
     self.close_input_admission().await;
@@ -160,6 +157,17 @@ impl Runtime {
       ));
     }
     result
+  }
+  pub(crate) async fn begin_cancellation(&self) -> CancellationToken {
+    let token = CancellationToken::new();
+    {
+      let mut current = self.cancellation.lock().await;
+      if self.pending_cancel.swap(false, Ordering::AcqRel) {
+        token.cancel();
+      }
+      *current = Some(token.clone());
+    }
+    token
   }
   pub async fn cancel(&self) -> Result<()> {
     let current = self.cancellation.lock().await;

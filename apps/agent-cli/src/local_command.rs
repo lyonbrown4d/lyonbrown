@@ -24,6 +24,9 @@ struct RunLine {
 
 pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::Result<()> {
   let prompt = app.input.text();
+  if crate::media::command(app, actions, &prompt)? {
+    return Ok(());
+  }
   if prompt.trim() == "/search" || prompt.trim_start().starts_with("/search ") {
     let query = prompt
       .trim_start()
@@ -238,6 +241,8 @@ pub(crate) fn submit(app: &mut App, actions: &mpsc::Sender<Action>) -> anyhow::R
     } else {
       format!("未知命令 /{command}。输入 / 查看命令，或 /help 查看帮助。")
     };
+  } else if crate::media::has_images(app) {
+    crate::media::submit(app, actions, &prompt)?;
   } else if app.connection == Connection::Connected
     && (app.active_run.is_some()
       || app.input_attempt.as_ref().is_some_and(|attempt| {

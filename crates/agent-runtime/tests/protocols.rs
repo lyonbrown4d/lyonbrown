@@ -220,9 +220,9 @@ async fn failures(protocol: StandardProtocol) {
     )
     .await
     .unwrap();
-    let result = runtime.execute("inspect fixture").await.unwrap();
+    let result = runtime.execute("inspect fixture").await;
     assert!(
-      matches!(result.outcome, RunOutcome::Failed { .. }),
+      matches!(result, Err(agent_runtime::RuntimeError::Uncertain(_))),
       "{protocol:?} accepted a failed or incomplete stream"
     );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
@@ -261,9 +261,11 @@ async fn cancellation(protocol: StandardProtocol) {
   let result = tokio::time::timeout(std::time::Duration::from_secs(5), task)
     .await
     .unwrap()
-    .unwrap()
     .unwrap();
-  assert_eq!(result.outcome, RunOutcome::Cancelled, "{protocol:?}");
+  assert!(
+    matches!(result, Err(agent_runtime::RuntimeError::Uncertain(_))),
+    "{protocol:?}"
+  );
   assert_eq!(server.requests().await.len(), 1);
 }
 macro_rules! protocol_tests {

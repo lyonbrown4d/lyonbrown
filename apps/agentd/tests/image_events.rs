@@ -80,7 +80,7 @@ async fn assert_snapshot(node: &TestNode) {
   let snapshot: Value = serde_json::from_slice(&bytes).unwrap();
   assert_eq!(snapshot["version"], 1);
   assert_eq!(snapshot["session_id"], node.session_id);
-  let entries = snapshot["history"].as_array().unwrap();
+  let entries = vec![snapshot["context"]["pinned"].clone()];
   let originals = entries
     .iter()
     .filter(|entry| entry["role"] == "user" && entry.to_string().contains(PROMPT))

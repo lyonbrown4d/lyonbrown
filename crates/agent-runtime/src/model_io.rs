@@ -13,26 +13,25 @@ use tokio_util::sync::CancellationToken;
 impl Runtime {
   pub(crate) async fn call_model(
     &self,
-    prompt: Arc<Message>,
-    history: Vec<Arc<Message>>,
+    _prompt: Arc<Message>,
+    _history: Vec<Arc<Message>>,
     turn: usize,
     token: &CancellationToken,
   ) -> Result<bool> {
+    let mut messages = self.prepare_context(token).await?;
+    let prompt = Arc::new(
+      messages
+        .pop()
+        .ok_or_else(|| RuntimeError::Execution("model request has no prompt".into()))?,
+    );
+    let history = messages.into_iter().map(Arc::new).collect::<Vec<_>>();
+    if token.is_cancelled() {
+      return Ok(false);
+    }
     let prepared = self
       .session
       .update("model_request_started", |state| {
         let active = active(state)?;
-        if active
-          .usage
-          .input_tokens
-          .saturating_add(u64::from(self.config.max_output_tokens))
-          >= u64::from(self.config.context_window)
-        {
-          return Err(RuntimeError::Configuration(
-            "context budget exhausted; automatic compaction is unavailable in the Rig runtime"
-              .into(),
-          ));
-        }
         let prepared = prepare_request(
           &active.spec,
           &self.model.capabilities().completion,
@@ -57,31 +56,32 @@ impl Runtime {
       .await?;
     (self.listener)(RuntimeEvent::ModelRequestStarted);
     let request = prepared.clone().apply(CompletionRequest::new(prompt));
-    let mut stream = self.model.stream(request).map_err(model_error)?;
+    let mut stream = self.model.stream(request).map_err(|_| unknown_model())?;
     let mut assembler = StreamedTurnAssembler::new(prepared.policy);
     let deadline = tokio::time::sleep(Duration::from_secs(120));
     tokio::pin!(deadline);
     let mut started = false;
+    let mut received_bytes = 0_usize;
     loop {
       let item = tokio::select! { biased;
         _ = self.session.stopped.cancelled() => return Err(RuntimeError::Uncertain("session writer fenced".into())),
-        _ = token.cancelled() => return Ok(false),
-        _ = &mut deadline => return Err(RuntimeError::Execution("model request exceeded 120 second deadline".into())),
+        _ = token.cancelled() => return Err(unknown_model()),
+        _ = &mut deadline => return Err(unknown_model()),
         item = stream.next() => item,
       };
       let Some(item) = item else {
         break;
       };
-      let item = item.map_err(model_error)?;
+      let item = item.map_err(|_| unknown_model())?;
+      let remaining = crate::budget::MODEL_BYTES.saturating_sub(received_bytes);
+      received_bytes += crate::budget::size(&item, remaining).map_err(|_| unknown_model())?;
       if !started {
         (self.listener)(RuntimeEvent::ModelResponseStarted);
         started = true;
       }
-      match assembler.ingest(&item).map_err(model_error)? {
+      match assembler.ingest(&item).map_err(|_| unknown_model())? {
         StreamedTurnEvent::InvalidToolCall(_) => {
-          return Err(RuntimeError::Execution(
-            "model emitted a tool outside the advertised authorization set".into(),
-          ));
+          return Err(unknown_model());
         }
         StreamedTurnEvent::EmitIngested => match &item {
           Item::Event(StreamEvent::Text { text, .. }) => {
@@ -95,7 +95,14 @@ impl Runtime {
         _ => {}
       }
     }
-    let response = stream.finish().await.map_err(model_error)?;
+    let response = tokio::select! { biased;
+      _ = self.session.stopped.cancelled() => return Err(unknown_model()),
+      _ = token.cancelled() => return Err(unknown_model()),
+      _ = &mut deadline => return Err(unknown_model()),
+      result = stream.finish() => result.map_err(|_| unknown_model())?,
+    };
+    crate::budget::check(&response.choice, crate::budget::MODEL_BYTES)
+      .map_err(|_| unknown_model())?;
     let usage = response.usage;
     let turn = assembler.finish(&response);
     self
@@ -131,7 +138,8 @@ impl Runtime {
           }],
         ))
       })
-      .await?;
+      .await
+      .map_err(|_| unknown_model())?;
     Ok(true)
   }
 }
@@ -147,4 +155,10 @@ fn runtime_usage(usage: Usage) -> TokenUsage {
 
 fn model_error(_: impl std::fmt::Display) -> RuntimeError {
   RuntimeError::Execution("model request did not complete successfully".into())
+}
+
+fn unknown_model() -> RuntimeError {
+  RuntimeError::Uncertain(
+    "model IO did not durably finish; retained request intent requires reconciliation".into(),
+  )
 }

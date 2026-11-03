@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 /// tab owns its own value inside `Navigation::inactive` (`ChatState::vm`), and
 /// `ChatState::swap_with` is the single place where the two are exchanged.
 pub(crate) struct DesktopViewModel {
+  pub(crate) images: agent_client::media::ImageDraft,
   pub(crate) selected: Option<String>,
   pub(crate) runs: Vec<Run>,
   pub(crate) active_run: Option<String>,
@@ -24,6 +25,7 @@ pub(crate) struct DesktopViewModel {
 impl Default for DesktopViewModel {
   fn default() -> Self {
     Self {
+      images: Default::default(),
       selected: None,
       runs: Vec::new(),
       active_run: None,

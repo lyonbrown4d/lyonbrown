@@ -37,8 +37,10 @@ pub(crate) struct ResourcePane {
   pub(super) notice: Option<String>,
   pub(super) models: Vec<v1::ModelCandidate>,
   pub(super) providers: Vec<v1::Provider>,
+  pub(super) profile_editor: Option<Entity<super::profile_editor::ProfileEditor>>,
   pub(super) skills: Vec<v1::Skill>,
   pub(super) status: Option<v1::RuntimeStatus>,
+  pub(super) context_panel: Option<Entity<super::context_panel::ContextPanel>>,
   pub(super) environment: BTreeMap<String, agent_config::ProviderCredentialStatus>,
   pub(super) source: Entity<InputState>,
   pub(super) scope: Entity<SelectState<Vec<String>>>,
@@ -170,7 +172,7 @@ impl ResourcePane {
     );
     Self {
       section,
-      runtime,
+      runtime: runtime.clone(),
       client: None,
       session: None,
       generation: 0,
@@ -182,8 +184,13 @@ impl ResourcePane {
       notice: None,
       models: Vec::new(),
       providers: Vec::new(),
+      profile_editor: (section == ResourceSection::Providers).then(|| {
+        cx.new(|cx| super::profile_editor::ProfileEditor::new(runtime.clone(), window, cx))
+      }),
       skills: Vec::new(),
       status: None,
+      context_panel: (section == ResourceSection::Status)
+        .then(|| cx.new(|_| super::context_panel::ContextPanel::new(runtime.clone()))),
       environment: agent_config::detect_provider_environment(),
       source,
       scope,
@@ -220,6 +227,18 @@ impl ResourcePane {
     let preserve_hub =
       self.section == ResourceSection::Models && self.client.is_some() && !connection_changed;
     let changed = connection_changed || self.session != session;
+    if connection_changed {
+      if let Some(editor) = &self.profile_editor {
+        editor.update(cx, |editor, cx| editor.bind(client.clone(), cx));
+      }
+    }
+    if changed {
+      if let Some(panel) = &self.context_panel {
+        panel.update(cx, |panel, cx| {
+          panel.bind(client.clone(), session.clone(), cx)
+        });
+      }
+    }
     self.client = client;
     if !changed {
       return;
