@@ -23,8 +23,9 @@ pub use models::{LocalModelBackend, LocalModelFormat, LocalModelSettings, valida
 pub use peer::PeerSettings;
 pub use providers::{
   ConfiguredProviderModel, CredentialSource, CredentialState, PROVIDER_CATALOG,
-  ProviderCredentialStatus, ProviderDefinition, ProviderProtocol, ProviderStatus,
-  detect_provider_credentials, detect_provider_environment, provider_definition,
+  ProviderCredentialStatus, ProviderDefinition, ProviderPreset, ProviderProtocol, ProviderStatus,
+  REMOTE_PROVIDER_PRESETS, detect_provider_credentials, detect_provider_environment,
+  provider_definition,
 };
 pub use relay::RelaySettings;
 pub use settings::{DecisionSettings, Settings};

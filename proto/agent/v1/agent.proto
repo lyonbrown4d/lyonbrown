@@ -32,6 +32,16 @@ service ClientService {
   rpc CreateSession(CreateSessionRequest) returns (Session);
   rpc GetSession(SessionRequest) returns (Session);
   rpc StartRun(StartRunRequest) returns (Run);
+  rpc StartRunWithAttachments(StartRunWithAttachmentsRequest) returns (Run);
+  rpc GetContextStatus(SessionRequest) returns (ContextStatus);
+  rpc GetContextSummary(SessionRequest) returns (ContextSummary);
+  rpc CompactContext(CompactContextRequest) returns (ContextStatus);
+  rpc UndoContextCompaction(UndoContextCompactionRequest) returns (ContextStatus);
+  rpc CancelContext(CancelContextRequest) returns (ContextMaintenanceJob);
+  rpc GetContextMaintenance(SessionRequest) returns (ContextMaintenanceJob);
+  rpc AbandonContext(AbandonContextRequest) returns (AbandonContextResult);
+  rpc GetInteractionPolicy(SessionRequest) returns (InteractionPolicy);
+  rpc SetInteractionMode(SetInteractionModeRequest) returns (InteractionPolicy);
   rpc SubmitRunInput(RunInputRequest) returns (RunInputReceipt);
   rpc CancelRunInput(CancelRunInputRequest) returns (RunInputReceipt);
   rpc ListRunInputs(RunRequest) returns (RunInputs);
@@ -53,6 +63,8 @@ service MemoryService {
   rpc ListMemoryJobs(GetMemoryRequest) returns (MemoryJobs);
   rpc RetryMemoryJob(RetryMemoryJobRequest) returns (Empty);
   rpc GetMemoryStatus(Empty) returns (MemoryStatus);
+  rpc StartMemoryRebuild(StartMemoryRebuildRequest) returns (MemoryRebuild);
+  rpc ListMemoryRebuilds(ListMemoryRebuildsRequest) returns (MemoryRebuilds);
 }
 enum MemoryScopeKind { MEMORY_SCOPE_KIND_UNSPECIFIED = 0; MEMORY_SCOPE_KIND_USER = 1; MEMORY_SCOPE_KIND_PROJECT = 2; MEMORY_SCOPE_KIND_SESSION = 3; }
 enum MemoryKind { MEMORY_KIND_UNSPECIFIED = 0; MEMORY_KIND_PREFERENCE = 1; MEMORY_KIND_FACT = 2; MEMORY_KIND_PROCEDURE = 3; }
@@ -146,7 +158,7 @@ message Nodes { repeated Node nodes = 1; }
 message Session { string id = 1; string title = 2; string workspace = 3; string owner_node_id = 4; uint64 owner_epoch = 5; int64 created_at_ms = 6; }
 message Sessions { repeated Session sessions = 1; }
 message RuntimeStatus { Node node = 1; Session session = 2; Run active_run = 3; string provider = 4; string model = 5; uint32 pending_approvals = 6; uint32 tools = 7; uint32 mcp_servers = 8; }
-enum RemoteProviderProtocol { REMOTE_PROVIDER_PROTOCOL_UNSPECIFIED = 0; REMOTE_PROVIDER_PROTOCOL_OPENAI_RESPONSES = 1; REMOTE_PROVIDER_PROTOCOL_OPENAI_COMPLETIONS = 2; REMOTE_PROVIDER_PROTOCOL_ANTHROPIC_MESSAGES = 3; }
+enum RemoteProviderProtocol { REMOTE_PROVIDER_PROTOCOL_UNSPECIFIED = 0; REMOTE_PROVIDER_PROTOCOL_OPENAI_RESPONSES = 1; REMOTE_PROVIDER_PROTOCOL_OPENAI_COMPLETIONS = 2; REMOTE_PROVIDER_PROTOCOL_ANTHROPIC_MESSAGES = 3; REMOTE_PROVIDER_PROTOCOL_GEMINI_GENERATE_CONTENT = 4; }
 message ProviderProfile { string id = 1; string name = 2; RemoteProviderProtocol protocol = 3; string base_url = 4; string model = 5; uint64 revision = 6; bool credential_configured = 7; }
 message ProviderProfiles { repeated ProviderProfile profiles = 1; }
 // revision=0 creates a new UUID identity; otherwise compare-and-swap the existing revision.
@@ -267,3 +279,74 @@ message RunInputRequest { string run_id = 1; uint64 owner_epoch = 2; string requ
 message CancelRunInputRequest { string run_id = 1; uint64 owner_epoch = 2; string entry_id = 3; }
 message RunInputReceipt { string run_id = 1; string request_id = 2; string entry_id = 3; RunInputKind kind = 4; RunInputState state = 5; string prompt = 6; bool prompt_truncated = 7; }
 message RunInputs { repeated RunInputReceipt inputs = 1; bool history_truncated = 2; }
+
+message RunImageAttachment { string mime_type = 1; bytes data = 2; string sha256 = 3; }
+message StartRunWithAttachmentsRequest { string session_id = 1; uint64 owner_epoch = 2; string prompt = 3; string idempotency_key = 4; repeated RunImageAttachment images = 5; }
+enum InteractionMode { INTERACTION_MODE_UNSPECIFIED = 0; INTERACTION_MODE_READ_ONLY = 1; INTERACTION_MODE_PLAN = 2; INTERACTION_MODE_EXECUTE = 3; }
+message InteractionPolicy { uint64 revision = 1; InteractionMode mode = 2; repeated ToolAvailability tools = 3; string run_id = 4; }
+message ToolAvailability { string name = 1; bool available = 2; bool requires_approval = 3; ToolAvailabilityState state = 4; }
+message SetInteractionModeRequest { string session_id = 1; uint64 owner_epoch = 2; uint64 expected_revision = 3; InteractionMode mode = 4; }
+
+message StartMemoryRebuildRequest { string session_id = 1; string request_id = 2; bool force = 3; }
+message ListMemoryRebuildsRequest { string session_id = 1; string after_id = 2; uint32 limit = 3; }
+enum MemoryRebuildState { MEMORY_REBUILD_STATE_UNSPECIFIED = 0; MEMORY_REBUILD_STATE_PENDING = 1; MEMORY_REBUILD_STATE_COMPLETED = 2; }
+message MemoryRebuild { string id = 1; repeated MemoryScope scopes = 2; string embedding_id = 3; string embedding_model = 4; uint32 dimensions = 5; string configuration_revision = 6; MemoryRebuildState state = 7; string after_id = 8; uint64 scanned = 9; uint64 enqueued = 10; int64 created_at_ms = 11; int64 updated_at_ms = 12; }
+message MemoryRebuilds { repeated MemoryRebuild items = 1; string next_cursor = 2; }
+
+message ContextStatus { uint64 revision = 1; uint64 message_count = 2; uint64 compaction_count = 3; bool has_summary = 4; bool can_undo = 5; uint64 estimated_input_tokens = 6; uint32 context_window = 7; uint32 reserved_output_tokens = 8; bool summary_request_pending = 9; bool summary_pipeline_available = 10; bool estimate_includes_tools = 11; bool manual_operations_available = 12; ContextMaintenanceJob maintenance = 13; }
+message ContextSummary { uint64 revision = 1; string text = 2; bool truncated = 3; }
+message CompactContextRequest { string session_id = 1; uint64 owner_epoch = 2; uint64 expected_revision = 3; string focus = 4; }
+message UndoContextCompactionRequest { string session_id = 1; uint64 owner_epoch = 2; uint64 expected_revision = 3; }
+
+// Durable progress and reviewable filesystem changes are daemon-owned resources.
+service WorkflowService {
+  rpc ListPlans(ListWorkflowPlansRequest) returns (WorkflowPlans);
+  rpc GetPlan(GetWorkflowPlanRequest) returns (WorkflowPlan);
+  rpc MutatePlan(MutateWorkflowPlanRequest) returns (WorkflowPlan);
+  rpc ListChanges(ListWorkflowChangesRequest) returns (WorkflowChanges);
+  rpc GetChange(GetWorkflowChangeRequest) returns (WorkflowChange);
+  rpc PreviewUndo(PreviewWorkflowUndoRequest) returns (WorkflowChange);
+  rpc ApplyChange(ApplyWorkflowChangeRequest) returns (WorkflowChange);
+}
+enum WorkflowStepState {
+  WORKFLOW_STEP_STATE_UNSPECIFIED = 0;
+  WORKFLOW_STEP_STATE_PENDING = 1;
+  WORKFLOW_STEP_STATE_RUNNING = 2;
+  WORKFLOW_STEP_STATE_BLOCKED = 3;
+  WORKFLOW_STEP_STATE_COMPLETED = 4;
+  WORKFLOW_STEP_STATE_SKIPPED = 5;
+}
+message WorkflowStepDraft { string id = 1; string title = 2; repeated string dependencies = 3; repeated string acceptance = 4; }
+message WorkflowPlanDraft { string title = 1; repeated WorkflowStepDraft steps = 2; }
+message WorkflowStep { WorkflowStepDraft definition = 1; WorkflowStepState state = 2; string reported_result = 3; repeated string verification_refs = 4; optional string user_override = 5; }
+message WorkflowVerification { string id = 1; string step_id = 2; string evidence_ref = 3; repeated string acceptance = 4; bool passed = 5; string summary = 6; }
+message WorkflowPlan { string id = 1; string session_id = 2; string run_id = 3; uint64 owner_epoch = 4; uint64 revision = 5; string title = 6; repeated WorkflowStep steps = 7; repeated WorkflowVerification verifications = 8; bool detail_included = 9; }
+message ListWorkflowPlansRequest { string session_id = 1; string run_id = 2; string after_id = 3; uint32 limit = 4; }
+message WorkflowPlans { repeated WorkflowPlan plans = 1; string next_after = 2; }
+message GetWorkflowPlanRequest { string session_id = 1; string plan_id = 2; }
+message UpdateWorkflowStep { string step_id = 1; WorkflowStepState state = 2; string reported_result = 3; repeated string verification_refs = 4; optional string user_override = 5; }
+// The host derives success from a durable execute_command operation. No caller-supplied passed flag exists.
+message VerifyWorkflowStep { string step_id = 1; string operation_id = 2; }
+message MutateWorkflowPlanRequest {
+  string session_id = 1; string run_id = 2; string request_id = 3; string plan_id = 4; uint64 expected_revision = 5;
+  oneof change { WorkflowPlanDraft create = 6; WorkflowPlanDraft revise = 7; UpdateWorkflowStep update_step = 8; VerifyWorkflowStep verify_step = 9; }
+}
+enum WorkflowChangeState { WORKFLOW_CHANGE_STATE_UNSPECIFIED = 0; WORKFLOW_CHANGE_STATE_PREVIEW = 1; WORKFLOW_CHANGE_STATE_PREPARED = 2; WORKFLOW_CHANGE_STATE_APPLIED = 3; WORKFLOW_CHANGE_STATE_UNCERTAIN = 4; }
+message WorkflowChangeFile { string path = 1; string expected_revision = 2; optional string before = 3; optional string after = 4; optional string before_sha256 = 5; optional string after_sha256 = 6; string unified_diff = 7; }
+message WorkflowChangeValidation { string id = 1; string change_id = 2; uint64 change_revision = 3; string change_sha256 = 4; string operation_id = 5; bool passed = 6; optional int64 exit_code = 7; bool verifies_current_workspace = 8; }
+message WorkflowChange { string id = 1; string run_id = 2; uint64 owner_epoch = 3; uint64 revision = 4; WorkflowChangeState state = 5; string preview_sha256 = 6; repeated WorkflowChangeFile files = 7; optional string reverses = 8; optional string action_id = 9; repeated string written_paths = 10; repeated WorkflowChangeValidation validations = 11; bool detail_included = 12; }
+message ListWorkflowChangesRequest { string session_id = 1; string after_id = 2; uint32 limit = 3; }
+message WorkflowChanges { repeated WorkflowChange changes = 1; string next_after = 2; }
+message GetWorkflowChangeRequest { string session_id = 1; string change_id = 2; }
+message PreviewWorkflowUndoRequest { string session_id = 1; string run_id = 2; string request_id = 3; string change_id = 4; uint64 owner_epoch = 5; }
+message ApplyWorkflowChangeRequest { string session_id = 1; string run_id = 2; string request_id = 3; string change_id = 4; uint64 expected_revision = 5; string preview_sha256 = 6; string action_id = 7; uint64 owner_epoch = 8; }
+
+enum ToolAvailabilityState { TOOL_AVAILABILITY_STATE_UNSPECIFIED = 0; TOOL_AVAILABILITY_STATE_CONFIGURED = 1; TOOL_AVAILABILITY_STATE_AVAILABLE = 2; TOOL_AVAILABILITY_STATE_MODE_RESTRICTED = 3; TOOL_AVAILABILITY_STATE_EXECUTION_PLAN_RESTRICTED = 4; TOOL_AVAILABILITY_STATE_RUNTIME_UNAVAILABLE = 5; }
+
+// These states describe host-owned summary maintenance, never AgentRun execution.
+enum ContextMaintenanceState { CONTEXT_MAINTENANCE_STATE_UNSPECIFIED = 0; CONTEXT_MAINTENANCE_STATE_PREPARING = 1; CONTEXT_MAINTENANCE_STATE_SENDING = 2; CONTEXT_MAINTENANCE_STATE_COMPLETED = 3; CONTEXT_MAINTENANCE_STATE_FAILED = 4; CONTEXT_MAINTENANCE_STATE_CANCELLED = 5; CONTEXT_MAINTENANCE_STATE_UNCERTAIN = 6; CONTEXT_MAINTENANCE_STATE_ABANDONED = 7; }
+message ContextMaintenanceJob { string id = 1; string session_id = 2; string run_id = 3; uint64 owner_epoch = 4; uint64 expected_revision = 5; ContextMaintenanceState state = 6; bool cancel_requested = 7; bool undo = 8; int64 created_at_ms = 9; int64 updated_at_ms = 10; optional string abandon_reason = 11; }
+message CancelContextRequest { string job_id = 1; uint64 owner_epoch = 2; }
+
+message AbandonContextRequest { string job_id = 1; uint64 owner_epoch = 2; string request_id = 3; string reason = 4; }
+message AbandonContextResult { ContextMaintenanceJob job = 1; Session session = 2; bool new_session_required = 3; }

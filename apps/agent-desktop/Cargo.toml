@@ -22,6 +22,7 @@ name = "desktop-computer-target"
 path = "examples/computer_target.rs"
 
 [dependencies]
+agent-media = { path = "../../crates/agent-media" }
 gpui-kit = { version = "=0.9.0", features = ["tree-sitter-rust", "tree-sitter-markdown", "tree-sitter-toml"] }
 image = { version = "=0.25.10", default-features = false }
 anyhow.workspace = true

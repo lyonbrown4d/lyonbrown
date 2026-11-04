@@ -57,6 +57,8 @@ pub(crate) struct ValidatedRequest {
 }
 impl ValidatedRequest {
   pub fn parse(mut body: Value, default_output: u64) -> Result<Self, GatewayError> {
+    let images = crate::inline_images::InlineImages::take(&mut body)?;
+    images.restore(&mut body)?;
     let object = body
       .as_object_mut()
       .ok_or_else(|| GatewayError::invalid("Expected a JSON object"))?;

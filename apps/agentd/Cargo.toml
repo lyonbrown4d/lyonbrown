@@ -15,6 +15,10 @@ gateway-storage = { path = "../../crates/gateway-storage" }
 model-provider = { path = "../../crates/model-provider" }
 agent-privacy = { path = "../../crates/agent-privacy" }
 axum = "=0.8.9"
+base64 = "=0.23.1"
+agent-media = { path = "../../crates/agent-media" }
+agent-planning = { path = "../../crates/agent-planning" }
+agent-changes = { path = "../../crates/agent-changes" }
 agent-memory = { path = "../../crates/agent-memory" }
 memory-core = { path = "../../crates/memory-core" }
 memory-qdrant = { path = "../../crates/memory-qdrant" }

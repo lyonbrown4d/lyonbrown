@@ -1,7 +1,7 @@
 use crate::{Result, RuntimeError, RuntimeImage};
 use base64::Engine;
 
-pub(crate) fn validate(prompt: &str, images: &[RuntimeImage]) -> Result<()> {
+pub fn validate_input(prompt: &str, images: &[RuntimeImage]) -> Result<()> {
   if prompt.len() > 1_048_576 || (prompt.trim().is_empty() && images.is_empty()) || images.len() > 8
   {
     return Err(RuntimeError::Configuration(

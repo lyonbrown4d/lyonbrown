@@ -12,6 +12,14 @@ impl Desktop {
     foreground: bool,
   ) {
     match update {
+      Update::ImagesSelected { scope, images } => self.add_selected_images(scope, images),
+      Update::ImagesRejected(request) => {
+        self.vm.images.reject(&request);
+      }
+      Update::ImagesConfirmed(request) => {
+        self.vm.images.acknowledge(&request);
+      }
+
       Update::Recovery(id, report) => self.apply_recovery(id, *report, cx),
       Update::RecoveryError(id, error) => {
         if let Some(state) = self.vm.recovery.as_mut().filter(|state| state.run_id == id) {
@@ -113,6 +121,7 @@ impl Desktop {
         if let Some(task) = self.watch_task.take() {
           task.abort();
         }
+        self.vm.images = Default::default();
         self.vm.recovery = None;
         self.vm.active_run = None;
         self.vm.cursor = 0;
@@ -128,6 +137,7 @@ impl Desktop {
         self.start_persistence(&endpoint, &node_id, window, cx);
       }
       Update::Session(session, keep_busy) => {
+        self.vm.images.bind_created_session(&session.id);
         self.vm.selected = Some(session.id.clone());
         self.sessions.retain(|previous| previous.id != session.id);
         self.sessions.insert(0, session);

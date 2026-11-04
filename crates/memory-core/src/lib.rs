@@ -1,4 +1,6 @@
 //! Memory domain and index ports. No ORM, Rig, provider or vector SDK types.
+mod rebuild;
+pub use rebuild::{MemoryRebuild, MemoryRebuildPage, MemoryRebuildState};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,6 +175,8 @@ pub enum MemoryError {
   EmbeddingUnavailable,
   #[error("memory retrieval is unavailable")]
   RetrievalUnavailable,
+  #[error("memory index job requires its original embedding configuration")]
+  EmbeddingMismatch,
   #[error("memory operation was cancelled")]
   Cancelled,
 }
@@ -190,6 +194,8 @@ pub trait MemoryRepository: Send + Sync {
   async fn save(&self, mutation: MemoryMutation) -> MemoryResult<MemoryItem>;
   async fn forget(&self, id: &str, expected_revision: u64) -> MemoryResult<MemoryItem>;
   async fn claim_job(&self) -> MemoryResult<Option<MemoryJob>>;
+  async fn claim_job_for(&self, embedding: &EmbeddingDescriptor)
+  -> MemoryResult<Option<MemoryJob>>;
   async fn finish_job(
     &self,
     id: &str,
@@ -198,6 +204,11 @@ pub trait MemoryRepository: Send + Sync {
     error_category: Option<&str>,
   ) -> MemoryResult<()>;
   async fn retry_job(&self, id: &str) -> MemoryResult<()>;
+  async fn retry_job_for(
+    &self,
+    id: &str,
+    embedding: Option<&EmbeddingDescriptor>,
+  ) -> MemoryResult<()>;
   async fn jobs(&self, memory_id: &str) -> MemoryResult<Vec<MemoryJob>>;
   async fn recover_jobs(&self) -> MemoryResult<u64>;
   async fn project_scope(
@@ -205,6 +216,27 @@ pub trait MemoryRepository: Send + Sync {
     owner: &str,
     canonical_workspace: &str,
   ) -> MemoryResult<MemoryScope>;
+  async fn start_rebuild(
+    &self,
+    request_id: &str,
+    scopes: &[MemoryScope],
+    embedding: &EmbeddingDescriptor,
+    force: bool,
+    now_ms: i64,
+  ) -> MemoryResult<MemoryRebuild>;
+  async fn list_rebuilds(
+    &self,
+    scopes: &[MemoryScope],
+    after: Option<&str>,
+    limit: u32,
+  ) -> MemoryResult<MemoryRebuildPage>;
+  /// Atomically advances at most `limit` authoritative rows and enqueues their jobs.
+  async fn advance_rebuild(
+    &self,
+    embedding: &EmbeddingDescriptor,
+    limit: u32,
+    now_ms: i64,
+  ) -> MemoryResult<bool>;
   async fn bind_run(
     &self,
     run: &str,

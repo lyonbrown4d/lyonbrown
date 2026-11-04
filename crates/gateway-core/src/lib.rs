@@ -5,6 +5,7 @@ mod config;
 mod endpoints;
 mod error;
 mod http;
+mod inline_images;
 mod openapi;
 mod privacy;
 mod request;

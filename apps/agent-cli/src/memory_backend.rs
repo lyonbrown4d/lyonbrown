@@ -131,6 +131,19 @@ pub(crate) async fn execute(
         ),
       ))
     }
+    MemoryCommand::Rebuild { request } => {
+      let rebuild = client.start_memory_rebuild(v1::StartMemoryRebuildRequest {
+        session_id: session.into(), request_id: request.clone(), force: true,
+      }).await.map_err(|error| anyhow::anyhow!("Rebuild request was not confirmed: {request}. Inspect /memory rebuilds before another request: {error}"))?;
+      Ok((
+        "Memory rebuild queued".into(),
+        memory_view::rebuild(&rebuild),
+      ))
+    }
+    MemoryCommand::Rebuilds { after } => Ok((
+      "Memory rebuilds".into(),
+      memory_view::rebuilds(&client.memory_rebuilds(session, &after, 20).await?),
+    )),
     MemoryCommand::Status => Err(anyhow::anyhow!("Memory status request was not dispatched")),
   }
 }

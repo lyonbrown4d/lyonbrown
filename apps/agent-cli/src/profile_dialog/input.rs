@@ -3,7 +3,6 @@ use crate::{
   backend::Action,
   model::{App, Connection},
 };
-use agent_protocol::v1::RemoteProviderProtocol;
 use crossterm::event::{Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{Frame, style::Style};
 use ratatui_textarea::TextArea;
@@ -85,14 +84,7 @@ impl ProfileInput {
         }
         KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') if dialog.focus == Focus::Protocol => {
           let reverse = key.code == KeyCode::Left;
-          use RemoteProviderProtocol::{AnthropicMessages, OpenaiCompletions, OpenaiResponses};
-          let protocol = RemoteProviderProtocol::try_from(dialog.profile.protocol).ok();
-          dialog.profile.protocol = match (protocol, reverse) {
-            (Some(OpenaiResponses), true) | (Some(OpenaiCompletions), false) => AnthropicMessages,
-            (Some(AnthropicMessages), true) | (Some(OpenaiResponses), false) => OpenaiCompletions,
-            _ => OpenaiResponses,
-          } as i32;
-          dialog.changed();
+          dialog.select_preset(reverse);
         }
         KeyCode::Enter => {
           let operation = match dialog.focus {

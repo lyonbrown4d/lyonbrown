@@ -7,58 +7,6 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 impl Daemon {
-  pub(crate) async fn launch(&self, run: Run) -> Result<()> {
-    let session = self
-      .store
-      .session(&run.session_id)
-      .await?
-      .ok_or_else(|| anyhow::anyhow!("session missing"))?;
-    let cancel = CancellationToken::new();
-    self
-      .active
-      .lock()
-      .await
-      .insert(run.id.clone(), cancel.clone());
-    let daemon = self.clone();
-    tokio::spawn(async move {
-      let permit = tokio::select! {value=daemon.permits.clone().acquire_owned()=>value.ok(),_=cancel.cancelled()=>None};
-      if permit.is_none() {
-        let _ = daemon
-          .store
-          .update_run_owned(&run.id, session.owner_epoch, RunStatus::Cancelled, "", "")
-          .await;
-      } else if let Err(error) = daemon
-        .execute_run_scoped(&run, &session, cancel, None)
-        .await
-      {
-        let status = if matches!(
-          error.downcast_ref::<RuntimeError>(),
-          Some(RuntimeError::Uncertain(_) | RuntimeError::Persistence(_))
-        ) {
-          RunStatus::Uncertain
-        } else {
-          RunStatus::Failed
-        };
-        if let Err(storage) = daemon
-          .store
-          .update_run_owned(
-            &run.id,
-            session.owner_epoch,
-            status,
-            "",
-            &agent_storage::public_error_message(&error),
-          )
-          .await
-        {
-          tracing::error!(run_id=%run.id,error=%agent_storage::public_error_message(&storage),"could not persist failed run");
-        }
-      }
-      drop(permit);
-      daemon.active.lock().await.remove(&run.id);
-      daemon.events.notify_waiters();
-    });
-    Ok(())
-  }
   pub(crate) async fn execute_run_scoped(
     &self,
     run: &Run,
@@ -149,6 +97,10 @@ impl Daemon {
       Err(error) => return Err(error.into()),
     };
     let proposed_tools = plan.allowed_tools.clone();
+    let interaction = self.store.run_interaction_policy(&run.id).await?;
+    plan
+      .allowed_tools
+      .retain(|tool| interaction.mode.permits(tool.name()));
     if let Some(permitted) = permitted_tools {
       plan
         .allowed_tools
@@ -212,94 +164,24 @@ impl Daemon {
       self.events.clone(),
       cancel.clone(),
     );
-    let mut tools =
-      crate::tools::workspace_tools(self.clone(), run, &session.workspace, session.owner_epoch)?;
-    let (skill_prompt, skill_tool) = crate::skill_runtime::prepare(self, run, session).await?;
-    if let Some(tool) = skill_tool {
-      tools.push(tool);
-    }
-    if let Some(tool) = self.mcp.tool(self.clone(), run, session.owner_epoch) {
-      tools.push(tool);
-    }
-    if browser {
-      tools.extend(crate::browser::tools(self.clone(), run, session));
-    }
-    tools.extend(crate::commands::tools(self.clone(), run, session)?);
-    if let Some(computer) = &computer {
-      tools.extend(computer.definitions());
-    }
-    if plan.execution_mode == agent_decision::ExecutionMode::DistributedAllowed {
-      let targets = delegation_targets
-        .into_iter()
-        .filter(|target| plan.target_hint.as_ref().is_none_or(|hint| hint == target))
-        .collect();
-      let scoped_capabilities = [
-        (agent_decision::Tool::ReadFile, "workspace.read"),
-        (agent_decision::Tool::ListFiles, "workspace.read"),
-        (agent_decision::Tool::SearchFiles, "workspace.read"),
-        (agent_decision::Tool::WriteFile, "workspace.write.approval"),
-      ]
-      .into_iter()
-      .filter(|(tool, _)| plan.allowed_tools.contains(tool))
-      .map(|(_, capability)| capability.to_owned())
-      .collect::<std::collections::BTreeSet<_>>()
-      .into_iter()
-      .collect();
-      tools.extend(crate::delegation::tools(
-        self.clone(),
+    let (tools, skill_prompt) = self
+      .execution_tools(crate::execution_tools::ToolScope {
         run,
         session,
-        targets,
-        scoped_capabilities,
-      ));
-    }
-    tools.retain(|tool| {
-      tool.definition().name == "load_skill"
-        || permitted_tools.is_none_or(|permitted| permitted.contains(&tool.definition().name))
-          && plan
-            .allowed_tools
-            .iter()
-            .any(|allowed| allowed.name() == tool.definition().name)
-    });
-    let mut runtime_config = self.config.runtime(session);
-    if runtime_config.api_key.is_empty()
-      && let Some(secret) = self
-        .provider_secrets
-        .get(&format!(
-          "provider-{}",
-          agent_config::provider_definition(&self.config.provider)
-            .map_or(self.config.provider.as_str(), |entry| entry.id)
-        ))
-        .map_err(|_| anyhow::anyhow!("provider credential store unavailable"))?
-    {
-      use agent_secrets::ExposeSecret;
-      runtime_config.api_key = secret.expose_secret().to_owned();
-    }
-    crate::repository_instructions::apply(&mut runtime_config, &session.workspace).await?;
-    if !skill_prompt.is_empty() {
-      runtime_config
-        .system_prompt
-        .get_or_insert_default()
-        .push_str(&skill_prompt);
-    }
-    if let Some(memory_context) = memory_context {
-      runtime_config
-        .system_prompt
-        .get_or_insert_default()
-        .push_str(&memory_context);
-    }
+        plan: &plan,
+        permitted_tools,
+        browser,
+        computer: computer
+          .as_ref()
+          .map_or_else(Vec::new, |computer| computer.definitions()),
+        delegation_targets,
+        mode: interaction.mode,
+      })
+      .await?;
+    let runtime_config = self
+      .execution_config(session, skill_prompt, memory_context)
+      .await?;
     let runtime = if let Some(backend) = backend {
-      let info = self.models.info(&self.config.model)?;
-      runtime_config.context_window = info.context_window;
-      runtime_config.max_output_tokens = self
-        .config
-        .local_models
-        .iter()
-        .find(|profile| profile.id == self.config.model)
-        .map_or(512.min(info.context_window.saturating_sub(1)), |profile| {
-          profile.max_output_tokens
-        });
-      runtime_config.supports_images = info.supports_images;
       Runtime::open_with_backend(
         runtime_config,
         Arc::new(crate::run_input::RunPersistence {
@@ -350,7 +232,8 @@ impl Daemon {
         },
       );
     }
-    let execute = runtime.execute(&run.prompt);
+    let images = self.media_input(run).await?;
+    let execute = runtime.execute_input(&run.prompt, images);
     tokio::pin!(execute);
     let result = async { tokio::select! {
       biased;

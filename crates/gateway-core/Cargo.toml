@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agent-media = { path = "../agent-media" }
+base64 = "=0.23.1"
 thiserror.workspace = true
 secrecy.workspace = true
 agent-security = { path = "../agent-security" }

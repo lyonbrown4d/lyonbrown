@@ -11,7 +11,24 @@ impl MemoryService {
     let Some(index) = &self.index else {
       return Ok(false);
     };
-    let Some(job) = self.repository.claim_job().await? else {
+    if let Some(embedding) = &self.embedding
+      && self
+        .repository
+        .advance_rebuild(&embedding.descriptor(), 100, now_ms()?)
+        .await?
+    {
+      return Ok(true);
+    }
+    let claimed = match &self.embedding {
+      Some(embedding) => {
+        self
+          .repository
+          .claim_job_for(&embedding.descriptor())
+          .await?
+      }
+      None => self.repository.claim_job().await?,
+    };
+    let Some(job) = claimed else {
       return Ok(false);
     };
     let outcome = self.execute_job(&job, index.as_ref(), cancel).await;

@@ -3,6 +3,7 @@ mod artifact;
 mod discovery;
 mod files;
 mod instructions;
+mod patch;
 pub mod process;
 mod watch;
 use anyhow::{Context, Result};

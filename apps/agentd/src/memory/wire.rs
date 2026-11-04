@@ -151,6 +151,9 @@ pub(super) fn failure(error: MemoryError) -> Status {
     MemoryError::Conflict => Status::aborted("memory revision or job attempt changed"),
     MemoryError::Forbidden => Status::permission_denied("memory scope is not authorized"),
     MemoryError::Storage => Status::unavailable("memory storage unavailable"),
+    MemoryError::EmbeddingMismatch => {
+      Status::failed_precondition("memory job requires its original embedding configuration")
+    }
     MemoryError::EmbeddingUnavailable => Status::unavailable("memory embedding unavailable"),
     MemoryError::RetrievalUnavailable => Status::unavailable("memory retrieval unavailable"),
     MemoryError::Cancelled => Status::cancelled("memory operation cancelled"),

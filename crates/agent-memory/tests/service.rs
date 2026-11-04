@@ -100,6 +100,7 @@ async fn mutations_enforce_scope_human_activation_terminal_state_and_model_propo
   ));
   let proposed = service.propose(&access, request.clone()).await?;
   assert_eq!(proposed.state, MemoryState::Proposed);
+  assert!(service.read_active(&access, &proposed.id).await?.is_none());
   request.item = proposed.clone();
   request.item.revision = 2;
   request.item.state = MemoryState::Active;
@@ -109,6 +110,10 @@ async fn mutations_enforce_scope_human_activation_terminal_state_and_model_propo
   };
   let active = service.save(&access, request.clone()).await?;
   assert_eq!(active.state, MemoryState::Active);
+  assert_eq!(
+    service.read_active(&access, &active.id).await?,
+    Some(active.clone())
+  );
   let mut agent_edit = request.clone();
   agent_edit.item.revision = 3;
   agent_edit.expected_revision = 2;

@@ -9,7 +9,7 @@ mod local_request;
 mod local_stream;
 mod transport;
 pub use classification::{CLASSIFICATION_OUTPUT_LIMIT, classify_json};
-pub use configuration::configured;
+pub use configuration::{configured, list_models, provider_base_url, supports_gateway_chat};
 pub use gateway::{configured_with_gateway, gateway_model};
 pub use local::classify_local_json;
 pub use local_model::local_model;

@@ -2,7 +2,6 @@
 use crate::{Result, RuntimeError, SessionMutation, SessionPersistence, TokenUsage};
 use agent_core::events::{AgentEvent, QueueKind, QueueStatus};
 use rig_agent::run::{AgentRun, PreparedRequest, RunSpec};
-use rig_core::message::Message;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{
@@ -20,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 pub(crate) struct Snapshot {
   pub version: u32,
   pub session_id: String,
-  pub history: Vec<Message>,
+  pub context: crate::context::ContextArchive,
   pub active: Option<ActiveRun>,
   pub pending_tools: BTreeMap<String, ToolIntent>,
   pub queue: Vec<QueuedInput>,
@@ -36,6 +35,7 @@ pub(crate) struct ActiveRun {
   pub in_flight: Option<String>,
   pub usage: TokenUsage,
   pub segment: u64,
+  pub context_cursor: usize,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct ToolIntent {
@@ -78,6 +78,11 @@ impl DurableSession {
   ) -> Result<Self> {
     let state = match persistence.load(id).await? {
       Some(bytes) => {
+        if bytes.len() > crate::budget::SNAPSHOT_BYTES {
+          return Err(RuntimeError::Persistence(
+            "session snapshot exceeds host byte limit".into(),
+          ));
+        }
         let value: Snapshot = serde_json::from_slice(&bytes)
           .map_err(|error| RuntimeError::Persistence(error.to_string()))?;
         if value.version != 1 || value.session_id != id {
@@ -85,12 +90,13 @@ impl DurableSession {
             "invalid Rig session identity/version".into(),
           ));
         }
+        crate::budget::validate_snapshot(&value)?;
         value
       }
       None => Snapshot {
         version: 1,
         session_id: id.into(),
-        history: vec![],
+        context: Default::default(),
         active: None,
         pending_tools: BTreeMap::new(),
         queue: vec![],
@@ -150,7 +156,26 @@ impl DurableSession {
     }
     let mut next = current.clone();
     let (output, payload, events) = f(&mut next)?;
-    let bytes = serde_json::to_vec(&next).map_err(|e| RuntimeError::Persistence(e.to_string()))?;
+    let (next, bytes) = crate::budget::snapshot(next).await.map_err(|error| {
+      if current
+        .active
+        .as_ref()
+        .is_some_and(|active| active.in_flight.is_some())
+        || !current.pending_tools.is_empty()
+        || current
+          .context
+          .pending
+          .as_ref()
+          .is_some_and(|intent| intent.sending)
+      {
+        RuntimeError::Uncertain(
+          "confirmed state retained after host byte limit; IO intent requires reconciliation"
+            .into(),
+        )
+      } else {
+        error
+      }
+    })?;
     if let Err(error) = self
       .persistence
       .commit(
@@ -187,6 +212,11 @@ impl DurableSession {
 pub(crate) fn ensure_snapshot_certain(state: &Snapshot) -> Result<()> {
   if let Some(message) = &state.uncertainty {
     return Err(RuntimeError::Uncertain(message.clone()));
+  }
+  if state.context.pending.is_some() {
+    return Err(RuntimeError::Uncertain(
+      "summary request outcome was not confirmed; never replay".into(),
+    ));
   }
   if !state.pending_tools.is_empty() {
     return Err(RuntimeError::Uncertain(

@@ -98,6 +98,22 @@ impl Desktop {
           .flex()
           .flex_col()
           .gap_2()
+          .children(
+            self
+              .vm
+              .images
+              .attachments
+              .iter()
+              .enumerate()
+              .map(|(index, image)| {
+                Button::new(SharedString::from(format!("image-{index}")))
+                  .ghost()
+                  .small()
+                  .label(format!("{}. {} · 移除", index + 1, image.name))
+                  .disabled(self.vm.busy || self.vm.images.pending.is_some())
+                  .on_click(cx.listener(move |this, _, _, cx| this.remove_image(index, cx)))
+              }),
+          )
           .child(
             div()
               .id("composer")
@@ -126,6 +142,22 @@ impl Desktop {
               .flex()
               .items_center()
               .gap_2()
+              .child(
+                Button::new("attach-images")
+                  .ghost()
+                  .small()
+                  .label("添加图片")
+                  .accessibility_label("选择要发送给模型的本地图片")
+                  .disabled(
+                    self.client.is_none()
+                      || self.vm.busy
+                      || running
+                      || self.navigation.connecting
+                      || self.persistence_loading
+                      || self.vm.images.pending.is_some(),
+                  )
+                  .on_click(cx.listener(|this, _, _, cx| this.choose_images(cx))),
+              )
               .child(
                 Button::new("composer-context")
                   .ghost()

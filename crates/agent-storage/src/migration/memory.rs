@@ -114,6 +114,8 @@ impl MigrationTrait for Memory {
               .not_null(),
           )
           .col(ColumnDef::new(Alias::new("error_category")).string_len(256))
+          .col(ColumnDef::new(Alias::new("rebuild_id")).string_len(256))
+          .col(ColumnDef::new(Alias::new("descriptor_key")).string_len(64))
           .primary_key(Index::create().col(Alias::new("id")))
           .to_owned(),
       )

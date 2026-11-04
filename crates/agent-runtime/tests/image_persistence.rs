@@ -49,7 +49,7 @@ fn assert_snapshot_image(store: &support::Memory) {
   let bytes = store.snapshot.lock().unwrap().clone().unwrap();
   let snapshot: Value = serde_json::from_slice(&bytes).unwrap();
   let mut images = Vec::new();
-  image_blocks(&snapshot["history"], &mut images);
+  image_blocks(&snapshot["context"]["pinned"], &mut images);
   assert_eq!(images.len(), 1);
   assert_eq!(images[0]["data"]["type"], "base64");
   assert_eq!(images[0]["data"]["value"], PNG);

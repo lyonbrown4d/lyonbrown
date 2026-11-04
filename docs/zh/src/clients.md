@@ -108,7 +108,7 @@ cargo run -p agent-cli -- --endpoint http://127.0.0.1:7447 --data-dir /path/to/l
 
 运行中的 `Enter` 使用 Runtime follow-up 队列，`Ctrl+S` 使用 steering 队列，不创建第二个 Agent Loop，也不扩大原执行计划的工具权限。每次输入保留稳定 request ID；只有 agentd 确认持久化后才清空匹配草稿和记录历史。重复确认使用同一身份，内容不一致会被拒绝；断线不自动重放。 未确认输入沿用原 Run、request ID 和模式，即使原 Run 已结束，也不会转成新的 StartRun。`F7` 区分待处理、已采纳和已撤销。队列在执行边界后仍待处理时，保留到下一次显式运行；接收不代表本轮已经采纳。撤销失败不会显示成功；已进入执行的输入只能通过 Run 取消处理，不能撤销已经产生的副作用。重启后无活动 Runtime 的遗留队列可核对，但不能假装已恢复可撤销的宿主。
 
-输入历史按 daemon 身份和 Session 隔离，仅保存已确认输入；最多 32 个会话、每会话 100 条、合计 1 MiB。草稿与未确认输入不进入历史。模型、会话、Provider、技能和历史选择器支持键入过滤与 Backspace，筛选后仍使用原始条目身份。`/context`、`/permissions`、`/tools`、`/mcp` 读取现有 daemon 接口；完整上下文、权限策略全文、工具目录和 MCP 连接健康尚未由协议开放，界面明确说明限制。
+输入历史按 daemon 身份和 Session 隔离，仅保存已确认输入；最多 32 个会话、每会话 100 条、合计 1 MiB。草稿与未确认输入不进入历史。模型、会话、Provider、技能和历史选择器支持键入过滤与 Backspace，筛选后仍使用原始条目身份。`/context` 读取 daemon 的上下文统计，`/context summary` 显式查看摘要；`/tools` 和 `/mode` 显示配置工具与模式限制，`/permissions` 查看审批。完整原始上下文、权限策略全文和 MCP 连接健康仍不开放。
 
 输入区复用 `ratatui-textarea` 0.9.4，支持光标编辑、多行文本、换行显示和粘贴。应用快捷键优先于编辑器的同名映射，例如 `Ctrl+X` 仍请求取消运行，`Ctrl+Y` 仍处理审批。提交等待期间不重复发送；失败保留草稿，服务端接受后清空对应草稿及其撤销历史。
 
@@ -122,9 +122,9 @@ TUI 的 `Router` 统一上下文页面、返回栈和页面滚动位置。`Esc` 
 
 ## TUI Provider 配置对话框
 
-输入 `/providers`，选择「新增 Provider」或已有自定义配置，按 Enter 打开模态对话框。通过 Tab／Shift+Tab 切换字段和按钮；协议字段使用左右方向键或空格切换。表单支持名称、标准协议、Base URL、模型 ID 和掩码密钥。支持的协议为 OpenAI Responses、OpenAI Chat Completions 和 Anthropic Messages；名称、模型 ID 和地址分别限制为 100、256、2048 字节。Base URL 必须为 HTTPS，只有回环地址允许 HTTP，不能包含用户名、密码、查询参数或 fragment。OpenAI 常用地址以 `/v1` 结尾；自定义路径应与推理适配器使用的地址一致。
+输入 `/providers`，选择「新增 Provider」或已有自定义配置，按 Enter 打开模态对话框。通过 Tab／Shift+Tab 切换字段和按钮；协议字段使用左右方向键或空格切换。表单支持名称、标准协议、Base URL、模型 ID 和掩码密钥。支持的协议为 OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 和 Gemini GenerateContent；名称、模型 ID 和地址分别限制为 100、256、2048 字节。Base URL 必须为 HTTPS，只有回环地址允许 HTTP，不能包含用户名、密码、查询参数或 fragment。OpenAI 常用地址以 `/v1` 结尾；自定义路径应与推理适配器使用的地址一致。
 
-「探测」由 agentd 向该协议的模型列表端点发送只读 GET，不发起推理，不保存表单，也不能证明所填模型支持生成或工具调用。探测最长 5 秒，响应最多 1 MiB、100 个模型；禁用代理、自动重试与重定向。失败时保留表单并显示安全错误。按 Esc 关闭对话框会停止客户端的探测请求；已经受理的保存或移除操作仍可能完成，不能把关闭视为回滚。
+「探测」由 agentd 向该协议的模型列表端点发送只读 GET，不发起推理，不保存表单，也不能证明所填模型支持生成或工具调用。探测最长 5 秒，响应最多 1 MiB、1000 个模型 ID；不自动重试或重定向，回环连接禁用代理。失败时保留表单并显示安全错误。按 Esc 关闭对话框会停止客户端的探测请求；已经受理的保存或移除操作仍可能完成，不能把关闭视为回滚。
 
 「保存」将配置交给 agentd，首次保存必须填写密钥，编辑时留空保留原凭据。密钥只进入临时输入适配器和认证请求，不进入 App、ViewModel、聊天草稿、输入历史或客户端持久状态；保存确认、关闭、断线和身份变化会清空输入。保存不会选择模型，关闭后使用 `/model` 显式选择该 Provider。不要把保存成功当成探测成功。
 
@@ -287,7 +287,7 @@ CLI 子命令使用同样参数，去掉 `/` 前缀即可，例如 `agent-cli ru
 
 ## 记忆管理
 
-TUI 通过 `/memory` 调用认证的 daemon 记忆服务，结果显示在已有的本地记录页。它不会直接连接数据库或 Qdrant。未选择 Session 时可管理当前用户范围；选择本机拥有的 Session 后才增加相应项目和会话范围。范围身份由 daemon 确定，缺少 Session 的项目／会话操作会被拒绝。当前没有 Desktop 记忆面板，也没有自动提取或模型记忆工具。配置、索引作业与 Run 绑定见[长期记忆](memory.md)。
+TUI 通过 `/memory` 调用认证的 daemon 记忆服务，结果显示在已有的本地记录页。它不会直接连接数据库或 Qdrant。未选择 Session 时可管理当前用户范围；选择本机拥有的 Session 后才增加相应项目和会话范围。范围身份由 daemon 确定，缺少 Session 的项目／会话操作会被拒绝。Desktop 的 Memory 页面提供管理、检索和索引作业入口。模型工具可以读取、搜索和提议记忆，但不能激活；自动提取仍未启用。`/memory rebuild` 请求当前授权范围重建，`/memory rebuilds [AFTER_ID]` 分页查看进度。配置、索引作业与 Run 绑定见[长期记忆](memory.md)。
 
 | TUI 命令 | 行为 |
 | --- | --- |
@@ -304,3 +304,5 @@ TUI 通过 `/memory` 调用认证的 daemon 记忆服务，结果显示在已有
 `SCOPE` 为 `user`、`project` 或 `session`；`KIND` 为 `preference`、`fact` 或 `procedure`。`STATE` 可选 `proposed`、`active`、`superseded`、`rejected`、`deleted` 或 `all`。正文支持 shell 引号或剩余词拼接，限制为 1–16,384 个 UTF-8 字节。
 
 新增、激活和修改命令在解析时生成稳定请求 ID；新增还生成记忆 ID。写操作取消、超时或断线时显示未确认身份，不自动重试；先用详情与作业列表核对结果。忘记与作业重试协议没有独立 `request_id`，分别使用修订和作业身份限制操作。当前仅提供 TUI `/memory` 与共享 AgentClient / RPC，非交互 CLI 未增加 memory 子命令。上述入口尚未完成本轮编译或实际 TUI 验收。
+
+计划、上下文压缩、运行模式、变更撤销和图片附件见[计划、上下文与变更](agent-workflows.md)。

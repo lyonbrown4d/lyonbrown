@@ -1,7 +1,13 @@
 use sea_orm::sea_query::ExprTrait;
+mod changes;
 mod configuration;
+mod context_maintenance;
+mod interaction;
+mod media;
 mod memory;
 mod memory_projects;
+mod memory_rebuilds;
+mod planning;
 mod privacy;
 mod sessions;
 mod tasks;
@@ -17,6 +23,12 @@ impl MigratorTrait for Migrator {
       Box::new(memory::Memory),
       Box::new(memory_projects::MemoryProjects),
       Box::new(privacy::PrivacyScopes),
+      Box::new(memory_rebuilds::MemoryRebuilds),
+      Box::new(planning::Planning),
+      Box::new(changes::Changes),
+      Box::new(interaction::Interaction),
+      Box::new(media::Media),
+      Box::new(context_maintenance::ContextMaintenance),
     ]
   }
 }

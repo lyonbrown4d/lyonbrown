@@ -126,6 +126,67 @@ impl ComputerRuntimeService for Service {
 }
 #[tonic::async_trait]
 impl ClientService for Service {
+  async fn start_run_with_attachments(
+    &self,
+    _: Request<v1::StartRunWithAttachmentsRequest>,
+  ) -> Result<Response<v1::Run>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn get_context_status(
+    &self,
+    _: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::ContextStatus>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn get_context_summary(
+    &self,
+    _: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::ContextSummary>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn compact_context(
+    &self,
+    _: Request<v1::CompactContextRequest>,
+  ) -> Result<Response<v1::ContextStatus>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn undo_context_compaction(
+    &self,
+    _: Request<v1::UndoContextCompactionRequest>,
+  ) -> Result<Response<v1::ContextStatus>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn cancel_context(
+    &self,
+    _: Request<v1::CancelContextRequest>,
+  ) -> Result<Response<v1::ContextMaintenanceJob>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn get_context_maintenance(
+    &self,
+    _: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::ContextMaintenanceJob>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn abandon_context(
+    &self,
+    _: Request<v1::AbandonContextRequest>,
+  ) -> Result<Response<v1::AbandonContextResult>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn get_interaction_policy(
+    &self,
+    _: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::InteractionPolicy>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+  async fn set_interaction_mode(
+    &self,
+    _: Request<v1::SetInteractionModeRequest>,
+  ) -> Result<Response<v1::InteractionPolicy>, Status> {
+    Err(Status::unimplemented("fixture"))
+  }
+
   async fn list_provider_profiles(
     &self,
     _: Request<v1::Empty>,

@@ -39,6 +39,7 @@ pub enum ContextPanel {
 
 #[derive(Debug)]
 pub struct App {
+  pub image_drafts: BTreeMap<String, agent_client::media::ImageDraft>,
   pub provider_dialog: Option<crate::provider_dialog::ProviderDialog>,
   pub provider_profiles: Vec<agent_protocol::v1::ProviderProfile>,
   pub provider_catalog: Vec<agent_protocol::v1::Provider>,
@@ -95,6 +96,7 @@ pub struct App {
 impl Default for App {
   fn default() -> Self {
     Self {
+      image_drafts: BTreeMap::new(),
       provider_dialog: None,
       provider_profiles: Vec::new(),
       provider_catalog: Vec::new(),

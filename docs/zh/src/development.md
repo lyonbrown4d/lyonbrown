@@ -19,7 +19,7 @@ Agent 运行使用固定版本 Rig 0.46.0 的 AgentRun 与标准协议适配器�
 
 既有 ORT 接入仍使用当前固定的候选版本，Qdrant Edge 仍使用 0.9.0 的 beta SDK；不能把这两项标为稳定版 SDK。GPUI Kit 0.9、Agent Skills 0.3、ZIP 与 Markdown 升级仅按官方源码核对现有接口，并补充 Skill 未知字段拒绝用例；尚未执行相应测试或桌面运行验收。
 
-本轮按要求未运行编译、测试或 mdBook 构建。下列命令是开发入口与验证要求，不表示当前工作区已有成功结果；[历史截图](runtime-evidence.md)仅覆盖各记录标注的平台、版本和源码，不覆盖当前 Rig 运行路径。
+当前默认 feature 的工作区在 macOS 27.2 arm64、Rust 1.99.1 上完成 `cargo build --workspace --locked --offline`；中英文 mdBook 构建通过。测试未重新运行，GUI、新图片链路与原生可选 feature 仍需对应运行验收。下列命令保留为完整验证要求；[历史截图](runtime-evidence.md)仅覆盖各记录标注的平台、版本和源码，不覆盖当前 Rig 运行路径。
 
 关系数据库使用原生异步 ORM，结构使用版本化 Rust 迁移；不维护旧 Diesel 数据库兼容。记忆后端配置与持久作业机制见[长期记忆](memory.md)。当前 PostgreSQL、MySQL、Qdrant embedded / server 的源码接线没有替代对应数据库或服务器的运行验收。
 

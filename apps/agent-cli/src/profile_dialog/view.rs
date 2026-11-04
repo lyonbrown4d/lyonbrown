@@ -43,7 +43,7 @@ pub(crate) fn render(frame: &mut Frame, dialog: &ProfileDialog, theme: Theme) {
   );
   let labels = [
     ("名称", Focus::Name),
-    ("协议 ←/→/空格", Focus::Protocol),
+    ("提供方预设 ←/→/空格", Focus::Protocol),
     ("Base URL", Focus::Url),
     ("模型 ID", Focus::Model),
     ("凭据（留空保留）", Focus::Credential),
@@ -69,12 +69,17 @@ pub(crate) fn render(frame: &mut Frame, dialog: &ProfileDialog, theme: Theme) {
       frame.render_widget(&editor, field_area);
     }
   }
-  let protocol = match RemoteProviderProtocol::try_from(dialog.profile.protocol).ok() {
-    Some(RemoteProviderProtocol::OpenaiResponses) => "OpenAI Responses",
-    Some(RemoteProviderProtocol::OpenaiCompletions) => "OpenAI Chat Completions",
-    Some(RemoteProviderProtocol::AnthropicMessages) => "Anthropic Messages",
-    _ => "请选择协议",
-  };
+  let protocol = super::presets::matching(&dialog.snapshot())
+    .map(|index| agent_config::REMOTE_PROVIDER_PRESETS[index].name)
+    .unwrap_or_else(
+      || match RemoteProviderProtocol::try_from(dialog.profile.protocol).ok() {
+        Some(RemoteProviderProtocol::OpenaiResponses) => "OpenAI Responses",
+        Some(RemoteProviderProtocol::OpenaiCompletions) => "OpenAI Chat Completions",
+        Some(RemoteProviderProtocol::AnthropicMessages) => "Anthropic Messages",
+        Some(RemoteProviderProtocol::GeminiGenerateContent) => "Gemini Generate Content",
+        _ => "请选择提供方",
+      },
+    );
   if let Some(field) = field_area(frame.area(), 1) {
     frame.render_widget(Paragraph::new(protocol), field);
   }
@@ -101,7 +106,7 @@ pub(crate) fn render(frame: &mut Frame, dialog: &ProfileDialog, theme: Theme) {
     Rect::new(area.x + 2, area.y + 14, area.width - 4, 3),
   );
   frame.render_widget(
-    Paragraph::new("Tab 切换 · Enter 执行 · Esc 关闭（已受理操作仍可能完成）")
+    Paragraph::new("Tab 切换 · 提供方栏 ←/→ 选择预设 · Enter 执行 · Esc 关闭")
       .wrap(Wrap { trim: false })
       .style(Style::default().fg(theme.muted)),
     Rect::new(area.x + 2, area.y + 17, area.width - 4, 2),

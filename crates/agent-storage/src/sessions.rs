@@ -51,6 +51,7 @@ impl Store {
       let connection = &transaction;
       let result: anyhow::Result<_> = async {
         verify_epoch(connection, id, expected_epoch).await?;
+        crate::context_maintenance::ensure_idle(connection, id).await?;
         let json: String = sessions::Entity::find()
           .filter(sessions::Column::Id.eq(id))
           .select_only()

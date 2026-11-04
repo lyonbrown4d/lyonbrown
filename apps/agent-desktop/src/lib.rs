@@ -10,6 +10,7 @@ mod connection;
 mod events;
 mod layout;
 mod local_state;
+mod media;
 mod message;
 mod operations;
 mod panes;

@@ -5,6 +5,8 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use crate::Settings;
+mod presets;
+pub use presets::{ProviderPreset, REMOTE_PROVIDER_PRESETS};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -12,6 +14,7 @@ pub enum ProviderProtocol {
   OpenaiResponses,
   OpenaiCompletions,
   AnthropicMessages,
+  GeminiGenerateContent,
   Local,
 }
 
@@ -59,16 +62,16 @@ pub const PROVIDER_CATALOG: &[ProviderDefinition] = &[
     name: "OpenRouter",
     aliases: &[],
     credential_env_names: &["OPENROUTER_API_KEY"],
-    protocols: &[],
-    runtime_supported: false,
+    protocols: &[ProviderProtocol::OpenaiCompletions],
+    runtime_supported: true,
   },
   ProviderDefinition {
     id: "gemini",
     name: "Google Gemini",
-    aliases: &[],
+    aliases: &["gemini-generate-content"],
     credential_env_names: &["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-    protocols: &[],
-    runtime_supported: false,
+    protocols: &[ProviderProtocol::GeminiGenerateContent],
+    runtime_supported: true,
   },
   ProviderDefinition {
     id: "deepseek",
@@ -83,16 +86,16 @@ pub const PROVIDER_CATALOG: &[ProviderDefinition] = &[
     name: "Mistral API",
     aliases: &[],
     credential_env_names: &["MISTRAL_API_KEY"],
-    protocols: &[],
-    runtime_supported: false,
+    protocols: &[ProviderProtocol::OpenaiCompletions],
+    runtime_supported: true,
   },
   ProviderDefinition {
     id: "groq",
     name: "Groq",
     aliases: &[],
     credential_env_names: &["GROQ_API_KEY"],
-    protocols: &[],
-    runtime_supported: false,
+    protocols: &[ProviderProtocol::OpenaiCompletions],
+    runtime_supported: true,
   },
 ];
 

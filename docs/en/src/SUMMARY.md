@@ -16,3 +16,5 @@
 - [Connect peers and Control Relay](network.md)
 - [Protocol and platform capabilities](protocol.md)
 - [Development and verification](development.md)
+
+- [Plans, context and changes](agent-workflows.md)

@@ -75,6 +75,7 @@ impl ContentPolicy for RuleContentPolicy {
     );
     tokio::task::spawn_blocking(move || {
       let _permit = permit;
+      let images = crate::inline_images::InlineImages::take(&mut body)?;
       if let Some(shared) = shared {
         let mut privacy = shared.blocking_lock();
         privacy
@@ -87,6 +88,7 @@ impl ContentPolicy for RuleContentPolicy {
         .register_secret(&scope, token.expose_secret())
         .map_err(|_| unavailable())?;
       protect_content(&mut privacy, &scope, &mut body).map_err(|_| rejected())?;
+      images.restore(&mut body)?;
       Ok(body)
     })
     .await

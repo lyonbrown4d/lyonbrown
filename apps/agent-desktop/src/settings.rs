@@ -56,6 +56,8 @@ impl Desktop {
       SettingsSection::Models => self.resources.view(ResourceSection::Models),
       SettingsSection::Providers => self.resources.view(ResourceSection::Providers),
       SettingsSection::Skills => self.resources.view(ResourceSection::Skills),
+      SettingsSection::Memory => self.resources.memory.clone().into_any_element(),
+      SettingsSection::Workflow => self.resources.workflow.clone().into_any_element(),
       SettingsSection::Status => self.resources.view(ResourceSection::Status),
     };
     div()

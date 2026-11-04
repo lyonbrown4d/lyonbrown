@@ -137,6 +137,7 @@ async fn serve(
     .add_service(agentd::workspace_service(daemon.clone()))
     .add_service(agentd::skill_service(daemon.clone()))
     .add_service(agentd::model_service(daemon.clone()))
+    .add_service(agentd::workflow_service(daemon.clone()))
     .add_service(agentd::memory_service(daemon.clone()))
     .add_service(agentd::browser_service(daemon.clone()))
     .add_service(agentd::runtime_service(daemon.clone()))

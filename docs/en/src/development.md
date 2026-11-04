@@ -19,7 +19,7 @@ Direct registry dependencies use exact versions, with updates checked against of
 
 The existing ORT integration still uses its pinned release candidate, and Qdrant Edge uses the 0.9.0 beta SDK; neither is described as a stable SDK release. GPUI Kit 0.9, Agent Skills 0.3, ZIP and Markdown upgrades received static checks against official source APIs, with an added Skill unknown-field rejection case. Their tests and desktop runtime acceptance were not performed.
 
-Compilation, tests and mdBook builds were not run in this iteration as requested. Commands below are development entry points and verification requirements, not successful results for this working tree. [Historical screenshots](runtime-evidence.md) cover only their recorded platforms, versions and source identities, and do not cover the current Rig execution path.
+The default-feature workspace completed `cargo build --workspace --locked --offline` on macOS 27.2 arm64 with Rust 1.99.1, and both mdBook builds passed. Tests have not been rerun; GUI behavior, the new image flow and optional native features still require their own runtime acceptance. Commands below remain the complete verification requirements. [Historical screenshots](runtime-evidence.md) cover only their recorded platforms, versions and source identities, and do not cover the current Rig execution path.
 
 Relational I/O uses the native asynchronous ORM with versioned Rust migrations and no legacy Diesel compatibility. See [Long-term memory](memory.md) for backend configuration and durable jobs. Source integration for PostgreSQL, MySQL and Qdrant embedded / server does not replace execution against those databases or services.
 

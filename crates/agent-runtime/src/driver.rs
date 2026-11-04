@@ -100,8 +100,17 @@ impl Runtime {
         input.status = QueueStatus::Consumed;
         let prompt = Message::user(input.prompt.clone());
         let event = input.event(QueueStatus::Consumed);
+        let current = state
+          .active
+          .as_mut()
+          .ok_or_else(|| RuntimeError::Execution("no active run".into()))?;
+        state
+          .context
+          .append(&current.run.full_history(), &mut current.context_cursor)?;
+        let history = state.context.messages()?;
+        state.context.protect(&prompt);
         let active = active(state)?;
-        let history = active.run.full_history();
+        active.context_cursor = history.len();
         // next_step already issued this turn but no provider IO has started.
         let remaining = active
           .spec
@@ -134,8 +143,17 @@ impl Runtime {
         input.status = QueueStatus::Consumed;
         let event = input.event(QueueStatus::Consumed);
         let prompt = Message::user(input.prompt.clone());
+        let current = state
+          .active
+          .as_mut()
+          .ok_or_else(|| RuntimeError::Execution("no active run".into()))?;
+        state
+          .context
+          .append(&current.run.full_history(), &mut current.context_cursor)?;
+        let history = state.context.messages()?;
+        state.context.protect(&prompt);
         let active = active(state)?;
-        let history = active.run.full_history();
+        active.context_cursor = history.len();
         active.spec = self.spec();
         active.run = AgentRun::from_spec(&active.spec, prompt, None)
           .with_validated_history(history)
@@ -156,7 +174,13 @@ impl Runtime {
     let result = self
       .session
       .update("run_finished", |state| {
-        if !state.pending_tools.is_empty() {
+        if !state.pending_tools.is_empty()
+          || state.context.pending.is_some()
+          || state
+            .active
+            .as_ref()
+            .is_some_and(|active| active.in_flight.is_some())
+        {
           return Err(RuntimeError::Uncertain(
             "tool effects require reconciliation".into(),
           ));
@@ -170,7 +194,10 @@ impl Runtime {
           .response()
           .map(|response| response.output())
           .unwrap_or_default();
-        state.history = active.run.canonical_history();
+        let mut context_cursor = active.context_cursor;
+        state
+          .context
+          .append(&active.run.canonical_history(), &mut context_cursor)?;
         let result = RuntimeResult {
           run_id: active.id.clone(),
           outcome,

@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agent-media = { path = "../agent-media" }
 agent-protocol = { path = "../agent-protocol" }
 agent-security = { path = "../agent-security" }
 anyhow.workspace = true

@@ -13,7 +13,13 @@ impl Daemon {
     }
     let mut scopes = vec![MemoryScope::User(self.node_id.clone())];
     if session_id.is_empty() {
-      return Ok(MemoryAccess::new(scopes));
+      let access = MemoryAccess::new(scopes);
+      self
+        .memory
+        .ensure_rebuild(&access)
+        .await
+        .map_err(super::failure)?;
+      return Ok(access);
     }
     let session = self
       .store
@@ -36,7 +42,13 @@ impl Daemon {
     scopes.push(MemoryScope::Session(session.id));
     scopes.push(project);
     self.events.notify_waiters();
-    Ok(MemoryAccess::new(scopes))
+    let access = MemoryAccess::new(scopes);
+    self
+      .memory
+      .ensure_rebuild(&access)
+      .await
+      .map_err(super::failure)?;
+    Ok(access)
   }
 }
 pub(super) fn selected_scope(access: &MemoryAccess, kind: i32) -> Result<MemoryScope, Status> {

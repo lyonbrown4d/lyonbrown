@@ -7,6 +7,10 @@ use serde_json::json;
 use support::TestNode;
 use tonic::Request;
 
+async fn snapshot(node: &TestNode, session: &str) -> Option<Vec<u8>> {
+  node.daemon.store.load_snapshot(session).await.unwrap()
+}
+
 fn route(protocol: StandardProtocol) -> ScriptedReply {
   text_reply(protocol, &json!({"task_kind":"code","model_policy":"general","allowed_tools":[],"execution_mode":"local","target_hint":null,"risk_level":"low","confidence":0.99}).to_string())
 }
@@ -172,7 +176,7 @@ async fn explicit_recovery_runs_fresh_prompt_through_all_real_adapters_without_r
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn committed_fresh_intent_recovers_after_restart_and_can_be_cancelled() {
+async fn committed_fresh_intent_recovers_but_cancelled_main_io_stays_uncertain() {
   let protocol = StandardProtocol::ChatCompletions;
   let classifier = MockModelServer::start(vec![route(protocol)]).await.unwrap();
   let main = MockModelServer::start(vec![ScriptedReply::stall()])
@@ -205,7 +209,11 @@ async fn committed_fresh_intent_recovers_after_restart_and_can_be_cancelled() {
     .cancel_run(Request::new(v1::RunRequest { run_id: id.clone() }))
     .await
     .unwrap();
-  assert_eq!(node.terminal(&id).await.status, "cancelled");
+  assert_eq!(node.terminal(&id).await.status, "uncertain");
+  let replacement = node.daemon.store.run(&id).await.unwrap().unwrap();
+  let snapshot: serde_json::Value =
+    serde_json::from_slice(&snapshot(&node, &replacement.session_id).await.unwrap()).unwrap();
+  assert_eq!(snapshot["active"]["in_flight"], "model");
   assert_eq!(
     node.daemon.store.run(&run.id).await.unwrap(),
     Some(original)
@@ -227,12 +235,34 @@ async fn active_and_stale_recovery_requests_cannot_create_execution() {
   main.wait_for_requests(1).await;
   assert!(node.client.recover_run(recovery(&run.id)).await.is_err());
   node.client.cancel_run(&run.id).await.unwrap();
-  assert_eq!(node.terminal(&run.id).await.status, "cancelled");
+  assert_eq!(node.terminal(&run.id).await.status, "uncertain");
+  let prior_snapshot = snapshot(&node, &node.session_id).await;
+  assert!(
+    node
+      .client
+      .start_run(
+        &node.session_id,
+        "cannot bypass unknown request",
+        &agent_core::new_id()
+      )
+      .await
+      .is_err()
+  );
+  // Keep the unknown model request intact. The stale-epoch case uses a separate
+  // Session, rather than pretending another run can enter the fenced Session.
+  let isolated = node
+    .client
+    .create_session(
+      "isolated stale ownership",
+      node.workspace.path().to_str().unwrap(),
+    )
+    .await
+    .unwrap();
   // A separate uncertain run with a changed epoch also rejects recovery.
   let (unknown, _) = node
     .daemon
     .store
-    .accept_run(&node.session_id, 1, "unknown", "unknown")
+    .accept_run(&isolated.id, 1, "unknown", "unknown")
     .await
     .unwrap();
   node
@@ -244,7 +274,7 @@ async fn active_and_stale_recovery_requests_cannot_create_execution() {
   node
     .daemon
     .store
-    .change_owner(&node.session_id, 1, &node.daemon.node_id)
+    .change_owner(&isolated.id, 1, &node.daemon.node_id)
     .await
     .unwrap();
   assert!(
@@ -263,7 +293,12 @@ async fn active_and_stale_recovery_requests_cannot_create_execution() {
       .unwrap()
       .is_none()
   );
-  assert_eq!(node.daemon.store.sessions().await.unwrap().len(), 1);
+  assert_eq!(node.daemon.store.sessions().await.unwrap().len(), 2);
+  assert_eq!(snapshot(&node, &node.session_id).await, prior_snapshot);
+  assert_eq!(
+    node.client.get_run(&run.id).await.unwrap().status,
+    "uncertain"
+  );
   assert_eq!(main.requests().await.len(), 1);
   node.close().await;
 }

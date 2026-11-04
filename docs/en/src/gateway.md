@@ -2,7 +2,7 @@
 
 Gateway is embedded in agentd. It routes model requests, enforces access restrictions and records request metadata; it does not run an Agent Loop. There is no standalone Gateway process or Web administration interface. The Agent retains responsibility for Sessions, tools, permissions and approvals.
 
-The embedded Gateway currently handles OpenAI Chat Completions. Responses and Anthropic use their native adapters, without an automatic Gateway fallback. Native local inference also uses its own backend and does not enter the Gateway model pool. The optional HTTP interface accepts Chat Completions, not Responses or Anthropic; it rejects images, and audio is not supported.
+The embedded Gateway currently handles OpenAI Chat Completions. Responses, Gemini and Anthropic use their native adapters, without an automatic Gateway fallback. Native local inference also uses its own backend and does not enter the Gateway model pool. The optional HTTP interface accepts Chat Completions, not Responses or Anthropic; images are restricted to the standard user inline parts described below, and audio is not supported.
 
 ## Configuration
 
@@ -65,3 +65,12 @@ Runtime response text is buffered until validation completes, so it is not shown
 The Gateway uses Rig's public HTTP transport and SSE framing. It limits requests, responses, concurrency and time, and checks terminal state. An interrupted request or missing terminal marker does not prove that an upstream did not execute; it must not be blindly replayed. Audit records contain metadata rather than prompts or response bodies.
 
 Runtime and daemon integration tests use local synthetic upstreams without paid model calls. They cover model selection, authentication of the optional HTTP listener, and privacy mapping recovery after restart. They do not establish real-model, native GUI, three-platform or public-network acceptance.
+
+
+## Inline images and model capabilities
+
+Chat images are accepted only as standard `image_url` parts in user messages, with inline base64 data URIs for PNG, JPEG, WebP or GIF. Gateway reuses shared image validation for encoding, actual MIME type, pixels and aggregate limits. It does not download remote images or accept audio or arbitrary opaque content. Only the exact validated image field retains its bytes; text still passes through shared sensitive-content protection. Image contents are not automatically redacted and require user review before sending.
+
+Image requests require an explicit `vision` model capability. Direct selection and every candidate in a model group enforce it, so a text-only model cannot receive an image through fallback. Automatic single-model configuration and caching use explicit `supports_images`, never a model-name guess.
+
+Images remain subject to Gateway `max_body_bytes`: 256 KiB by default, configurable up to 16 MiB. This can be lower than daemon attachment limits; an attachment within its own limit is not necessarily within the current Gateway request limit.

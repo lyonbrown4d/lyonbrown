@@ -10,7 +10,12 @@ pub fn client_service(
   daemon: Daemon,
 ) -> InterceptedService<ClientServiceServer<Daemon>, Authenticate> {
   let auth = Authenticate::new(daemon.auth_token());
-  ClientServiceServer::with_interceptor(daemon, auth)
+  InterceptedService::new(
+    ClientServiceServer::new(daemon)
+      .max_decoding_message_size(agent_media::MAX_RPC_BYTES)
+      .max_encoding_message_size(agent_media::MAX_RPC_BYTES),
+    auth,
+  )
 }
 pub(crate) fn db_error(error: anyhow::Error) -> Status {
   Status::failed_precondition(agent_storage::public_error_message(&error))
@@ -28,6 +33,11 @@ impl ClientService for Daemon {
         "sessions".into(),
         "runs".into(),
         "runs.input".into(),
+        "runs.images".into(),
+        "context.manage".into(),
+        "interaction.modes".into(),
+        "plans.manage".into(),
+        "changes.manage".into(),
         "events.semantic".into(),
         "runs.recover".into(),
         "workspace.read".into(),
@@ -314,6 +324,109 @@ impl ClientService for Daemon {
     self.events.notify_waiters();
     Ok(Response::new(value.into()))
   }
+  async fn start_run_with_attachments(
+    &self,
+    request: Request<v1::StartRunWithAttachmentsRequest>,
+  ) -> Result<Response<v1::Run>, Status> {
+    self
+      .start_attached_run(request.into_inner())
+      .await
+      .map(Response::new)
+  }
+  async fn get_context_status(
+    &self,
+    request: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::ContextStatus>, Status> {
+    self
+      .inspect_session_context(&request.into_inner().session_id)
+      .await
+      .map(Response::new)
+  }
+  async fn get_context_summary(
+    &self,
+    request: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::ContextSummary>, Status> {
+    self
+      .inspect_session_summary(&request.into_inner().session_id)
+      .await
+      .map(Response::new)
+  }
+  async fn compact_context(
+    &self,
+    request: Request<v1::CompactContextRequest>,
+  ) -> Result<Response<v1::ContextStatus>, Status> {
+    let input = request.into_inner();
+    self
+      .mutate_context(
+        &input.session_id,
+        input.owner_epoch,
+        input.expected_revision,
+        Some(&input.focus),
+      )
+      .await
+      .map(Response::new)
+  }
+  async fn get_context_maintenance(
+    &self,
+    request: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::ContextMaintenanceJob>, Status> {
+    self
+      .inspect_context_job(&request.into_inner().session_id)
+      .await
+      .map(Response::new)
+  }
+  async fn abandon_context(
+    &self,
+    request: Request<v1::AbandonContextRequest>,
+  ) -> Result<Response<v1::AbandonContextResult>, Status> {
+    self
+      .abandon_context_job(request.into_inner())
+      .await
+      .map(Response::new)
+  }
+  async fn cancel_context(
+    &self,
+    request: Request<v1::CancelContextRequest>,
+  ) -> Result<Response<v1::ContextMaintenanceJob>, Status> {
+    let input = request.into_inner();
+    self
+      .cancel_context_job(&input.job_id, input.owner_epoch)
+      .await
+      .map(Response::new)
+  }
+  async fn undo_context_compaction(
+    &self,
+    request: Request<v1::UndoContextCompactionRequest>,
+  ) -> Result<Response<v1::ContextStatus>, Status> {
+    let input = request.into_inner();
+    self
+      .mutate_context(
+        &input.session_id,
+        input.owner_epoch,
+        input.expected_revision,
+        None,
+      )
+      .await
+      .map(Response::new)
+  }
+  async fn get_interaction_policy(
+    &self,
+    request: Request<v1::SessionRequest>,
+  ) -> Result<Response<v1::InteractionPolicy>, Status> {
+    self
+      .interaction_status(&request.into_inner().session_id)
+      .await
+      .map(Response::new)
+  }
+  async fn set_interaction_mode(
+    &self,
+    request: Request<v1::SetInteractionModeRequest>,
+  ) -> Result<Response<v1::InteractionPolicy>, Status> {
+    self
+      .change_interaction_mode(request.into_inner())
+      .await
+      .map(Response::new)
+  }
   async fn submit_run_input(
     &self,
     request: Request<v1::RunInputRequest>,
@@ -478,6 +591,7 @@ fn provider_status(status: &agent_config::ProviderStatus, uploaded: bool) -> v1:
           ProviderProtocol::OpenaiResponses => "openai_responses",
           ProviderProtocol::OpenaiCompletions => "openai_completions",
           ProviderProtocol::AnthropicMessages => "anthropic_messages",
+          ProviderProtocol::GeminiGenerateContent => "gemini_generate_content",
           ProviderProtocol::Local => "local",
         }
         .into()

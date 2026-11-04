@@ -23,7 +23,7 @@ impl Daemon {
   }
 
   pub(crate) fn uses_gateway_registry(&self, binding: &agent_storage::ModelBinding) -> bool {
-    binding.provider == "openai-completions"
+    model_provider::supports_gateway_chat(&binding.provider)
       && (binding.execution_id.starts_with("gateway:")
         || binding.execution_id == "configured" && self.gateway_contains(&binding.model))
   }
@@ -35,9 +35,9 @@ impl Daemon {
     tools: Vec<Arc<dyn RuntimeTool>>,
     listener: EventListener,
   ) -> agent_runtime::Result<Runtime> {
-    // Responses and Anthropic retain their native adapters. They must never be
+    // Responses, Gemini and Anthropic retain their native adapters. They must never be
     // silently encoded as Chat Completions by the embedded gateway.
-    if config.provider != "openai-completions" {
+    if !model_provider::supports_gateway_chat(&config.provider) {
       return Runtime::open(config, persistence, tools, listener).await;
     }
     let gateway = self
@@ -52,9 +52,18 @@ impl Daemon {
       .map_err(|_| {
         agent_runtime::RuntimeError::Configuration("embedded gateway model unavailable".into())
       })?;
-    let model = model_provider::gateway_model(
+    let model = model_provider::configured_with_gateway(
+      &model_provider::ModelConfig {
+        provider: config.provider.clone(),
+        model: config.model.clone(),
+        api_key: config.api_key.clone(),
+        base_url: config.base_url.clone(),
+        system_prompt: config.system_prompt.clone(),
+        context_window: config.context_window,
+        max_output_tokens: config.max_output_tokens,
+        supports_images: config.supports_images,
+      },
       gateway,
-      &config.model,
       self.gateway.internal_token.expose_secret(),
     )
     .map_err(|_| {

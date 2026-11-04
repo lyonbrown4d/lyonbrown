@@ -1,6 +1,6 @@
 //! Host-owned privacy transforms. Placeholders are references, not authorization.
 //! Callers must select content fields and enforce authorization before resolving.
-//! Mappings are memory-only and disappear when this service is dropped.
+//! Mappings live in memory; hosts may explicitly export and restore encrypted scopes.
 
 mod detector;
 mod known_secrets;
@@ -9,6 +9,9 @@ mod service;
 
 pub use detector::{Detection, Detector, Evidence, Kind, RuleDetector};
 pub use service::PrivacyService;
+
+/// Maximum UTF-8 bytes accepted by one privacy preparation call.
+pub const MAX_TEXT_BYTES: usize = detector::MAX_INPUT;
 
 /// Failures are intentionally free of input text and secret values.
 #[derive(Debug, thiserror::Error)]

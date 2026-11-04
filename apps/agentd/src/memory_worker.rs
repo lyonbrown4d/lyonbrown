@@ -15,6 +15,12 @@ impl Daemon {
     if !self.config.memory.enabled || self.config.memory.embedding.is_none() {
       return Ok(());
     }
+    self
+      .memory
+      .ensure_rebuild(&agent_memory::MemoryAccess::new(vec![
+        memory_core::MemoryScope::User(self.node_id.clone()),
+      ]))
+      .await?;
     let service = self.memory.clone();
     let cancel = self.stopping.child_token();
     let events = self.events.clone();

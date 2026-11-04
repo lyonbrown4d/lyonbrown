@@ -41,6 +41,15 @@ impl Gateway {
     {
       constraints.required_capabilities.insert("tools".into());
     }
+    if request.body["messages"].as_array().is_some_and(|messages| {
+      messages.iter().any(|message| {
+        message["content"]
+          .as_array()
+          .is_some_and(|parts| parts.iter().any(|part| part["type"] == "image_url"))
+      })
+    }) {
+      constraints.required_capabilities.insert("vision".into());
+    }
     constraints.input_tokens = Some(
       constraints
         .input_tokens

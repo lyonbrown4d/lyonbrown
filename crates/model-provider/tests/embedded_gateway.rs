@@ -21,6 +21,31 @@ impl AuditSink for Audit {
 }
 #[tokio::test]
 async fn rig_chat_uses_in_process_gateway_authentication_and_audit() {
+  exercise(None).await;
+}
+#[tokio::test]
+async fn native_chat_presets_keep_the_gateway_admission_and_audit_boundary() {
+  for provider in [
+    "openai-completions",
+    "deepseek",
+    "openrouter",
+    "groq",
+    "mistral",
+  ] {
+    assert!(model_provider::supports_gateway_chat(provider));
+    exercise(Some(provider)).await;
+  }
+  for provider in [
+    "openai",
+    "openai-responses",
+    "anthropic",
+    "gemini",
+    "unknown",
+  ] {
+    assert!(!model_provider::supports_gateway_chat(provider));
+  }
+}
+async fn exercise(provider: Option<&str>) {
   let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
     .await
     .expect("mock listener");
@@ -55,7 +80,25 @@ async fn rig_chat_uses_in_process_gateway_authentication_and_audit() {
     decision_core::DecisionEngine::new(decision_core::Policy::default(), vec![]).expect("engine"),
   );
   let gateway = Gateway::new(config, engine, audit.clone()).expect("gateway");
-  let model = model_provider::gateway_model(gateway, "test", token).expect("model");
+  let model = if let Some(provider) = provider {
+    model_provider::configured_with_gateway(
+      &model_provider::ModelConfig {
+        provider: provider.into(),
+        model: "test".into(),
+        api_key: "upstream-fixture".into(),
+        base_url: None,
+        system_prompt: None,
+        context_window: 65536,
+        max_output_tokens: 512,
+        supports_images: false,
+      },
+      gateway,
+      token,
+    )
+    .expect("native gateway model")
+  } else {
+    model_provider::gateway_model(gateway, "test", token).expect("model")
+  };
   let mut stream = model
     .stream(CompletionRequest::new("hello").max_tokens(32))
     .expect("stream");

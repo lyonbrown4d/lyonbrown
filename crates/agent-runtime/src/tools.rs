@@ -138,9 +138,27 @@ impl Runtime {
         is_error: true,
       },
     };
-    let output = ToolOutput {
-      text: self.protect_text(&output.text).await?,
-      is_error: output.is_error,
+    let output = if output.text.len() > tool_output_limit() {
+      omitted_output(output.is_error)
+    } else {
+      match self.protect_text(&output.text).await {
+        Ok(text) => ToolOutput {
+          text,
+          is_error: output.is_error,
+        },
+        Err(error @ (RuntimeError::Uncertain(_) | RuntimeError::Persistence(_))) => {
+          return Err(error);
+        }
+        // The host outcome is known. If its body cannot be protected, persist
+        // only a safe omission receipt rather than exposing or redoing it.
+        Err(_) => omitted_output(output.is_error),
+      }
+    };
+    // Replacements can expand text; keep the protected receipt bounded too.
+    let output = if output.text.len() > tool_output_limit() {
+      omitted_output(output.is_error)
+    } else {
+      output
     };
     let result = if output.is_error {
       ToolResult::failed(ToolExecutionError::other(output.text.clone()))
@@ -175,4 +193,18 @@ impl Runtime {
     });
     Ok(())
   }
+}
+
+fn omitted_output(is_error: bool) -> ToolOutput {
+  ToolOutput {
+    text: format!(
+      "The tool returned a confirmed {} result. The result body was omitted because it exceeded the host size or privacy-preparation limit. Do not repeat the operation merely to regenerate the omitted body.",
+      if is_error { "error" } else { "successful" }
+    ),
+    is_error,
+  }
+}
+
+fn tool_output_limit() -> usize {
+  crate::budget::TOOL_BYTES.min(agent_privacy::MAX_TEXT_BYTES)
 }

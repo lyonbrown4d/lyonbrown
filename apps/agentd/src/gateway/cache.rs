@@ -13,7 +13,7 @@ impl GatewayHost {
     use_registry: bool,
   ) -> Result<Gateway> {
     ensure!(
-      runtime.provider == "openai-completions",
+      model_provider::supports_gateway_chat(&runtime.provider),
       "gateway requires Chat Completions"
     );
     if self.explicit && use_registry {
@@ -22,15 +22,14 @@ impl GatewayHost {
         .clone()
         .context("configured gateway unavailable");
     }
-    let base = runtime
-      .base_url
-      .as_deref()
-      .unwrap_or("https://api.openai.com/v1");
+    let default_base = model_provider::provider_base_url(&runtime.provider)?;
+    let base = runtime.base_url.as_deref().unwrap_or(&default_base);
     let key = cache_key(
       &runtime.model,
       base,
       &runtime.api_key,
       runtime.context_window,
+      runtime.supports_images,
     );
     let mut cache = self
       .cache
@@ -52,6 +51,7 @@ impl GatewayHost {
         local_inference: false,
         capabilities: ["text".to_owned(), "tools".to_owned()]
           .into_iter()
+          .chain(runtime.supports_images.then(|| "vision".to_owned()))
           .collect(),
         context_tokens: Some(u64::from(runtime.context_window)),
       }],
@@ -77,6 +77,7 @@ pub(super) fn cache_key(
   base: &str,
   credential: &str,
   context_window: u32,
+  supports_images: bool,
 ) -> [u8; 32] {
   let mut hash = Sha256::new();
   for value in [model, base, credential] {
@@ -84,5 +85,6 @@ pub(super) fn cache_key(
     hash.update(value.as_bytes());
   }
   hash.update(context_window.to_be_bytes());
+  hash.update([u8::from(supports_images)]);
   hash.finalize().into()
 }

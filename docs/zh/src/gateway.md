@@ -2,7 +2,7 @@
 
 Gateway 内嵌在 agentd 中，负责模型请求路由、访问限制和请求元数据审计，不运行 Agent Loop。项目不提供独立 Gateway 进程或 Web 管理界面。Session、工具、权限和审批仍由 Agent 负责。
 
-嵌入式 Gateway 目前处理 OpenAI Chat Completions。Responses 和 Anthropic 保留各自的原生适配器，不自动回退到 Gateway。原生本地推理也使用独立后端，不进入 Gateway 模型池。可选 HTTP 接口只接受 Chat Completions，不接受 Responses 或 Anthropic；接口拒绝图片，也不支持音频。
+嵌入式 Gateway 目前处理 OpenAI Chat Completions。Responses、Gemini 和 Anthropic 保留各自的原生适配器，不自动回退到 Gateway。原生本地推理也使用独立后端，不进入 Gateway 模型池。可选 HTTP 接口只接受 Chat Completions，不接受 Responses 或 Anthropic；图片仅接受下文说明的标准用户内联内容块，不支持音频。
 
 ## 配置
 
@@ -65,3 +65,12 @@ Runtime 会缓冲回复文本，待校验完成后再展示，因此不会逐步
 Gateway 使用 Rig 的公开 HTTP 传输与 SSE 分帧能力，并限制请求、响应、并发和时间，检查终态。连接中断或缺少终态不能证明上游没有执行，不得盲目重放。审计记录保存元数据，不保存提示词或回复正文。
 
 Runtime 和 daemon 集成测试使用本地合成上游，不调用付费模型，覆盖模型选择、可选 HTTP 入口认证和隐私映射的重启恢复。这些测试不代表真实模型、原生 GUI、三平台或公网运行验收。
+
+
+## 内联图片与模型能力
+
+Chat 请求中的图片仅接受用户消息内标准 `image_url` 内容块，URL 必须为 PNG、JPEG、WebP 或 GIF 的内联 base64 data URI。Gateway 复用共享图片校验，核对编码、真实 MIME、像素与总量；不下载远程图片，不接受音频或任意不透明内容。只对校验后的精确图像字段保留原始字节，文本仍使用共享敏感信息处理；图片内容不会自动脱敏，发送前须由用户确认。
+
+包含图片的请求要求模型显式声明 `vision`。直接选择和模型组的每个候选均执行该条件，不会回退到纯文本模型。单模型自动装配与缓存使用显式 `supports_images`，不因名称推断能力。
+
+图片仍受 Gateway 的 `max_body_bytes` 限制：默认 256 KiB，可配置范围最高 16 MiB；这可能比 daemon 图片附件的上限更小。达到附件上限不代表能通过当前 Gateway 请求限制。

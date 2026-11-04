@@ -15,16 +15,20 @@ pub enum SettingsSection {
   Models,
   Providers,
   Skills,
+  Memory,
+  Workflow,
   Status,
   Appearance,
 }
 
 impl SettingsSection {
-  pub const ALL: [Self; 6] = [
+  pub const ALL: [Self; 8] = [
     Self::Connection,
     Self::Models,
     Self::Providers,
     Self::Skills,
+    Self::Memory,
+    Self::Workflow,
     Self::Status,
     Self::Appearance,
   ];
@@ -35,6 +39,8 @@ impl SettingsSection {
       Self::Models => "Models",
       Self::Providers => "Providers",
       Self::Skills => "Skills",
+      Self::Memory => "Memory",
+      Self::Workflow => "Plans and changes",
       Self::Status => "Status",
       Self::Appearance => "Appearance",
     }

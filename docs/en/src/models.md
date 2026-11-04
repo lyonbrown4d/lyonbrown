@@ -1,5 +1,15 @@
 # Models and execution decisions
 
+
+## Remote providers
+
+Remote models use Rig Registry and public clients: OpenAI Responses, OpenAI Chat Completions, Anthropic Messages, Gemini GenerateContent, and framework presets for OpenRouter, Groq, Mistral API and DeepSeek. Framework adapters own encoding and model-list parsing. The daemon supplies credentials explicitly through layered configuration or encrypted credential storage; SDK environment fallback is not used.
+
+The TUI provider dialog and Desktop Providers page share presets and allow editing names, endpoints and models, saving profiles and probing model catalogs. Probes have a five-second total deadline, a 1 MiB response limit and at most 1000 model IDs. They do not perform generation or establish model quality, image support or tool support. Credentials indicate configurability, not runtime acceptance.
+
+Environment names are `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `OPENROUTER_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY` and `DEEPSEEK_API_KEY`. Credentials never select a model automatically. Endpoints require HTTPS, except loopback HTTP. Local mock regressions were authored for the new adapters; the default-feature workspace compiles, while tests have not been rerun.
+
+
 ## Terminal catalog and installation
 
 `/models` reads agentd's authenticated unified catalog of builtin API models, configured models and installed Hugging Face artifacts. `configurable`, `installed_unverified` and `ready` distinguish missing credentials, downloaded files and an available execution binding. API credential presence does not establish successful inference. Select using `/models select MODEL EXECUTION`. agentd checks session ownership and epoch and rejects changes while runs are active or uncertain. SQLite stores the selection and copies an immutable execution binding when accepting a Run.

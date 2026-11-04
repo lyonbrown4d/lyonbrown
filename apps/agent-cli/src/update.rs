@@ -5,6 +5,7 @@ use crate::{
 
 pub fn apply(app: &mut App, update: Update) {
   match update {
+    Update::Media(reply) => crate::media::apply(app, reply),
     Update::Inputs {
       generation,
       run,
@@ -209,6 +210,9 @@ pub fn apply(app: &mut App, update: Update) {
       preserve,
     } => {
       app.state_loaded = true;
+      if app.persistence_node_id != node_id {
+        app.image_drafts.clear();
+      }
       app
         .interaction
         .bind_connection(node_id.as_deref().unwrap_or_default());

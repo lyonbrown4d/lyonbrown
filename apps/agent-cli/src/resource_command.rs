@@ -3,9 +3,26 @@ use agent_protocol::v1;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ResourceCommand {
+  Workflow(crate::plan_command::WorkflowCommand),
   Memory(crate::memory_command::MemoryCommand),
   Status,
   Context,
+  ContextSummary,
+  ContextUndo,
+  ContextCancel {
+    job_id: String,
+  },
+  ContextAbandon {
+    job_id: String,
+    request_id: String,
+    reason: String,
+  },
+  ContextCompact {
+    focus: String,
+  },
+  Mode {
+    mode: Option<v1::InteractionMode>,
+  },
   Permissions,
   Mcp,
   Tools,

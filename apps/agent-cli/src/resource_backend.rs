@@ -8,15 +8,20 @@ pub(crate) async fn execute(
   command: ResourceCommand,
 ) -> anyhow::Result<(String, String)> {
   match command {
+    ResourceCommand::Workflow(command) => {
+      crate::plan_backend::execute(client, session, command).await
+    }
     ResourceCommand::Memory(command) => {
       crate::memory_backend::execute(client, session, command).await
     }
-    ResourceCommand::Context => {
-      let status = client.runtime_status(required_session(session)?).await?;
-      Ok((
-        "Session context".into(),
-        crate::resource_command::format_context(&status),
-      ))
+    ResourceCommand::Context
+    | ResourceCommand::ContextSummary
+    | ResourceCommand::ContextUndo
+    | ResourceCommand::ContextCancel { .. }
+    | ResourceCommand::ContextAbandon { .. }
+    | ResourceCommand::ContextCompact { .. }
+    | ResourceCommand::Mode { .. } => {
+      crate::context_command::execute(client, required_session(session)?, command).await
     }
     ResourceCommand::Permissions => {
       let status = client.runtime_status(required_session(session)?).await?;
@@ -29,7 +34,15 @@ pub(crate) async fn execute(
         crate::resource_command::format_permissions(&approvals),
       ))
     }
-    ResourceCommand::Mcp | ResourceCommand::Tools => {
+    ResourceCommand::Tools => {
+      crate::context_command::execute(
+        client,
+        required_session(session)?,
+        ResourceCommand::Mode { mode: None },
+      )
+      .await
+    }
+    ResourceCommand::Mcp => {
       let status = client.runtime_status(required_session(session)?).await?;
       let (title, kind, count) = if command == ResourceCommand::Mcp {
         ("MCP servers", "MCP server", status.mcp_servers)

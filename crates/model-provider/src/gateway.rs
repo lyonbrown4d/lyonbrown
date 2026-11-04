@@ -39,12 +39,21 @@ pub fn configured_with_gateway(
   token: &str,
 ) -> crate::Result<DynModel<Completion>> {
   crate::configuration::validate(config)?;
-  if config.provider != "openai-completions" {
+  if !crate::supports_gateway_chat(&config.provider) {
     return Err(crate::ProviderError::Configuration(
-      "embedded gateway currently supports only openai-completions".into(),
+      "embedded gateway requires the native Chat Completions wire".into(),
     ));
   }
-  gateway_model(gateway, &config.model, token)
+  let provider =
+    crate::configuration::selection(&config.provider, token, Some("http://gateway.internal/v1"))?;
+  let id = provider
+    .id()
+    .ok_or_else(|| crate::ProviderError::Configuration("unregistered gateway provider".into()))?;
+  Ok(provider.completion_model(
+    &config.model,
+    rig_core::http_client::DynHttpClient::new(GatewayClient { gateway }),
+    rig_core::catalog::Catalog::builtin().facts(id, &config.model),
+  ))
 }
 
 #[derive(Clone)]

@@ -166,7 +166,7 @@ async fn missing_local_model_and_uncompiled_backend_fail_before_daemon_is_ready(
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn local_model_cancellation_persists_cancelled_for_classifier_and_harness() {
+async fn local_cancellation_is_known_before_main_io_and_uncertain_after_it() {
   for during_classification in [true, false] {
     let main = Backend::new("main", true, None);
     let classifier = Backend::new("classifier", false, None);
@@ -182,7 +182,7 @@ async fn local_model_cancellation_persists_cancelled_for_classifier_and_harness(
       .into_inner();
     let run = daemon
       .start_run(Request::new(v1::StartRunRequest {
-        session_id: session.id,
+        session_id: session.id.clone(),
         owner_epoch: session.owner_epoch,
         prompt: "cancel during classification".into(),
         idempotency_key: agent_core::new_id(),
@@ -221,8 +221,25 @@ async fn local_model_cancellation_persists_cancelled_for_classifier_and_harness(
     .unwrap();
     assert_eq!(
       daemon.store.run(&run.id).await.unwrap().unwrap().status,
-      "cancelled"
+      if during_classification {
+        "cancelled"
+      } else {
+        "uncertain"
+      }
     );
+    let snapshot = daemon.store.load_snapshot(&session.id).await.unwrap();
+    if during_classification {
+      // Classifier cancellation occurs before the execution model starts and
+      // must not leave a main-model request intent or invent an unknown effect.
+      if let Some(snapshot) = snapshot {
+        let snapshot: serde_json::Value = serde_json::from_slice(&snapshot).unwrap();
+        assert!(snapshot["active"]["in_flight"].is_null());
+      }
+    } else {
+      let snapshot: serde_json::Value =
+        serde_json::from_slice(&snapshot.expect("durable main-model request")).unwrap();
+      assert_eq!(snapshot["active"]["in_flight"], "model");
+    }
     assert_eq!(main.requests.lock().await.is_empty(), during_classification);
     assert_eq!(
       daemon

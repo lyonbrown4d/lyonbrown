@@ -9,7 +9,7 @@ async fn requested(mock: &MockModelServer, count: usize) {
     .unwrap();
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn inherited_input_cannot_be_cancelled_through_a_stale_runtime_during_handoff() {
+async fn uncertain_model_cancellation_fences_inherited_queue_and_new_run_admission() {
   let protocol = StandardProtocol::ChatCompletions;
   let classifier = MockModelServer::start_interactive().await.unwrap();
   let main = MockModelServer::start_interactive().await.unwrap();
@@ -27,27 +27,43 @@ async fn inherited_input_cannot_be_cancelled_through_a_stale_runtime_during_hand
       owner_epoch: 1,
       request_id: agent_core::new_id(),
       kind: v1::RunInputKind::FollowUp as i32,
-      prompt: "retained input must be cancellable".into(),
+      prompt: "retained input must not be consumed before reconciliation".into(),
     })
     .await
     .unwrap();
   node.client.cancel_run(&first.id).await.unwrap();
-  assert_eq!(node.terminal(&first.id).await.status, "cancelled");
-  let next = node.run("explicit next run").await;
-  requested(&classifier, 2).await;
+  assert_eq!(node.terminal(&first.id).await.status, "uncertain");
   let before = node
     .daemon
     .store
     .load_snapshot(&node.session_id)
     .await
+    .unwrap()
     .unwrap();
+  let snapshot: serde_json::Value = serde_json::from_slice(&before).unwrap();
+  assert_eq!(snapshot["active"]["in_flight"], "model");
+  let queued = node.client.list_run_inputs(&first.id).await.unwrap();
+  assert_eq!(queued.len(), 1);
+  assert_eq!(queued[0].entry_id, receipt.entry_id);
+  assert_eq!(queued[0].run_id, first.id);
+  assert_eq!(queued[0].state, v1::RunInputState::Pending as i32);
+  // Unknown main-model IO is not a known cancellation boundary. Starting a
+  // successor would hand the old queue to a new Runtime before reconciliation.
   assert!(
     node
       .client
-      .cancel_run_input(&first.id, 1, &receipt.entry_id)
+      .start_run(&node.session_id, "explicit next run", &agent_core::new_id())
       .await
       .is_err()
   );
+  // Even available synthetic replies must not cause automatic replay or input adoption.
+  classifier
+    .push_reply(text_reply(protocol, "invalid decision"))
+    .await;
+  main
+    .push_reply(text_reply(protocol, "must not be requested"))
+    .await;
+  node.daemon.recover().await.unwrap();
   assert_eq!(
     node
       .daemon
@@ -55,47 +71,24 @@ async fn inherited_input_cannot_be_cancelled_through_a_stale_runtime_during_hand
       .load_snapshot(&node.session_id)
       .await
       .unwrap(),
-    before
-  );
-  let inherited = node.client.list_run_inputs(&next.id).await.unwrap();
-  assert_eq!(inherited.len(), 1);
-  assert_eq!(inherited[0].run_id, first.id);
-  assert_eq!(inherited[0].state, v1::RunInputState::Pending as i32);
-  classifier
-    .push_reply(text_reply(protocol, "invalid decision"))
-    .await;
-  requested(&main, 2).await;
-  let cancelled = node
-    .client
-    .cancel_run_input(&first.id, 1, &receipt.entry_id)
-    .await
-    .unwrap();
-  assert!(matches!(
-    v1::RunInputState::try_from(cancelled.state).unwrap(),
-    v1::RunInputState::Cancelled | v1::RunInputState::Consumed
-  ));
-  let adopted = main.requests().await[1]
-    .body
-    .to_string()
-    .contains("retained input must be cancellable");
-  assert_eq!(
-    adopted,
-    cancelled.state == v1::RunInputState::Consumed as i32,
-    "consumption must correspond to an actual model request; otherwise withdrawal must be durable"
-  );
-  main
-    .push_reply(text_reply(protocol, "next run completed"))
-    .await;
-  assert_eq!(node.terminal(&next.id).await.status, "completed");
-  assert_eq!(
-    main.requests().await.len(),
-    2,
-    "withdrawn inherited input must never request another turn"
+    Some(before)
   );
   assert_eq!(
-    node.client.list_run_inputs(&next.id).await.unwrap()[0].state,
-    cancelled.state
+    node
+      .daemon
+      .store
+      .runs(&node.session_id)
+      .await
+      .unwrap()
+      .len(),
+    1
   );
+  let after = node.client.list_run_inputs(&first.id).await.unwrap();
+  assert_eq!(after.len(), 1);
+  assert_eq!(after[0].entry_id, receipt.entry_id);
+  assert_eq!(after[0].state, v1::RunInputState::Pending as i32);
+  assert_eq!(main.requests().await.len(), 1);
+  assert_eq!(classifier.requests().await.len(), 1);
   assert_eq!(std::fs::read_dir(node.workspace.path()).unwrap().count(), 0);
   node.close().await;
 }
@@ -160,7 +153,7 @@ async fn queue_snapshot_previews_are_utf8_safe_and_pending_bytes_are_bounded() {
     .await
     .unwrap();
   node.client.cancel_run(&run.id).await.unwrap();
-  assert_eq!(node.terminal(&run.id).await.status, "cancelled");
+  assert_eq!(node.terminal(&run.id).await.status, "uncertain");
   assert_eq!(main.requests().await.len(), 1);
   assert_eq!(std::fs::read_dir(node.workspace.path()).unwrap().count(), 0);
   node.close().await;

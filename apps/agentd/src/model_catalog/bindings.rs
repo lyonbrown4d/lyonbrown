@@ -47,15 +47,43 @@ impl Daemon {
         "deepseek-chat",
         "DeepSeek Chat",
         "deepseek",
-        "openai-completions",
+        "deepseek",
         "https://api.deepseek.com",
       ),
       (
         "deepseek-reasoner",
         "DeepSeek Reasoner",
         "deepseek",
-        "openai-completions",
+        "deepseek",
         "https://api.deepseek.com",
+      ),
+      (
+        "gemini-2.5-flash",
+        "Gemini 2.5 Flash",
+        "gemini",
+        "gemini",
+        "https://generativelanguage.googleapis.com",
+      ),
+      (
+        "openrouter/auto",
+        "OpenRouter Auto",
+        "openrouter",
+        "openrouter",
+        "https://openrouter.ai/api/v1",
+      ),
+      (
+        "llama-3.3-70b-versatile",
+        "Groq Llama 3.3 70B",
+        "groq",
+        "groq",
+        "https://api.groq.com/openai/v1",
+      ),
+      (
+        "mistral-small-latest",
+        "Mistral Small",
+        "mistral",
+        "mistral",
+        "https://api.mistral.ai/v1",
       ),
       (
         "gpt-4.1",
@@ -126,6 +154,7 @@ impl Daemon {
       ));
     }
     for profile in self.store.provider_profiles().await? {
+      let runtime_provider = profile.runtime_provider();
       let id = format!("profile:{}", profile.id);
       entries.push((
         id.clone(),
@@ -134,7 +163,7 @@ impl Daemon {
         ModelBinding {
           model_id: id,
           execution_id: format!("profile:{}:{}", profile.id, profile.revision),
-          provider: profile.protocol.runtime_provider().into(),
+          provider: runtime_provider.into(),
           model: profile.model,
           endpoint: Some(profile.base_url),
           credential_id: format!("profile-secret:{}", profile.credential_id),

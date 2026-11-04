@@ -5,6 +5,9 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+agent-media = { path = "../agent-media" }
+agent-planning = { path = "../agent-planning" }
+agent-changes = { path = "../agent-changes" }
 memory-core = { path = "../memory-core" }
 sha2.workspace = true
 hex.workspace = true

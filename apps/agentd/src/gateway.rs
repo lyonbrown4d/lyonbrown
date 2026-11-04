@@ -98,12 +98,17 @@ pub(crate) async fn build(
       })
     })
     .collect::<Result<Vec<_>>>()?;
-  if models.is_empty() && config.provider == "openai-completions" {
+  if models.is_empty() && model_provider::supports_gateway_chat(&config.provider) {
     let key = match &config.provider_api_key {
       Some(key) => Some(Secret::new(key.clone())),
       None => {
         let store = provider_secrets.clone();
-        tokio::task::spawn_blocking(move || store.get("provider-openai"))
+        let credential = format!(
+          "provider-{}",
+          agent_config::provider_definition(&config.provider)
+            .map_or(config.provider.as_str(), |provider| provider.id)
+        );
+        tokio::task::spawn_blocking(move || store.get(&credential))
           .await
           .context("provider credential worker failed")??
           .map(|value| Secret::new(value.expose_secret().to_owned()))
@@ -112,16 +117,17 @@ pub(crate) async fn build(
     models.push(ModelConfig {
       id: config.model.clone(),
       upstream_model: config.model.clone(),
-      api_base: config
-        .api_base
-        .clone()
-        .unwrap_or_else(|| "https://api.openai.com/v1".into()),
+      api_base: match &config.api_base {
+        Some(base) => base.clone(),
+        None => model_provider::provider_base_url(&config.provider)?,
+      },
       api_key: key,
       api_key_env: None,
       tier: ModelTier::Balanced,
       local_inference: false,
       capabilities: ["text".to_owned(), "tools".to_owned()]
         .into_iter()
+        .chain(config.supports_images.then(|| "vision".to_owned()))
         .collect(),
       context_tokens: Some(128_000),
     });
@@ -212,6 +218,7 @@ pub(crate) async fn build(
         &model.api_base,
         model.api_key.as_ref().map_or("", Secret::expose_secret),
         model.context_tokens.unwrap_or(0) as u32,
+        config.supports_images,
       )
     })
   } else {

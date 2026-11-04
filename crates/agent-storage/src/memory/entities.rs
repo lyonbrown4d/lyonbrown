@@ -73,6 +73,8 @@ pub(super) mod jobs {
     pub state: String,
     pub attempts: i64,
     pub error_category: Option<String>,
+    pub rebuild_id: Option<String>,
+    pub descriptor_key: Option<String>,
   }
   #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
   pub enum Relation {}
@@ -112,6 +114,27 @@ pub(super) mod projects {
     pub workspace_hash: String,
     #[sea_orm(column_type = "Text")]
     pub workspace: String,
+  }
+  #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+  pub enum Relation {}
+  impl ActiveModelBehavior for ActiveModel {}
+}
+
+pub(super) mod rebuilds {
+  use sea_orm::entity::prelude::*;
+  #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+  #[sea_orm(table_name = "memory_rebuilds")]
+  pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: String,
+    pub scope_key: String,
+    pub descriptor_key: String,
+    pub scan_finished: bool,
+    pub generation: i64,
+    /// 1 = Pending; 2 = Completed.
+    pub state: i16,
+    #[sea_orm(column_type = "Text")]
+    pub record: String,
   }
   #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
   pub enum Relation {}

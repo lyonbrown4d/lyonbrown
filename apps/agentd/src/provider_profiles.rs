@@ -32,6 +32,9 @@ pub(crate) fn validate(input: v1::ProviderProfile) -> Result<ProviderProfile, St
     Ok(v1::RemoteProviderProtocol::OpenaiResponses) => RemoteProviderProtocol::OpenaiResponses,
     Ok(v1::RemoteProviderProtocol::OpenaiCompletions) => RemoteProviderProtocol::OpenaiCompletions,
     Ok(v1::RemoteProviderProtocol::AnthropicMessages) => RemoteProviderProtocol::AnthropicMessages,
+    Ok(v1::RemoteProviderProtocol::GeminiGenerateContent) => {
+      RemoteProviderProtocol::GeminiGenerateContent
+    }
     _ => return Err(Status::invalid_argument("unsupported remote protocol")),
   };
   let endpoint = &input.base_url;
@@ -121,6 +124,9 @@ impl Daemon {
         }
         RemoteProviderProtocol::AnthropicMessages => {
           v1::RemoteProviderProtocol::AnthropicMessages as i32
+        }
+        RemoteProviderProtocol::GeminiGenerateContent => {
+          v1::RemoteProviderProtocol::GeminiGenerateContent as i32
         }
       },
       base_url: profile.base_url,

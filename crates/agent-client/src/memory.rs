@@ -91,6 +91,38 @@ impl AgentClient {
       .await?;
     Ok(())
   }
+  pub async fn start_memory_rebuild(
+    &self,
+    request: v1::StartMemoryRebuildRequest,
+  ) -> Result<v1::MemoryRebuild> {
+    Ok(
+      self
+        .memory
+        .clone()
+        .start_memory_rebuild(request)
+        .await?
+        .into_inner(),
+    )
+  }
+  pub async fn memory_rebuilds(
+    &self,
+    session: &str,
+    after: &str,
+    limit: u32,
+  ) -> Result<v1::MemoryRebuilds> {
+    Ok(
+      self
+        .memory
+        .clone()
+        .list_memory_rebuilds(v1::ListMemoryRebuildsRequest {
+          session_id: session.into(),
+          after_id: after.into(),
+          limit,
+        })
+        .await?
+        .into_inner(),
+    )
+  }
   pub async fn memory_status(&self) -> Result<v1::MemoryStatus> {
     Ok(
       self

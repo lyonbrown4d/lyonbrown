@@ -173,13 +173,15 @@ pub(crate) fn message(message: &Value, text: &mut String) -> Result<(), GatewayE
     }
     Some(Value::Array(parts)) => {
       for part in parts {
+        if role == "user" && part.get("type").and_then(Value::as_str) == Some("image_url") {
+          // The complete body was independently validated by InlineImages.
+          continue;
+        }
         if !only_keys(part, &["type", "text"])
           || part.get("type").and_then(Value::as_str) != Some("text")
           || part.get("text").and_then(Value::as_str).is_none()
         {
-          return Err(GatewayError::invalid(
-            "Only text message content is supported",
-          ));
+          return Err(GatewayError::invalid("Unsupported message content"));
         }
         if let Some(content) = part.get("text").and_then(Value::as_str) {
           text.push_str(content);

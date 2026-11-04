@@ -48,6 +48,8 @@ impl Daemon {
     self.models.all()
   }
   pub async fn recover(&self) -> Result<()> {
+    self.recover_context_jobs().await?;
+    self.store.recover_changes().await?;
     let operations_uncertain = self.store.recover_operations().await?;
     tracing::info!(
       operations_uncertain,
@@ -84,12 +86,12 @@ impl Daemon {
     if let Some(gateway) = &self.gateway.gateway {
       gateway.set_ready(false);
     }
-    let worker = {
-      let _submission = self.submission.lock().await;
-      let worker = self.peer_worker.lock().await.clone();
-      self.stopping.cancel();
-      worker
-    };
+    // Signal cancellation before waiting for any admission or native I/O lock.
+    self.stopping.cancel();
+    self
+      .draining
+      .store(true, std::sync::atomic::Ordering::Release);
+    let worker = self.peer_worker.lock().await.clone();
     {
       let active = self.active.lock().await;
       for token in active.values() {
@@ -101,7 +103,10 @@ impl Daemon {
         let notify = self.events.notified();
         tokio::pin!(notify);
         notify.as_mut().enable();
-        if self.active.lock().await.is_empty() && self.model_jobs.lock().await.is_empty() {
+        if self.active.lock().await.is_empty()
+          && self.model_jobs.lock().await.is_empty()
+          && self.context_jobs.lock().await.is_empty()
+        {
           break;
         }
         notify.await;
@@ -133,13 +138,17 @@ impl Daemon {
   }
   pub(crate) async fn active_count(&self) -> usize {
     let local = self.active.lock().await.len();
+    let context = self.store.context_maintenance_count().await.unwrap_or_else(|error| {
+      tracing::error!(error=%agent_storage::public_error_message(&error), "Could not inspect context maintenance; deferring upgrade");
+      1
+    });
     // Unknown remote outcomes also defer upgrades until explicit reconciliation.
     let remote = self.store.active_master_tasks(&self.node_id).await.unwrap_or_else(|error| {
       tracing::error!(error=%agent_storage::public_error_message(&error), "could not determine in-flight Master tasks; deferring idle maintenance");
       1
     });
     let peer = self.peer_worker.lock().await.clone();
-    local.saturating_add(remote)
+    local.saturating_add(remote).saturating_add(context)
       + match peer {
         Some(worker) => worker.active_count().await,
         None => 0,
@@ -151,6 +160,7 @@ impl Daemon {
 pub struct RuntimeServices {
   pub(crate) memory_worker: Mutex<Option<tokio::task::JoinHandle<()>>>,
   pub(crate) model_jobs: Mutex<HashMap<String, CancellationToken>>,
+  pub(crate) context_jobs: Mutex<HashMap<String, CancellationToken>>,
   pub(crate) browser: Arc<crate::browser::BrowserRouter>,
   pub(crate) computer: Arc<crate::computer::ComputerRouter>,
   pub(crate) workspace_writes: Arc<Mutex<()>>,
@@ -170,6 +180,7 @@ impl RuntimeServices {
     Self {
       memory_worker: Mutex::new(None),
       model_jobs: Mutex::new(HashMap::new()),
+      context_jobs: Mutex::new(HashMap::new()),
       browser: Arc::new(Default::default()),
       computer: Arc::new(Default::default()),
       workspace_writes: Arc::new(Mutex::new(())),
